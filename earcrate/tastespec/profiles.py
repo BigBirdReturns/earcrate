@@ -71,3 +71,16 @@ def flat_profile(profile: Dict[str, Any]) -> Dict[str, Any]:
         "tastespec_version": profile.get("version"),
         "tastespec_hash": profile.get("hash"),
     }
+
+
+def available_profiles() -> list:
+    """Every persona the runtime can load: JSON files in profiles/ plus any
+    embedded in a single-file build. Adding a resident = adding a JSON file."""
+    ids = set(EMBEDDED_PROFILES.keys())
+    try:
+        for f in PROFILE_DIR.glob("*.json"):
+            if f.stem != "tastespec.schema":
+                ids.add(f.stem)
+    except Exception:
+        pass
+    return sorted(ids)

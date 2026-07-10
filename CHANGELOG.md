@@ -1,5 +1,41 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.7.7 — Residents (the front end becomes the product)
+- SHELL: new interface built to the product mock — left sidebar (Residents /
+  Crate / Sessions + the full Workbench preserved beneath), warm light theme
+  with dark toggle, persistent station bar. No external fonts (local-first).
+- RESIDENTS: each persona is a card with a LIVE readiness gauge, the endless
+  receipt ("can play M:SS endless before a source must recur"), and exactly
+  what it's missing. "Book a set" compiles with that resident; the readiness
+  widget in the top bar tracks the selected one. New: GET /api/residents.
+- TWO NEW RESIDENTS, both pure JSON (proving personas are data):
+  · troubadour_v1 — the Pat & Sean medley contract: one persistent harmonic
+    bed, sequential recognizable hooks spliced at phrase boundaries, constant
+    key (capo logic), ~2.7 sources/min, 1–2 layers, intelligible vocals
+    mandatory. Derivation: PERSONAS/TROUBADOUR_V1.md (22-songs-in-1:34 stunt
+    ceiling vs standard-medley band). Honest gap named: real chord-progression
+    matching is the next analyzer rung.
+  · notorious_v1 — one voice over another era's beds (bootleg-album form):
+    verse-length runs, beds rotate, voice recurs by design.
+  Profile discovery is automatic (profiles/*.json + embedded in single-file);
+  the drift gate now checks EVERY persona against enforced deck limits.
+- CRATE VIEW: rails as columns with live counts, thin-rail alerts, the role
+  bar, endless + bottleneck in the legend, click-to-audition cells, fix cards
+  from real readiness failures, and topbar search (bpm:104-118 role:vocal).
+- SESSIONS VIEW: every render AND every refusal with receipts (rejected
+  renders' gate failures surfaced). New: GET /api/sessions.
+- STATION: crowd controls with real consequences — 🔥/🧊 write durable taste
+  receipts (kv + fsync journal) and bias the NEXT compile's chaos/vocal/drama
+  (clamped, recorded in params); ⏭ logs. Gentle/full-send toggle actually
+  reconfigures analysis workers. New: POST /api/station/feedback.
+- LICENSE: PolyForm Noncommercial 1.0.0 — free for personal use, commercial
+  use requires a written license; note included that music rights are separate
+  from software rights.
+- Verified end-to-end in a real headless browser: residents cards (3 personas
+  + honest teaser), crate rails + search filter, sessions, station receipts
+  persisted with correct bias math, theme toggle, and the old workbench fully
+  functional inside the new shell. Zero page errors; 13 tests green.
+
 ## v0.7.6 — Compose (the rungs assembled)
 - MERGED PR #8 (Codex vertical slice): governance (AGENTS.md), versioned TasteSpec
   JSON + schema + stable hash, atom/pair judgment tables, plan save/load, profile

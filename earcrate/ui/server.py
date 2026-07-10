@@ -118,6 +118,12 @@ class JBHandler(BaseHTTPRequestHandler):
                 q = urllib.parse.parse_qs(parsed.query)
                 self._json(200, self.core.list_ear_atoms((q.get("status") or ["approved"])[0], (q.get("taste_profile") or ["girl_talk_v1"])[0]))
                 return
+            if parsed.path == "/api/residents":
+                self._json(200, self.core.residents())
+                return
+            if parsed.path == "/api/sessions":
+                self._json(200, self.core.sessions_list())
+                return
             if parsed.path == "/api/timeline/list":
                 self._json(200, self.core.list_plans())
                 return
@@ -206,6 +212,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.set_atom_judgment(str(data["atom_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("relabel_role") or ""), bool(data.get("favorite", False)), bool(data.get("locked", False)), str(data.get("reason") or ""))); return
             if path == "/api/taste/pair_judgment":
                 self._json(200, self.core.set_pair_judgment(str(data["edge_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("reason") or ""))); return
+            if path == "/api/station/feedback":
+                self._json(200, self.core.station_feedback(str(data.get("signal") or ""))); return
             if path == "/api/timeline/propose":
                 self._json(200, self.core.propose_plan(data)); return
             if path == "/api/timeline/save":

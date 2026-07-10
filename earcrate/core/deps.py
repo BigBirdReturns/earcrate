@@ -55,8 +55,8 @@ except Exception as exc:  # pragma: no cover
     raise
 
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wv"}
-ENGINE_VERSION = "earcrate_v076"
-ENGINE_DISPLAY_VERSION = "v0.7.6"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
+ENGINE_VERSION = "earcrate_v077"
+ENGINE_DISPLAY_VERSION = "v0.7.7"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
 BUILD_STAMP = "__BUILD_STAMP__"     # sentinel; the single-file builder replaces it with the package content hash
 ANALYZER_VERSION = "gt-v0.6.1-earcrate-feasibility"
 APP_NAME = "JukebreakerGT"
@@ -73,9 +73,7 @@ EAR_TO_RENDER_ROLE = {"VOX_HOOK": "vocal", "VOX_VERSE": "vocal", "VOX_SHOUT": "v
 # of that JSON, never a place to define numbers. Adding a persona = adding a
 # JSON file, not editing code. Loading fails LOUDLY on a missing/corrupt
 # profile — a shadow literal here would be a second constitution.
-from earcrate.tastespec.profiles import load_tastespec, flat_profile, profile_summary, tastespec_hash
-TASTE_PROFILES = {
-    "girl_talk_v1": flat_profile(load_tastespec("girl_talk_v1")),
-}
+from earcrate.tastespec.profiles import load_tastespec, flat_profile, profile_summary, tastespec_hash, available_profiles
+TASTE_PROFILES = {pid: flat_profile(load_tastespec(pid)) for pid in available_profiles()}
 
 

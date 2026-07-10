@@ -196,22 +196,28 @@ def test_persona_single_source():
     from earcrate.core.deps import TASTE_PROFILES
     from earcrate.deck.transform import drydeck_transform_limits
     from earcrate.ear.readiness import GT_RANK_WEIGHTS
-    prof = load_tastespec("girl_talk_v1")
-    # 1. the runtime flat profile IS the JSON projection (no shadow literal)
-    assert TASTE_PROFILES["girl_talk_v1"] == flat_profile(prof)
-    assert TASTE_PROFILES["girl_talk_v1"]["tastespec_hash"] == prof["hash"]
-    # 2. profile transform budgets == enforced deck limits, role for role
-    for role, decl in (prof["transform_budgets"]["roles"]).items():
-        enforced = drydeck_transform_limits(role)
-        assert abs(decl["varispeed_pct"] - enforced["varispeed"]) < 1e-9, f"{role} varispeed drift"
-        assert abs(decl["residual_pitch"] - enforced["residual_pitch"]) < 1e-9, f"{role} pitch drift"
-    # 3. every relation threshold == the enforced edge floor
-    for rel, spec in prof["compatibility_relations"].items():
-        assert abs(spec["min_score"] - prof["min_edge_score"]) < 1e-9, f"{rel} threshold drift"
-    assert abs(prof["min_edge_score"] - TASTE_PROFILES["girl_talk_v1"]["min_edge_score"]) < 1e-9
-    # 4. ranking weights come from the profile and sum to 1
-    assert GT_RANK_WEIGHTS == prof["objective_weights"]
-    assert abs(sum(GT_RANK_WEIGHTS.values()) - 1.0) < 1e-9
+    from earcrate.tastespec import available_profiles
+    profs = available_profiles()
+    assert "girl_talk_v1" in profs and "troubadour_v1" in profs and "notorious_v1" in profs
+    for pid in profs:
+        prof = load_tastespec(pid)
+        # 1. the runtime flat profile IS the JSON projection (no shadow literal)
+        assert TASTE_PROFILES[pid] == flat_profile(prof), f"{pid} projection drift"
+        assert TASTE_PROFILES[pid]["tastespec_hash"] == prof["hash"]
+        # 2. profile transform budgets == enforced deck limits, role for role
+        for role, decl in (prof["transform_budgets"]["roles"]).items():
+            enforced = drydeck_transform_limits(role)
+            assert abs(decl["varispeed_pct"] - enforced["varispeed"]) < 1e-9, f"{pid}/{role} varispeed drift"
+            assert abs(decl["residual_pitch"] - enforced["residual_pitch"]) < 1e-9, f"{pid}/{role} pitch drift"
+        # 3. every relation threshold == the profile's own edge floor
+        for rel, spec in prof["compatibility_relations"].items():
+            assert abs(spec["min_score"] - prof["min_edge_score"]) < 1e-9, f"{pid}/{rel} threshold drift"
+        # 4. ranking weights carry the exact five priorities and sum to 1
+        w = prof["objective_weights"]
+        assert set(w) == {"recognizability", "role_clarity", "danceability", "deck_feasibility", "contrast"}, pid
+        assert abs(sum(w.values()) - 1.0) < 1e-9, f"{pid} weights must sum to 1"
+    # girl_talk remains the default whose weights feed the module-level ranker
+    assert GT_RANK_WEIGHTS == load_tastespec("girl_talk_v1")["objective_weights"]
 
 
 def test_girl_talk_ranking():

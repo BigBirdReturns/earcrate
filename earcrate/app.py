@@ -2456,6 +2456,13 @@ class EarcrateCore:
             graph = self._perf_stage(ledger, "build_compatibility_graph", self.build_compatibility_graph, taste_profile, target_seconds, float(data.get("bpm") or 0.0))
             params = self.outcome_params(data)
             params.update({"taste_profile": taste_profile, "name": str(data.get("name") or "Jukebreaker TasteSpec"), "target_seconds": int(target_seconds), "quality_mode": "stable_deck", "post_render_gate": True})
+            # Station steering: crowd 🔥/🧊 receipts bias the compile intent.
+            _bias = self.station_bias()
+            for _k in ("chaos", "vocal_density", "drama"):
+                if _bias.get(_k):
+                    params[_k] = max(0, min(100, int(params.get(_k, 70)) + int(_bias[_k])))
+            if any(_bias.get(k) for k in ("chaos", "vocal_density", "drama")):
+                params["station_bias"] = {k: _bias.get(k, 0) for k in ("chaos", "vocal_density", "drama")}
             self.set_status("TasteSpec: composing deterministic rail plan", 0.84, True, None)
             try:
                 proposal = self._perf_stage(ledger, "compose_and_gate_taste_plan", self.propose_taste_mashup, params)
@@ -4016,6 +4023,95 @@ class EarcrateCore:
     def list_plans(self) -> Dict[str, Any]:
         rows = self.conn().execute("SELECT id,name,taste_profile,plan_hash,created_at FROM saved_plans ORDER BY created_at DESC LIMIT 100").fetchall()
         return {"ok": True, "items": [dict(r) for r in rows]}
+
+    def residents(self) -> Dict[str, Any]:
+        """One card per persona: live readiness, endless receipt, and what the
+        crate is missing — the honest 'can this resident play tonight' answer."""
+        items = []
+        for pid in sorted(TASTE_PROFILES):
+            flat = TASTE_PROFILES[pid]
+            entry: Dict[str, Any] = {
+                "id": pid, "name": flat.get("name") or pid, "contract": flat.get("contract") or "",
+                "version": flat.get("tastespec_version"), "hash": flat.get("tastespec_hash"),
+                "density": {"sources_per_minute": flat.get("sources_per_minute"),
+                            "min_layers": flat.get("min_layers"), "max_layers": flat.get("max_layers")},
+            }
+            try:
+                r = self.taste_readiness(pid, 120.0)
+                have, need = r.get("have") or {}, r.get("need") or {}
+                ratios = [min(1.0, float(have.get(k, 0)) / max(1, float(need[k]))) for k in need] or [0.0]
+                entry["readiness_pct"] = int(round(100 * sum(ratios) / len(ratios)))
+                entry["ready"] = bool(r.get("ready"))
+                entry["endless"] = r.get("endless")
+                entry["wants"] = list(r.get("failures") or [])
+            except Exception as exc:
+                entry["error"] = str(exc)[:200]
+            items.append(entry)
+        return {"ok": True, "items": items}
+
+    def sessions_list(self) -> Dict[str, Any]:
+        """Every render AND every refusal, with receipts. A refusal is a session
+        too — it tells you what to feed the crate."""
+        c = self.ensure_config()
+        items: List[Dict[str, Any]] = []
+        for x in (self.list_renders().get("items") or []):
+            passed = x.get("quality_gate_passed")
+            items.append({"kind": "render", "name": x.get("name"), "path": x.get("path"),
+                          "mtime": x.get("mtime"), "passed": (passed is not False),
+                          "meta": f"{(x.get('size_bytes') or 0)/1048576:.1f} MB · {x.get('engine_version') or '?'}"
+                                  + ("" if x.get("current_engine") else " · old engine"),
+                          "receipts": "quality gate " + ("passed" if passed else ("FAILED" if passed is False else "unrecorded"))})
+        rej_root = c.agent_root / "rejected_renders"
+        if rej_root.exists():
+            reports = sorted(rej_root.rglob("*.render_report.json"), key=lambda f: f.stat().st_mtime, reverse=True)[:20]
+            for f in reports:
+                why = "refused by post-render gate"
+                try:
+                    rep = json.loads(f.read_text(encoding="utf-8"))
+                    gate = rep.get("quality_gate") or {}
+                    fails = gate.get("failures") or [k for k, v in gate.items() if v is False]
+                    if fails:
+                        why = "refused: " + "; ".join(str(x) for x in fails[:4])
+                except Exception:
+                    pass
+                items.append({"kind": "refusal", "name": f.stem.replace(".render_report", ""),
+                              "path": str(f), "passed": False,
+                              "mtime": _dt.datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds"),
+                              "meta": "quarantined render", "receipts": why})
+        items.sort(key=lambda x: str(x.get("mtime") or ""), reverse=True)
+        return {"ok": True, "items": items[:60]}
+
+    def station_feedback(self, signal: str) -> Dict[str, Any]:
+        """Crowd controls with real consequences: 🔥/🧊 nudge the NEXT compile's
+        intent (persisted bias, clamped), ⏭ is logged. Every press is a taste
+        receipt in a durable journal — steering, not theater."""
+        signal = str(signal or "").lower()
+        if signal not in {"fire", "ice", "skip"}:
+            return {"ok": False, "error": "signal must be fire, ice, or skip"}
+        c = self.ensure_config()
+        db = self.conn()
+        row = db.execute("SELECT value FROM kv WHERE key='station_bias'").fetchone()
+        bias = json.loads(row["value"]) if row else {"chaos": 0, "vocal_density": 0, "drama": 0, "receipts": 0}
+        if signal == "fire":
+            bias["chaos"] = max(-20, min(20, bias.get("chaos", 0) + 5))
+            bias["vocal_density"] = max(-20, min(20, bias.get("vocal_density", 0) + 5))
+        elif signal == "ice":
+            bias["chaos"] = max(-20, min(20, bias.get("chaos", 0) - 6))
+            bias["drama"] = max(-20, min(20, bias.get("drama", 0) - 5))
+        bias["receipts"] = int(bias.get("receipts", 0)) + 1
+        db.execute("INSERT OR REPLACE INTO kv(key,value) VALUES('station_bias',?)", (json.dumps(bias),))
+        db.commit()
+        fsync_append_jsonl(c.agent_root / "journals" / "station_feedback.jsonl",
+                           {"at": now_utc(), "signal": signal, "bias": bias})
+        return {"ok": True, "receipt": bias["receipts"], "bias": bias,
+                "applies": "next compile" if signal != "skip" else "logged only"}
+
+    def station_bias(self) -> Dict[str, int]:
+        try:
+            row = self.conn().execute("SELECT value FROM kv WHERE key='station_bias'").fetchone()
+            return json.loads(row["value"]) if row else {}
+        except Exception:
+            return {}
 
     def taste_profile_receipt(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
         return profile_summary(taste_profile)

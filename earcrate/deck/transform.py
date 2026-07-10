@@ -160,15 +160,3 @@ def drydeck_transform_violation(role: str, pitch_shift: float, stretch_pct: floa
     return None
 
 
-def drydeck_role_leak(role: str, world: str, mix_mode: str) -> bool:
-    if str(mix_mode or "") not in {"two_world", "two_world_continuum", "album_collision", "notorious_mode"}:
-        return False
-    role = str(role or "full")
-    world = str(world or "")
-    if role == "vocal":
-        return world != "voice"
-    if role in {"drum_anchor", "bass", "harmony", "texture", "fx", "full"}:
-        return world != "bed"
-    return False
-
-

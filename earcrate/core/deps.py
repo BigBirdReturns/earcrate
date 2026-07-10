@@ -55,8 +55,8 @@ except Exception as exc:  # pragma: no cover
     raise
 
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wv"}
-ENGINE_VERSION = "earcrate_v078"
-ENGINE_DISPLAY_VERSION = "v0.7.8"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
+ENGINE_VERSION = "earcrate_v080"
+ENGINE_DISPLAY_VERSION = "v0.8.0"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
 BUILD_STAMP = "__BUILD_STAMP__"     # sentinel; the single-file builder replaces it with the package content hash
 ANALYZER_VERSION = "gt-v0.6.1-earcrate-feasibility"
 APP_NAME = "JukebreakerGT"

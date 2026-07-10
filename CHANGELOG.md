@@ -1,5 +1,33 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.8.0 — the v2 cut: one composer, the legacy two-world arranger removed
+- THE DEAD BUFFALO IS BURIED, not hidden. The old two-world/album-collision
+  arranger — a SECOND full composer living beside the TasteSpec engine — is
+  deleted outright, not merely UI-hidden: `arrange`, `propose_continuum`, the
+  legacy `propose_mashup`/`one_click_mix` branches, and their legacy-only
+  helpers (`build_energy_plan`, `plan_harmonic_route`, `score_key_for_pool`,
+  `pick_loop`, plus dead `choose_target_key`/`compatible_era_keys`). Net −840
+  lines. This closes rebuild-plan lesson #2 ("two vocabularies for one
+  concept") — there is now ONE layer model and ONE composer.
+- SCORER DE-TWINNED: `score_arrangement` no longer branches on the two-world
+  `mix_mode` vocabulary (`two_world`/`album_collision`/`notorious_mode`). The
+  voice/bed reward, the role-leak veto, and the `voice_missing` veto that only
+  ever fired for two-world are gone; the TasteSpec path (the only path) keeps
+  its intent-match, coverage, transform, and structural vetoes. `test_intent_
+  flips_winner` still passes — behavior on the surviving path is unchanged.
+- PRESETS/KNOBS PRUNED: `album_collision`/`notorious_mode` presets and the
+  `voice_world_query`/`bed_world_query` world-routing knobs removed from
+  `outcome_params`. Orphaned deck helpers (`world_query_match`,
+  `role_world_guess`, `drydeck_role_leak`, dead `item_text_blob`) and the
+  `/api/continuum/compile` route removed. `propose_mashup` remains as a thin
+  back-compat adapter that routes to the TasteSpec composer.
+- VERIFIED: 13/13 gates green, singlefile builds + `SELF_TEST_OK`, vertical
+  suite 2/2, package compiles. No new failures vs baseline.
+- STILL OPEN (honest): `APP_NAME`/state-dir (`JukebreakerGT`) and
+  `ANALYZER_VERSION` are live cache/migration keys — renaming them orphans
+  existing workspaces and analysis caches, so they need a real migration, not
+  a rename. That is the next v2 slice, tracked separately.
+
 ## v0.7.9 — crate-librarian extracted (rebuild plan v2, phase 1)
 - NEW STANDALONE TOOL `crate-librarian/`: the library engine cut loose as a
   reusable, mutagen-only package (no audio analysis, no personas, no UI, no

@@ -230,8 +230,6 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.run_background(self.core.one_click_mix, data)); return
             if path == "/api/one_click":
                 self._json(200, self.core.one_click_mix(data)); return
-            if path == "/api/continuum/compile":
-                self._json(200, self.core.propose_continuum(data)); return
             if path == "/api/preflight":
                 self._json(200, self.core.preflight(data)); return
             if path == "/api/playlist/propose":

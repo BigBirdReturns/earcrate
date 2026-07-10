@@ -511,7 +511,7 @@ class EarcrateCore:
 
     def ensure_layout(self) -> None:
         c = self.ensure_config()
-        for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "continuum", c.agent_root / "logs"]:
+        for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "logs"]:
             p.mkdir(parents=True, exist_ok=True)
 
     def connect_db(self) -> None:
@@ -1479,8 +1479,6 @@ class EarcrateCore:
             "hook_ride": {"chaos": 58, "key_strictness": 72, "pitch_shift_budget": 2, "stretch_budget": 10, "genre_whiplash": 48, "vocal_density": 88, "anchor_stability": 78, "recognizability_bias": 86},
             "party_cutup": {"chaos": 72, "key_strictness": 64, "pitch_shift_budget": 2, "stretch_budget": 8, "genre_whiplash": 74, "vocal_density": 78, "anchor_stability": 72, "recognizability_bias": 84},
             "max_chaos": {"chaos": 86, "key_strictness": 54, "pitch_shift_budget": 2, "stretch_budget": 9, "genre_whiplash": 90, "vocal_density": 80, "anchor_stability": 44, "recognizability_bias": 88},
-            "album_collision": {"chaos": 68, "key_strictness": 64, "pitch_shift_budget": 2, "stretch_budget": 8, "genre_whiplash": 82, "vocal_density": 84, "anchor_stability": 54, "recognizability_bias": 92},
-            "notorious_mode": {"chaos": 62, "key_strictness": 66, "pitch_shift_budget": 2, "stretch_budget": 7, "genre_whiplash": 76, "vocal_density": 86, "anchor_stability": 60, "recognizability_bias": 94},
         }
         out = dict(presets.get(preset, presets["party_cutup"]))
 
@@ -1524,16 +1522,12 @@ class EarcrateCore:
         elif backbone == "restless":
             out["anchor_stability"] = min(out["anchor_stability"], 48)
 
-        mix_mode = str(data.get("mix_mode") or data.get("mode") or ("two_world_continuum" if preset in ("album_collision", "notorious_mode") else "single_crate"))
-        default_candidates = 24 if mix_mode in ("two_world", "two_world_continuum", "album_collision", "notorious_mode") else 12
+        default_candidates = 12
         params = {
             "name": str(data.get("name") or "Jukebreaker Sketch"),
             "target_seconds": int(data.get("target_seconds") or 180),
             "bpm": float(data.get("bpm") or 0),
-            "drama": int(data.get("drama") or (82 if preset in ("party_cutup", "max_chaos", "album_collision", "notorious_mode") else 58)),
-            "mix_mode": mix_mode,
-            "voice_world_query": str(data.get("voice_world_query") or data.get("voice_world") or ""),
-            "bed_world_query": str(data.get("bed_world_query") or data.get("bed_world") or ""),
+            "drama": int(data.get("drama") or (82 if preset in ("party_cutup", "max_chaos") else 58)),
             "candidate_count": int(data.get("candidate_count") or data.get("arrangement_candidates") or default_candidates),
             "max_aux_decks": int(data.get("max_aux_decks") or 3),
             "quality_mode": str(data.get("quality_mode") or "stable_deck"),
@@ -1547,180 +1541,9 @@ class EarcrateCore:
         return params
 
     def one_click_mix(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Cold-start jam path: scan, analyze, extract, approve, arrange, execute."""
-        if str(data.get("taste_profile") or "girl_talk_v1") == "girl_talk_v1" or bool(data.get("tastespec", True)):
-            return self.one_click_taste_mix(data)
-        c = self.ensure_config()
-        track_budget = int(data.get("track_budget") or 40)
-        force_loops = bool(data.get("force_loops", False))
-        self.set_status("one-click: doctor", 0.02, True, None)
-        doctor = self.doctor()
-        if not doctor.get("ok"):
-            raise RuntimeError("Doctor failed; fix setup before one-click jam")
-        self.set_status("one-click: scanning library", 0.06, True, None)
-        scan_result = self.scan()
-        self.set_status("one-click: analyzing tracks", 0.24, True, None)
-        analyze_result = self.analyze(limit=track_budget, force=False)
-        self.set_status("one-click: extracting loop DNA", 0.55, True, None)
-        loop_result = self.extract_loops(limit=track_budget, auto_approve=False, force=force_loops)
-        self.set_status("one-click: approving by quota", 0.70, True, None)
-        approve_result = self.auto_approve_quota(max_loops=60)
-        base_params = self.outcome_params(data)
-        base_params["quality_mode"] = str(base_params.get("quality_mode") or "stable_deck")
-        base_params["post_render_gate"] = True
-        base_params["candidate_count"] = max(32, min(64, int(base_params.get("candidate_count") or 64)))
-        # Varispeed Lattice rule: do not spend twenty minutes proving four bad WAVs are bad.
-        # Compile many candidates cheaply, render one preflight-approved expressive plan,
-        # then one repaired plan if needed.
-        attempts = max(1, min(2, int(data.get("quality_attempts") or 1)))
-        rejected: List[Dict[str, Any]] = []
-        last_proposal: Optional[Dict[str, Any]] = None
-        last_execute: Optional[Dict[str, Any]] = None
-        for attempt in range(attempts):
-            params = dict(base_params)
-            if attempt:
-                # Automatic safe-deck retry: preserve the musical intent, but reduce the
-                # two causes of bad outputs seen in practice: dead air and wet aux tails.
-                params.pop("seed", None)
-                params["drama"] = max(42, int(base_params.get("drama") or 70) - 10 * attempt)
-                params["chaos"] = max(52, int(base_params.get("chaos") or 65) - 7 * attempt)
-                params["vocal_density"] = max(58, int(base_params.get("vocal_density") or 72) - 6 * attempt)
-                params["genre_whiplash"] = max(50, int(base_params.get("genre_whiplash") or 70) - 6 * attempt)
-                params["anchor_stability"] = max(62, int(base_params.get("anchor_stability") or 70) + 5 * attempt)
-                params["max_aux_decks"] = max(1, min(int(base_params.get("max_aux_decks") or 3), 3 - min(attempt, 2)))
-                params["quality_retry_index"] = attempt
-            self.set_status(f"one-click: arranging candidate pass {attempt+1}/{attempts}", 0.78 + 0.04 * attempt, True, None)
-            proposal = self.propose_mashup(params)
-            last_proposal = proposal
-            preflight = (((proposal.get("arrangement") or {}).get("candidate_search") or {}).get("selected_preflight") or {})
-            if preflight and not preflight.get("passed", True):
-                rejected.append({"attempt": attempt + 1, "stage": "preflight", "preflight": preflight, "arrangement_sha": proposal.get("arrangement_sha")})
-                self.set_status(f"one-click: preflight rejected pass {attempt+1}; skipping full WAV", 0.86 + 0.03 * attempt, True, None)
-                continue
-            self.set_status(f"one-click: rendering quality pass {attempt+1}/{attempts}", 0.86 + 0.03 * attempt, True, None)
-            executed = self.execute_manifest(proposal["manifest"], apply=True)
-            last_execute = executed
-            render_path = None
-            for item in executed.get("done", []):
-                if item.get("type") == "render_mashup" and item.get("path"):
-                    render_path = item.get("path")
-                elif item.get("type") == "render_rejected":
-                    rejected.append({"attempt": attempt + 1, "report": item.get("report"), "quality_gate": item.get("quality_gate"), "arrangement_sha": item.get("arrangement_sha")})
-            if render_path:
-                with self.status_lock:
-                    self.status["last_render_path"] = render_path
-                self.set_status(f"one-click complete after {attempt+1} quality pass(es)", 1, False)
-                return {"ok": True, "render_path": render_path, "quality_attempts": attempt + 1, "rejected_attempts": rejected, "scan": scan_result, "analyze": analyze_result, "loops": loop_result, "approved": approve_result, "proposal": {"manifest": proposal["manifest"], "dst": proposal.get("dst")}, "execute": executed, "params": params}
-        # If the expressive continuum passes all failed, take one conservative rescue pass.
-        # This is not a degraded bypass: the post-render gate still applies. The difference
-        # is that the arrangement itself is built to be dry, continuous, and transform-light.
-        rescue_params = dict(base_params)
-        rescue_params.pop("seed", None)
-        rescue_params.update({
-            "name": str(base_params.get("name") or "Jukebreaker Sketch") + " Varispeed Lattice Rescue",
-            "safe_deck_rescue": True,
-            "quality_retry_index": attempts,
-            "quality_mode": "stable_deck",
-            "post_render_gate": True,
-            "candidate_count": 64,
-            "max_aux_decks": 2,
-            "drama": 38,
-            "chaos": 48,
-            "vocal_density": 66,
-            "genre_whiplash": 54,
-            "anchor_stability": 88,
-            "pitch_shift_budget": 1,
-            "stretch_budget": 3.8,
-            "key_strictness": 82,
-        })
-        self.set_status("one-click: varispeed-lattice repaired rescue pass", 0.98, True, None)
-        try:
-            proposal = self.propose_mashup(rescue_params)
-            last_proposal = proposal
-            preflight = (((proposal.get("arrangement") or {}).get("candidate_search") or {}).get("selected_preflight") or {})
-            if preflight and not preflight.get("passed", True):
-                failures = [str(x) for x in (preflight.get("failures") or [])]
-                rejected.append({"attempt": "varispeed_lattice_rescue", "stage": "preflight", "preflight": preflight, "arrangement_sha": proposal.get("arrangement_sha")})
-                structural = any("arrangement score veto" in f for f in failures)
-                if structural:
-                    raise RuntimeError("varispeed-lattice rescue structural preflight failed; trying floor-safe rescue")
-                # Non-structural dry-quality preflight is advisory for the last conservative
-                # pass. The full post-render gate still decides whether the WAV is presented.
-            executed = self.execute_manifest(proposal["manifest"], apply=True)
-            last_execute = executed
-            render_path = None
-            for item in executed.get("done", []):
-                if item.get("type") == "render_mashup" and item.get("path"):
-                    render_path = item.get("path")
-                elif item.get("type") == "render_rejected":
-                    rejected.append({"attempt": "varispeed_lattice_rescue", "report": item.get("report"), "quality_gate": item.get("quality_gate"), "arrangement_sha": item.get("arrangement_sha")})
-            if render_path:
-                with self.status_lock:
-                    self.status["last_render_path"] = render_path
-                self.set_status("varispeed-lattice repaired render complete", 1, False)
-                return {"ok": True, "render_path": render_path, "quality_attempts": attempts + 1, "varispeed_lattice_rescue": True, "rejected_attempts": rejected, "scan": scan_result, "analyze": analyze_result, "loops": loop_result, "approved": approve_result, "proposal": {"manifest": proposal["manifest"], "dst": proposal.get("dst")}, "execute": executed, "params": rescue_params}
-        except Exception as exc:
-            rejected.append({"attempt": "varispeed_lattice_rescue", "error": str(exc)})
-
-        # Last stop: make the smallest honest deck that should be audible. This abandons
-        # two-world ambition before it abandons the user. It still writes only under the
-        # render root and it still uses the post-render gate before loading the player.
-        floor_params = dict(base_params)
-        floor_params.pop("seed", None)
-        floor_params.update({
-            "name": str(base_params.get("name") or "Jukebreaker Sketch") + " Floor-Safe Audible Rescue",
-            "safe_deck_rescue": True,
-            "floor_safe_rescue": True,
-            "quality_retry_index": attempts + 1,
-            "quality_mode": "stable_deck",
-            "post_render_gate": True,
-            "mix_mode": "single_crate",
-            "strict_world_roles": False,
-            "voice_world_query": "",
-            "bed_world_query": "",
-            "target_seconds": min(120, max(75, int(base_params.get("target_seconds") or 120))),
-            "candidate_count": 64,
-            "max_aux_decks": 1,
-            "drama": 24,
-            "chaos": 26,
-            "vocal_density": 42,
-            "genre_whiplash": 18,
-            "anchor_stability": 98,
-            "recognizability_bias": 64,
-            "pitch_shift_budget": 0,
-            "stretch_budget": 2.75,
-            "key_strictness": 96,
-        })
-        self.set_status("one-click: floor-safe audible rescue", 0.99, True, None)
-        try:
-            proposal = self.propose_mashup(floor_params)
-            last_proposal = proposal
-            preflight = (((proposal.get("arrangement") or {}).get("candidate_search") or {}).get("selected_preflight") or {})
-            if preflight and not preflight.get("passed", True):
-                rejected.append({"attempt": "floor_safe_rescue", "stage": "preflight", "preflight": preflight, "arrangement_sha": proposal.get("arrangement_sha")})
-                failures = [str(x) for x in (preflight.get("failures") or [])]
-                if any("arrangement score veto" in f for f in failures):
-                    raise RuntimeError("floor-safe structural preflight failed; no full WAV render attempted")
-            executed = self.execute_manifest(proposal["manifest"], apply=True)
-            last_execute = executed
-            render_path = None
-            for item in executed.get("done", []):
-                if item.get("type") == "render_mashup" and item.get("path"):
-                    render_path = item.get("path")
-                elif item.get("type") == "render_rejected":
-                    rejected.append({"attempt": "floor_safe_rescue", "report": item.get("report"), "quality_gate": item.get("quality_gate"), "arrangement_sha": item.get("arrangement_sha")})
-            if render_path:
-                with self.status_lock:
-                    self.status["last_render_path"] = render_path
-                self.set_status("floor-safe rescue complete; audible render loaded", 1, False)
-                return {"ok": True, "render_path": render_path, "quality_attempts": attempts + 2, "floor_safe_rescue": True, "rejected_attempts": rejected, "scan": scan_result, "analyze": analyze_result, "loops": loop_result, "approved": approve_result, "proposal": {"manifest": proposal["manifest"], "dst": proposal.get("dst")}, "execute": executed, "params": floor_params}
-        except Exception as exc:
-            rejected.append({"attempt": "floor_safe_rescue", "error": str(exc)})
-        msg = "varispeed-lattice gate rejected expressive, repaired, and floor-safe candidates; no passing render was loaded"
-        with self.status_lock:
-            self.status["last_render_path"] = None
-        self.set_status(msg, 1, False, msg)
-        return {"ok": False, "render_path": None, "error": msg, "rejected_attempts": rejected, "scan": scan_result, "analyze": analyze_result, "loops": loop_result, "approved": approve_result, "proposal": {"manifest": last_proposal.get("manifest") if last_proposal else None, "dst": last_proposal.get("dst") if last_proposal else None}, "execute": last_execute, "params": base_params}
+        """Cold-start jam path. The only composer is the TasteSpec engine; the
+        legacy two-world arranger was removed in the v2 cut."""
+        return self.one_click_taste_mix(data)
 
     def auto_approve_quota(self, max_loops: int = 60) -> Dict[str, Any]:
         """Approve a balanced hot pool instead of bulk-approving the landfill."""
@@ -2679,62 +2502,6 @@ class EarcrateCore:
         audit["user_bpm"] = user_bpm
         return audit
 
-    def annotate_pool_dry_quality(self, pool: List[Dict[str, Any]], sr: int = 22050) -> List[Dict[str, Any]]:
-        """Attach fast dry-deck spectral receipts to approved loops before planning.
-
-        This is the speed/quality fix: bad source fragments are rejected before a
-        full WAV render. It decodes each source file at most once, measures the
-        actual approved loop slice, and records enough dry quality to guide the
-        arranger away from cave/muffle material without downgrading the DJ model.
-        """
-        audio_by_path: Dict[str, np.ndarray] = {}
-        out: List[Dict[str, Any]] = []
-        for item in pool:
-            x = dict(item)
-            path = str(x.get("path") or "")
-            y = audio_by_path.get(path)
-            if y is None:
-                try:
-                    y = decode_audio(Path(path), sr=sr).astype(np.float32)
-                except Exception:
-                    y = np.zeros(0, dtype=np.float32)
-                audio_by_path[path] = y
-            start = int(max(0, float(x.get("start_s") or 0.0) * sr))
-            end = int(max(start + 1, float(x.get("end_s") or 0.0) * sr))
-            seg = y[start:min(end, y.size)] if y.size else np.zeros(0, dtype=np.float32)
-            if seg.size < sr // 8:
-                x.update({"dry_high3000_share": 0.0, "dry_low200_share": 0.0, "dry_rms": 0.0, "dry_quality_score": 0.0, "dry_quality_veto": True})
-                out.append(x); continue
-            try:
-                n_fft = 2048
-                stft = np.abs(librosa.stft(seg, n_fft=n_fft, hop_length=1024)) ** 2
-                freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
-                total = float(np.sum(stft) + 1e-12)
-                low200 = float(np.sum(stft[freqs < 200]) / total)
-                high3000 = float(np.sum(stft[freqs > 3000]) / total)
-                mid_presence = float(np.sum(stft[(freqs >= 1800) & (freqs <= 6500)]) / total)
-            except Exception:
-                low200 = 0.0; high3000 = 0.0; mid_presence = 0.0
-            rms = rms_value(seg)
-            role = str(x.get("role") or "full")
-            # A bass loop is allowed to be dark. Vocals, full beds, and textures are not.
-            required_high = 0.010 if role == "bass" else (0.016 if role == "drum_anchor" else 0.022)
-            quality = 0.0
-            quality += min(1.0, high3000 / 0.060) * 0.45
-            quality += min(1.0, mid_presence / 0.22) * 0.35
-            quality += min(1.0, rms / 0.08) * 0.20
-            veto = bool(rms < 1e-4 or (high3000 < required_high and role not in {"bass"}))
-            x.update({
-                "dry_high3000_share": high3000,
-                "dry_low200_share": low200,
-                "dry_mid_presence_share": mid_presence,
-                "dry_rms": rms,
-                "dry_quality_score": float(quality),
-                "dry_quality_veto": veto,
-            })
-            out.append(x)
-        return out
-
     def arrangement_preflight_gate(self, arrangement: Dict[str, Any]) -> Dict[str, Any]:
         """Cheap non-audio veto before any full WAV render is attempted.
 
@@ -2770,8 +2537,6 @@ class EarcrateCore:
             _ems = int(score.get("empty_music_sections") or 0)
             if _cov < 0.62 or _lev < 6 or _flb is None or (_flb is not None and int(_flb) > 4) or (_ems / _ms > 0.25):
                 causes.append(f"structural_empty(covered={_cov:.2f}, layer_events={_lev}, first_layer_bar={_flb}, empty_sections={_ems}/{_ms})")
-            if bool(score.get("voice_missing")):
-                causes.append("voice_missing (mode requires a voice layer; none placed)")
             failures.append("arrangement score veto: " + (", ".join(causes) if causes else "unattributed; inspect candidate_search.selected_score"))
         covered = float(score.get("covered_bar_ratio") or 0.0)
         layer_events = int(score.get("layer_events") or 0)
@@ -2790,10 +2555,6 @@ class EarcrateCore:
             failures.append("preflight found no planned audio layers")
         elif float(first_layer_bar) > 4.0:
             failures.append(f"preflight first layer starts too late at bar {float(first_layer_bar):.1f}")
-        params = arrangement.get("params") or {}
-        two_world = str(params.get("mix_mode") or "") in {"two_world", "two_world_continuum", "album_collision", "notorious_mode"}
-        if two_world and int(params.get("vocal_density") or 0) >= 60 and int(score.get("voice_layers") or 0) <= 0:
-            failures.append("preflight requested vocal identity but planned zero voice layers")
         if avg_high < 0.016:
             failures.append("preflight high-frequency share too low; likely cave/muffle")
         elif avg_high < 0.026:
@@ -2805,52 +2566,11 @@ class EarcrateCore:
         return {"passed": not failures, "failures": failures, "warnings": warnings, "score": score, "avg_high3000_share": avg_high, "avg_dry_quality_score": avg_quality}
 
     def propose_mashup(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        if params.get("taste_profile") or str(params.get("mix_mode") or "") == "tastespec_graph":
-            return self.propose_taste_mashup(params)
-        c = self.ensure_config()
-        pool = self.approved_loop_pool()
-        if len(pool) < 2:
-            raise RuntimeError("Need at least two approved loops. Run Analyze and Extract Loops, then approve candidates.")
-        if str(params.get("quality_mode") or "") in {"dry_deck", "stable_deck"}:
-            self.set_status("preflight: measuring approved loop dry quality", 0.74, True, None)
-            pool = self.annotate_pool_dry_quality(pool)
-        name = safe_name(str(params.get("name") or "Jukebreaker Mashup"), "Jukebreaker Mashup")
-        explicit_seed = params.get("seed") not in (None, "", 0, "0")
-        seed = int(params.get("seed")) if explicit_seed else self.next_render_seed(c.seed)
+        """Back-compat entry: routes every proposal through the TasteSpec composer.
+        The legacy two-world arranger this used to dispatch to no longer exists."""
         params = dict(params)
-        params["seed"] = seed
-        candidate_count = max(1, min(64, int(params.get("candidate_count") or params.get("arrangement_candidates") or 1)))
-        candidates = []
-        for i in range(candidate_count):
-            cand_seed = seed + i
-            cand_params = dict(params)
-            cand_params["seed"] = cand_seed
-            arr = self.arrange(pool, cand_params, cand_seed)
-            score = self.score_arrangement(arr)
-            preflight = self.arrangement_preflight_gate(arr) if str(cand_params.get("quality_mode") or "") in {"dry_deck", "stable_deck"} else {"passed": True, "warnings": [], "failures": [], "score": score}
-            score = {**score, "preflight_passed": bool(preflight.get("passed")), "preflight_failures": preflight.get("failures") or [], "preflight_warnings": preflight.get("warnings") or [], "avg_high3000_share": round(float(preflight.get("avg_high3000_share") or 0.0), 5), "avg_dry_quality_score": round(float(preflight.get("avg_dry_quality_score") or 0.0), 5)}
-            candidates.append((score, cand_seed, arr, preflight))
-        candidates.sort(reverse=True, key=lambda x: (1 if x[0].get("preflight_passed") else 0, 0 if x[0].get("veto") else 1, x[0].get("total", 0.0)))
-        selected_score, selected_seed, arrangement, selected_preflight = candidates[0]
-        seed = int(selected_seed)
-        params["seed"] = seed
-        params["candidate_count"] = candidate_count
-        arrangement["candidate_search"] = {"count": candidate_count, "selected_seed": seed, "selected_score": selected_score, "selected_preflight": selected_preflight, "top_scores": [c[0] for c in candidates[:5]], "render_policy": "render only after dry preflight; failures are caught before full WAV whenever possible"}
-        arr_sha = arrangement_sha(arrangement)
-        mashup_id = ulidish()
-        render_name = f"{safe_name(name)}-{ENGINE_VERSION}-{arr_sha[:8]}-{seed}.wav"
-        dst = c.working_root / "renders" / render_name
-        db = self.conn()
-        existing = db.execute("SELECT render_path FROM mashups WHERE arrangement_sha=? AND render_path IS NOT NULL ORDER BY created_at DESC LIMIT 1", (arr_sha,)).fetchone()
-        db.execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
-        db.commit()
-        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
-        manifest = self.write_manifest("user", seed, f"Render layered mashup '{name}'", [op])
-        out = {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement, "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha}
-        if existing:
-            out["warning"] = f"identical arrangement already rendered at {existing['render_path']}"
-        return out
-
+        params.setdefault("taste_profile", "girl_talk_v1")
+        return self.propose_taste_mashup(params)
 
     def score_arrangement(self, arrangement: Dict[str, Any]) -> Dict[str, Any]:
         """Cheap arrangement-only scorer so many candidate plans can compete before audio render."""
@@ -2903,7 +2623,6 @@ class EarcrateCore:
         source_diversity = len(track_keys) / max(1, len(layers))
         pitch_diversity = len(set(keys))
         params = arrangement.get("params") or {}
-        mix_mode = str(params.get("mix_mode") or "")
         transform_violations = 0
         role_leaks = 0
         max_stretch_seen = 0.0
@@ -2917,8 +2636,6 @@ class EarcrateCore:
             max_pitch_seen = max(max_pitch_seen, abs(ps))
             if drydeck_transform_violation(role, ps, stretch_pct):
                 transform_violations += 1
-            if drydeck_role_leak(role, str(ly.get("world") or ""), mix_mode):
-                role_leaks += 1
             k = str(ly.get("source_track_key") or ly.get("loop_id"))
             by_source[k] = by_source.get(k, 0) + 1
         max_source_reuse = max(by_source.values()) if by_source else 0
@@ -2939,7 +2656,7 @@ class EarcrateCore:
         total = 0.0
         total += 4.0 * min(1.0, source_diversity * 2.0)
         total += 0.2 * named
-        total += 3.0 if (voice and bed) or not (mix_mode in {"two_world", "two_world_continuum", "album_collision", "notorious_mode"}) else -4.0
+        total += 3.0 if (voice and bed) else 0.0
         total += 8.0 * (1.0 - abs(t_chaos - realized_chaos))
         total += 7.0 * (1.0 - abs(t_drama - realized_drama))
         total += 6.0 * (1.0 - abs(t_whip - realized_whiplash))
@@ -2959,346 +2676,9 @@ class EarcrateCore:
         total -= 2.5 * max(0, hard_air - 1)
         total -= 10.0 * max(0.0, 0.20 - source_diversity)
         total -= 3.0 * empty_music_sections
-        needs_voice = mix_mode in {"two_world", "two_world_continuum", "album_collision", "notorious_mode"} and t_vocal >= 0.60
         structural_empty = covered_bar_ratio < 0.62 or len(layers) < 6 or first_layer_bar is None or first_layer_bar > 4 or (music_sections and empty_music_sections / max(1, len(music_sections)) > 0.25)
-        voice_missing = bool(needs_voice and voice <= 0)
-        veto = bool(transform_violations or role_leaks or predicted_silence > 0.10 or max_source_reuse > 12 or source_diversity < 0.16 or structural_empty or voice_missing)
-        return {"total": round(float(total), 4), "veto": veto, "transform_violations": transform_violations, "role_leaks": role_leaks, "predicted_silence_ratio": round(float(predicted_silence), 4), "hard_air_transitions": int(hard_air), "max_stretch_pct": round(float(max_stretch_seen), 3), "max_abs_residual_pitch_shift": round(float(max_pitch_seen), 3), "max_source_reuse": int(max_source_reuse), "source_tracks": len(track_keys), "source_diversity": round(float(source_diversity), 4), "pitch_centers": pitch_diversity, "named_transitions": named, "dynamic_sections": dynamic, "false_blends": false_blend, "voice_layers": voice, "voice_missing": voice_missing, "bed_layers": bed, "duration_bars": duration_bars, "layer_events": len(layers), "covered_bar_ratio": round(float(covered_bar_ratio), 4), "avg_layer_depth": round(float(avg_layer_depth), 4), "music_sections": len(music_sections), "empty_music_sections": int(empty_music_sections), "first_layer_bar": first_layer_bar, "realized_chaos": round(realized_chaos, 3), "realized_drama": round(realized_drama, 3), "realized_whiplash": round(realized_whiplash, 3), "realized_vocal": round(realized_vocal, 3), "intent_targets": {"chaos": round(t_chaos, 3), "drama": round(t_drama, 3), "whiplash": round(t_whip, 3), "vocal": round(t_vocal, 3)}}
-
-    def propose_continuum(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Compile lookahead remix windows without rendering the final WAV."""
-        params = self.outcome_params(data)
-        params["mix_mode"] = params.get("mix_mode") or "two_world_continuum"
-        params["candidate_count"] = max(12, int(params.get("candidate_count") or 24))
-        params["target_seconds"] = int(data.get("lookahead_seconds") or params.get("target_seconds") or 90)
-        result = self.propose_mashup(params)
-        c = self.ensure_config()
-        out_dir = c.agent_root / "continuum"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        plan_path = out_dir / f"continuum-{result['arrangement_sha'][:8]}-{result['arrangement'].get('seed')}.json"
-        plan = {"created_at": now_utc(), "mode": "continuum_lookahead", "mashup_id": result["mashup_id"], "render_manifest": result["manifest"], "arrangement_sha": result["arrangement_sha"], "arrangement": result["arrangement"], "next_step": "render transition auditions, then approve full stream capture"}
-        plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
-        return {"ok": True, "plan_path": str(plan_path), "mashup_id": result["mashup_id"], "arrangement_sha": result["arrangement_sha"], "candidate_search": result["arrangement"].get("candidate_search"), "sections": len(result["arrangement"].get("sections") or []), "manifest": result["manifest"]}
-
-    def arrange(self, pool: List[Dict[str, Any]], params: Dict[str, Any], seed: int) -> Dict[str, Any]:
-        rng = random.Random(seed)
-        target_seconds = float(params.get("target_seconds") or params.get("duration_s") or 180)
-        chaos = int(params.get("chaos", 55))
-        drama = int(params.get("drama", 70))
-        key_strictness = int(params.get("key_strictness", 65))
-        # Respect the user's budgets up to a real ceiling. These were previously hard-
-        # capped at 2 semitones and 8.5% — so the sliders were half-dead above the cap.
-        # The per-loop transform planner still enforces role-tier safety downstream.
-        pitch_budget = max(0, min(6, int(params.get("pitch_shift_budget", params.get("pitch_budget", 2)))))
-        stretch_budget = max(0.0, min(15.0, float(params.get("stretch_budget", 12))))
-        genre_whiplash = int(params.get("genre_whiplash", 55))
-        vocal_density = int(params.get("vocal_density", 70))
-        anchor_stability = int(params.get("anchor_stability", 75))
-        recognizability = int(params.get("recognizability_bias", 70))
-        mix_mode = str(params.get("mix_mode") or params.get("mode") or "single_crate")
-        safe_deck_rescue = bool(params.get("safe_deck_rescue"))
-        if safe_deck_rescue:
-            # Last-resort durable mode: keep the output dry, boring if necessary,
-            # and pass quality by construction instead of letting a bad plan escape.
-            chaos = min(34, chaos)
-            drama = min(28, drama)
-            key_strictness = max(82, key_strictness)
-            pitch_budget = min(1, pitch_budget)
-            stretch_budget = min(4.5, stretch_budget)
-            genre_whiplash = min(30, genre_whiplash)
-            vocal_density = min(58, vocal_density)
-            anchor_stability = max(94, anchor_stability)
-            recognizability = max(65, min(82, recognizability))
-        voice_query = str(params.get("voice_world_query") or "")
-        bed_query = str(params.get("bed_world_query") or "")
-        two_world = mix_mode in {"two_world", "two_world_continuum", "album_collision", "notorious_mode"} or bool(voice_query or bed_query)
-
-        voice_world_pool = [x for x in pool if world_query_match(x, voice_query)] if voice_query else []
-        bed_world_pool = [x for x in pool if world_query_match(x, bed_query)] if bed_query else []
-        if two_world:
-            if not voice_world_pool:
-                voice_world_pool = [x for x in pool if role_world_guess(x) == "voice"]
-            if not bed_world_pool:
-                bed_world_pool = [x for x in pool if role_world_guess(x) == "bed"]
-            # Avoid empty worlds: a small crate must still run, but the report marks fallback worlds.
-            voice_source = voice_world_pool or pool
-            bed_source = bed_world_pool or pool
-        else:
-            voice_source = pool
-            bed_source = pool
-
-        anchors = [x for x in bed_source if x.get("role") == "drum_anchor"] or [x for x in bed_source if x.get("role") in ("full", "texture")] or [x for x in pool if x.get("role") == "drum_anchor"]
-        vocals = [x for x in voice_source if x.get("role") == "vocal" and float(x.get("vocal_likelihood") or 0) >= 0.65]
-        fallback_vocals = sorted([x for x in voice_source if x.get("role") != "vocal" and float(x.get("vocal_likelihood") or 0) >= 0.65], key=lambda x: float(x.get("score") or 0), reverse=True)[: max(1, min(16, len(pool)//4 or 1))]
-        basses = [x for x in bed_source if x.get("role") == "bass"]
-        harmonies = [x for x in bed_source if x.get("role") in ("harmony", "full", "texture")]
-        textures = [x for x in bed_source if x.get("role") in ("texture", "fx", "full")]
-        world_model = {"mode": mix_mode, "voice_world_query": voice_query, "bed_world_query": bed_query, "voice_candidates": len(voice_world_pool), "bed_candidates": len(bed_world_pool), "rule": "voice world supplies lead identity; bed world supplies drums, bass, harmony, and texture"}
-        if two_world and not safe_deck_rescue:
-            anchor_stability = min(anchor_stability, 54)
-
-        bpms = [float(x.get("bpm") or 0) for x in anchors if 70 <= float(x.get("bpm") or 0) <= 180]
-        user_bpm = float(params.get("bpm") or 0) or None
-        _stretch_budget_for_lattice = float(params.get("stretch_budget") or 0) or None
-        _pitch_budget_for_lattice = float(params.get("pitch_shift_budget") or 0) or None
-        target_key_for_lattice = self.choose_target_key_for_pool(pool)
-        # The lattice: score candidate deck speeds by total clean-transform cost over
-        # the pool instead of forcing everything to one rigid BPM. If the user pinned a
-        # BPM we honour it but still record the lattice so the report shows what it cost;
-        # if they left it blank we take the lattice winner instead of a naive median.
-        lattice_result = score_bpm_lattice(pool, user_bpm or (float(np.median(bpms)) if bpms else 120.0),
-                                           target_key_for_lattice, _stretch_budget_for_lattice, _pitch_budget_for_lattice)
-        if user_bpm:
-            render_bpm = user_bpm
-        else:
-            render_bpm = float(lattice_result.get("best_bpm") or (np.median(bpms) if bpms else 100.0))
-        render_bpm = max(70.0, min(180.0, render_bpm))
-        seconds_per_bar = 4 * 60.0 / render_bpm
-        target_bars = max(4, int(round(target_seconds / seconds_per_bar)))
-        plan = self.build_energy_plan(target_bars, chaos, drama, rng)
-        if safe_deck_rescue:
-            # No true air in rescue. Build/sustain sections only, with one small
-            # breakdown that still carries musical material. This prevents the
-            # exact failure seen in v0.5.8/v0.5.9: gate-caught dead air plus muffle.
-            plan = []
-            remaining = target_bars
-            first = min(8, remaining)
-            if first > 0:
-                plan.append({"type": "build", "bars": first, "energy_level": 0.42, "target_layer_count": 2})
-                remaining -= first
-            while remaining > 0:
-                bars = min(8, remaining)
-                plan.append({"type": "sustain", "bars": bars, "energy_level": 0.74, "target_layer_count": 3})
-                remaining -= bars
-            if target_bars >= 48 and len(plan) > 4:
-                mid = max(2, len(plan)//2)
-                plan[mid].update({"type": "breakdown", "energy_level": 0.34, "target_layer_count": 2})
-        # Stable-deck mode may be aggressive, but it cannot be mostly air.
-        # Limit true cut sections before render so the post-render gate does not
-        # repeatedly catch predictable dead-air failures.
-        if str(params.get("quality_mode") or "") in {"dry_deck", "stable_deck"}:
-            max_air_bars = max(2, int(round(target_bars * 0.055)))
-            air_seen = 0
-            prev_air = False
-            for sec in plan:
-                typ = str(sec.get("type") or "")
-                bars_i = int(sec.get("bars") or 0)
-                if typ == "cut":
-                    if air_seen + bars_i > max_air_bars or prev_air:
-                        sec.update({"type": "breakdown", "target_layer_count": 1, "energy_level": 0.24})
-                        prev_air = True
-                    else:
-                        air_seen += bars_i
-                        prev_air = True
-                elif typ == "breakdown":
-                    if prev_air and bars_i > 2:
-                        sec["bars"] = 2
-                    prev_air = True
-                else:
-                    prev_air = False
-
-        # Key eras: target key changes every few sections by an intentional harmonic route.
-        era_spans: List[Tuple[int, int]] = []
-        i = 0
-        while i < len(plan):
-            era_len = int(rng.choice([3, 4, 5, 6])) if chaos >= 70 else int(rng.choice([4, 5, 6, 8]))
-            era_spans.append((i, min(len(plan), i + era_len)))
-            i += era_len
-        current_key = self.choose_target_key_for_pool(pool)
-        route = self.plan_harmonic_route(pool, current_key, len(era_spans), pitch_budget, key_strictness, chaos, rng)
-        era_keys: List[int] = [current_key] * len(plan)
-        for (a, b), k in zip(era_spans, route):
-            for idx in range(a, b):
-                era_keys[idx] = int(k)
-
-        sections: List[Dict[str, Any]] = []
-        bars_elapsed = 0
-        current_anchor: Optional[Dict[str, Any]] = None
-        current_bass: Optional[Dict[str, Any]] = None
-        current_harmony: Optional[Dict[str, Any]] = None
-        anchor_started_bar = -999
-        bass_started_bar = -999
-        bass_survive_until = 0
-        harmony_survive_until = 0
-        recent_ids: List[str] = []
-        recent_track_keys: List[str] = []
-        last_genre = None
-
-        def append_section(sec: Dict[str, Any]) -> None:
-            prev = sections[-1] if sections else None
-            prev_key = int(prev.get("target_key")) if prev and prev.get("target_key") is not None else None
-            sec["transition_in"] = self.plan_transition(prev, str(sec.get("type") or "sustain"), prev_key, int(sec.get("target_key") or 0), int(sec.get("bar_start") or 0), int(sec.get("bars") or 0), list(sec.get("layers") or []), chaos, drama, rng)
-            sec["beat_dna"] = {"phrase_boundary": sec["transition_in"].get("phrase_boundary"), "bar_start": int(sec.get("bar_start") or 0), "bars": int(sec.get("bars") or 0), "bpm": render_bpm}
-            sec["chord_dna"] = {"target_key": int(sec.get("target_key") or 0), "harmonic_relation": sec["transition_in"].get("harmonic_relation")}
-            sections.append(sec)
-
-        def different_file_items(items: List[Dict[str, Any]], layers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-            used_ids = {ly["loop_id"] for ly in layers}
-            used_paths = {x.get("path") for x in pool if x.get("id") in used_ids}
-            recent_set = set(recent_track_keys[-18:])
-            out = [x for x in items if x.get("id") not in used_ids and x.get("path") not in used_paths and track_identity(x) not in recent_set]
-            return out or [x for x in items if x.get("id") not in used_ids and x.get("path") not in used_paths] or [x for x in items if x.get("id") not in used_ids] or items
-
-        def add_layer(layers: List[Dict[str, Any]], item: Optional[Dict[str, Any]], role: Optional[str], target_key: int, gain_db: Optional[float] = None, bar_offset: int = 0, bar_len: Optional[int] = None, provenance: str = "native") -> bool:
-            if not item:
-                return False
-            role_name = role or item.get("role") or "full"
-            # In two-world mode, enforce the crate contract before any musical scoring.
-            # Voice-world material supplies lead identity; bed-world material supplies the floor.
-            if two_world and bool(params.get("strict_world_roles", True)):
-                if role_name == "vocal":
-                    if item not in voice_source:
-                        return False
-                elif role_name in {"drum_anchor", "bass", "harmony", "texture", "fx", "full"}:
-                    if item not in bed_source:
-                        return False
-            try:
-                loop_key = int(item.get("key_root")) % 12
-            except Exception:
-                loop_key = target_key
-            item_bpm = float(item.get("bpm") or render_bpm)
-            transform = plan_varispeed_transform(role_name, item_bpm, render_bpm, loop_key, target_key, stretch_budget, pitch_budget)
-            if transform.get("violation"):
-                return False
-            ps = float(transform.get("synthetic_pitch_shift") or 0.0)
-            stretch_pct_for_item = float(transform.get("varispeed_pct") or 0.0)
-            if gain_db is None:
-                gain_db = -6.2 if role_name == "vocal" else (-6.0 if role_name == "bass" else (-7.0 if role_name == "drum_anchor" else (-14.5 if role_name in ("texture", "fx", "full") else -12.0)))
-            world = "voice" if item in voice_source and role_name == "vocal" else ("bed" if item in bed_source else role_world_guess(item))
-            if drydeck_role_leak(role_name, world, mix_mode) and bool(params.get("strict_world_roles", True)):
-                return False
-            tkey = track_identity(item)
-            layers.append({
-                "loop_id": item["id"], "role": role_name, "pitch_shift": float(ps), "gain_db": float(gain_db),
-                "bar_offset": int(max(0, bar_offset)), "bar_len": int(bar_len) if bar_len is not None else None,
-                "start_s": item.get("start_s"), "end_s": item.get("end_s"), "target_key": int(target_key),
-                "role_provenance": provenance, "world": world, "source_track_key": tkey,
-                "native_key": loop_key, "source_bpm": float(item.get("bpm") or render_bpm),
-                "transform_mode": transform.get("transform_mode"), "speed_ratio": float(transform.get("speed_ratio") or 1.0),
-                "varispeed_pct": float(transform.get("varispeed_pct") or 0.0),
-                "natural_pitch_shift": float(transform.get("natural_pitch_shift") or 0.0),
-                "desired_key_shift": float(transform.get("desired_key_shift") or 0.0),
-                "residual_pitch_shift": float(transform.get("residual_pitch_shift") or 0.0),
-                "artifact_risk": transform.get("artifact_risk"),
-                "dry_high3000_share": float(item.get("dry_high3000_share") or 0.0),
-                "dry_low200_share": float(item.get("dry_low200_share") or 0.0),
-                "dry_mid_presence_share": float(item.get("dry_mid_presence_share") or 0.0),
-                "dry_quality_score": float(item.get("dry_quality_score") or 0.0),
-            })
-            recent_ids.append(item["id"])
-            recent_track_keys.append(tkey)
-            nonlocal last_genre
-            last_genre = item.get("genre") or last_genre
-            return True
-
-        for section_index, sec_plan in enumerate(plan):
-            if bars_elapsed >= target_bars:
-                break
-            bars = int(min(int(sec_plan.get("bars") or 4), target_bars - bars_elapsed))
-            if bars <= 0:
-                break
-            sec_type = str(sec_plan.get("type") or "sustain")
-            target_layers = int(sec_plan.get("target_layer_count") or 3)
-            era_key = int(era_keys[min(section_index, len(era_keys)-1)])
-            layers: List[Dict[str, Any]] = []
-
-            if sec_type == "cut":
-                # Actual air. Optional one-beat/one-bar stinger only at higher drama.
-                if textures and rng.random() < drama / 160.0:
-                    sting = self.pick_loop(textures, render_bpm, era_key, pitch_budget, stretch_budget, max(0, key_strictness - 15), recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                    add_layer(layers, sting, "texture", era_key, gain_db=-20.0, bar_offset=0, bar_len=max(1, min(1, bars)))
-                append_section({"bar_start": bars_elapsed, "bars": bars, "type": sec_type, "energy_level": sec_plan.get("energy_level"), "target_key": era_key, "layers": layers})
-                bars_elapsed += bars
-                recent_ids = recent_ids[-24:]
-                continue
-
-            max_anchor_hold_bars = 8 if two_world else (12 if chaos >= 70 else 16)
-            if sec_type == "drop":
-                current_anchor = self.pick_loop(different_file_items(anchors, []), render_bpm, era_key, pitch_budget, stretch_budget, key_strictness, recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                anchor_started_bar = bars_elapsed
-            else:
-                anchor_overheld = current_anchor is not None and (bars_elapsed - anchor_started_bar) >= max_anchor_hold_bars
-                swap_anchor = current_anchor is None or anchor_overheld or rng.random() > (anchor_stability / 100.0) or section_index % max(1, int(4 + anchor_stability / 20)) == 0
-                if swap_anchor and sec_type != "breakdown":
-                    picked_anchor = self.pick_loop(different_file_items(anchors, []), render_bpm, era_key, pitch_budget, stretch_budget, key_strictness, recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                    if picked_anchor:
-                        current_anchor = picked_anchor
-                        anchor_started_bar = bars_elapsed
-
-            if sec_type != "breakdown" and current_anchor and target_layers > 0:
-                anchor_gain = -5.5 if sec_type == "drop" else (-8.5 if sec_type == "build" else -7.0)
-                off = 0 if sec_type != "build" or rng.random() > 0.35 else int(min(max(0, bars-2), rng.choice([0,1,2])))
-                add_layer(layers, current_anchor, "drum_anchor" if current_anchor.get("role") == "drum_anchor" else current_anchor.get("role"), era_key, gain_db=anchor_gain, bar_offset=off, bar_len=bars-off)
-
-            if sec_type in ("sustain", "drop", "build") and basses and len(layers) < target_layers and rng.random() < 0.78:
-                bass_overheld = current_bass is not None and (bars_elapsed - bass_started_bar) >= (8 if two_world else 16)
-                if current_bass is None or bass_overheld or bars_elapsed >= bass_survive_until or sec_type == "drop" or rng.random() < (0.12 + chaos / 550.0):
-                    picked_bass = self.pick_loop(different_file_items(basses, layers), render_bpm, era_key, pitch_budget, stretch_budget, key_strictness, recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                    if picked_bass:
-                        current_bass = picked_bass
-                        bass_started_bar = bars_elapsed
-                    bass_survive_until = bars_elapsed + int(rng.choice([8, 12, 16]))
-                if current_bass:
-                    add_layer(layers, current_bass, "bass", era_key, gain_db=-6.0, bar_offset=0, bar_len=bars)
-
-            if harmonies and len(layers) < target_layers and (sec_type == "breakdown" or rng.random() < 0.70):
-                if current_harmony is None or bars_elapsed >= harmony_survive_until or sec_type == "drop" or rng.random() < (0.18 + chaos / 500.0):
-                    current_harmony = self.pick_loop(different_file_items(harmonies, layers), render_bpm, era_key, pitch_budget, stretch_budget, key_strictness, recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                    harmony_survive_until = bars_elapsed + int(rng.choice([4, 8, 12]))
-                if current_harmony:
-                    role = "harmony" if current_harmony.get("role") != "full" else "full"
-                    add_layer(layers, current_harmony, role, era_key, gain_db=-12.0 if sec_type == "breakdown" else -11.0, bar_offset=0, bar_len=bars)
-
-            vocal_pool = vocals or fallback_vocals
-            if vocal_pool and len(layers) < max(target_layers, 1) + 1 and rng.random() < vocal_density / 100.0:
-                l = self.pick_loop(different_file_items(vocal_pool, layers), render_bpm, era_key, pitch_budget, stretch_budget, max(0, key_strictness - 10), recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                if l:
-                    if bars >= 8 and chaos >= 50:
-                        hook_len = int(rng.choice([2, 4, 4])); hook_offset = int(rng.choice([0, 0, 2, 4]))
-                        if hook_offset + hook_len > bars: hook_offset = max(0, bars - hook_len)
-                    elif bars >= 4 and chaos >= 60:
-                        hook_len = int(rng.choice([2, 4])); hook_offset = 0 if hook_len >= bars else int(rng.choice([0, bars-hook_len]))
-                    else:
-                        hook_len = bars; hook_offset = 0
-                    prov = "fallback" if l in fallback_vocals and l not in vocals else "native"
-                    add_layer(layers, l, "vocal", era_key, gain_db=-6.5 if sec_type != "breakdown" else -8.0, bar_offset=hook_offset, bar_len=hook_len, provenance=prov)
-
-            if textures and sec_type in ("sustain", "drop", "build") and rng.random() < max(0.15, chaos / 125.0):
-                l = self.pick_loop(different_file_items(textures, layers), render_bpm, era_key, pitch_budget, stretch_budget, max(0, key_strictness - 15), recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                if l:
-                    fill_len = 1 if bars <= 4 else int(rng.choice([1, 2]))
-                    fill_offset = 0 if rng.random() < 0.35 else max(0, bars - fill_len)
-                    add_layer(layers, l, "texture" if l.get("role") != "vocal" else "vocal", era_key, gain_db=-20.0 if fill_len <= 1 else -17.5, bar_offset=fill_offset, bar_len=fill_len)
-
-            guard = 0
-            filler_pool = (harmonies + textures + basses + anchors) if two_world else pool
-            while sec_type not in ("breakdown", "cut") and len(layers) < min(target_layers, len(pool)) and guard < 8:
-                guard += 1
-                l = self.pick_loop(different_file_items(filler_pool, layers), render_bpm, era_key, pitch_budget, stretch_budget, max(0, key_strictness - 15), recent_ids, last_genre, genre_whiplash, recognizability, rng)
-                if not l:
-                    break
-                role = l.get("role") or "full"
-                if role == "drum_anchor" and any(ly.get("role") == "drum_anchor" for ly in layers):
-                    role = "texture"
-                if role == "vocal" and two_world:
-                    role = "texture"
-                add_layer(layers, l, role, era_key, bar_offset=0, bar_len=bars)
-
-            append_section({"bar_start": bars_elapsed, "bars": bars, "type": sec_type, "energy_level": sec_plan.get("energy_level"), "target_key": era_key, "layers": layers})
-            bars_elapsed += bars
-            recent_ids = recent_ids[-24:]
-
-        bpm_lattice_receipt = {
-            "target_bpm": user_bpm,
-            "chosen_bpm": round(render_bpm, 2),
-            "chosen_by": "user_pin" if user_bpm else "lattice_min_cost",
-            "candidates": lattice_result.get("lattice", [])[:8],
-            "best": lattice_result.get("best"),
-        }
-        return {"bpm": render_bpm, "target_key": target_key_for_lattice, "seed": seed, "params": params, "engine": ENGINE_VERSION, "dj_compiler": {"version": "v0.5.17", "contract": "full_capability_continuum + varispeed_first_tempo_key_lattice + role_locked_two_world_crates + preflight_quality_scoring + residual_pitch_transforms + pruned_multideck_tails + transform_cache + post_render_sanity"}, "bpm_lattice": bpm_lattice_receipt, "world_model": world_model, "sections": sections}
-
-    def choose_target_key(self, pool: List[Dict[str, Any]]) -> int:
-        return self.choose_target_key_for_pool(pool)
+        veto = bool(transform_violations or role_leaks or predicted_silence > 0.10 or max_source_reuse > 12 or source_diversity < 0.16 or structural_empty)
+        return {"total": round(float(total), 4), "veto": veto, "transform_violations": transform_violations, "role_leaks": role_leaks, "predicted_silence_ratio": round(float(predicted_silence), 4), "hard_air_transitions": int(hard_air), "max_stretch_pct": round(float(max_stretch_seen), 3), "max_abs_residual_pitch_shift": round(float(max_pitch_seen), 3), "max_source_reuse": int(max_source_reuse), "source_tracks": len(track_keys), "source_diversity": round(float(source_diversity), 4), "pitch_centers": pitch_diversity, "named_transitions": named, "dynamic_sections": dynamic, "false_blends": false_blend, "voice_layers": voice, "bed_layers": bed, "duration_bars": duration_bars, "layer_events": len(layers), "covered_bar_ratio": round(float(covered_bar_ratio), 4), "avg_layer_depth": round(float(avg_layer_depth), 4), "music_sections": len(music_sections), "empty_music_sections": int(empty_music_sections), "first_layer_bar": first_layer_bar, "realized_chaos": round(realized_chaos, 3), "realized_drama": round(realized_drama, 3), "realized_whiplash": round(realized_whiplash, 3), "realized_vocal": round(realized_vocal, 3), "intent_targets": {"chaos": round(t_chaos, 3), "drama": round(t_drama, 3), "whiplash": round(t_whip, 3), "vocal": round(t_vocal, 3)}}
 
     def choose_target_key_for_pool(self, pool: List[Dict[str, Any]]) -> int:
         counts: Dict[int, float] = {}
@@ -3311,139 +2691,6 @@ class EarcrateCore:
         if not counts:
             return 0
         return max(counts, key=counts.get)
-
-    def compatible_era_keys(self, current: int, rng: random.Random, chaos: int) -> List[int]:
-        moves = [0, 7, 5, 3, 4, -7, -5]
-        if chaos >= 70:
-            moves += [1, -1]
-        keys = [int((current + m) % 12) for m in moves]
-        rng.shuffle(keys)
-        return keys
-
-    def build_energy_plan(self, target_bars: int, chaos: int, drama: int, rng: random.Random) -> List[Dict[str, Any]]:
-        """Build a phrase-aware energy plan and repair it to the exact target length."""
-        plan: List[Dict[str, Any]] = []
-        bars_elapsed = 0
-        intro_bars = min(target_bars, int(rng.choice([4, 4, 8])))
-        plan.append({"type": "build", "bars": intro_bars, "energy_level": 0.35, "target_layer_count": 1})
-        bars_elapsed += intro_bars
-        section_choices = [2, 4, 4, 8] if chaos >= 70 else ([4, 4, 8] if chaos >= 45 else [8, 8, 16])
-        mandatory_gap_bars = 12 if chaos >= 70 else 24
-        bars_since_break = 0
-        pending_drop = False
-        while bars_elapsed < target_bars:
-            remaining = target_bars - bars_elapsed
-            bars = int(min(remaining, rng.choice(section_choices)))
-            must_break = bars_since_break >= mandatory_gap_bars
-            if pending_drop:
-                typ = "drop"
-                energy = 0.96
-                layers = 4
-                pending_drop = False
-                bars_since_break = 0
-            elif must_break or rng.random() < (0.08 + drama / 420.0):
-                typ = "cut" if rng.random() < (0.26 + drama / 150.0) else "breakdown"
-                bars = int(min(remaining, rng.choice([1, 2]) if typ == "cut" else rng.choice([2, 4, 4, 8])))
-                energy = 0.00 if typ == "cut" else 0.22
-                layers = 0 if typ == "cut" else int(rng.choice([1, 1, 2]))
-                pending_drop = True
-                bars_since_break = 0
-            elif rng.random() < (0.26 + chaos / 470.0):
-                typ = "build"
-                energy = 0.55
-                layers = int(rng.choice([1, 2, 3]))
-                bars_since_break += bars
-            else:
-                typ = "sustain"
-                energy = 0.76
-                layers = 3 + (1 if chaos >= 55 else 0)
-                bars_since_break += bars
-            plan.append({"type": typ, "bars": bars, "energy_level": energy, "target_layer_count": layers})
-            bars_elapsed += bars
-        # Enforce at least two real dynamic events without shrinking the piece.
-        dyn = sum(1 for x in plan if x["type"] in ("cut", "breakdown"))
-        if target_bars >= 24 and dyn < 2:
-            for pos, typ in [(max(1, len(plan)//3), "breakdown"), (max(2, (2*len(plan))//3), "cut")]:
-                if pos < len(plan):
-                    old_bars = int(plan[pos].get("bars") or 4)
-                    new_bars = min(old_bars, 4 if typ == "breakdown" else 2)
-                    plan[pos].update({"type": typ, "bars": new_bars, "energy_level": 0.20 if typ == "breakdown" else 0.0, "target_layer_count": 1 if typ == "breakdown" else 0})
-                    # Add any removed bars to the following drop/sustain section so target length remains exact.
-                    removed = old_bars - new_bars
-                    if removed > 0:
-                        target_pos = min(len(plan)-1, pos+1)
-                        plan[target_pos]["bars"] = int(plan[target_pos].get("bars") or 0) + removed
-        total = sum(int(x.get("bars") or 0) for x in plan)
-        if total < target_bars:
-            deficit = target_bars - total
-            for x in reversed(plan):
-                if x.get("type") in ("sustain", "drop", "build"):
-                    x["bars"] = int(x.get("bars") or 0) + deficit
-                    break
-            else:
-                plan.append({"type": "sustain", "bars": deficit, "energy_level": 0.72, "target_layer_count": 3})
-        elif total > target_bars:
-            over = total - target_bars
-            for x in reversed(plan):
-                b = int(x.get("bars") or 0)
-                take = min(over, max(0, b - 1))
-                x["bars"] = b - take
-                over -= take
-                if over <= 0:
-                    break
-        return [x for x in plan if int(x.get("bars") or 0) > 0]
-
-    def score_key_for_pool(self, pool: List[Dict[str, Any]], target_key: int, pitch_budget: int, key_strictness: int) -> float:
-        score = 0.0
-        for item in pool:
-            try:
-                lk = int(item.get("key_root")) % 12
-            except Exception:
-                continue
-            role = str(item.get("role") or "full")
-            src_bpm = float(item.get("bpm") or 0.0)
-            # A key is viable if the loop can arrive there by clean deck-speed movement
-            # plus at most a small residual pitch correction.
-            tf = plan_varispeed_transform(role, src_bpm or 120.0, src_bpm or 120.0, lk, target_key, 99.0, pitch_budget)
-            if tf.get("violation") and abs(float(tf.get("residual_pitch_shift") or 0.0)) > float(drydeck_transform_limits(role)["residual_pitch"]):
-                continue
-            role_bonus = 1.15 if role in ("drum_anchor", "bass", "harmony", "vocal") else 0.85
-            residual = abs(float(tf.get("residual_pitch_shift") or 0.0))
-            score += role_bonus * (float(item.get("score") or 0.5) - 0.10 * residual + float(item.get("dry_quality_score") or 0.0) * 0.12)
-        return float(score)
-
-    def plan_harmonic_route(self, pool: List[Dict[str, Any]], start_key: int, n_eras: int, pitch_budget: int, key_strictness: int, chaos: int, rng: random.Random) -> List[int]:
-        """Plan an intentional harmonic route instead of repeatedly collapsing to one key."""
-        if n_eras <= 0:
-            return []
-        route = [int(start_key) % 12]
-        preferred_moves = [0, 7, 5, 3, 4]
-        if chaos >= 70:
-            preferred_moves += [1, 11]
-        while len(route) < n_eras:
-            prev = route[-1]
-            candidates = []
-            for move in preferred_moves:
-                k = (prev + move) % 12
-                support = self.score_key_for_pool(pool, k, pitch_budget, key_strictness)
-                novelty = 0.32 if k not in route else -0.20 * route.count(k)
-                motion = 0.20 if move in (7, 5, 3, 4) else (0.08 if move in (1, 11) else 0.0)
-                candidates.append((support + novelty + motion + rng.random() * 0.04, k))
-            candidates.sort(reverse=True, key=lambda x: x[0])
-            route.append(int(candidates[0][1]))
-        if n_eras >= 4 and len(set(route)) < 4:
-            # Force enough musical geography for a two-minute sketch: same, fifth, fourth, relative/parallel.
-            forced = [(start_key + m) % 12 for m in (0, 7, 5, 3, 4, 1, 11)]
-            good = sorted(forced, key=lambda k: self.score_key_for_pool(pool, k, pitch_budget, key_strictness), reverse=True)
-            repl = []
-            for k in good:
-                if k not in repl and compatible_pitch_shift(start_key, k, max(5, pitch_budget), 0) is not None:
-                    repl.append(k)
-                if len(repl) >= min(4, n_eras):
-                    break
-            for i, k in enumerate(repl):
-                route[i % len(route)] = k
-        return route[:n_eras]
 
     def plan_transition(self, prev_sec: Optional[Dict[str, Any]], sec_type: str, prev_key: Optional[int], next_key: int, bar_start: int, bars: int, layers: List[Dict[str, Any]], chaos: int, drama: int, rng: random.Random) -> Dict[str, Any]:
         """Compile basic DJ transition grammar into the arrangement report."""
@@ -3471,55 +2718,6 @@ class EarcrateCore:
         else:
             typ, beats, curve, bass_policy = "hard_cut_pickup", 1, "s_curve", "incoming_on_downbeat"
         return {"type": typ, "xfade_beats": int(beats), "curve": curve, "phrase_boundary": phrase, "harmonic_relation": relation, "bass_policy": bass_policy, "low_cutoff_hz": 170, "prev_bass_owner": prev_bass, "next_bass_owner": next_bass}
-
-    def pick_loop(self, items: List[Dict[str, Any]], render_bpm: float, target_key: int, pitch_budget: int, stretch_budget: float, key_strictness: int, recent_ids: List[str], last_genre: Optional[str], genre_whiplash: int, recognizability: int, rng: random.Random) -> Optional[Dict[str, Any]]:
-        scored = []
-        for x in items:
-            try:
-                bpm = float(x.get("bpm") or render_bpm)
-                try:
-                    loop_key = int(x.get("key_root")) % 12
-                except Exception:
-                    loop_key = target_key
-                role_for_limit = str(x.get("role") or "full")
-                transform = plan_varispeed_transform(role_for_limit, bpm, render_bpm, loop_key, target_key, stretch_budget, pitch_budget)
-                if transform.get("violation"):
-                    continue
-                stretch = float(transform.get("varispeed_pct") or 0.0)
-                ps = float(transform.get("synthetic_pitch_shift") or 0.0)
-                if bool(x.get("dry_quality_veto")) and role_for_limit not in {"bass"}:
-                    continue
-                score = float(x.get("score") or 0.5)
-                score *= 1.0 + recognizability / 180.0
-                score += float(x.get("dry_quality_score") or 0.0) * 0.85
-                score -= stretch / 32.0
-                score -= abs(ps) / 5.0
-                score += max(0.0, 0.28 - abs(float(transform.get("residual_pitch_shift") or 0.0)))
-                score += max(0.0, 0.18 - abs(float(transform.get("natural_pitch_shift") or 0.0) - round(float(transform.get("natural_pitch_shift") or 0.0))) )
-                if x["id"] in recent_ids:
-                    score -= 1.25
-                g = (x.get("genre") or "").lower()
-                lg = (last_genre or "").lower()
-                if lg and g and lg != g:
-                    score += (genre_whiplash - 50) / 100.0
-                score += rng.random() * 0.05
-                scored.append((score, x))
-            except Exception:
-                continue
-        if not scored:
-            return None
-        scored.sort(reverse=True, key=lambda t: t[0])
-        # Weighted pick among top five for deterministic variety.
-        top = scored[: min(5, len(scored))]
-        weights = np.array([max(0.01, s - top[-1][0] + 0.05) for s, _ in top], dtype=np.float64)
-        weights = weights / np.sum(weights)
-        r = rng.random()
-        acc = 0.0
-        for w, (_, item) in zip(weights, top):
-            acc += float(w)
-            if r <= acc:
-                return item
-        return top[0][1]
 
     def write_manifest(self, author: str, seed: int, summary: str, operations: List[Dict[str, Any]]) -> str:
         c = self.ensure_config()

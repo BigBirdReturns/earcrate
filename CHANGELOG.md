@@ -1,6 +1,14 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.4 — Persona Codex (unreleased)
+- RANKING: the persona now ranks raw material the way the artist reaches for it,
+  not just gates it. `rank_material` (five weighted priorities: recognizability
+  0.34, role clarity 0.24, danceability 0.18, deck feasibility 0.14, contrast
+  0.10) grounds each on a metric the analyzer already computes, and every ranked
+  entry carries its five sub-scores as a receipt — the curation surface. Deck
+  feasibility is a hard reality (an unbeatmatchable loop sinks regardless of
+  contrast). Surfaced via `rank_crate`, CLI `earcrate rank`, `POST /api/rank`;
+  documented in PERSONAS/GIRL_TALK_V1.md §11; gate test_girl_talk_ranking.
 - FIX (duration): every TasteSpec render came out ~4x its target length (a
   2-min pick became ~8 min). total_bars computed beats/4 (already bars) then
   multiplied by 4 again; now rounds to the nearest whole 4-bar phrase. A 120s

@@ -180,6 +180,28 @@ missing. This is why stem separation is the highest-leverage unlock — it conve
 the scarce roles (clean drum beds, isolatable vocals) from rare to abundant
 without adding a single new song.
 
+## 11. The ranking model (how the artist ranks raw material)
+
+The persona doesn't just gate a crate — it ranks it, the way the artist reaches
+for material. Implemented in `rank_material` (`ear/readiness.py`), surfaced via
+`rank_crate` / CLI `earcrate rank` / `POST /api/rank`, gated by
+`test_girl_talk_ranking`. Five priorities, highest first, each mapped to a metric
+the analyzer already computes so the ranking is grounded, not taste-by-assertion:
+
+| Priority | Weight | Why it ranks here | Metric |
+|---|---|---|---|
+| **recognizability** | 0.34 | the entire payoff is recognition — the "oh, THAT song" hit | `hook_score` (+ `score`), role-weighted so hooks trade on it and beds barely do |
+| **role clarity** | 0.24 | a clean isolatable vocal or a clean bed beats full-mix mush | `intelligibility`+mid salience (vox), transient+low (drums), `bass_score` (bass), `floor_score`/`bed_score` (bed) |
+| **danceability** | 0.18 | it's party music; the floor has to move | `energy` + `transient_density` |
+| **deck feasibility** | 0.14 | a hook you can't beatmatch to the crate tempo is dead weight | varispeed % to the nearest tempo island after octave folding |
+| **contrast** | 0.10 | genre/era/key distance is the collision payoff | circle-of-keys distance from the crate centroid (weak until online metadata adds genre/era — see §9) |
+
+Deck feasibility is a hard reality, not a soft weight: a maximum-contrast loop that
+can't reach the tempo scores 0 there and sinks regardless — exactly the DJ truth
+that an unbeatmatchable record stays in the bag. The output is ranked overall and
+`top_by_role`, each entry carrying its five sub-scores as a receipt: this is the
+curation surface — which of *your* loops the artist would actually pull, and why.
+
 ## 9. What the persona does NOT yet encode (honest backlog)
 
 - **Chroma-trajectory matching**: loops are routed to era keys, not selected by

@@ -1836,6 +1836,21 @@ class EarcrateCore:
             out.append(d)
         return out
 
+    def rank_crate(self, taste_profile: str = "girl_talk_v1", limit: int = 0) -> Dict[str, Any]:
+        """Rank the approved ear crate by the persona's own selection priorities
+        (recognizable hooks first, clean role material, danceable, deck-feasible,
+        contrast bonus). The curation surface: which of YOUR loops the artist would
+        actually reach for, and why — every entry carries its five sub-scores."""
+        pool = self.approved_atom_pool(taste_profile)
+        profile = TASTE_PROFILES.get(taste_profile, TASTE_PROFILES["girl_talk_v1"])
+        islands = build_bpm_lattice(pool, None)[:4] if pool else []
+        out = rank_material(pool, tempo_islands=islands, profile=profile)
+        if limit and limit > 0:
+            out["ranked"] = out["ranked"][:limit]
+        out["ok"] = True
+        out["taste_profile"] = taste_profile
+        return out
+
     def taste_readiness(self, taste_profile: str = "girl_talk_v1", target_seconds: float = 120.0) -> Dict[str, Any]:
         pool = self.approved_atom_pool(taste_profile)
         profile = TASTE_PROFILES.get(taste_profile, TASTE_PROFILES["girl_talk_v1"])

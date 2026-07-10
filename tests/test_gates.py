@@ -121,6 +121,27 @@ def test_taste_duration_and_vocal_count():
     assert sc["voice_layers"] > 0 and sc["realized_vocal"] > 0.0, f"scorer blind to vocals: {sc['voice_layers']}"
 
 
+def test_girl_talk_ranking():
+    """The persona ranker must reach for a recognizable, clean, on-tempo hook
+    before a mushy off-tempo bed, and expose the five sub-scores as receipts."""
+    from earcrate.ear.readiness import rank_material, GT_RANK_WEIGHTS
+    assert abs(sum(GT_RANK_WEIGHTS.values()) - 1.0) < 1e-9, "rank weights must sum to 1"
+    atoms = [
+        {"atom_id": "hit", "ear_role": "VOX_HOOK", "hook_score": 0.95, "score": 0.9,
+         "intelligibility": 0.9, "mid_share": 0.6, "bpm": 124, "key_root": 0, "energy": 0.8, "transient_density": 0.5},
+        {"atom_id": "mush", "ear_role": "BED_CHORD", "hook_score": 0.2, "score": 0.4,
+         "floor_score": 0.3, "bpm": 171, "key_root": 6, "energy": 0.3, "transient_density": 0.2},
+        {"atom_id": "break", "ear_role": "DRUM_BREAK", "hook_score": 0.3, "score": 0.7,
+         "transient_density": 0.9, "low_share": 0.5, "bpm": 124, "key_root": 0, "energy": 0.85},
+    ]
+    r = rank_material(atoms, tempo_islands=[124])
+    assert r["ranked"][0]["atom_id"] == "hit", "recognizable hook must rank first"
+    assert r["ranked"][-1]["atom_id"] == "mush", "off-tempo mush must rank last"
+    assert set(r["ranked"][0]["why"]) == set(GT_RANK_WEIGHTS), "receipt must expose every sub-score"
+    # deck feasibility must dominate: the off-tempo loop is unusable regardless of contrast
+    assert r["ranked"][-1]["why"]["deck_feasibility"] == 0.0
+
+
 def test_endless_math_is_exact():
     """Persona endless-set gate: T = min(60*S/r, E*seconds_per_event); endless
     iff T clears the recycle gap. Numbers must be exact, not vibes."""

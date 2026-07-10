@@ -150,3 +150,126 @@ def crate_readiness_audit(pool: List[Dict[str, Any]], target_bpm: Optional[float
     }
 
 
+
+
+# --- The Girl Talk ranking model -------------------------------------------------
+# How Girl Talk (and mashup DJs generally) actually rank raw material, documented
+# in PERSONAS/GIRL_TALK_V1.md §11. Five priorities, highest first. Each maps to a
+# metric the analyzer already computes, so the ranking is grounded, not vibes.
+GT_RANK_WEIGHTS = {
+    "recognizability": 0.34,   # the payoff: an instantly-known hook/riff ("oh, THAT song")
+    "role_clarity":    0.24,   # a clean isolatable vocal OR a clean bed, never full mush
+    "danceability":    0.18,   # party floor: energy + a steady, strong beat
+    "deck_feasibility": 0.14,  # survives varispeed to a crate tempo island without artifacts
+    "contrast":        0.10,   # genre/era/key distance from the crate = collision payoff
+}
+_VOX_ROLES = {"VOX_HOOK", "VOX_VERSE", "VOX_SHOUT", "RIFF_ID"}
+_DRUM_ROLES = {"DRUM_BREAK"}
+_BASS_ROLES = {"BASS_RIFF"}
+_BED_ROLES = {"BED_CHORD", "RIFF_ID", "TEXTURE"}
+
+
+def _clamp01(x: float) -> float:
+    return 0.0 if x < 0.0 else (1.0 if x > 1.0 else float(x))
+
+
+def _tempo_feasibility(bpm: float, islands: List[float]) -> float:
+    """1.0 if the atom sits on a crate tempo island after octave folding, decaying
+    with the varispeed % a DJ would need to reach the nearest one."""
+    if not islands or bpm <= 0:
+        return 0.6
+    best = 0.0
+    for isl in islands:
+        if isl <= 0:
+            continue
+        # fold by octaves; a DJ runs half/double time freely
+        folded = bpm
+        for _ in range(3):
+            if folded > isl * 1.4:
+                folded /= 2.0
+            elif folded < isl / 1.4:
+                folded *= 2.0
+        pct = abs(folded - isl) / isl * 100.0
+        best = max(best, max(0.0, 1.0 - pct / 8.0))  # 8% varispeed = unusable
+    return best
+
+
+def rank_material(atoms: List[Dict[str, Any]], tempo_islands: Optional[List[float]] = None,
+                  profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Rank raw ear atoms the way the persona's artist ranks crates: recognizable
+    foreground first, clean role material next, danceable + deck-feasible, with a
+    contrast bonus for material that collides against the rest of the crate. Returns
+    a ranked list with a per-atom receipt (the five sub-scores) so a human can see
+    WHY a loop ranks where — the curation surface, not a black box."""
+    islands = list(tempo_islands or [])
+    if not islands:
+        cnt: Dict[float, int] = {}
+        for a in atoms:
+            b = round(float(a.get("bpm") or 0.0))
+            if 60 <= b <= 190:
+                cnt[b] = cnt.get(b, 0) + 1
+        islands = [b for b, _ in sorted(cnt.items(), key=lambda kv: kv[1], reverse=True)[:4]]
+    # crate key centroid for the contrast term
+    keys = [int(a.get("key_root") or 0) % 12 for a in atoms if a.get("key_root") is not None]
+    key_mode = max(set(keys), key=keys.count) if keys else 0
+
+    ranked: List[Dict[str, Any]] = []
+    for a in atoms:
+        role = str(a.get("ear_role") or "")
+        hook = float(a.get("hook_score") or 0.0)
+        score = float(a.get("score") or 0.0)
+        intel = float(a.get("intelligibility") or 0.0)
+        mid = float(a.get("mid_share") or 0.0)
+        low = float(a.get("low_share") or 0.0)
+        floor = max(float(a.get("floor_score") or 0.0), float(a.get("bed_score") or 0.0))
+        bassd = float(a.get("bass_score") or 0.0)
+        trans = float(a.get("transient_density") or 0.0)
+        energy = float(a.get("energy") or 0.0)
+        # 1. recognizability: hooks/riffs carry the payoff; beds barely trade on it
+        if role in _VOX_ROLES:
+            recog = 0.7 * hook + 0.3 * score
+        else:
+            recog = 0.35 * hook + 0.25 * score
+        # 2. role clarity: judged by what the atom is FOR
+        if role in _VOX_ROLES:
+            clarity = _clamp01(0.6 * intel + 0.4 * min(1.0, mid / 0.55))
+        elif role in _DRUM_ROLES:
+            clarity = _clamp01(0.6 * trans + 0.4 * min(1.0, low / 0.5))
+        elif role in _BASS_ROLES:
+            clarity = _clamp01(0.7 * bassd + 0.3 * min(1.0, low / 0.5))
+        else:
+            clarity = _clamp01(floor)
+        # 3. danceability: party floor
+        dance = _clamp01(0.55 * min(1.0, energy) + 0.45 * min(1.0, trans))
+        # 4. deck feasibility
+        feasible = _tempo_feasibility(float(a.get("bpm") or 0.0), islands)
+        # 5. contrast: distance in the circle of keys from the crate centroid
+        k = int(a.get("key_root") or key_mode) % 12
+        circle = min((k - key_mode) % 12, (key_mode - k) % 12)  # 0..6
+        contrast = circle / 6.0
+        total = (GT_RANK_WEIGHTS["recognizability"] * recog +
+                 GT_RANK_WEIGHTS["role_clarity"] * clarity +
+                 GT_RANK_WEIGHTS["danceability"] * dance +
+                 GT_RANK_WEIGHTS["deck_feasibility"] * feasible +
+                 GT_RANK_WEIGHTS["contrast"] * contrast)
+        ranked.append({
+            "atom_id": a.get("atom_id") or a.get("id"),
+            "source": str(a.get("title") or a.get("path") or "unknown"),
+            "ear_role": role,
+            "rank_score": round(float(total), 4),
+            "why": {"recognizability": round(recog, 3), "role_clarity": round(clarity, 3),
+                    "danceability": round(dance, 3), "deck_feasibility": round(feasible, 3),
+                    "contrast": round(contrast, 3)},
+        })
+    ranked.sort(key=lambda r: r["rank_score"], reverse=True)
+    by_role: Dict[str, List[Dict[str, Any]]] = {}
+    for r in ranked:
+        by_role.setdefault(r["ear_role"] or "UNKNOWN", []).append(r)
+    return {
+        "model": "girl_talk_ranking_v1",
+        "weights": GT_RANK_WEIGHTS,
+        "tempo_islands": islands,
+        "ranked": ranked,
+        "top_by_role": {role: items[:8] for role, items in by_role.items()},
+        "count": len(ranked),
+    }

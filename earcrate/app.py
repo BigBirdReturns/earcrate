@@ -632,7 +632,100 @@ class EarcrateCore:
             checks.append({"name": "sqlite_integrity", "ok": row and row[0] == "ok", "detail": row[0] if row else "no row"})
         except Exception as exc:
             checks.append({"name": "sqlite_integrity", "ok": False, "detail": str(exc)})
+        jl = c.agent_root / "janitor_last.json"
+        if jl.exists():
+            try:
+                checks.append({"name": "janitor", "ok": True, "detail": json.loads(jl.read_text(encoding="utf-8")).get("summary", "ran")})
+            except Exception:
+                pass
         return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict()}
+
+    def startup_janitor(self) -> Dict[str, Any]:
+        """Launch-time cleanup of everything old versions are known to leave behind.
+
+        Auto-handled (regenerable or salvage-by-copy, never destroys user data):
+        stale analysis/transform caches keyed to dead analyzer/engine versions,
+        ' (N)' suffix-accretion duplicates in the organized tree (archived, not
+        deleted), and legacy workspaces from earlier Jukebreaker/earcrate installs
+        — their ingested masters are re-ingested (content-hash deduped) and their
+        renders copied to renders/rescued/, after which the receipt marks the old
+        folder safe to delete. Deleting the husk stays a human decision."""
+        if not self.config:
+            return {"ok": False, "reason": "no workspace configured yet"}
+        c = self.config
+        receipt: Dict[str, Any] = {"ok": True, "ran_at": now_utc()}
+        # 1. caches for analyzer/engine versions that no longer exist
+        stale_npz = 0
+        for f in (c.agent_root / "cache" / "analysis").glob("*.npz"):
+            if not f.name.endswith(f"-{ANALYZER_VERSION}.npz"):
+                with contextlib.suppress(Exception):
+                    f.unlink(); stale_npz += 1
+        stale_tf = 0
+        for d in (c.agent_root / "cache" / "transforms").glob("*"):
+            if d.is_dir() and d.name != ENGINE_VERSION:
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(d); stale_tf += 1
+        receipt["stale_caches_purged"] = stale_npz + stale_tf
+        # 2. ' (N)' accretion in the organized tree (pre-v0.7.4 organize bug):
+        #    archived under agent/archive/janitor, never deleted
+        org = c.working_root / "organized"
+        moved = 0
+        if org.exists():
+            batch_dir = c.agent_root / "archive" / "janitor" / time.strftime("%Y%m%d-%H%M%S")
+            for f in list(org.rglob("*")):
+                if not f.is_file():
+                    continue
+                m = re.match(r"^(?P<base>.+?)(?: \(\d+\))+$", f.stem)
+                if m and (f.with_name(m.group("base") + f.suffix)).exists():
+                    dst = batch_dir / f.relative_to(org)
+                    with contextlib.suppress(Exception):
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.move(str(f), str(dst)); moved += 1
+        receipt["duplicate_suffixes_archived"] = moved
+        # 3. legacy workspaces from every location old versions used
+        home = Path.home()
+        candidates = [app_state_dir() / "workspace", home / "Jukebreaker", home / "jukebreaker",
+                      home / "earcrate", home / "Earcrate"]
+        if os.name == "nt":
+            for drive in "CDEFGH":
+                candidates += [Path(f"{drive}:\\Jukebreaker"), Path(f"{drive}:\\Earcrate"), Path(f"{drive}:\\earcrate")]
+        active = {p.resolve() for p in [c.working_root, c.agent_root, c.working_root.parent, c.agent_root.parent]}
+        legacy: List[Dict[str, Any]] = []
+        for ws in candidates:
+            try:
+                if not ws.is_dir() or ws.resolve() in active:
+                    continue
+                marker = (ws / "agent" / "jukebreaker.sqlite").exists() or (ws / "jukebreaker.sqlite").exists()
+                if not marker:
+                    continue
+                entry: Dict[str, Any] = {"path": str(ws), "salvaged_songs": 0, "rescued_renders": 0}
+                ing = ws / "master" / "ingested"
+                if ing.is_dir():
+                    with contextlib.suppress(Exception):
+                        r = self.ingest_sources({"sources": [str(ing)], "apply": True})
+                        entry["salvaged_songs"] = int(r.get("planned") or 0)
+                rdir = ws / "work" / "renders"
+                if rdir.is_dir():
+                    rescue = c.working_root / "renders" / "rescued" / safe_name(ws.name)
+                    for w in rdir.glob("*.wav"):
+                        dst = rescue / w.name
+                        if not dst.exists():
+                            with contextlib.suppress(Exception):
+                                dst.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(w, dst); entry["rescued_renders"] += 1
+                entry["safe_to_delete"] = True
+                entry["note"] = "songs re-ingested + renders rescued; delete this folder yourself when ready"
+                legacy.append(entry)
+            except Exception as exc:
+                legacy.append({"path": str(ws), "error": str(exc)[:120]})
+        receipt["legacy_workspaces"] = legacy
+        receipt["summary"] = (f"{stale_npz + stale_tf} stale cache file(s) purged, {moved} duplicate-suffix file(s) archived, "
+                              f"{len(legacy)} legacy workspace(s) handled")
+        with contextlib.suppress(Exception):
+            (c.agent_root / "janitor_last.json").write_text(json.dumps(receipt, ensure_ascii=False, indent=2), encoding="utf-8")
+        if not self.status.get("busy"):
+            self.set_status("janitor: " + receipt["summary"], None, False)
+        return receipt
 
     def scan(self) -> Dict[str, Any]:
         c = self.ensure_config()

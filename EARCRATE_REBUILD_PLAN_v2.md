@@ -93,8 +93,10 @@ without surgery:
 
 ## 5. Order of work
 
-1. **Extract crate-librarian** (repo-ready package + `library.json` contract
-   + CLI). *Deliverable your next project can consume immediately.*
+1. **Extract crate-librarian** ✅ DONE (v0.7.9) — standalone `crate-librarian/`
+   package (mutagen-only), `library.json` contract + `LIBRARY_CONTRACT.md`, CLI
+   (scan/report/organize/rollback), own acceptance corpus, cross-agreement gate
+   with earcrate. *Point it at the SSD now; your next project reads library.json.*
 2. Measurements table + adopt/parallel harness as the only compute path.
 3. `plan/` purification (composition math out of EarcrateCore, unit-gated).
 4. Exact renderer + selected-layer-drop = failure (closes SHIP_RIGHTING's

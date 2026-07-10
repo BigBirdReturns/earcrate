@@ -1,5 +1,22 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.7.9 — crate-librarian extracted (rebuild plan v2, phase 1)
+- NEW STANDALONE TOOL `crate-librarian/`: the library engine cut loose as a
+  reusable, mutagen-only package (no audio analysis, no personas, no UI, no
+  network). scan → identify (the tested decades-of-dumps heuristics) → dedup →
+  idempotent journaled organize into Artist/Album/NN Title, all emitting a
+  versioned `library.json` contract (LIBRARY_CONTRACT.md) any project can read.
+  CLI: `crate-librarian scan|report|organize|rollback`. Point it at the SSD to
+  turn it into a usable, deduped, tagged archive whose manifest your NEXT
+  project consumes without any mashup machinery.
+- Own acceptance corpus (identity nasty-cases, full scan→dedup→organize→
+  rollback pipeline, CLI) + a cross-agreement gate in earcrate
+  (test_librarian_identity_agrees_with_earcrate) so the standalone identity and
+  earcrate's inline identity cannot drift before the planned cutover.
+- EarCrate runtime unchanged (single-file build + selftest still green);
+  crate-librarian is a sibling package, extractable to its own repo per the
+  plan. Next: phase B (the RTX 4060 stems provider seam).
+
 ## v0.7.8 — House flavor (one design system, under law)
 - SCHEMA FIX (the big one): ear_atoms had UNIQUE(loop_id) — one atom per loop
   GLOBALLY — so personas were mutually destructive: building Troubadour's

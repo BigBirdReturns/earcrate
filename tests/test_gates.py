@@ -121,6 +121,32 @@ def test_taste_duration_and_vocal_count():
     assert sc["voice_layers"] > 0 and sc["realized_vocal"] > 0.0, f"scorer blind to vocals: {sc['voice_layers']}"
 
 
+def test_librarian_identity_agrees_with_earcrate():
+    """The standalone crate-librarian is destined to REPLACE earcrate's inline
+    identity logic (rebuild plan v2). Until cutover, both must agree byte-for-byte
+    on every canonical case — a drift here means one of them regressed."""
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "crate-librarian"))
+    from crate_librarian.identity import derive_identity as lib_id
+    from earcrate.librarian.ingest import _derive_identity as ec_id
+    cases = [
+        ("/lib/The Front Bottoms/Au Revoir (Adios) by the Front Bottoms.mp3", {}),
+        ("/lib/Radiohead/OK Computer/02 Paranoid Android.mp3", {}),
+        ("/lib/Ben E. King/Stand by Me.mp3", {}),
+        ("/lib/New folder/mystery.mp3", {}),
+        ("/x/song.mp3", {"artist": "Portishead", "title": "Glory Box"}),
+        ("/x/02_-_daft_punk_-_harder_better_faster_stronger.mp3", {}),
+        ("/x/track03.mp3", {"artist": "portishead", "album": "DUMMY", "title": "Track 03", "tracknumber": "3"}),
+        ("/x/esom.mp3", {"artist": "Jay-Z FEAT. Alicia Keys", "album": "The Blueprint 3", "title": "Empire State Of Mind"}),
+        ("/lib/ingested/2026-07-10-001122-ABC/seagate/The Front Bottoms/Maps by the Front Bottoms.mp3", {}),
+    ]
+    keys = ("artist", "track_artist", "album", "title", "track", "year", "compilation")
+    for path, tags in cases:
+        a = lib_id(Path(path), tags, Path("/lib"))
+        b = ec_id(Path(path), tags, Path("/lib"))
+        assert {k: a[k] for k in keys} == {k: b[k] for k in keys}, f"identity drift on {path}: {a} vs {b}"
+
+
 def test_personas_coexist_and_adopt():
     """v0.7.8 schema gate: ear atoms are per-(loop,profile) — building resident B
     must not destroy resident A; B ADOPTS A's persona-independent measurements

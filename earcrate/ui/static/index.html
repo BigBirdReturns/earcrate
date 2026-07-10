@@ -170,6 +170,48 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 .kactbar{width:64px;height:5px;border-radius:4px;background:var(--kedge);overflow:hidden;flex:none}.kactbar i{display:block;height:100%;background:var(--kacc);width:0}
 @media(max-width:1020px){.khidep{display:none}}
 .f1k{flex:1;min-width:0}
+</style><style>
+/* ================= AXM property flavor: EarCrate =================
+   Family: Dark Ecosystem (default) / Cream Editorial (light toggle).
+   Signature accent: Technics pitch-LED amber (the varispeed light).
+   Ember #C24B2C is RESERVED: refusals, gate failures, thin rails only.
+   Type law: Barlow Condensed (display) + IBM Plex Mono (evidence) +
+   IBM Plex Sans (running text) — named in stacks, NO webfont load
+   (local-first; the acceptance-page precedent). Registry:
+   axm-tools/identity/axm/PROPERTY-FLAVORS.md                       */
+#kapp{
+ --bg:#0d0c09; --chassis:#131109; --panel:#161410; --panel-2:#1d1a13; --edge:#2e2a20; --edge-hi:#443d2c;
+ --ink:#ece7d8; --ink-dim:#a49a86; --ink-faint:#6e675a;
+ --amber:#e6a23c; --amber-dim:#9a6a17; --cyan:#7fa3c4; --cyan-dim:#54718c; --coral:#c24b2c; --green:#4e9a6f;
+ --mono:'IBM Plex Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+ --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+ --disp:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+ --kbg:#0d0c09; --ksur:#161410; --ksur2:#1d1a13; --kedge:#2e2a20; --kink:#ece7d8; --kdim:#a49a86; --kfaint:#6e675a;
+ --kacc:#e6a23c; --kaccink:#241703; --kgo:#4e9a6f; --kwarn:#c24b2c; --kcool:#7fa3c4;
+ background:var(--kbg); color:var(--kink); font-family:var(--sans);
+}
+#kapp.light{
+ --bg:#f0ebe0; --chassis:#e8e2d5; --panel:#f7f4ec; --panel-2:#e8e2d5; --edge:#b8afa0; --edge-hi:#9a9088;
+ --ink:#0e0d0c; --ink-dim:#5e5850; --ink-faint:#948c80;
+ --amber:#9a6a17; --amber-dim:#7a5512; --cyan:#1e3a6b; --cyan-dim:#4d648a; --coral:#c24b2c; --green:#2d5a3d;
+ --kbg:#f0ebe0; --ksur:#f7f4ec; --ksur2:#e8e2d5; --kedge:#b8afa0; --kink:#0e0d0c; --kdim:#5e5850; --kfaint:#948f80;
+ --kacc:#9a6a17; --kaccink:#fff6e0; --kgo:#2d5a3d; --kwarn:#c24b2c; --kcool:#1e3a6b;
+}
+/* display face across both systems */
+#kapp .kh1,#kapp .klogo,#kapp .kpname,#kapp h1,#kapp h2,#kapp .kcolh,#kapp .kssec,#kapp .kpill,#kapp .brand .mk{font-family:var(--disp);letter-spacing:.01em}
+#kapp .kh1{font-size:27px}
+/* evidence face: numbers, paths, receipts */
+#kapp pre,#kapp code,#kapp .mono,#kapp .mononum,#kapp .kcell .m,#kapp .knp .m,#kapp .kver,#kapp .kact2{font-family:var(--mono)}
+/* legacy workbench surfaces: kill hardcoded gradients, follow the family */
+#kapp .card{background:var(--panel);border-color:var(--edge)}
+#kapp .card.hero{background:var(--panel-2);border-color:var(--edge-hi)}
+#kapp input,#kapp select,#kapp textarea{background:var(--chassis);color:var(--ink);border-color:var(--edge)}
+#kapp pre{background:var(--chassis);color:var(--ink-dim);border-color:var(--edge)}
+#kapp table th{color:var(--ink-faint)} #kapp table td{border-color:var(--edge)}
+#kapp .ksearch{background:var(--ksur);color:var(--kink);border-color:var(--kedge);width:auto}
+/* ember discipline: reserved meanings only (refusals, gate failures, thin rails) */
+#kapp .kpill.ref,#kapp .kcell.alert,#kapp .pill.bad,#kapp button.danger{color:var(--coral);border-color:var(--coral)}
+#kapp .kpill.pass,#kapp .pill.ok{color:var(--kgo)}
 </style></head><body><header style="display:none">
 <div class="brand" title="earcrate __ENGINE_VERSION__" aria-label="earcrate __ENGINE_VERSION__"><span class="mk">EAR<b>CRATE</b></span><span class="ver">__ENGINE_VERSION__ · Runtime ledger</span></div>
 <nav id="nav"></nav>
@@ -233,7 +275,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <p class="ksub">Every render and every refusal, with its receipts. A refusal is a session too &mdash; it tells you what to feed the crate.</p>
 <div id="sessionList">Loading sessions&hellip;</div>
 <div class="card"><b>Latest render:</b> <span class="muted">latest render dock</span><div class="playerBox"><a id="renderLink" href="#" target="_blank" rel="noopener">open audio link</a><button onclick="copyRenderPath()">copy file path</button><button onclick="openRenderFolder()">open folder</button><button onclick="refreshRenders(false)">refresh renders</button></div><p id="playerPath" class="small muted"></p><div id="renderList" class="renderList small muted"></div></div></section>
-</main></div>
+</main></div></div>
 <div class="kbar"><button class="kbtn p" onclick="oneClickJam()" title="Book a set with the selected resident">&#9654;</button>
 <audio id="renderPlayer" controls preload="metadata"></audio>
 <div class="knp"><div class="t" id="playerName">none yet</div><div class="m" id="kNpMeta">press &#9654; to book a set</div></div>
@@ -242,7 +284,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <button class="kbtn" onclick="station('ice')" title="Cool it down">&#129482;</button>
 <span class="ktoast khidep" id="ktoastline"></span>
 <div class="kact2" onclick="kmode()" title="Click to switch gentle / full send"><span class="spin"></span><span class="nowrap" id="kact_text">idle</span><span class="kactbar"><i id="kact_bar"></i></span><span class="nowrap" id="kact_mode"></span></div>
-</div></div></div>
+</div></div>
 <script>
 const TOKEN = new URL(location.href).searchParams.get('token') || '';
 const tabs = ['residents','crate','sessions','jam','setup','library','analyze','loops','compose','manifests'];
@@ -251,8 +293,8 @@ function tab(t){for(const x of tabs){document.getElementById(x).classList.toggle
 function val(id){const e=document.getElementById(id); return e?e.value:''}
 window.__ranked=[];window.__pairs=[];window.__plans=[];window.__composePlan=null;
 window.__stationProfile=localStorage.getItem('ec_profile')||'girl_talk_v1';window.__residents=[];window.__crateRanked=[];
-function ktheme(){const a=document.getElementById('kapp');a.classList.toggle('dark');localStorage.setItem('ec_theme',a.classList.contains('dark')?'dark':'light')}
-function kthemeInit(){if(localStorage.getItem('ec_theme')==='dark')document.getElementById('kapp').classList.add('dark')}
+function ktheme(){const a=document.getElementById('kapp');a.classList.toggle('light');localStorage.setItem('ec_theme',a.classList.contains('light')?'light':'dark')}
+function kthemeInit(){if(localStorage.getItem('ec_theme')==='light')document.getElementById('kapp').classList.add('light')}
 function kmmss(sec){sec=Math.max(0,Math.round(sec||0));return Math.floor(sec/60)+' min '+String(sec%60).padStart(2,'0')+' s'}
 function kupdateWidget(){const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);if(!r)return;document.getElementById('krwName').textContent='readiness · '+r.id;document.getElementById('krwPct').textContent=(r.readiness_pct!=null?r.readiness_pct+'%':'–');document.getElementById('krwBar').style.width=(r.readiness_pct||0)+'%'}
 async function loadResidents(){const el=document.getElementById('residentCards');try{const j=await api('/api/residents');window.__residents=j.items||[];

@@ -305,6 +305,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <button class="kbtn khidep" id="kCastBtn" onclick="castToTv()" title="Cast to a TV (Chrome/Edge)" style="display:none">Cast</button>
 <span class="kact2" id="kCastState" style="display:none"></span>
 <button class="kbtn p" id="kEndlessBtn" onclick="toggleEndless()" title="Play the crate continuously (auto-advances, reshuffles: endless)">Endless</button>
+<button class="kbtn" id="kDemoBtn" onclick="playDemo()" title="Play a synthesized warm-up set instantly — no library needed">Play demo</button>
 <button class="kbtn" onclick="oneClickJam()" title="Book a set: compiles a new sketch with the selected resident">Book a set</button>
 <button class="kbtn khidep" onclick="station('skip')" title="Next collision">&#9197;</button>
 <button class="kbtn" onclick="station('fire')" title="More like this">&#128293;</button>
@@ -415,7 +416,8 @@ function castToTv(){var a=document.getElementById('renderPlayer'); if(!a || !a.r
 window.__endless={on:false,queue:[],i:-1};
 function ecShuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
 async function endlessQueue(){var j=await api('/api/renders');return (j.items||[]).filter(function(r){return r.current_engine && r.quality_gate_passed!==false;}).map(function(r){return r.path;});}
-async function startEndless(){var items=await endlessQueue(); if(!items.length){toast('No passing renders yet \u2014 Book a set, or the mini demo seeds some. Nothing to play endlessly.');return;} window.__endless.on=true; window.__endless.queue=ecShuffle(items.slice()); window.__endless.i=-1; var b=document.getElementById('kEndlessBtn'); if(b){b.textContent='Endless \u25a0';} endlessNext();}
+async function playDemo(){var b=document.getElementById('kDemoBtn'); if(b){b.textContent='Seeding\u2026';} try{ toast('Synthesizing a warm-up demo set\u2026 (no library needed)'); await post('/api/demo/seed',{count:8}); await refreshRenders(false); await startEndless(); toast('Demo set playing endlessly. Book a set to compile YOUR library.'); }catch(e){ toast('Demo seed failed: '+(e&&e.message||e)); } if(b){b.textContent='Play demo';} }
+async function startEndless(){var items=await endlessQueue(); if(!items.length){toast('No renders yet \u2014 press "Play demo" to hear a warm-up set now, or Book a set to compile your library.');return;} window.__endless.on=true; window.__endless.queue=ecShuffle(items.slice()); window.__endless.i=-1; var b=document.getElementById('kEndlessBtn'); if(b){b.textContent='Endless \u25a0';} endlessNext();}
 function stopEndless(){window.__endless.on=false; var a=document.getElementById('renderPlayer'); if(a)a.pause(); var b=document.getElementById('kEndlessBtn'); if(b){b.textContent='Endless';}}
 function toggleEndless(){window.__endless.on?stopEndless():startEndless();}
 function endlessNext(){var E=window.__endless; if(!E.on)return; E.i++;

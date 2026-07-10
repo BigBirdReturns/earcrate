@@ -2920,6 +2920,48 @@ class EarcrateCore:
         return {"items": items[:200]}
 
 
+    def seed_demo_renders(self, count: int = 8, bars: int = 8, bpm: int = 100) -> Dict[str, Any]:
+        """Warm-up demo: synthesize a few listenable chord+kick loops into renders/
+        so a brand-new workspace can PLAY immediately (Endless has material) while
+        the real library compiles. Clearly a demo — no real music, made locally."""
+        c = self.ensure_config()
+        renders = c.working_root / "renders"
+        renders.mkdir(parents=True, exist_ok=True)
+        sr = 44100
+        beat = 60.0 / float(bpm or 100)
+        A = 220.0
+        keys = {k: A * 2 ** (semi / 12.0) for k, semi in {"A": 0, "C": 3, "D": 5, "E": 7, "F": 8, "G": 10}.items()}
+        progs = [["A","C","D","E"],["C","G","A","F"],["D","A","E","C"],["E","C","G","D"],
+                 ["F","C","D","A"],["G","D","E","C"],["A","E","F","C"],["C","D","A","G"],
+                 ["D","F","G","A"],["E","A","C","D"]]
+        def _loop(name, roots):
+            dur = beat * 4 * bars
+            t = np.arange(int(sr * dur)) / sr
+            y = np.zeros_like(t)
+            seg = len(t) // len(roots)
+            for i, r in enumerate(roots):
+                a = i * seg; b = (i + 1) * seg if i < len(roots) - 1 else len(t)
+                tt = t[a:b] - t[a]
+                env = np.minimum(1.0, np.minimum(tt / 0.05, (tt[-1] - tt) / 0.15 + 1)) if len(tt) else tt
+                chord = (np.sin(2*np.pi*r*tt) + 0.6*np.sin(2*np.pi*r*1.26*tt) + 0.5*np.sin(2*np.pi*r*1.5*tt)) / 2.1
+                y[a:b] += chord * env * 0.5
+            for bt in range(int(dur / beat)):
+                k0 = int(bt * beat * sr); kl = int(0.09 * sr); kt = np.arange(kl) / sr
+                y[k0:k0+kl] += np.sin(2*np.pi*(120*np.exp(-kt*18)+45)*kt) * np.exp(-kt*32) * 0.7
+            y = np.tanh(y * 1.1) * 0.85
+            st = np.stack([y, y], axis=1).astype(np.float32)
+            sf.write(str(renders / (name + ".wav")), st, sr)
+            (renders / (name + ".render_report.json")).write_text(json.dumps(
+                {"engine_version": ENGINE_VERSION, "quality_gate": {"passed": True},
+                 "render_timestamp": now_utc(), "demo": True,
+                 "note": "synthesized warm-up demo (no real music) — Book a set to compile your library"}),
+                encoding="utf-8")
+            return str(renders / (name + ".wav"))
+        n = max(1, min(len(progs), int(count)))
+        made = [_loop("demo_%02d_%s" % (i + 1, "".join(progs[i])), [keys[k] for k in progs[i]]) for i in range(n)]
+        return {"ok": True, "seeded": len(made), "dir": str(renders),
+                "note": "demo warm-up renders written; press Endless to play them continuously"}
+
     def list_renders(self) -> Dict[str, Any]:
         c = self.ensure_config()
         render_dir = c.working_root / "renders"

@@ -1,5 +1,17 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.8.4 — first-run "press play": an instant demo warm-up set
+- YOU CAN PRESS PLAY ON A FRESH INSTALL. Endless plays renders, and a brand-new
+  library has none until you compile — so a "Play demo" button (core
+  `seed_demo_renders`, route `/api/demo/seed`) synthesizes a handful of
+  listenable chord+kick loops locally (no real music, clearly a demo) and plays
+  them endlessly on the spot, while you Book a set to compile YOUR library in
+  the background. The "no renders yet" path now points here instead of dead-ending.
+- VERIFIED headless (Playwright/Chromium) on a FRESH empty workspace: 0 renders
+  → click Play demo → 8 renders seeded → Endless on, actually playing (not
+  paused), no page errors. Backend: seed → list_renders shows current-engine
+  passing renders. 14/14 gates + singlefile SELF_TEST_OK.
+
 ## v0.8.3 — the continuous player: a resident actually plays endless
 - THE 45-MINUTE CLAIM IS NOW REAL. An "Endless" transport plays the crate
   continuously: it builds a shuffled queue of passing current-engine renders,

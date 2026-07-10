@@ -824,6 +824,12 @@ class EarcrateCore:
         workers = min(self._worker_count(), max(1, len(jobs)))
         results: List[Dict[str, Any]] = []
         used_parallel = False
+        t_eta = time.perf_counter()
+        def _eta(computed: int) -> str:
+            if computed <= 0:
+                return ""
+            left = (time.perf_counter() - t_eta) / computed * (len(jobs) - computed)
+            return f" \u00b7 ~{int(left // 60)}m{int(left % 60):02d}s left"
         if jobs and workers > 1:
             try:
                 mp = __import__("multiprocessing")
@@ -836,7 +842,7 @@ class EarcrateCore:
                     futs = {ex.submit(analyze_file_worker, job): job for job in jobs}
                     for i, fut in enumerate(concurrent.futures.as_completed(futs)):
                         results.append(fut.result())
-                        self.set_status(f"analyzing {done + i + 1}/{total} \u00d7{workers} cores", (done + i + 1) / max(1, total), True)
+                        self.set_status(f"analyzing {done + i + 1}/{total} \u00d7{workers} cores{_eta(i + 1)}", (done + i + 1) / max(1, total), True)
                 used_parallel = True
             except Exception as exc:
                 # Serial fallback: any pool/spawn failure must not break analysis.
@@ -845,7 +851,7 @@ class EarcrateCore:
         if jobs and not used_parallel:
             for i, job in enumerate(jobs):
                 results.append(analyze_file_worker(job))
-                self.set_status(f"analyzing {done + i + 1}/{total} (1 core)", (done + i + 1) / max(1, total), True)
+                self.set_status(f"analyzing {done + i + 1}/{total} (1 core){_eta(i + 1)}", (done + i + 1) / max(1, total), True)
         phase_timings["compute_seconds"] = round(time.perf_counter() - t_phase, 3)
         t_phase = time.perf_counter()
 

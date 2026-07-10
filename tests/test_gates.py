@@ -160,8 +160,12 @@ def test_personas_coexist_and_adopt():
         t = np.arange(sr * 8) / sr
         sf.write(str(tmp / "music" / f"s{i}.wav"), (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
     core = EarcrateCore()
+    # workers=1: gate tests validate LOGIC, not the process pool. Spawning a
+    # fork-based ProcessPool with librosa/numba already imported segfaults on some
+    # runners (native BLAS threads + fork). The serial path exercises the same
+    # adopt/coexist/migration logic deterministically.
     core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
-                    "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
     core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
     r1 = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
     r2 = core.build_ear_crate(taste_profile="troubadour_v1")

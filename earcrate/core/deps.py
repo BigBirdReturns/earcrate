@@ -41,6 +41,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+# Cap native BLAS/OMP thread pools to 1 BEFORE numpy imports. EarCrate parallelizes
+# across FILES at the process level (analyze, ear-crate), so per-process multi-
+# threaded BLAS only oversubscribes cores (N workers x M threads) AND leaves live
+# native threads that make os.fork() unsafe — the exact cause of the CI segfault on
+# runners with an aggressive OpenBLAS. Single-threaded math + process parallelism is
+# both faster here and fork-safe. Respect an explicit override if the user set one.
+for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_var, "1")
+
 import numpy as np
 
 try:

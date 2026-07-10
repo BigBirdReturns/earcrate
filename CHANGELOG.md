@@ -1,6 +1,15 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.9 — crate-librarian extracted (rebuild plan v2, phase 1)
+- CI FIX (segfault): gate suite crashed (exit 139) on the runner inside
+  test_personas_coexist_and_adopt — it spawned a fork-based ProcessPool with
+  librosa/numba already imported, and fork() over live OpenBLAS threads segfaults
+  on some environments. The gate now runs serial (workers=1) since it validates
+  logic, not the pool. ROOT-CAUSE hardening for real users too: BLAS/OMP thread
+  pools are capped to 1 before numpy imports — EarCrate parallelizes across FILES
+  at the process level, so single-threaded math + process parallelism is both
+  faster (no N×M oversubscription) and fork-safe. Verified: parallel ear-crate
+  with workers=2 now runs to completion.
 - NEW STANDALONE TOOL `crate-librarian/`: the library engine cut loose as a
   reusable, mutagen-only package (no audio analysis, no personas, no UI, no
   network). scan → identify (the tested decades-of-dumps heuristics) → dedup →

@@ -1,5 +1,26 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.7.8 — House flavor (one design system, under law)
+- FIX: the station bar was nested inside the flex row, crushing the main
+  column to 57px — the "squeezed card in an empty page" bug. Structure
+  corrected; main column now fills the shell (verified by measured layout).
+- FLAVOR: EarCrate is now a registered AXM property (axm-tools
+  identity/axm/PROPERTY-FLAVORS.md, branch earcrate-flavor): Dark Ecosystem
+  default (void #0d0c09 — the station at night) with Cream Editorial as the
+  light toggle; signature accent is the Technics pitch-LED amber; EMBER
+  #C24B2C is reserved for refusals, gate failures, and thin rails only.
+  Type law: Barlow Condensed (display) + IBM Plex Mono (evidence) + IBM
+  Plex Sans (text), named in stacks with ZERO webfont loads (local-first,
+  the acceptance-page precedent).
+- ONE SYSTEM: the legacy workbench palette is bridged to the family tokens
+  (the old :root variables are redefined under the shell), so Jam/Setup/
+  Library/Analyze/Loops/Compose/Manifests follow the active family instead
+  of floating as dark console cards on a light page. Hardcoded card/hero
+  gradients removed.
+- Verified by LOOKING: headless screenshots of Residents (both families),
+  Jam, and Library reviewed; layout boxes measured; full shell e2e green;
+  zero page errors.
+
 ## v0.7.7 — Residents (the front end becomes the product)
 - SHELL: new interface built to the product mock — left sidebar (Residents /
   Crate / Sessions + the full Workbench preserved beneath), warm light theme

@@ -58,7 +58,7 @@ try:
     import pyloudnorm as pyln
     from mutagen import File as MutagenFile
 except Exception as exc:  # pragma: no cover
-    print("Jukebreaker GT could not import required audio packages.", file=sys.stderr)
+    print("EarCrate could not import required audio packages.", file=sys.stderr)
     print("Run Install-Dependencies.cmd or pip install -r requirements.txt", file=sys.stderr)
     print(f"Import error: {exc}", file=sys.stderr)
     raise

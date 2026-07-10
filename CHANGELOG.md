@@ -1,6 +1,18 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.9 — crate-librarian extracted + crate-digging (rebuild plan v2, phase 1)
+- DEAD-BUFFALO PURGE (partial, honest): the scorer's voice veto/bonus no longer
+  depends on the legacy two-world concept — it's persona-agnostic now (asked for
+  vocals + got none = missing, full stop). Removed the two-world/album_collision/
+  notorious presets from the compile defaults and the JAM preset dropdown; killed
+  the confusing dev-only "Re-extract with current scoring" button; shed leftover
+  "Jukebreaker Sketch/TasteSpec" default names and import text. NOT touched (they
+  need a real migration, not a blind rename): APP_NAME/state-dir (renaming orphans
+  your workspace), ANALYZER_VERSION (renaming orphans analysis caches), and the
+  old two-world arranger itself (propose_mashup/arrange still exist behind the
+  TasteSpec path). Those are the v2 ground-up rebuild, not a patch. Verified: 14
+  gates + selftest green; a real vocal_density=85 compile yields 8 voice layers,
+  no veto.
 - CRATE-DIG BY METADATA: the jam no longer grabs the whole pool blind — it draws
   from what you asked for. New `source_filter` (genre substring + era range)
   narrows the approved pool before composing, threaded through readiness so a

@@ -1557,10 +1557,10 @@ class EarcrateCore:
         elif backbone == "restless":
             out["anchor_stability"] = min(out["anchor_stability"], 48)
 
-        mix_mode = str(data.get("mix_mode") or data.get("mode") or ("two_world_continuum" if preset in ("album_collision", "notorious_mode") else "single_crate"))
+        mix_mode = str(data.get("mix_mode") or data.get("mode") or "single_crate")  # two-world arranger is legacy; the resident/TasteSpec path is default
         default_candidates = 24 if mix_mode in ("two_world", "two_world_continuum", "album_collision", "notorious_mode") else 12
         params = {
-            "name": str(data.get("name") or "Jukebreaker Sketch"),
+            "name": str(data.get("name") or "EarCrate Sketch"),
             "target_seconds": int(data.get("target_seconds") or 180),
             "bpm": float(data.get("bpm") or 0),
             "drama": int(data.get("drama") or (82 if preset in ("party_cutup", "max_chaos", "album_collision", "notorious_mode") else 58)),
@@ -1650,7 +1650,7 @@ class EarcrateCore:
         rescue_params = dict(base_params)
         rescue_params.pop("seed", None)
         rescue_params.update({
-            "name": str(base_params.get("name") or "Jukebreaker Sketch") + " Varispeed Lattice Rescue",
+            "name": str(base_params.get("name") or "EarCrate Sketch") + " Rescue",
             "safe_deck_rescue": True,
             "quality_retry_index": attempts,
             "quality_mode": "stable_deck",
@@ -2324,7 +2324,7 @@ class EarcrateCore:
         self.conn().execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
         self.conn().commit()
         op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
-        manifest = self.write_manifest("tastespec", seed, f"Render TasteSpec mashup '{name}'", [op])
+        manifest = self.write_manifest("earcrate", seed, f"Render mashup '{name}'", [op])
         return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement, "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
             "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "readiness": readiness}
 
@@ -2659,7 +2659,7 @@ class EarcrateCore:
             self.set_status("TasteSpec: building compatibility graph", 0.76, True, None)
             graph = self._perf_stage(ledger, "build_compatibility_graph", self.build_compatibility_graph, taste_profile, target_seconds, float(data.get("bpm") or 0.0))
             params = self.outcome_params(data)
-            params.update({"taste_profile": taste_profile, "name": str(data.get("name") or "Jukebreaker TasteSpec"), "target_seconds": int(target_seconds), "quality_mode": "stable_deck", "post_render_gate": True, "source_filter": source_filter})
+            params.update({"taste_profile": taste_profile, "name": str(data.get("name") or "EarCrate Sketch"), "target_seconds": int(target_seconds), "quality_mode": "stable_deck", "post_render_gate": True, "source_filter": source_filter})
             # Station steering: crowd 🔥/🧊 receipts bias the compile intent.
             _bias = self.station_bias()
             for _k in ("chaos", "vocal_density", "drama"):
@@ -2996,7 +2996,7 @@ class EarcrateCore:
         total = 0.0
         total += 4.0 * min(1.0, source_diversity * 2.0)
         total += 0.2 * named
-        total += 3.0 if (voice and bed) or not (mix_mode in {"two_world", "two_world_continuum", "album_collision", "notorious_mode"}) else -4.0
+        total += 3.0 if (voice and bed) else (-2.0 if t_vocal >= 0.5 else 0.0)  # reward voice-over-bed; penalize its absence only when vocals were asked for
         total += 8.0 * (1.0 - abs(t_chaos - realized_chaos))
         total += 7.0 * (1.0 - abs(t_drama - realized_drama))
         total += 6.0 * (1.0 - abs(t_whip - realized_whiplash))
@@ -3016,7 +3016,7 @@ class EarcrateCore:
         total -= 2.5 * max(0, hard_air - 1)
         total -= 10.0 * max(0.0, 0.20 - source_diversity)
         total -= 3.0 * empty_music_sections
-        needs_voice = mix_mode in {"two_world", "two_world_continuum", "album_collision", "notorious_mode"} and t_vocal >= 0.60
+        needs_voice = t_vocal >= 0.60  # asked for vocals and got none = missing, regardless of persona
         structural_empty = covered_bar_ratio < 0.62 or len(layers) < 6 or first_layer_bar is None or first_layer_bar > 4 or (music_sections and empty_music_sections / max(1, len(music_sections)) > 0.25)
         voice_missing = bool(needs_voice and voice <= 0)
         veto = bool(transform_violations or role_leaks or predicted_silence > 0.10 or max_source_reuse > 12 or source_diversity < 0.16 or structural_empty or voice_missing)

@@ -23,6 +23,48 @@ def app_state_dir() -> Path:
     return Path.home() / ".local" / "share" / APP_NAME
 
 
+def visible_app_dir() -> Path:
+    """A VISIBLE, portable home for the single app-global pointer file — never a
+    hidden AppData/dotfolder nest. Order: EARCRATE_HOME override, then the
+    directory of the running app (portable, next to START_HERE), then the current
+    working directory, then the user profile as a last resort. The pointer is one
+    small file; it does not create a cluttered top-level folder."""
+    env = os.environ.get("EARCRATE_HOME")
+    if env:
+        return Path(env).expanduser()
+    cand: Optional[Path] = None
+    main = sys.modules.get("__main__")
+    mf = getattr(main, "__file__", None) if main is not None else None
+    if mf:
+        try:
+            cand = Path(mf).resolve().parent
+        except Exception:
+            cand = None
+    if cand is None:
+        try:
+            cand = Path.cwd()
+        except Exception:
+            cand = Path.home()
+    try:
+        cand.mkdir(parents=True, exist_ok=True)
+        probe = cand / "earcrate_write_probe.tmp"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        return cand
+    except Exception:
+        return Path.home()
+
+
+def sibling_workspace(music_folder: str) -> str:
+    """Derive the default workspace as a VISIBLE SIBLING next to the music folder
+    (INV-1 forbids it living inside the music folder). Name is derived from the
+    music folder, never hardcoded. e.g. '.../The Sample Factory' ->
+    '.../The Sample Factory — EarCrate'."""
+    music = Path(str(music_folder or "")).expanduser().resolve()
+    base = safe_name(music.name, "Library")
+    return str(music.parent / f"{base} — EarCrate")
+
+
 def _normalize_initial_dir(current: str) -> str:
     initial = str(current or "").strip()
     if initial:

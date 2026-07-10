@@ -230,8 +230,12 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.run_background(self.core.one_click_mix, data)); return
             if path == "/api/one_click":
                 self._json(200, self.core.one_click_mix(data)); return
-            if path == "/api/continuum/compile":
-                self._json(200, self.core.propose_continuum(data)); return
+            if path == "/api/demo/seed":
+                self._json(200, self.core.seed_demo_renders(int(data.get("count") or 8))); return
+            if path == "/api/migrate/plan":
+                self._json(200, self.core.plan_workspace_migration(data)); return
+            if path == "/api/migrate/apply":
+                self._json(200, self.core.run_background(self.core.apply_workspace_migration, data)); return
             if path == "/api/preflight":
                 self._json(200, self.core.preflight(data)); return
             if path == "/api/playlist/propose":

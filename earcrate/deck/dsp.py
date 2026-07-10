@@ -77,30 +77,6 @@ def track_identity(item: Dict[str, Any]) -> str:
     return hashlib.sha1(path.encode("utf-8", "replace")).hexdigest()[:12]
 
 
-def item_text_blob(item: Dict[str, Any]) -> str:
-    parts = [item.get(k) for k in ("artist", "album", "title", "genre", "path", "year")]
-    return " ".join(str(x or "") for x in parts).lower()
-
-
-def world_query_match(item: Dict[str, Any], query: str) -> bool:
-    q = str(query or "").strip().lower()
-    if not q:
-        return False
-    blob = item_text_blob(item)
-    terms = [t for t in re.split(r"[,;|]+|\s+", q) if t]
-    return all(t in blob for t in terms)
-
-
-def role_world_guess(item: Dict[str, Any]) -> str:
-    role = str(item.get("role") or "full")
-    vocal = float(item.get("vocal_likelihood") or 0.0)
-    if role == "vocal" or vocal >= 0.65:
-        return "voice"
-    if role in ("drum_anchor", "bass", "harmony", "texture", "fx", "full"):
-        return "bed"
-    return "neutral"
-
-
 def deck_group_for_role(role: str) -> str:
     role = str(role or "full")
     if role == "bass":

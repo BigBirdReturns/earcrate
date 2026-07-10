@@ -1,5 +1,101 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.8.4 — first-run "press play": an instant demo warm-up set
+- YOU CAN PRESS PLAY ON A FRESH INSTALL. Endless plays renders, and a brand-new
+  library has none until you compile — so a "Play demo" button (core
+  `seed_demo_renders`, route `/api/demo/seed`) synthesizes a handful of
+  listenable chord+kick loops locally (no real music, clearly a demo) and plays
+  them endlessly on the spot, while you Book a set to compile YOUR library in
+  the background. The "no renders yet" path now points here instead of dead-ending.
+- VERIFIED headless (Playwright/Chromium) on a FRESH empty workspace: 0 renders
+  → click Play demo → 8 renders seeded → Endless on, actually playing (not
+  paused), no page errors. Backend: seed → list_renders shows current-engine
+  passing renders. 14/14 gates + singlefile SELF_TEST_OK.
+
+## v0.8.3 — the continuous player: a resident actually plays endless
+- THE 45-MINUTE CLAIM IS NOW REAL. An "Endless" transport plays the crate
+  continuously: it builds a shuffled queue of passing current-engine renders,
+  auto-advances on each track's `ended`, and reshuffles when the queue is
+  exhausted (avoiding an immediate repeat) — genuinely endless, not a single
+  sketch. `?endless=1` on the URL auto-starts it so one link just plays.
+- VERIFIED headless (Playwright/Chromium): from a seeded 10-render crate the
+  player started a full queue, auto-advanced through 13 track-endings, wrapped
+  past the queue and kept going (still endless), played multiple distinct
+  tracks, zero page errors. Autoplay in a real browser still needs one click
+  (browser policy); the queue is armed on load either way.
+- Verified: 14/14 gates + singlefile `SELF_TEST_OK`.
+
+## v0.8.2 — honest player transport + Cast to TV
+- STOP ADVERTISING A PLAYER THAT DID NOT EXIST. The station `▶` used to call
+  `oneClickJam()` — it started a long background compile, not playback — while
+  the residents card advertised "Can play 45:00 endless off your crate." There
+  was no endless player behind that number (it is `endless_sustain` CAPACITY,
+  the max render is a 5-min sketch). Fixed the lie: `▶` is now a real
+  PLAY/PAUSE transport for the loaded render, a separate clearly-labelled
+  "Book a set" button does the compile, and the copy now reads honestly as
+  "crate depth: ~MM:SS of non-repeating material" (a continuous player is the
+  next slice, explicitly marked "coming").
+- CAST TO TV (Remote Playback API): a "Cast" button (`audio.remote.prompt()`)
+  appears when a cast target is available (Chrome/Edge → Chromecast/DLNA), with
+  a live "▶ Playing on your TV" state and graceful fallback messaging where the
+  browser does not expose it. No external SDK, no CSP dependencies.
+- VERIFIED: 14/14 gates + singlefile `SELF_TEST_OK`, plus a headless-Chromium
+  (Playwright) pass — transport + `audio.remote` wiring present, no page
+  errors, Play-with-no-render toasts instead of crashing. The physical
+  Chromecast handshake is the one thing only your browser + TV can confirm.
+
+## v0.8.1 — visible-by-default layout + a one-time workspace migration
+- NO HIDDEN NESTS, NO ROOT CLUTTER. The workspace now defaults to a VISIBLE
+  sibling next to your music — point at `.../The Sample Factory` and it derives
+  `.../The Sample Factory — EarCrate` (name derived, never hardcoded). Killed the
+  `~/.local/share/JukebreakerGT` / `%LOCALAPPDATA%\JukebreakerGT` fallback in
+  `configure_workspace`, and stopped the workspace scout from ever suggesting a
+  drive-root or home-root folder. The one app-global breadcrumb (the workspace
+  pointer) moved from the hidden AppData nest to a VISIBLE portable file
+  (`visible_app_dir()`), and an old hidden pointer is adopted on first launch so
+  nothing breaks.
+- ONE-TIME MIGRATION TOOL (`plan_workspace_migration` / `apply_workspace_migration`,
+  routes `/api/migrate/plan` + `/api/migrate/apply`): SIMULATE → APPROVE →
+  EXECUTE. The preview shows exactly what will happen and touches nothing; a
+  plan carries a signature so a stale apply refuses. On approval it moves
+  reusable buffalo to their NEW homes (library DB with your judgments, analysis
+  cache kept by name so NO re-scan is forced, renders, manifests), QUARANTINES
+  anything non-conforming under `legacy/`, and scrubs dead breadcrumbs into
+  `legacy/_scrubbed/`. Nothing is ever deleted; every move is journaled and
+  reversible; the music library is read-only and never touched. New gate
+  `test_workspace_migration_previews_then_executes` locks the contract.
+  (This is a personal, this-iteration cleanup; a later version folds it into
+  the library engine.)
+- VERIFIED: 14/14 gates, singlefile builds + `SELF_TEST_OK`.
+
+## v0.8.0 — the v2 cut: one composer, the legacy two-world arranger removed
+- THE DEAD BUFFALO IS BURIED, not hidden. The old two-world/album-collision
+  arranger — a SECOND full composer living beside the TasteSpec engine — is
+  deleted outright, not merely UI-hidden: `arrange`, `propose_continuum`, the
+  legacy `propose_mashup`/`one_click_mix` branches, and their legacy-only
+  helpers (`build_energy_plan`, `plan_harmonic_route`, `score_key_for_pool`,
+  `pick_loop`, plus dead `choose_target_key`/`compatible_era_keys`). Net −840
+  lines. This closes rebuild-plan lesson #2 ("two vocabularies for one
+  concept") — there is now ONE layer model and ONE composer.
+- SCORER DE-TWINNED: `score_arrangement` no longer branches on the two-world
+  `mix_mode` vocabulary (`two_world`/`album_collision`/`notorious_mode`). The
+  voice/bed reward, the role-leak veto, and the `voice_missing` veto that only
+  ever fired for two-world are gone; the TasteSpec path (the only path) keeps
+  its intent-match, coverage, transform, and structural vetoes. `test_intent_
+  flips_winner` still passes — behavior on the surviving path is unchanged.
+- PRESETS/KNOBS PRUNED: `album_collision`/`notorious_mode` presets and the
+  `voice_world_query`/`bed_world_query` world-routing knobs removed from
+  `outcome_params`. Orphaned deck helpers (`world_query_match`,
+  `role_world_guess`, `drydeck_role_leak`, dead `item_text_blob`) and the
+  `/api/continuum/compile` route removed. `propose_mashup` remains as a thin
+  back-compat adapter that routes to the TasteSpec composer.
+- VERIFIED: 13/13 gates green, singlefile builds + `SELF_TEST_OK`, vertical
+  suite 2/2, package compiles. No new failures vs baseline.
+- STILL OPEN (honest): `APP_NAME`/state-dir (`JukebreakerGT`) and
+  `ANALYZER_VERSION` are live cache/migration keys — renaming them orphans
+  existing workspaces and analysis caches, so they need a real migration, not
+  a rename. That is the next v2 slice, tracked separately.
+
 ## v0.7.9 — crate-librarian extracted (rebuild plan v2, phase 1)
 - NEW STANDALONE TOOL `crate-librarian/`: the library engine cut loose as a
   reusable, mutagen-only package (no audio analysis, no personas, no UI, no

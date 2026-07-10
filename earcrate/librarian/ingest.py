@@ -30,10 +30,36 @@ def _first(tags: Dict[str, str], *keys: str) -> str:
     return ""
 
 
-def _derive_identity(path: Path, tags: Dict[str, str]) -> Dict[str, Any]:
+_GENERIC_DIR = re.compile(r"^(new folder(\s*\(\d+\))?|music|my music|mp3s?|songs?|tracks?|audio|downloads?|"
+                          r"ingested|unsorted|misc|stuff|files|media|temp|dump\w*|backups?|old\s.*|to sort|"
+                          r"ssd|hdd|usb|external|flash|drive [a-z]|various.*|va)$", re.I)
+_BATCH_DIR = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{6}-", re.I)  # master/ingested/<batch>/ stamps
+
+
+def _folder_identity(path: Path, root: Optional[Path]) -> Tuple[str, str]:
+    """Artist/Album fallback from the near-universal folder convention
+    .../Artist/Album/track.ext or .../Artist/track.ext. Only the two nearest
+    meaningful parents are considered; generic dump/batch folder names are
+    ignored. This is a FALLBACK — embedded tags and parseable filenames win."""
+    try:
+        parts = list((path.relative_to(root) if root else path).parent.parts)
+    except Exception:
+        parts = [path.parent.name]
+    if len(parts) >= 2 and parts[0].lower() == "ingested" and _BATCH_DIR.match(parts[1]):
+        parts = parts[2:]  # copies live under ingested/<batch>/<source-folder>/...
+    dirs = [d for d in parts if d and not _GENERIC_DIR.match(d) and not _BATCH_DIR.match(d)][-2:]
+    if len(dirs) == 2:
+        return dirs[0], dirs[1]
+    if len(dirs) == 1:
+        return dirs[0], ""
+    return "", ""
+
+
+def _derive_identity(path: Path, tags: Dict[str, str], root: Optional[Path] = None) -> Dict[str, Any]:
     """Deterministic normalization for decades of mp3-dump mess (spec §6.2):
     scene underscores, Track-NN junk titles, ALLCAPS, year-suffixed albums,
-    'NN - Artist - Title' filenames, feat. canonicalization, compilations."""
+    'NN - Artist - Title' filenames, folder-convention fallback, 'Title by
+    Artist' suffix strip, feat. canonicalization, compilations."""
     stem = path.stem
     if "_" in stem and " " not in stem:
         stem = stem.replace("_", " ")
@@ -52,7 +78,25 @@ def _derive_identity(path: Path, tags: Dict[str, str]) -> Dict[str, Any]:
             title = title or (parts[0] if parts else stem)
     if _JUNK_TITLE.match(re.sub(r"[\s_]+", " ", _clean_text(title))):
         title = ""
-    album = _first(tags, "album")
+    folder_artist, folder_album = _folder_identity(path, root)
+    if not artist and folder_artist:
+        artist = folder_artist
+    # 'Title by Artist.mp3': strip the suffix ONLY when it names a known folder
+    # identity ('Stand by Me' must survive). If it names the INNER folder, that
+    # folder is the artist, not an album (dump/Artist/ layouts).
+    if title:
+        m_by = re.search(r"\s+by\s+(?:the\s+)?(?P<a>.+)$", title, re.I)
+        if m_by:
+            said = m_by.group("a").strip().lower()
+            def _variants(a: str) -> set:
+                a = a.lower()
+                return {a, a[4:] if a.startswith("the ") else a}
+            if artist and said in _variants(artist):
+                title = title[:m_by.start()].strip() or title
+            elif folder_album and said in _variants(folder_album):
+                artist, folder_album = folder_album, ""
+                title = title[:m_by.start()].strip() or title
+    album = _first(tags, "album") or folder_album
     year = None
     m = _YEAR_SUFFIX.search(album)
     if m:
@@ -192,7 +236,7 @@ def organize_and_retag(self, data: Dict[str, Any]) -> Dict[str, Any]:
         if not p.exists():
             continue
         tags = {str(k).lower(): (v or "") for k, v in db.execute("SELECT key, value FROM tags WHERE file_id=?", (fid,)).fetchall()}
-        derived.append((p, tags, _derive_identity(p, tags)))
+        derived.append((p, tags, _derive_identity(p, tags, c.master_root)))
     album_artists: Dict[str, set] = {}
     for _, _, ident in derived:
         if ident["album"].lower() != "unknown album":

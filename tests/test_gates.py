@@ -64,6 +64,33 @@ def test_percussion_is_keyless_but_vocals_are_not():
     assert not drum.get("violation"), f"drum should be keyless, got: {drum.get('violation')}"
     assert voc.get("violation"), "vocal at a tritone with no varispeed help must violate"
 
+def test_identity_from_folders():
+    """Untagged files must inherit identity from the Artist/Album folder
+    convention, and 'Title by Artist' suffixes strip ONLY for the known artist."""
+    from pathlib import Path
+    from earcrate.librarian.ingest import _derive_identity
+    root = Path("/lib")
+    # the real-world case: artist folder + 'Title by the Artist.mp3', zero tags
+    i = _derive_identity(Path("/lib/The Front Bottoms/Au Revoir (Adios) by the Front Bottoms.mp3"), {}, root)
+    assert i["artist"] == "The Front Bottoms" and i["title"] == "Au Revoir (Adios)", i
+    # Artist/Album/NN Title.ext, zero tags
+    i = _derive_identity(Path("/lib/Radiohead/OK Computer/02 Paranoid Android.mp3"), {}, root)
+    assert i["artist"] == "Radiohead" and i["album"] == "OK Computer" and i["track"] == 2, i
+    # 'Stand by Me' must NOT be mangled: 'Me' is not the artist
+    i = _derive_identity(Path("/lib/Ben E. King/Stand by Me.mp3"), {}, root)
+    assert i["title"] == "Stand by Me" and i["artist"] == "Ben E. King", i
+    # generic dump folders must not become artists
+    i = _derive_identity(Path("/lib/New folder/mystery.mp3"), {}, root)
+    assert i["artist"] == "Unknown Artist", i
+    # embedded tags always beat folders
+    i = _derive_identity(Path("/lib/WrongFolder/song.mp3"), {"artist": "Portishead", "title": "Glory Box"}, root)
+    assert i["artist"] == "Portishead" and i["title"] == "Glory Box", i
+    # ingested copies: batch scaffolding is skipped, and a 'by X' title naming the
+    # inner folder promotes that folder from album to artist
+    i = _derive_identity(Path("/lib/ingested/2026-07-10-001122-ABC123/seagate2tb/The Front Bottoms/Maps by the Front Bottoms.mp3"), {}, root)
+    assert i["artist"] == "The Front Bottoms" and i["title"] == "Maps" and i["album"] == "Unknown Album", i
+
+
 def test_endless_math_is_exact():
     """Persona endless-set gate: T = min(60*S/r, E*seconds_per_event); endless
     iff T clears the recycle gap. Numbers must be exact, not vibes."""

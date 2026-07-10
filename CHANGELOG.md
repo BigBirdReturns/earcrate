@@ -1,6 +1,17 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.4 — Persona Codex (unreleased)
+- LIBRARIAN: folder-convention identity fallback — untagged files inherit
+  Artist/Album from `.../Artist/Album/track` or `.../Artist/track` parents
+  (generic dump/batch/drive folder names ignored; ingested/<batch>/<source>
+  scaffolding skipped). 'Title by Artist' filename suffixes strip only when
+  they name a known folder identity ('Stand by Me' survives), and a 'by X'
+  title naming the inner folder promotes it from album to artist. Gate:
+  test_identity_from_folders.
+- UI: Browse buttons fixed (native Windows FolderBrowserDialog via PowerShell
+  with a TopMost owner; Tk fallback; picker errors surface as a toast where
+  clicked). Header rebranded EARCRATE with the version injected from
+  ENGINE_DISPLAY_VERSION at serve time — it can no longer drift.
 - PERSONA: `PERSONAS/GIRL_TALK_V1.md` — the complete quantitative reference for the
   first TasteSpec persona: documented sample densities, rails contract, varispeed and
   harmony math, typed-edge and acceptance-gate thresholds, and a code map for every

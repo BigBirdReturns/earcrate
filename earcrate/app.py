@@ -3,6 +3,7 @@ from earcrate.core.deps import _dt
 from earcrate.analyze.features import *
 from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_likelihood, _estimate_sections
 from earcrate.deck.transform import _artifact_cost
+from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
 class EarcrateCore:
     def __init__(self):
         self.state_dir = app_state_dir()
@@ -537,6 +538,25 @@ class EarcrateCore:
               reasons_json TEXT NOT NULL DEFAULT '{}',
               created_at TEXT NOT NULL,
               UNIQUE(taste_profile,left_atom_id,right_atom_id,relation)
+            );
+            CREATE TABLE IF NOT EXISTS atom_judgments(
+              atom_id TEXT REFERENCES ear_atoms(id) ON DELETE CASCADE,
+              taste_profile TEXT NOT NULL,
+              status TEXT CHECK(status IN ('approved','rejected','candidate')) NOT NULL,
+              relabel_role TEXT, favorite INTEGER DEFAULT 0, locked INTEGER DEFAULT 0,
+              reason TEXT, updated_at TEXT NOT NULL,
+              PRIMARY KEY(atom_id,taste_profile)
+            );
+            CREATE TABLE IF NOT EXISTS pair_judgments(
+              edge_id TEXT REFERENCES compatibility_edges(id) ON DELETE CASCADE,
+              taste_profile TEXT NOT NULL,
+              status TEXT CHECK(status IN ('approved','rejected','candidate')) NOT NULL,
+              reason TEXT, updated_at TEXT NOT NULL,
+              PRIMARY KEY(edge_id,taste_profile)
+            );
+            CREATE TABLE IF NOT EXISTS saved_plans(
+              id TEXT PRIMARY KEY, name TEXT NOT NULL, taste_profile TEXT NOT NULL,
+              plan_hash TEXT UNIQUE NOT NULL, plan_json TEXT NOT NULL, created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS kv(
               key TEXT PRIMARY KEY,
@@ -2071,7 +2091,8 @@ class EarcrateCore:
         self.conn().commit()
         op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
         manifest = self.write_manifest("tastespec", seed, f"Render TasteSpec mashup '{name}'", [op])
-        return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement, "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "readiness": readiness}
+        return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement, "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
+            "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "readiness": readiness}
 
     def compose_taste_arrangement(self, pool: List[Dict[str, Any]], params: Dict[str, Any], seed: int) -> Dict[str, Any]:
         rng = random.Random(seed)
@@ -2079,6 +2100,7 @@ class EarcrateCore:
         user_bpm = float(params.get("bpm") or 0.0) or None
         deck = self.choose_taste_deck(pool, params)
         pool = list(deck.get("pool") or [])
+        profile_data = load_tastespec(str(params.get("taste_profile") or "girl_talk_v1"))
         profile0 = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         need_sources0 = max(5, int(math.ceil(target_seconds / float(profile0.get("source_seconds") or 11.5))))
         deck_sources = int(((deck.get("diagnostics") or {}).get("have") or {}).get("sources", 0))
@@ -2207,7 +2229,7 @@ class EarcrateCore:
             prev_sec = sec
             bar += bars
             idx += 1
-        return {"bpm": render_bpm, "target_key": target_key, "seed": seed, "params": params, "engine": ENGINE_VERSION, "dj_compiler": {"version": "v0.7.3", "contract": "TasteSpec: ear-crated phrase atoms + deterministic compatibility graph + runtime ledger + turnover contract + keyless percussion + style gates; no fallback render is allowed"}, "bpm_lattice": {"target_bpm": user_bpm, "chosen_bpm": round(render_bpm,2), "chosen_by": "taste_feasibility" if lattice.get("best") else ("user_hint" if user_bpm else "taste_lattice_min_cost"), "best": lattice.get("best"), "candidates": lattice.get("lattice", [])[:8]}, "world_model": {"mode": "tastespec_graph", "taste_profile": params.get("taste_profile"), "rule": "floor rail + foreground rail + spark rail from approved EarAtoms"}, "taste_ledger": {"profile": params.get("taste_profile"), "graph_receipts": graph_receipts[:200], "source_contract": TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"))}, "sections": sections}
+        return {"bpm": render_bpm, "target_key": target_key, "seed": seed, "params": params, "engine": ENGINE_VERSION, "dj_compiler": {"version": "v0.7.3", "contract": "TasteSpec: ear-crated phrase atoms + deterministic compatibility graph + runtime ledger + turnover contract + keyless percussion + style gates; no fallback render is allowed"}, "bpm_lattice": {"target_bpm": user_bpm, "chosen_bpm": round(render_bpm,2), "chosen_by": "taste_feasibility" if lattice.get("best") else ("user_hint" if user_bpm else "taste_lattice_min_cost"), "best": lattice.get("best"), "candidates": lattice.get("lattice", [])[:8]}, "world_model": {"mode": "tastespec_graph", "taste_profile": params.get("taste_profile"), "rule": "floor rail + foreground rail + spark rail from approved EarAtoms"}, "tastespec": {"id": profile_data["id"], "version": profile_data["version"], "hash": profile_data["hash"]}, "taste_ledger": {"profile": params.get("taste_profile"), "graph_receipts": graph_receipts[:200], "source_contract": TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"))}, "sections": sections}
 
     def taste_arrangement_gate(self, arrangement: Dict[str, Any]) -> Dict[str, Any]:
         params = arrangement.get("params") or {}
@@ -3572,7 +3594,7 @@ class EarcrateCore:
         transform_cache_dir = c.agent_root / "cache" / "transforms" / ENGINE_VERSION
         transform_cache_dir.mkdir(parents=True, exist_ok=True)
         max_tail_decks = max(1, min(6, int((arrangement.get("params") or {}).get("max_aux_decks") or 3)))
-        report: Dict[str, Any] = {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "bpm": bpm, "render_timestamp": now_utc(), "dj_compiler": arrangement.get("dj_compiler") or {}, "world_model": arrangement.get("world_model") or {}, "candidate_search": arrangement.get("candidate_search") or {}, "deck_model": {"version": "v0.5.17", "model": "varispeed_lattice_dry_multideck_tail_overlay", "max_aux_decks": max_tail_decks, "rule": "incoming downbeat stays on grid; only dry, role-approved outgoing decks overhang into the transition window"}, "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0}, "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0}
+        report: Dict[str, Any] = {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "bpm": bpm, "render_timestamp": now_utc(), "dj_compiler": arrangement.get("dj_compiler") or {}, "world_model": arrangement.get("world_model") or {}, "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "candidate_search": arrangement.get("candidate_search") or {}, "deck_model": {"version": "v0.5.17", "model": "varispeed_lattice_dry_multideck_tail_overlay", "max_aux_decks": max_tail_decks, "rule": "incoming downbeat stays on grid; only dry, role-approved outgoing decks overhang into the transition window"}, "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0}, "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0}
 
         def transition_xfade_samples(sec_obj: Dict[str, Any], sec_len_samples: int) -> int:
             transition = dict(sec_obj.get("transition_in") or {})
@@ -3884,6 +3906,66 @@ class EarcrateCore:
         db.execute("UPDATE mashups SET render_path=?, engine_version=?, arrangement_sha=?, render_report_path=? WHERE id=?", (str(dst), ENGINE_VERSION, arr_sha, str(report_path), mashup_id))
         db.commit()
         return {"type": "render_mashup", "path": str(dst), "report": str(report_path), "drop_count": report["drop_count"], "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": sum(len(s.get("layers", [])) for s in sections), "presented": True}
+
+
+    def taste_profile_receipt(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        return profile_summary(taste_profile)
+
+    def set_atom_judgment(self, atom_id: str, taste_profile: str, status: str, relabel_role: str = "", favorite: bool = False, locked: bool = False, reason: str = "") -> Dict[str, Any]:
+        if status not in {"approved", "rejected", "candidate"}:
+            raise ValueError("atom judgment status must be approved, rejected, or candidate")
+        db = self.conn()
+        row = db.execute("SELECT id FROM ear_atoms WHERE id=? AND taste_profile=?", (atom_id, taste_profile)).fetchone()
+        if not row:
+            raise ValueError("atom not found for TasteSpec profile")
+        db.execute("""INSERT INTO atom_judgments(atom_id,taste_profile,status,relabel_role,favorite,locked,reason,updated_at)
+                      VALUES(?,?,?,?,?,?,?,?)
+                      ON CONFLICT(atom_id,taste_profile) DO UPDATE SET status=excluded.status,relabel_role=excluded.relabel_role,favorite=excluded.favorite,locked=excluded.locked,reason=excluded.reason,updated_at=excluded.updated_at""",
+                   (atom_id, taste_profile, status, relabel_role or None, 1 if favorite else 0, 1 if locked else 0, reason, now_utc()))
+        db.execute("UPDATE ear_atoms SET status=?, ear_role=COALESCE(NULLIF(?,''), ear_role) WHERE id=? AND taste_profile=?", (status, relabel_role, atom_id, taste_profile))
+        db.commit()
+        return {"ok": True, "atom_id": atom_id, "taste_profile": taste_profile, "status": status}
+
+    def compatible_pairs_for_atom(self, atom_id: str, taste_profile: str = "girl_talk_v1", limit: int = 40) -> Dict[str, Any]:
+        rows = self.conn().execute("""SELECT e.*, pj.status judgment_status, pj.reason judgment_reason,
+                   la.ear_role left_role, ra.ear_role right_role, rf.path right_path, rt.artist right_artist, rt.title right_title
+                 FROM compatibility_edges e
+                 JOIN ear_atoms la ON la.id=e.left_atom_id JOIN ear_atoms ra ON ra.id=e.right_atom_id
+                 JOIN files rf ON rf.id=ra.file_id LEFT JOIN tracks rt ON rt.file_id=rf.id
+                 LEFT JOIN pair_judgments pj ON pj.edge_id=e.id AND pj.taste_profile=e.taste_profile
+                 WHERE e.taste_profile=? AND (e.left_atom_id=? OR e.right_atom_id=?)
+                 ORDER BY e.score DESC LIMIT ?""", (taste_profile, atom_id, atom_id, limit)).fetchall()
+        items=[]
+        for r in rows:
+            d=dict(r); d["reasons"] = json.loads(d.pop("reasons_json") or "{}"); items.append(d)
+        return {"ok": True, "taste_profile": taste_profile, "atom_id": atom_id, "items": items}
+
+    def set_pair_judgment(self, edge_id: str, taste_profile: str, status: str, reason: str = "") -> Dict[str, Any]:
+        if status not in {"approved", "rejected", "candidate"}:
+            raise ValueError("pair judgment status must be approved, rejected, or candidate")
+        row = self.conn().execute("SELECT id FROM compatibility_edges WHERE id=? AND taste_profile=?", (edge_id, taste_profile)).fetchone()
+        if not row:
+            raise ValueError("compatibility edge not found for TasteSpec profile")
+        self.conn().execute("""INSERT INTO pair_judgments(edge_id,taste_profile,status,reason,updated_at) VALUES(?,?,?,?,?)
+                             ON CONFLICT(edge_id,taste_profile) DO UPDATE SET status=excluded.status,reason=excluded.reason,updated_at=excluded.updated_at""", (edge_id, taste_profile, status, reason, now_utc()))
+        self.conn().commit()
+        return {"ok": True, "edge_id": edge_id, "taste_profile": taste_profile, "status": status}
+
+    def save_plan(self, name: str, plan: Dict[str, Any], taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        prof = load_tastespec(taste_profile)
+        plan = dict(plan)
+        plan["tastespec"] = {"id": prof["id"], "version": prof["version"], "hash": prof["hash"]}
+        ph = arrangement_sha(plan)
+        self.conn().execute("INSERT OR REPLACE INTO saved_plans(id,name,taste_profile,plan_hash,plan_json,created_at) VALUES(COALESCE((SELECT id FROM saved_plans WHERE plan_hash=?),?),?,?,?,?,?)", (ph, ulidish(), name, taste_profile, ph, json.dumps(plan, ensure_ascii=False), now_utc()))
+        self.conn().commit()
+        out_dir = self.ensure_config().working_root / "plans"; out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"{safe_name(name)}-{ph[:8]}.plan.json"; path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"ok": True, "plan_hash": ph, "path": str(path), "tastespec": plan["tastespec"]}
+
+    def load_plan(self, plan_hash: str) -> Dict[str, Any]:
+        row = self.conn().execute("SELECT * FROM saved_plans WHERE plan_hash=?", (plan_hash,)).fetchone()
+        if not row: raise ValueError("saved plan not found")
+        return {"ok": True, "plan": json.loads(row["plan_json"]), "name": row["name"], "taste_profile": row["taste_profile"], "plan_hash": row["plan_hash"]}
 
     def judge_render(self, render_path: str, ref_path: Optional[str] = None) -> Dict[str, Any]:
         render_metrics = judge_audio_file(Path(render_path), ref_path=Path(ref_path) if ref_path else None)

@@ -5,18 +5,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / "earcrate"
-ORDER = ["core/deps.py", "core/util.py", "core/wavinfo.py", "analyze/decode.py", "deck/dsp.py",
+ORDER = ["tastespec/profiles.py", "core/deps.py", "core/util.py", "core/wavinfo.py", "analyze/decode.py", "deck/dsp.py",
          "deck/transform.py", "deck/lattice.py", "ear/readiness.py", "judge/audio.py",
          "deck/harmony.py", "core/config.py", "analyze/features.py", "librarian/ingest.py",
          "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
 import base64
 html_b64 = base64.b64encode((PKG / "ui/static/index.html").read_bytes()).decode("ascii")
+profiles_b64 = {f.stem: base64.b64encode(f.read_bytes()).decode("ascii")
+                for f in sorted((ROOT / "profiles").glob("*.json")) if f.stem != "tastespec.schema"}
 parts = ["#!/usr/bin/env python3\nfrom __future__ import annotations\n# Auto-built from the earcrate package. Do not edit; edit the package.\nimport base64 as _b64\n"]
 for rel in ORDER:
     src = (PKG / rel).read_text(encoding="utf-8")
     lines = [l for l in src.split("\n") if not STRIP.match(l) and not l.startswith("from __future__")]
     body = "\n".join(lines)
+    if rel == "tastespec/profiles.py":
+        body = body.replace("EMBEDDED_PROFILES: Dict[str, str] = {}",
+                            "EMBEDDED_PROFILES: Dict[str, str] = " + repr(profiles_b64))
     if rel == "ui/server.py":
         body = body.replace(
             'HTML_PAGE = (Path(__file__).resolve().parent / "static" / "index.html").read_text(encoding="utf-8")  # single-file build inlines this',

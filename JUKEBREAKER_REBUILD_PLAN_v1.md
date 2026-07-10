@@ -1,8 +1,6 @@
 # JUKEBREAKER REBUILD PLAN — v1.0
-**Constitution: BUILD_SPEC v1.0 + ADDENDUM A v1.1 (canonical, unchanged).**
-This document does not replace the specs. It is the execution plan for rebuilding the
-code TO them, folding in everything learned across v0.2 → v0.6.3. Where learning
-refined a spec section, it is written here as a slot-in under that section's number.
+**Constitution: executable acceptance tests first, then JUKEBREAKER_SPEC_v2_CONSOLIDATED.md, then versioned TasteSpec profiles.**
+BUILD_SPEC v1.0 and ADDENDUM A v1.1 are historical inputs only. This plan is subordinate to the consolidated spec and must not reintroduce rescue, degraded, floor-safe, single-crate, or old-render fallback behavior.
 
 ---
 
@@ -94,9 +92,7 @@ transition application, `fsync_append_jsonl`, path guards, doctor, workspace sco
 already spec §4 + v0.6.0 tables); npz caches keyed by content-sha migrate as-is; renders
 and reports are plain files. Rebuild loses nothing analyzed or approved.
 
-Cut permanently: mode aliases (two honest modes only), safe-deck rescue's slider
-overrides (the intent scorer made them obsolete — rescue may retry seeds, never rewrite
-the user's intent), all `contextlib.suppress` in deck/arrange/executor paths (A8.2),
+Cut permanently: mode aliases, Jam/Mashup as duplicate products, safe-deck rescue, floor-safe rescue, single-crate fallback, old-render fallback, all `contextlib.suppress` in deck/arrange/executor paths (A8.2),
 per-section limiting (A3.4), the embedded-HTML string, patch-notes-as-architecture.
 
 ## 5. Build order = spec P1→P8, with tests FIRST

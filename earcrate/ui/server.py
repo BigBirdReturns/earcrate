@@ -118,6 +118,23 @@ class JBHandler(BaseHTTPRequestHandler):
                 q = urllib.parse.parse_qs(parsed.query)
                 self._json(200, self.core.list_ear_atoms((q.get("status") or ["approved"])[0], (q.get("taste_profile") or ["girl_talk_v1"])[0]))
                 return
+            if parsed.path == "/api/residents":
+                self._json(200, self.core.residents())
+                return
+            if parsed.path == "/api/sessions":
+                self._json(200, self.core.sessions_list())
+                return
+            if parsed.path == "/api/timeline/list":
+                self._json(200, self.core.list_plans())
+                return
+            if parsed.path == "/api/taste/profile":
+                q = urllib.parse.parse_qs(parsed.query)
+                self._json(200, self.core.taste_profile_receipt((q.get("taste_profile") or ["girl_talk_v1"])[0]))
+                return
+            if parsed.path == "/api/taste/pairs":
+                q = urllib.parse.parse_qs(parsed.query)
+                self._json(200, self.core.compatible_pairs_for_atom((q.get("atom_id") or [""])[0], (q.get("taste_profile") or ["girl_talk_v1"])[0], int((q.get("limit") or ["40"])[0])))
+                return
             if parsed.path == "/api/manifests":
                 self._json(200, self.core.list_manifests())
                 return
@@ -129,7 +146,18 @@ class JBHandler(BaseHTTPRequestHandler):
                 raw = (q.get("path") or [""])[0]
                 audio_path = Path(raw).expanduser().resolve()
                 c = self.core.ensure_config()
-                self.core.validate_path_in_root(audio_path, c.working_root / "renders")
+                # Read-only playback is allowed from renders, atom previews, and the
+                # source library itself (auditioning IS the product). Writes never
+                # happen here; path containment still enforced.
+                for _root in (c.working_root, c.master_root):
+                    try:
+                        self.core.validate_path_in_root(audio_path, _root)
+                        break
+                    except Exception:
+                        continue
+                else:
+                    self._json(403, {"error": "audio path outside workspace/library"})
+                    return
                 if not audio_path.exists() or not audio_path.is_file():
                     self._json(404, {"error": "audio file not found"})
                     return
@@ -156,6 +184,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.organize_and_retag(data)); return
             if path == "/api/rank":
                 self._json(200, self.core.rank_crate(str(data.get("taste_profile") or "girl_talk_v1"), int(data.get("limit") or 40))); return
+            if path == "/api/open_folder":
+                self._json(200, self.core.open_folder(str(data.get("path") or ""))); return
             if path == "/api/config_workspace":
                 self._json(200, self.core.configure_workspace(data)); return
             if path == "/api/workspace_candidates":
@@ -178,6 +208,18 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.auto_approve_quota(int(data.get("max_loops") or 60))); return
             if path == "/api/ear_crate/build":
                 self._json(200, self.core.build_ear_crate(int(data.get("limit") or 0), bool(data.get("force", False)), str(data.get("taste_profile") or "girl_talk_v1"), bool(data.get("write_previews", False)))); return
+            if path == "/api/ear_atoms/judgment":
+                self._json(200, self.core.set_atom_judgment(str(data["atom_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("relabel_role") or ""), bool(data.get("favorite", False)), bool(data.get("locked", False)), str(data.get("reason") or ""))); return
+            if path == "/api/taste/pair_judgment":
+                self._json(200, self.core.set_pair_judgment(str(data["edge_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("reason") or ""))); return
+            if path == "/api/station/feedback":
+                self._json(200, self.core.station_feedback(str(data.get("signal") or ""))); return
+            if path == "/api/timeline/propose":
+                self._json(200, self.core.propose_plan(data)); return
+            if path == "/api/timeline/save":
+                self._json(200, self.core.save_plan(str(data.get("name") or "plan"), data["plan"], str(data.get("taste_profile") or "girl_talk_v1"))); return
+            if path == "/api/timeline/load":
+                self._json(200, self.core.load_plan(str(data["plan_hash"]))); return
             if path == "/api/taste/readiness":
                 self._json(200, self.core.taste_readiness(str(data.get("taste_profile") or "girl_talk_v1"), float(data.get("target_seconds") or 120))); return
             if path == "/api/taste/graph":

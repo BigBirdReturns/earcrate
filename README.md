@@ -25,3 +25,8 @@ rebuild). Full history in CHANGELOG.md. Legacy workspaces are adopted in
 place: an existing `jukebreaker.sqlite` is used without migration.
 
 Sources (audio) never enter this repository.
+
+## License
+PolyForm Noncommercial 1.0.0 — free for personal/noncommercial use; commercial use
+requires a written license from the copyright holder. See LICENSE.md (which also
+notes that music rights are separate from software rights).

@@ -121,6 +121,105 @@ def test_taste_duration_and_vocal_count():
     assert sc["voice_layers"] > 0 and sc["realized_vocal"] > 0.0, f"scorer blind to vocals: {sc['voice_layers']}"
 
 
+def test_curation_steers_composer():
+    """Loop closure: a favorited atom outranks a slightly better stranger, and a
+    human-rejected pairing is a veto the composer obeys even over a favorite."""
+    import tempfile
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "music").mkdir(); (tmp / "work").mkdir(); (tmp / "agent").mkdir()
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+    db = core.conn()
+    pool = []
+    floor_ids = []
+    n = 0
+    for srci in range(5):
+        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
+                   (f"f{srci}", str(tmp / "music" / f"s{srci}.wav"), "master", 1, 1, "now"))
+        for ear, role in (("DRUM_BREAK", "drum_anchor"), ("TEXTURE", "texture")):
+            n += 1
+            aid = f"a{n}"
+            db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                       (f"l{n}", f"f{srci}", 0, 4, 2, role, 0.7, "now"))
+            db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (aid, f"l{n}", f"f{srci}", "girl_talk_v1", ear, role, 0, 4, 2, 0.7, "{}", "now"))
+            pool.append({"id": f"l{n}", "atom_id": aid, "ear_role": ear, "role": role, "key_root": 0,
+                         "bpm": 124.0, "score": 0.7, "hook_score": 0.3, "title": f"song_{srci}",
+                         "path": f"/m/song_{srci}.mp3", "low_share": 0.2, "high_share": 0.3})
+            if ear in {"DRUM_BREAK", "TEXTURE"}:
+                floor_ids.append(aid)
+    vocals = {}
+    for aid, srci, score in (("v_good", 0, 0.60), ("v_fav", 1, 0.55)):
+        n += 1
+        db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                   (f"l{n}", f"f{srci}", 4, 8, 2, "vocal", score, "now"))
+        db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (aid, f"l{n}", f"f{srci}", "girl_talk_v1", "VOX_HOOK", "vocal", 4, 8, 2, score, "{}", "now"))
+        vocals[aid] = {"id": f"l{n}", "atom_id": aid, "ear_role": "VOX_HOOK", "role": "vocal", "key_root": 0,
+                       "bpm": 124.0, "score": score, "hook_score": 0.8, "title": f"song_{srci}",
+                       "path": f"/m/song_{srci}.mp3", "low_share": 0.1, "high_share": 0.4}
+        pool.append(vocals[aid])
+    db.commit()
+    params = {"taste_profile": "girl_talk_v1", "target_seconds": 40, "bpm": 124}
+
+    def first_vocal(arr):
+        for sec in arr["sections"]:
+            for ly in sec["layers"]:
+                if ly.get("role") == "vocal":
+                    return ly.get("atom_id")
+        return None
+
+    base = first_vocal(core.compose_taste_arrangement(list(pool), dict(params), seed=7))
+    assert base == "v_good", f"baseline should pick the higher-scored vocal, got {base}"
+    # favorite flips the pick
+    core.set_atom_judgment("v_fav", "girl_talk_v1", "approved", favorite=True)
+    fav = first_vocal(core.compose_taste_arrangement(list(pool), dict(params), seed=7))
+    assert fav == "v_fav", f"favorite must outrank a slightly better stranger, got {fav}"
+    # human rejection of every (v_fav, floor) pairing is a veto that beats the favorite
+    for i, fid in enumerate(floor_ids):
+        db.execute("INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,relation,score,reasons_json,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                   (f"e{i}", "girl_talk_v1", "v_fav", fid, "vocal_over_bed", 0.8, "{}", "now"))
+        db.commit()
+        core.set_pair_judgment(f"e{i}", "girl_talk_v1", "rejected", "clashes")
+    vetoed = core.compose_taste_arrangement(list(pool), dict(params), seed=7)
+    used = {ly.get("atom_id") for sec in vetoed["sections"] for ly in sec["layers"] if ly.get("role") == "vocal"}
+    assert "v_fav" not in used, "a rejected pairing must never be composed, favorite or not"
+    assert "v_good" in used, "the non-vetoed vocal should carry the foreground"
+
+
+def test_persona_single_source():
+    """The versioned TasteSpec JSON is the ONLY source of persona numbers, and it
+    must state the values the engine actually ENFORCES — a profile that promises
+    looser budgets than the deck allows is a lie in both directions."""
+    from earcrate.tastespec import load_tastespec, flat_profile
+    from earcrate.core.deps import TASTE_PROFILES
+    from earcrate.deck.transform import drydeck_transform_limits
+    from earcrate.ear.readiness import GT_RANK_WEIGHTS
+    from earcrate.tastespec import available_profiles
+    profs = available_profiles()
+    assert "girl_talk_v1" in profs and "troubadour_v1" in profs and "notorious_v1" in profs
+    for pid in profs:
+        prof = load_tastespec(pid)
+        # 1. the runtime flat profile IS the JSON projection (no shadow literal)
+        assert TASTE_PROFILES[pid] == flat_profile(prof), f"{pid} projection drift"
+        assert TASTE_PROFILES[pid]["tastespec_hash"] == prof["hash"]
+        # 2. profile transform budgets == enforced deck limits, role for role
+        for role, decl in (prof["transform_budgets"]["roles"]).items():
+            enforced = drydeck_transform_limits(role)
+            assert abs(decl["varispeed_pct"] - enforced["varispeed"]) < 1e-9, f"{pid}/{role} varispeed drift"
+            assert abs(decl["residual_pitch"] - enforced["residual_pitch"]) < 1e-9, f"{pid}/{role} pitch drift"
+        # 3. every relation threshold == the profile's own edge floor
+        for rel, spec in prof["compatibility_relations"].items():
+            assert abs(spec["min_score"] - prof["min_edge_score"]) < 1e-9, f"{pid}/{rel} threshold drift"
+        # 4. ranking weights carry the exact five priorities and sum to 1
+        w = prof["objective_weights"]
+        assert set(w) == {"recognizability", "role_clarity", "danceability", "deck_feasibility", "contrast"}, pid
+        assert abs(sum(w.values()) - 1.0) < 1e-9, f"{pid} weights must sum to 1"
+    # girl_talk remains the default whose weights feed the module-level ranker
+    assert GT_RANK_WEIGHTS == load_tastespec("girl_talk_v1")["objective_weights"]
+
+
 def test_girl_talk_ranking():
     """The persona ranker must reach for a recognizable, clean, on-tempo hook
     before a mushy off-tempo bed, and expose the five sub-scores as receipts."""

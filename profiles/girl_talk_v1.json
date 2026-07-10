@@ -1,0 +1,161 @@
+{
+  "id": "girl_talk_v1",
+  "version": "1.1.0",
+  "name": "Girl Talk v1",
+  "contract": "recognizable foreground + stable floor + fast source turnover + phrase-grid transitions",
+  "provenance": {
+    "basis": "PERSONAS/GIRL_TALK_V1.md (documented sample densities: Night Ripper ~4.0/min, Feed the Animals ~5.7/min, All Day 372 samples / ~71 min = ~5.2/min)",
+    "samples_per_minute": 5.5,
+    "seconds_per_event": 11.0,
+    "note": "v1.1.0 corrects transform budgets and edge thresholds to match the ENFORCED engine values (deck/transform.py drydeck_transform_limits, min_edge_score) - v1.0.0 carried aspirational numbers that diverged from tested reality."
+  },
+  "permitted_roles": [
+    "VOX_HOOK",
+    "VOX_VERSE",
+    "VOX_SHOUT",
+    "RIFF_ID",
+    "DRUM_BREAK",
+    "BASS_RIFF",
+    "BED_CHORD",
+    "TEXTURE",
+    "PICKUP_FILL",
+    "DROP_HIT",
+    "TRANSITION_TAIL"
+  ],
+  "role_salience": {
+    "VOX_HOOK": {
+      "min_score": 0.5,
+      "min_intelligibility": 0.45
+    },
+    "DRUM_BREAK": {
+      "min_floor_score": 0.48
+    },
+    "BASS_RIFF": {
+      "min_bass_score": 0.48
+    },
+    "BED_CHORD": {
+      "min_bed_score": 0.48
+    }
+  },
+  "hard_constraints": {
+    "rails": [
+      "floor",
+      "foreground",
+      "spark"
+    ],
+    "require_transform_feasible_before_compose": true,
+    "forbid_silent_layer_drop": true,
+    "forbid_wav_on_gate_failure": true
+  },
+  "objective_weights": {
+    "recognizability": 0.34,
+    "role_clarity": 0.24,
+    "danceability": 0.18,
+    "deck_feasibility": 0.14,
+    "contrast": 0.1
+  },
+  "compatibility_relations": {
+    "vocal_over_bed": {
+      "min_score": 0.54
+    },
+    "bass_over_drums": {
+      "min_score": 0.54
+    },
+    "spark_into_phrase": {
+      "min_score": 0.54
+    },
+    "floor": {
+      "min_score": 0.54
+    },
+    "foreground": {
+      "min_score": 0.54
+    }
+  },
+  "min_edge_score": 0.54,
+  "transition_grammar": {
+    "allowed": [
+      "beatmatch_blend",
+      "bass_swap",
+      "hook_blend_over_bed",
+      "acapella_bridge",
+      "impact_drop",
+      "hard_cut_pickup",
+      "hard_cut_to_air"
+    ]
+  },
+  "transform_budgets": {
+    "default_stretch_pct": 8.0,
+    "default_pitch_semitones": 2,
+    "roles": {
+      "drum_anchor": {
+        "varispeed_pct": 8.0,
+        "residual_pitch": 0.75
+      },
+      "bass": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 0.9
+      },
+      "vocal": {
+        "varispeed_pct": 6.5,
+        "residual_pitch": 1.15
+      },
+      "harmony": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 1.25
+      },
+      "texture": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 1.0
+      },
+      "fx": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 1.0
+      },
+      "full": {
+        "varispeed_pct": 7.0,
+        "residual_pitch": 0.9
+      }
+    }
+  },
+  "coverage_obligations": {
+    "floor_coverage": 0.7,
+    "foreground_coverage": 0.5,
+    "first_foreground_s": 8.0,
+    "max_silent_gap_s": 2.0
+  },
+  "source_turnover": {
+    "source_seconds": 11.5,
+    "max_source_run_s": 16.0,
+    "foreground_max_share": 0.2,
+    "min_feasible_sources": 11
+  },
+  "density_model": {
+    "seconds_per_event": 11.0,
+    "sources_per_minute": 5.5,
+    "min_layers": 2,
+    "max_layers": 4
+  },
+  "endless_contract": {
+    "min_recycle_gap_s": 900.0,
+    "note": "no-repeat runtime T = min(60*S/r, E*seconds_per_event); endless iff T >= min_recycle_gap_s => 83 deck-safe sources"
+  },
+  "foreground_limits": {
+    "max_foreground_reuse": 2,
+    "max_foreground_duration_s": 16.0
+  },
+  "low_end_ownership": {
+    "max_simultaneous_bass_layers": 1,
+    "low_conflict_warn": 0.34,
+    "bass_ducking_required": true
+  },
+  "masking_intelligibility": {
+    "max_mid_mask": 0.62,
+    "min_vocal_intelligibility": 0.45
+  },
+  "acceptance_corpus_metrics": {
+    "hook_top5_recall": 0.8,
+    "pair_top10_min_approved_when_available": 3,
+    "deterministic_plan_hash": true,
+    "deterministic_render_hash": true
+  }
+}

@@ -1,6 +1,82 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.7.7 — Residents (the front end becomes the product)
+- SHELL: new interface built to the product mock — left sidebar (Residents /
+  Crate / Sessions + the full Workbench preserved beneath), warm light theme
+  with dark toggle, persistent station bar. No external fonts (local-first).
+- RESIDENTS: each persona is a card with a LIVE readiness gauge, the endless
+  receipt ("can play M:SS endless before a source must recur"), and exactly
+  what it's missing. "Book a set" compiles with that resident; the readiness
+  widget in the top bar tracks the selected one. New: GET /api/residents.
+- TWO NEW RESIDENTS, both pure JSON (proving personas are data):
+  · troubadour_v1 — the Pat & Sean medley contract: one persistent harmonic
+    bed, sequential recognizable hooks spliced at phrase boundaries, constant
+    key (capo logic), ~2.7 sources/min, 1–2 layers, intelligible vocals
+    mandatory. Derivation: PERSONAS/TROUBADOUR_V1.md (22-songs-in-1:34 stunt
+    ceiling vs standard-medley band). Honest gap named: real chord-progression
+    matching is the next analyzer rung.
+  · notorious_v1 — one voice over another era's beds (bootleg-album form):
+    verse-length runs, beds rotate, voice recurs by design.
+  Profile discovery is automatic (profiles/*.json + embedded in single-file);
+  the drift gate now checks EVERY persona against enforced deck limits.
+- CRATE VIEW: rails as columns with live counts, thin-rail alerts, the role
+  bar, endless + bottleneck in the legend, click-to-audition cells, fix cards
+  from real readiness failures, and topbar search (bpm:104-118 role:vocal).
+- SESSIONS VIEW: every render AND every refusal with receipts (rejected
+  renders' gate failures surfaced). New: GET /api/sessions.
+- STATION: crowd controls with real consequences — 🔥/🧊 write durable taste
+  receipts (kv + fsync journal) and bias the NEXT compile's chaos/vocal/drama
+  (clamped, recorded in params); ⏭ logs. Gentle/full-send toggle actually
+  reconfigures analysis workers. New: POST /api/station/feedback.
+- LICENSE: PolyForm Noncommercial 1.0.0 — free for personal use, commercial
+  use requires a written license; note included that music rights are separate
+  from software rights.
+- Verified end-to-end in a real headless browser: residents cards (3 personas
+  + honest teaser), crate rails + search filter, sessions, station receipts
+  persisted with correct bias math, theme toggle, and the old workbench fully
+  functional inside the new shell. Zero page errors; 13 tests green.
+
+## v0.7.6 — Compose (the rungs assembled)
+- MERGED PR #8 (Codex vertical slice): governance (AGENTS.md), versioned TasteSpec
+  JSON + schema + stable hash, atom/pair judgment tables, plan save/load, profile
+  provenance in arrangements and render reports.
+- ONE SOURCE OF TRUTH: profiles/girl_talk_v1.json (v1.1.0) is now canonical and
+  DRIVES the engine — TASTE_PROFILES is a projection of it (flat_profile), the
+  readiness aliases and ranking weights derive from it, and the single-file build
+  embeds it. v1.0.0's aspirational numbers (drum stretch 12% vs enforced 8%,
+  edge floor 0.42 vs enforced 0.54) corrected to tested reality; gate
+  test_persona_single_source forbids any future drift between JSON, projection,
+  and enforced deck limits.
+- CURATION LOOP CLOSED: the composer now OBEYS human judgments — a rejected
+  pairing is a veto (beats even a favorite), approved pairings get boosted,
+  favorited atoms get pulled forward. Gate test_curation_steers_composer proves
+  favorite flips the pick and veto beats favorite.
+- DURABLE JUDGMENTS: compatibility edge ids are now deterministic hashes of
+  (profile,left,right,relation), so rebuilding the pair graph updates scores in
+  place and pair judgments SURVIVE every regraph (the merged code deleted all
+  edges with random ids — every rebuild silently erased judgments).
+- COMPOSE SURFACE replaces the Mashup tab: (1) the crate ranked by the persona
+  with per-atom why-bars, audition, ★ favorite / ✗ reject; (2) pair explorer
+  with edge receipts and ✓/✗ judgments; (3) timeline — propose a plan WITHOUT
+  rendering, see sections/layers as colored rails, save/load named plans (hash +
+  tastespec provenance). Old Mashup controls preserved under an advanced fold.
+  New: POST /api/timeline/propose, GET /api/timeline/list, propose_plan(),
+  list_plans(); /api/audio now serves read-only source/preview audio (Range
+  supported) so atoms can be auditioned. Verified end-to-end in a real headless
+  browser: rank → pairs → judge → propose → gate PASSES → save → load, judgments
+  persisted in sqlite, zero page errors.
+
 ## v0.7.5 — Persona Codex + craft ranking
+- UI DECLUTTER: removed the confusing 'Legacy two-world labels' control blocks from
+  the Jam and Mashup pages (voice/bed world queries, mix-mode, aux decks) — dead
+  weight from the pre-TasteSpec engine. `val()` is now null-safe so their removal
+  can't break the param builder. Verified in a headless browser: no JS errors.
+- OPEN FOLDER: new 'open folder' button by the render player and 'OPEN ARCHIVE
+  FOLDER' by the ingest/organize receipt, plus POST /api/open_folder (reveals a
+  path in the OS file manager, constrained to the configured workspace/library).
+  No more hunting through hidden AppData nests.
+- SANER DEFAULT: new setups default the workspace to a VISIBLE ~/EarCrate folder
+  instead of a hidden AppData nest.
 - VERSION: bumped so the header visibly changes on update (it stayed "v0.7.4"
   across every fix, which made "did the update land?" unanswerable). Going
   forward the version moves every shipped batch; the `· build <hash>` stamp

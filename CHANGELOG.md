@@ -1,5 +1,29 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.8.1 — visible-by-default layout + a one-time workspace migration
+- NO HIDDEN NESTS, NO ROOT CLUTTER. The workspace now defaults to a VISIBLE
+  sibling next to your music — point at `.../The Sample Factory` and it derives
+  `.../The Sample Factory — EarCrate` (name derived, never hardcoded). Killed the
+  `~/.local/share/JukebreakerGT` / `%LOCALAPPDATA%\JukebreakerGT` fallback in
+  `configure_workspace`, and stopped the workspace scout from ever suggesting a
+  drive-root or home-root folder. The one app-global breadcrumb (the workspace
+  pointer) moved from the hidden AppData nest to a VISIBLE portable file
+  (`visible_app_dir()`), and an old hidden pointer is adopted on first launch so
+  nothing breaks.
+- ONE-TIME MIGRATION TOOL (`plan_workspace_migration` / `apply_workspace_migration`,
+  routes `/api/migrate/plan` + `/api/migrate/apply`): SIMULATE → APPROVE →
+  EXECUTE. The preview shows exactly what will happen and touches nothing; a
+  plan carries a signature so a stale apply refuses. On approval it moves
+  reusable buffalo to their NEW homes (library DB with your judgments, analysis
+  cache kept by name so NO re-scan is forced, renders, manifests), QUARANTINES
+  anything non-conforming under `legacy/`, and scrubs dead breadcrumbs into
+  `legacy/_scrubbed/`. Nothing is ever deleted; every move is journaled and
+  reversible; the music library is read-only and never touched. New gate
+  `test_workspace_migration_previews_then_executes` locks the contract.
+  (This is a personal, this-iteration cleanup; a later version folds it into
+  the library engine.)
+- VERIFIED: 14/14 gates, singlefile builds + `SELF_TEST_OK`.
+
 ## v0.8.0 — the v2 cut: one composer, the legacy two-world arranger removed
 - THE DEAD BUFFALO IS BURIED, not hidden. The old two-world/album-collision
   arranger — a SECOND full composer living beside the TasteSpec engine — is

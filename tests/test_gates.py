@@ -346,3 +346,56 @@ if __name__ == "__main__":
         except AssertionError as e:
             fails += 1; print(f"FAIL {name}: {e}")
     sys.exit(1 if fails else 0)
+
+
+def test_workspace_migration_previews_then_executes():
+    """v0.8.1 migration gate: the one-time cleanup SIMULATES (touching nothing),
+    a stale-plan apply refuses, and an approved apply moves reusable buffalo to
+    new homes, quarantines non-conforming files under legacy/ (never deletes),
+    preserves human judgments in the DB, and never touches the music library."""
+    import tempfile, sqlite3, os
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    saved_home = os.environ.get("HOME")
+    os.environ["HOME"] = str(tmp)          # isolate the legacy-workspace scan
+    os.environ.pop("EARCRATE_HOME", None)
+    try:
+        music = tmp / "The Sample Factory"; music.mkdir()
+        (music / "song.mp3").write_bytes(b"\x00" * 512)
+        before_music = {p.name for p in music.iterdir()}
+        old = tmp / "old_ws"
+        (old / "agent" / "cache" / "analysis").mkdir(parents=True)
+        (old / "work" / "renders").mkdir(parents=True)
+        (old / "agent" / "notes").mkdir(parents=True)
+        db = sqlite3.connect(str(old / "agent" / "jukebreaker.sqlite"))
+        db.execute("CREATE TABLE judged(id TEXT, verdict TEXT)")
+        db.execute("INSERT INTO judged VALUES('atom1','approved')"); db.commit(); db.close()
+        (old / "agent" / "cache" / "analysis" / "abc-gt-v0.6.1-earcrate-feasibility.npz").write_bytes(b"NPZ")
+        (old / "work" / "renders" / "mix1.wav").write_bytes(b"RIFFWAVE")
+        (old / "agent" / "config_pointer.json").write_text("{}")
+        (old / "agent" / "notes" / "random.txt").write_text("keep me")
+        core = EarcrateCore()
+        ws = str(tmp / "The Sample Factory — EarCrate")
+        data = {"music_folder": str(music), "workspace_folder": ws, "sources": [str(old)]}
+        plan = core.plan_workspace_migration(data)
+        assert plan["dry_run"] and plan["source_readonly"]
+        assert len(plan["legacy_sources"]) == 1
+        assert (old / "agent" / "jukebreaker.sqlite").exists(), "dry run must touch nothing"
+        assert any(a["op"] == "migrate-db" for a in plan["actions"])
+        assert any(a["op"] == "quarantine" and a["from"].endswith("random.txt") for a in plan["actions"])
+        assert any(a["op"] == "scrub" and a["from"].endswith("config_pointer.json") for a in plan["actions"])
+        assert core.apply_workspace_migration({**data, "signature": "stale"})["ok"] is False
+        res = core.apply_workspace_migration({**data, "signature": plan["signature"]})
+        assert res["ok"], res
+        H = core._migration_homes(ws)
+        nd = sqlite3.connect(str(H["db"]))
+        row = nd.execute("SELECT verdict FROM judged WHERE id='atom1'").fetchone(); nd.close()
+        assert row and row[0] == "approved", "human judgment must survive"
+        assert (H["cache_analysis"] / "abc-gt-v0.6.1-earcrate-feasibility.npz").exists()
+        assert (H["renders"] / "mix1.wav").exists()
+        assert list(H["legacy"].rglob("random.txt")) and list(H["scrubbed"].rglob("config_pointer.json"))
+        assert Path(res["journal"]).exists()
+        assert {p.name for p in music.iterdir()} == before_music, "music library must be untouched"
+    finally:
+        if saved_home is not None:
+            os.environ["HOME"] = saved_home

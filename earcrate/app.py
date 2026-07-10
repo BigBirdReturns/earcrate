@@ -56,8 +56,13 @@ def classify_atom_status(ear_role: str, metrics: Dict[str, float]) -> str:
 
 class EarcrateCore:
     def __init__(self):
-        self.state_dir = app_state_dir()
-        self.pointer_path = self.state_dir / "config_pointer.json"
+        # The workspace pointer is the ONE app-global breadcrumb (it names the
+        # active workspace, so it cannot live inside a workspace). Keep it VISIBLE
+        # and portable: a single file next to the app, never a hidden AppData nest.
+        # A legacy hidden pointer is adopted on load so nothing breaks on upgrade.
+        self.state_dir = visible_app_dir()
+        self.pointer_path = self.state_dir / "earcrate_workspace.json"
+        self.legacy_pointer_path = app_state_dir() / "config_pointer.json"
         self.config: Optional[Config] = None
         self.db: Optional[sqlite3.Connection] = None
         self.status_lock = threading.Lock()
@@ -200,6 +205,10 @@ class EarcrateCore:
 
     def load_config_if_present(self) -> None:
         try:
+            if not self.pointer_path.exists() and self.legacy_pointer_path.exists():
+                with contextlib.suppress(Exception):
+                    self.pointer_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.pointer_path.write_text(self.legacy_pointer_path.read_text(encoding="utf-8"), encoding="utf-8")
             if not self.pointer_path.exists():
                 return
             data = json.loads(self.pointer_path.read_text(encoding="utf-8"))
@@ -260,12 +269,7 @@ class EarcrateCore:
         # Default the workspace to a VISIBLE folder the user can actually find and
         # open, not a hidden AppData nest. Must not sit inside the music folder
         # (INV-1 path separation), so use a sibling under the profile.
-        workspace = home / "EarCrate"
-        try:
-            if music.resolve() == (home / "Music").resolve():
-                workspace = home / "EarCrate"
-        except Exception:
-            pass
+        workspace = Path(sibling_workspace(str(music)))
         return {
             "music_folder": str(music),
             "workspace_folder": str(workspace),
@@ -393,21 +397,12 @@ class EarcrateCore:
         raw: List[Path] = []
         if self.config:
             raw.append(self.config.agent_root.parent)
-        raw.append(app_state_dir() / "workspace")
-        home = Path.home()
-        raw.append(home / "Earcrate")
-        raw.append(home / "Jukebreaker")  # legacy: adoptable existing workspaces
-        if os.name == "nt":
-            try:
-                drives = [Path(d) for d in os.listdrives()]  # py3.12+
-            except Exception:
-                drives = [Path(f"{ch}:\\") for ch in string.ascii_uppercase if os.path.exists(f"{ch}:\\")]
-            sysdrive = (os.environ.get("SystemDrive") or "C:").rstrip("\\").upper()
-            for d in drives:
-                if d.drive.upper().rstrip("\\") == sysdrive:
-                    continue  # profile paths already cover the system drive
-                raw.append(d / "Earcrate")
-                raw.append(d / "Jukebreaker")  # legacy: adoptable
+        # The one no-hunting default: a VISIBLE sibling next to the music folder.
+        # No hidden AppData nests, no drive-root / home-root folders. Adoption of
+        # old workspaces is handled by the migration tool, not by suggesting new
+        # top-level folders here.
+        if music is not None:
+            raw.append(Path(sibling_workspace(str(music))))
         seen: set = set()
         candidates: List[Dict[str, Any]] = []
         for cand in raw:
@@ -490,7 +485,7 @@ class EarcrateCore:
         if not music:
             raise ValueError("music_folder is required")
         if not workspace:
-            workspace = str(app_state_dir() / "workspace")
+            workspace = sibling_workspace(music)
         paths = self.derive_workspace_paths(music, workspace)
         if data.get("analysis_seconds"):
             paths["analysis_seconds"] = int(data["analysis_seconds"])
@@ -503,6 +498,191 @@ class EarcrateCore:
         c = self.config
         text = f'''[paths]\nmaster_root = {json.dumps(str(c.master_root))}\nworking_root = {json.dumps(str(c.working_root))}\nstems_root = {json.dumps(str(c.stems_root))}\nplaylists_root = {json.dumps(str(c.playlists_root))}\nagent_root = {json.dumps(str(c.agent_root))}\n\n[analysis]\nsample_rate = {c.sample_rate}\nworkers = {c.workers}\nseed = {c.seed}\nanalysis_seconds = {c.analysis_seconds}\n\n[assist]\nenabled = false\nprovider = "anthropic"\nmodel = ""\n'''
         (c.agent_root / "config.toml").write_text(text, encoding="utf-8")
+
+    # ---- One-time workspace migration (this-iteration cleanup) --------------
+    # Simulate -> approve -> execute. Reusable buffalo (DB, analysis cache,
+    # renders, manifests, human judgments) move to their NEW homes; anything
+    # that does not conform to the current layout is QUARANTINED under legacy/
+    # (never deleted); dead breadcrumbs are scrubbed into legacy/_scrubbed/.
+    # A later version can fold this into the library engine; for now it is a
+    # personal migration tool off the old JukebreakerGT hidden-nest era.
+    def _migration_homes(self, workspace: str) -> Dict[str, Path]:
+        ws = Path(str(workspace)).expanduser().resolve()
+        agent = ws / "agent"
+        work = ws / "work"
+        return {
+            "workspace": ws, "agent": agent, "work": work,
+            "db": agent / "earcrate.sqlite",
+            "cache_analysis": agent / "cache" / "analysis",
+            "cache_transforms": agent / "cache" / "transforms",
+            "manifests": agent / "manifests",
+            "renders": work / "renders",
+            "legacy": ws / "legacy",
+            "scrubbed": ws / "legacy" / "_scrubbed",
+        }
+
+    def _legacy_source_roots(self, music: str, workspace: str, extra: List[str]) -> List[Path]:
+        ws = Path(str(workspace)).expanduser().resolve()
+        music_r: Optional[Path] = None
+        with contextlib.suppress(Exception):
+            music_r = Path(str(music)).expanduser().resolve() if music else None
+        home = Path.home()
+        cands: List[Path] = [app_state_dir() / "workspace", home / "Jukebreaker", home / "jukebreaker",
+                             home / "Earcrate", home / "earcrate"]
+        if self.config:
+            cands.append(self.config.agent_root.parent)
+        for e in (extra or []):
+            cands.append(Path(str(e)).expanduser())
+        roots: List[Path] = []
+        seen: set = set()
+        for c in cands:
+            try:
+                c = c.expanduser().resolve()
+            except Exception:
+                continue
+            if not c.is_dir():
+                continue
+            if c == ws or ws in c.parents or c in ws.parents:
+                continue  # never the target workspace itself
+            if music_r is not None and (c == music_r or music_r in c.parents or c in music_r.parents):
+                continue  # never the read-only music library
+            looks = any((c / p).exists() for p in ("agent/earcrate.sqlite", "agent/jukebreaker.sqlite",
+                                                    "earcrate.sqlite", "jukebreaker.sqlite", "agent", "work"))
+            if not looks or str(c) in seen:
+                continue
+            seen.add(str(c))
+            roots.append(c)
+        return roots
+
+    def _classify_root(self, root: Path, homes: Dict[str, Path], db_taken: List[bool]) -> List[tuple]:
+        actions: List[tuple] = []
+        db_candidates: List[Path] = []
+        for p in sorted(root.rglob("*")):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(root)
+            parts = [x.lower() for x in rel.parts]
+            name = p.name.lower()
+            try:
+                sz = p.stat().st_size
+            except Exception:
+                sz = 0
+            if name in ("earcrate.sqlite", "jukebreaker.sqlite"):
+                db_candidates.append(p); continue
+            if name.endswith((".sqlite-wal", ".sqlite-shm")):
+                actions.append(("scrub", p, homes["scrubbed"] / root.name / rel, "sqlite side file (regenerated on open)", sz)); continue
+            if name in ("config_pointer.json", "config.json", "config.toml", "janitor_last.json") or name.endswith("probe.tmp"):
+                actions.append(("scrub", p, homes["scrubbed"] / root.name / rel, "stale config/breadcrumb (regenerated)", sz)); continue
+            if "cache" in parts and "analysis" in parts and name.endswith(".npz"):
+                actions.append(("migrate", p, homes["cache_analysis"] / p.name, "analysis cache — kept as-is, no re-scan forced", sz)); continue
+            if "cache" in parts and "transforms" in parts:
+                actions.append(("migrate", p, homes["cache_transforms"] / p.name, "transform cache", sz)); continue
+            if "renders" in parts and name.endswith(".wav"):
+                actions.append(("migrate", p, homes["renders"] / p.name, "finished render", sz)); continue
+            if "manifests" in parts and name.endswith(".json"):
+                actions.append(("migrate", p, homes["manifests"] / p.name, "operation manifest", sz)); continue
+            actions.append(("quarantine", p, homes["legacy"] / root.name / rel, "does not conform to the current layout", sz))
+        if db_candidates:
+            db_candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            primary = db_candidates[0]
+            if db_taken[0]:
+                actions.append(("quarantine", primary, homes["legacy"] / root.name / primary.relative_to(root),
+                                "another workspace's DB was already adopted; kept for reference", primary.stat().st_size))
+            else:
+                actions.append(("migrate-db", primary, homes["db"],
+                                "reusable library DB — analysis, loops, atoms, and your human judgments", primary.stat().st_size))
+                db_taken[0] = True
+            for extra_db in db_candidates[1:]:
+                actions.append(("quarantine", extra_db, homes["legacy"] / root.name / extra_db.relative_to(root),
+                                "older/duplicate DB", extra_db.stat().st_size))
+        return actions
+
+    def _migration_actions(self, data: Dict[str, Any]) -> tuple:
+        music = str(data.get("music_folder") or (self.config.master_root if self.config else "") or "").strip()
+        workspace = str(data.get("workspace_folder") or "").strip() or (sibling_workspace(music) if music else "")
+        if not workspace:
+            raise ValueError("workspace_folder (or music_folder to derive the sibling) is required")
+        homes = self._migration_homes(workspace)
+        roots = self._legacy_source_roots(music, workspace, data.get("sources") or [])
+        db_taken = [homes["db"].exists()]
+        actions: List[tuple] = []
+        for r in roots:
+            actions += self._classify_root(r, homes, db_taken)
+        return music, workspace, homes, roots, actions
+
+    def plan_workspace_migration(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """DRY RUN: exactly what the cleanup will do, with nothing touched yet."""
+        music, workspace, homes, roots, actions = self._migration_actions(data)
+        buckets: Dict[str, Dict[str, int]] = {}
+        total = 0
+        for op, src, dst, reason, sz in actions:
+            b = buckets.setdefault(op, {"count": 0, "bytes": 0})
+            b["count"] += 1; b["bytes"] += int(sz); total += int(sz)
+        sig = sha256_text(json_dumps([[op, str(src), str(dst)] for op, src, dst, _, _ in
+                                      sorted(actions, key=lambda a: str(a[1]))]))
+        preview = [{"op": op, "from": str(src), "to": str(dst), "why": reason, "bytes": int(sz)}
+                   for op, src, dst, reason, sz in actions]
+        mv = buckets.get("migrate", {}).get("count", 0) + buckets.get("migrate-db", {}).get("count", 0)
+        qn = buckets.get("quarantine", {}).get("count", 0)
+        sc = buckets.get("scrub", {}).get("count", 0)
+        human = (f"From {len(roots)} old workspace(s): migrate {mv} reusable item(s) into "
+                 f"{homes['workspace'].name}/, quarantine {qn} non-conforming item(s) under legacy/, "
+                 f"scrub {sc} dead breadcrumb(s). Your music library is read-only and never touched. "
+                 f"Nothing is deleted — legacy/ keeps everything.")
+        return {"ok": True, "dry_run": True, "music_folder": music or None, "source_readonly": True,
+                "new_workspace": str(homes["workspace"]), "homes": {k: str(v) for k, v in homes.items()},
+                "legacy_sources": [str(r) for r in roots],
+                "summary": {**buckets, "total_bytes": total, "sources": len(roots)},
+                "signature": sig, "actions": preview, "human": human}
+
+    def apply_workspace_migration(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """EXECUTE an approved plan. Journaled and reversible; nothing deleted."""
+        plan = self.plan_workspace_migration(data)
+        approved = str(data.get("signature") or "")
+        if approved and approved != plan["signature"]:
+            return {"ok": False, "error": "the workspace changed since you approved this plan; re-run the preview",
+                    "expected_signature": plan["signature"]}
+        homes = self._migration_homes(plan["new_workspace"])
+        for key in ("agent", "work", "cache_analysis", "cache_transforms", "manifests", "renders", "legacy", "scrubbed"):
+            homes[key].mkdir(parents=True, exist_ok=True)
+        journal = homes["legacy"] / f"migration-{ulidish()}.jsonl"
+        done: Dict[str, int] = {"migrate": 0, "migrate-db": 0, "quarantine": 0, "scrub": 0}
+        errors: List[Dict[str, str]] = []
+        for a in plan["actions"]:
+            op, src, dst = a["op"], Path(a["from"]), Path(a["to"])
+            try:
+                if not src.exists():
+                    continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if op == "migrate-db":
+                    # Fold any WAL into the main file so a single copied .sqlite is
+                    # self-consistent; the -wal/-shm side files are regenerable and
+                    # are scrubbed separately, never copied onto the new DB.
+                    with contextlib.suppress(Exception):
+                        _cx = sqlite3.connect(str(src))
+                        _cx.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        _cx.close()
+                    shutil.copy2(str(src), str(dst))
+                    keep = homes["legacy"] / src.parent.name / src.name
+                    keep.parent.mkdir(parents=True, exist_ok=True)
+                    if keep.exists():
+                        keep = keep.with_name(keep.stem + "__" + ulidish()[:6] + keep.suffix)
+                    shutil.move(str(src), str(keep))
+                    fsync_append_jsonl(journal, {"op": op, "copied_to": str(dst), "original_moved_to": str(keep), "from": str(src)})
+                else:
+                    if dst.exists():
+                        dst = dst.with_name(dst.stem + "__" + ulidish()[:6] + dst.suffix)
+                    shutil.move(str(src), str(dst))
+                    fsync_append_jsonl(journal, {"op": op, "moved_to": str(dst), "restore_to": str(src)})
+                done[op] = done.get(op, 0) + 1
+            except Exception as exc:
+                errors.append({"src": str(src), "error": str(exc)[:160]})
+        return {"ok": not errors, "applied": done, "errors": errors, "journal": str(journal),
+                "new_workspace": plan["new_workspace"],
+                "note": ("reusable data moved to new homes; non-conforming quarantined under legacy/; "
+                         "dead breadcrumbs in legacy/_scrubbed/; music library untouched; nothing deleted"),
+                "next": "point EarCrate at this workspace to use the migrated library"}
+
 
     def ensure_config(self) -> Config:
         if not self.config:

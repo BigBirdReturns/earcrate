@@ -1,5 +1,24 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.8.2 — honest player transport + Cast to TV
+- STOP ADVERTISING A PLAYER THAT DID NOT EXIST. The station `▶` used to call
+  `oneClickJam()` — it started a long background compile, not playback — while
+  the residents card advertised "Can play 45:00 endless off your crate." There
+  was no endless player behind that number (it is `endless_sustain` CAPACITY,
+  the max render is a 5-min sketch). Fixed the lie: `▶` is now a real
+  PLAY/PAUSE transport for the loaded render, a separate clearly-labelled
+  "Book a set" button does the compile, and the copy now reads honestly as
+  "crate depth: ~MM:SS of non-repeating material" (a continuous player is the
+  next slice, explicitly marked "coming").
+- CAST TO TV (Remote Playback API): a "Cast" button (`audio.remote.prompt()`)
+  appears when a cast target is available (Chrome/Edge → Chromecast/DLNA), with
+  a live "▶ Playing on your TV" state and graceful fallback messaging where the
+  browser does not expose it. No external SDK, no CSP dependencies.
+- VERIFIED: 14/14 gates + singlefile `SELF_TEST_OK`, plus a headless-Chromium
+  (Playwright) pass — transport + `audio.remote` wiring present, no page
+  errors, Play-with-no-render toasts instead of crashing. The physical
+  Chromecast handshake is the one thing only your browser + TV can confirm.
+
 ## v0.8.1 — visible-by-default layout + a one-time workspace migration
 - NO HIDDEN NESTS, NO ROOT CLUTTER. The workspace now defaults to a VISIBLE
   sibling next to your music — point at `.../The Sample Factory` and it derives

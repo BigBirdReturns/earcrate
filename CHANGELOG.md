@@ -1,6 +1,27 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.8 — House flavor (one design system, under law)
+- SCHEMA FIX (the big one): ear_atoms had UNIQUE(loop_id) — one atom per loop
+  GLOBALLY — so personas were mutually destructive: building Troubadour's
+  crate destroyed Girl Talk's (via loop-rebuild cascade), which is why it
+  "required a full rebuild" and took hours. Now UNIQUE(loop_id,taste_profile)
+  with an in-place migration for existing workspaces.
+- ADOPT, DON'T RE-MEASURE: segment measurements are persona-independent, so a
+  new resident now ADOPTS existing measurements and only re-judges them —
+  measured in the gate: second resident's audition adopted 12/12 atoms in
+  0.01s vs 3.0s of DSP for the first. Your two-hour Troubadour audition
+  becomes seconds next time.
+- PARALLEL FIRST AUDITION: the one time DSP must run, it decodes each file
+  once and fans across cores (same ProcessPool discipline as analyze), with
+  per-file ETA. force now re-measures IN PLACE (never deletes), and a locked
+  human judgment survives force rebuilds. Gate:
+  test_personas_coexist_and_adopt (includes the schema migration).
+- PLAN: EARCRATE_REBUILD_PLAN_v2.md — the "fully fully" rebuild: 12-lesson
+  ledger (each already gated), crate-librarian extracted as a standalone
+  reusable package with a stable library.json contract (the buffalo for the
+  next project), prepared attachment seams (stems, identify, progression,
+  transcribe, twin, export), migration that loses nothing, cutover only on
+  green.
 - ACTIVITY TAB: a real view of what the engine is doing — current task, RUNNING
   pill, progress %, a live ETA COUNTDOWN (parsed from measured-throughput ETAs,
   ticking each second between polls), elapsed time, last error in ember, and

@@ -121,6 +121,57 @@ def test_taste_duration_and_vocal_count():
     assert sc["voice_layers"] > 0 and sc["realized_vocal"] > 0.0, f"scorer blind to vocals: {sc['voice_layers']}"
 
 
+def test_personas_coexist_and_adopt():
+    """v0.7.8 schema gate: ear atoms are per-(loop,profile) — building resident B
+    must not destroy resident A; B ADOPTS A's persona-independent measurements
+    (instant) instead of re-measuring; a locked human call survives force."""
+    import tempfile, numpy as np, soundfile as sf
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sr = 44100
+    for i in range(3):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"), (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
+    core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
+    r1 = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    r2 = core.build_ear_crate(taste_profile="troubadour_v1")
+    assert r1["inserted"] > 0 and r1["adopted"] == 0
+    assert r2["adopted"] == r2["inserted"] and r2["adopted"] > 0, "second resident must adopt, not re-measure"
+    db = core.conn()
+    gt = db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='girl_talk_v1'").fetchone()["n"]
+    tb = db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='troubadour_v1'").fetchone()["n"]
+    assert gt > 0 and gt == tb, "personas must coexist"
+    aid = db.execute("SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 1").fetchone()["id"]
+    core.set_atom_judgment(aid, "girl_talk_v1", "approved", relabel_role="VOX_SHOUT", locked=True)
+    core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    row = db.execute("SELECT ear_role, status FROM ear_atoms WHERE id=?", (aid,)).fetchone()
+    assert row["ear_role"] == "VOX_SHOUT" and row["status"] == "approved", "locked call must survive force"
+    # migration: an old-schema table (UNIQUE loop_id) must migrate and then accept both profiles
+    db.executescript("DROP TABLE ear_atoms;")
+    db.execute("""CREATE TABLE ear_atoms(
+        id TEXT PRIMARY KEY, loop_id TEXT UNIQUE REFERENCES loops(id) ON DELETE CASCADE,
+        file_id TEXT REFERENCES files(id) ON DELETE CASCADE,
+        taste_profile TEXT NOT NULL DEFAULT 'girl_talk_v1', ear_role TEXT NOT NULL, render_role TEXT NOT NULL,
+        start_s REAL NOT NULL, end_s REAL NOT NULL, bars INTEGER NOT NULL, bpm REAL, key_root INTEGER,
+        score REAL NOT NULL, hook_score REAL DEFAULT 0, bed_score REAL DEFAULT 0, floor_score REAL DEFAULT 0,
+        bass_score REAL DEFAULT 0, spark_score REAL DEFAULT 0, intelligibility REAL DEFAULT 0,
+        low_share REAL DEFAULT 0, mid_share REAL DEFAULT 0, high_share REAL DEFAULT 0,
+        loopability REAL DEFAULT 0, transient_density REAL DEFAULT 0, phrase_position TEXT DEFAULT 'downbeat',
+        status TEXT CHECK(status IN ('candidate','approved','rejected')) DEFAULT 'candidate',
+        preview_path TEXT, metrics_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL)""")
+    lid = db.execute("SELECT id FROM loops LIMIT 1").fetchone()["id"]
+    fid = db.execute("SELECT file_id FROM loops WHERE id=?", (lid,)).fetchone()["file_id"]
+    db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,created_at) VALUES('old1',?,?,?,?,?,0,4,2,0.7,'now')", (lid, fid, "girl_talk_v1", "VOX_HOOK", "vocal"))
+    core.migrate_ear_atoms_per_profile()
+    db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,created_at) VALUES('new1',?,?,?,?,?,0,4,2,0.7,'now')", (lid, fid, "troubadour_v1", "VOX_HOOK", "vocal"))
+    both = db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE loop_id=?", (lid,)).fetchone()["n"]
+    assert both == 2, "migrated table must accept the same loop under two profiles"
+
+
 def test_curation_steers_composer():
     """Loop closure: a favorited atom outranks a slightly better stranger, and a
     human-rejected pairing is a veto the composer obeys even over a favorite."""

@@ -164,7 +164,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 .kbar audio{height:30px;max-width:230px}
 .knp{min-width:0;flex:1}.knp .t{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.knp .m{font-size:11px;color:var(--kfaint);white-space:nowrap}
 .ktoast{font-size:12px;color:var(--kgo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
-.kact2{display:flex;align-items:center;gap:8px;background:var(--ksur2);border:1px solid var(--kedge);border-radius:12px;padding:5px 11px;font-size:11.5px;color:var(--kdim);cursor:pointer;min-width:0}
+.kact2{display:flex;align-items:center;gap:8px;background:var(--ksur2);border:1px solid var(--kedge);border-radius:12px;padding:5px 11px;font-size:11.5px;color:var(--kdim);cursor:pointer;min-width:0}.kact2:hover{border-color:var(--kacc);color:var(--kink)}
 .kact2 .spin{width:8px;height:8px;border-radius:50%;background:var(--kacc);animation:kpulse 1.2s infinite;flex:none}
 @keyframes kpulse{50%{opacity:.25;transform:scale(.7)}}
 .kactbar{width:64px;height:5px;border-radius:4px;background:var(--kedge);overflow:hidden;flex:none}.kactbar i{display:block;height:100%;background:var(--kacc);width:0}
@@ -283,7 +283,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <button class="kbtn" onclick="station('fire')" title="More like this">&#128293;</button>
 <button class="kbtn" onclick="station('ice')" title="Cool it down">&#129482;</button>
 <span class="ktoast khidep" id="ktoastline"></span>
-<div class="kact2" onclick="kmode()" title="Click to switch gentle / full send"><span class="spin"></span><span class="nowrap" id="kact_text">idle</span><span class="kactbar"><i id="kact_bar"></i></span><span class="nowrap" id="kact_mode"></span></div>
+<div class="kact2" onclick="kmode()" title="Engine activity + performance. Click to switch: GENTLE uses a few cores (keep using your PC), FULL SEND uses all cores (fastest, laptop becomes a jet engine)."><span class="spin"></span><span class="nowrap" id="kact_text">idle</span><span class="kactbar"><i id="kact_bar"></i></span><span class="nowrap" id="kact_mode"></span></div>
 </div></div>
 <script>
 const TOKEN = new URL(location.href).searchParams.get('token') || '';
@@ -336,7 +336,7 @@ async function station(sig){try{const j=await post('/api/station/feedback',{sign
 async function kmode(){try{const cfg=window.__cfg;if(!cfg){toast('Configure a workspace first');return}
  const cores=navigator.hardwareConcurrency||8;const gentle=Math.max(1,Math.floor(cores/3));
  const cur=parseInt(cfg.workers||0);const next=cur===0?gentle:0;cfg.workers=next;
- const j=await post('/api/config',cfg);if(j.ok){window.__cfg=j.config;document.getElementById('kact_mode').textContent=next===0?('full send: all cores'):('gentle: '+next+' of '+cores);toast('Workers → '+(next===0?'auto (all cores − 2)':next))}}catch(e){toast('mode switch failed: '+e.message)}}
+ const j=await post('/api/config',cfg);if(j.ok){window.__cfg=j.config;document.getElementById('kact_mode').textContent=(next===0?'\u26a1 full send':'\ud83c\udf31 gentle: '+next+' cores')+' \u21c4';toast('Workers → '+(next===0?'auto (all cores − 2)':next))}}catch(e){toast('mode switch failed: '+e.message)}}
 
 function roleColor(r){return ({VOX_HOOK:'#f5a623',VOX_VERSE:'#f5c56b',VOX_SHOUT:'#ff8c42',DRUM_BREAK:'#4fc3f7',BASS_RIFF:'#9575cd',BED_CHORD:'#81c784',RIFF_ID:'#e57373',TEXTURE:'#90a4ae',PICKUP_FILL:'#ce93d8',DROP_HIT:'#ef5350',TRANSITION_TAIL:'#a1887f'})[r]||'#666'}
 function playClip(path,preview,start,end){const a=document.getElementById('cratePlayer');if(!path&&!preview){toast('No audio for this atom');return}let src=audioUrl(preview||path);if(!preview&&start!=null){src+='#t='+Number(start).toFixed(2)+(end!=null?','+Number(end).toFixed(2):'')}a.src=src;a.play().catch(()=>{})}
@@ -375,7 +375,7 @@ function deriveWorkspaceFields(){
 async function browseInto(id){let j=await post('/api/browse_dir',{current:val(id)}); if(j.path){setVal(id,j.path); deriveWorkspaceFields();} else if(j.error){toast('Folder picker: '+j.error); const d=document.getElementById('doctorOut'); if(d){d.textContent=JSON.stringify(j,null,2)}}}
 async function suggestWorkspace(){const box=document.getElementById('wsCandidates');box.textContent='scouting drives...';const j=await post('/api/workspace_candidates',{music_folder:val('music_folder')});if(!j.ok){box.textContent=(j.error||'scout failed');return}
 box.innerHTML='';(j.candidates||[]).forEach(c=>{const d=document.createElement('div');d.style.cssText='padding:6px 8px;margin:4px 0;border:1px solid rgba(255,255,255,.14);cursor:'+(c.rejected?'not-allowed':'pointer')+';opacity:'+(c.rejected?'.45':'1');d.innerHTML='<b>'+esc(c.path)+'</b> <span class="accent">score '+c.score+'</span><br>'+ (c.reasons||[]).map(esc).join(' &middot; ');if(!c.rejected){d.onclick=()=>{setVal('workspace_folder',c.path);deriveWorkspaceFields();box.querySelectorAll('div').forEach(x=>x.style.background='');d.style.background='rgba(255,255,255,.08)'}}box.appendChild(d)});if(j.recommended){setVal('workspace_folder',j.recommended);deriveWorkspaceFields()}}
-async function loadDefaults(){try{let j=await api('/api/defaults'); if(j.configured){window.__cfgd=true; window.__cfg=j.configured; setConfigFields(j.configured)} else {setVal('music_folder',j.music_folder); setVal('workspace_folder',j.workspace_folder); deriveWorkspaceFields();}}catch(e){}}
+async function loadDefaults(){try{let j=await api('/api/defaults'); if(j.configured){window.__cfgd=true; window.__cfg=j.configured; setConfigFields(j.configured);const w=parseInt(j.configured.workers||0); const km=document.getElementById('kact_mode'); if(km)km.textContent=(w===0?'\u26a1 full send':'\ud83c\udf31 gentle: '+w+' cores')+' \u21c4';} else {setVal('music_folder',j.music_folder); setVal('workspace_folder',j.workspace_folder); deriveWorkspaceFields();}}catch(e){}}
 function setConfigFields(c){for(const k of ['master_root','working_root','agent_root','playlists_root','stems_root'])if(c[k])setVal(k,c[k]); if(c.master_root)setVal('music_folder',c.master_root); if(c.agent_root){let a=String(c.agent_root); let m=a.match(/^(.*)[\\/]agent$/i); if(m)setVal('workspace_folder',m[1]);} if(c.analysis_seconds)setVal('analysis_seconds',c.analysis_seconds); if(c.workers!=null)setVal('workers',c.workers); deriveWorkspaceFields();}
 async function saveWorkspaceConfig(){deriveWorkspaceFields(); const body={music_folder:val('music_folder'),workspace_folder:val('workspace_folder')}; const as=val('analysis_seconds'); if(as)body.analysis_seconds=+as; const w=val('workers'); if(w!=='')body.workers=+w; let j=await post('/api/config_workspace',body); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
 async function saveConfig(){deriveWorkspaceFields(); let j=await post('/api/config',{master_root:val('master_root'),working_root:val('working_root'),agent_root:val('agent_root'),playlists_root:val('playlists_root'),stems_root:val('stems_root')}); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}

@@ -2,6 +2,7 @@ from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.app import *
 HTML_PAGE = (Path(__file__).resolve().parent / "static" / "index.html").read_text(encoding="utf-8")  # single-file build inlines this
+HTML_PAGE = HTML_PAGE.replace("__ENGINE_VERSION__", ENGINE_DISPLAY_VERSION)  # version is single-sourced from deps.py
 class JBHandler(BaseHTTPRequestHandler):
     core: EarcrateCore = None  # type: ignore
     token: str = ""

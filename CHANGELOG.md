@@ -1,6 +1,15 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.4 — Persona Codex (unreleased)
+- JANITOR: launch-time cleanup of old-version leftovers, automatic. Purges caches
+  keyed to dead analyzer/engine versions, archives ' (N)' accretion duplicates in
+  the organized tree, finds legacy Jukebreaker/earcrate workspaces (AppData,
+  profile, drive roots), re-ingests their songs (deduped) and rescues their
+  renders to renders/rescued/, then marks each husk safe to delete. Receipt at
+  agent/janitor_last.json + doctor line; deleting the husk stays a human act.
+- BUILD STAMP: one content-hash stamped in three places that must match — the
+  Pages download button ("currently ships v0.7.4 · build abc1234"), the package
+  header, and the single-file header. Update = re-run installer until they match.
 - FIX: organize is now idempotent — an existing destination means the track was
   organized on a previous run and is skipped (receipt reports the count);
   re-running can never duplicate the tree, and numeric collision suffixes derive

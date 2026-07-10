@@ -2,7 +2,24 @@ from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.app import *
 HTML_PAGE = (Path(__file__).resolve().parent / "static" / "index.html").read_text(encoding="utf-8")  # single-file build inlines this
-HTML_PAGE = HTML_PAGE.replace("__ENGINE_VERSION__", ENGINE_DISPLAY_VERSION)  # version is single-sourced from deps.py
+
+
+def _resolve_build_stamp() -> str:
+    """Package mode: content-hash the source so every code change visibly changes
+    the header. Single-file mode: the builder already replaced the sentinel."""
+    if BUILD_STAMP != "__BUILD" + "_STAMP__":
+        return BUILD_STAMP
+    try:
+        pkg = Path(__file__).resolve().parent.parent
+        h = hashlib.sha256()
+        for f in sorted(pkg.rglob("*.py")) + [pkg / "ui" / "static" / "index.html"]:
+            h.update(f.read_bytes())
+        return h.hexdigest()[:7]
+    except Exception:
+        return "dev"
+
+
+HTML_PAGE = HTML_PAGE.replace("__ENGINE_VERSION__", f"{ENGINE_DISPLAY_VERSION} · build {_resolve_build_stamp()}")  # single-sourced from deps.py
 class JBHandler(BaseHTTPRequestHandler):
     core: EarcrateCore = None  # type: ignore
     token: str = ""
@@ -202,6 +219,15 @@ def serve(open_browser: bool = True, port: int = 0) -> None:
     # Warm librosa's numba JIT off the request path so the first analyze/render
     # does not block ~5-10s on compilation and look like a freeze.
     threading.Thread(target=warmup_dsp, daemon=True).start()
+
+    def _janitor():
+        try:
+            core.startup_janitor()
+        except Exception:
+            pass
+    # Launch-time cleanup of old-version leftovers (caches, ' (N)' dupes, legacy
+    # workspaces). Additive/archival only; receipt at agent/janitor_last.json.
+    threading.Timer(2.0, lambda: threading.Thread(target=_janitor, daemon=True).start()).start()
     if open_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try:

@@ -27,6 +27,12 @@ for rel in ORDER:
 out = "\n".join(parts)
 if "if __name__" not in out.split("# ===== cli.py =====")[-1]:
     out += '\nif __name__ == "__main__":\n    import sys\n    sys.exit(main())\n'
+# Stamp the package content hash so the single-file header matches the package
+# header and the Pages installer button (same formula in .github/workflows/pages.yml).
+_h = hashlib.sha256()
+for _f in sorted(PKG.rglob("*.py")) + [PKG / "ui" / "static" / "index.html"]:
+    _h.update(_f.read_bytes())
+out = out.replace('"__BUILD_STAMP__"', f'"{_h.hexdigest()[:7]}"')
 dist = ROOT / "dist"
 dist.mkdir(exist_ok=True)
 (dist / "earcrate.py").write_text(out, encoding="utf-8")

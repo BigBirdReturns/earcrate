@@ -118,6 +118,14 @@ class JBHandler(BaseHTTPRequestHandler):
                 q = urllib.parse.parse_qs(parsed.query)
                 self._json(200, self.core.list_ear_atoms((q.get("status") or ["approved"])[0], (q.get("taste_profile") or ["girl_talk_v1"])[0]))
                 return
+            if parsed.path == "/api/taste/profile":
+                q = urllib.parse.parse_qs(parsed.query)
+                self._json(200, self.core.taste_profile_receipt((q.get("taste_profile") or ["girl_talk_v1"])[0]))
+                return
+            if parsed.path == "/api/taste/pairs":
+                q = urllib.parse.parse_qs(parsed.query)
+                self._json(200, self.core.compatible_pairs_for_atom((q.get("atom_id") or [""])[0], (q.get("taste_profile") or ["girl_talk_v1"])[0], int((q.get("limit") or ["40"])[0])))
+                return
             if parsed.path == "/api/manifests":
                 self._json(200, self.core.list_manifests())
                 return
@@ -180,6 +188,14 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.auto_approve_quota(int(data.get("max_loops") or 60))); return
             if path == "/api/ear_crate/build":
                 self._json(200, self.core.build_ear_crate(int(data.get("limit") or 0), bool(data.get("force", False)), str(data.get("taste_profile") or "girl_talk_v1"), bool(data.get("write_previews", False)))); return
+            if path == "/api/ear_atoms/judgment":
+                self._json(200, self.core.set_atom_judgment(str(data["atom_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("relabel_role") or ""), bool(data.get("favorite", False)), bool(data.get("locked", False)), str(data.get("reason") or ""))); return
+            if path == "/api/taste/pair_judgment":
+                self._json(200, self.core.set_pair_judgment(str(data["edge_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("reason") or ""))); return
+            if path == "/api/timeline/save":
+                self._json(200, self.core.save_plan(str(data.get("name") or "plan"), data["plan"], str(data.get("taste_profile") or "girl_talk_v1"))); return
+            if path == "/api/timeline/load":
+                self._json(200, self.core.load_plan(str(data["plan_hash"]))); return
             if path == "/api/taste/readiness":
                 self._json(200, self.core.taste_readiness(str(data.get("taste_profile") or "girl_talk_v1"), float(data.get("target_seconds") or 120))); return
             if path == "/api/taste/graph":

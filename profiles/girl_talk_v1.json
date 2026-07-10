@@ -1,0 +1,18 @@
+{
+  "id": "girl_talk_v1",
+  "version": "1.0.0",
+  "provenance": {"basis": "JUKEBREAKER_SPEC_v2_CONSOLIDATED.md density model", "samples_per_minute": 5.5, "seconds_per_event": 11.0},
+  "permitted_roles": ["VOX_HOOK", "VOX_VERSE", "VOX_SHOUT", "RIFF_ID", "DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "TEXTURE", "PICKUP_FILL", "DROP_HIT", "TRANSITION_TAIL"],
+  "role_salience": {"VOX_HOOK": {"min_score": 0.50, "min_intelligibility": 0.45}, "DRUM_BREAK": {"min_floor_score": 0.48}, "BASS_RIFF": {"min_bass_score": 0.48}, "BED_CHORD": {"min_bed_score": 0.48}},
+  "hard_constraints": {"rails": ["floor", "foreground", "spark"], "require_transform_feasible_before_compose": true, "forbid_silent_layer_drop": true, "forbid_wav_on_gate_failure": true},
+  "objective_weights": {"recognizability": 0.34, "role_clarity": 0.24, "danceability": 0.18, "deck_feasibility": 0.14, "contrast": 0.10},
+  "compatibility_relations": {"vocal_over_bed": {"min_score": 0.42}, "bass_over_drums": {"min_score": 0.40}, "spark_into_phrase": {"min_score": 0.35}, "floor": {"min_score": 0.35}, "foreground": {"min_score": 0.35}},
+  "transition_grammar": {"allowed": ["beatmatch_blend", "bass_swap", "impact_drop", "hard_cut_pickup", "hard_cut_to_air"]},
+  "transform_budgets": {"default_stretch_pct": 8.0, "default_pitch_semitones": 2, "role_stretch_pct": {"vocal": 6.5, "drum_anchor": 12.0, "bass": 8.0, "harmony": 8.0, "texture": 12.0}},
+  "coverage_obligations": {"floor_coverage": 0.70, "foreground_coverage": 0.50, "first_foreground_s": 8.0},
+  "source_turnover": {"source_seconds": 11.5, "max_source_run_s": 16.0, "foreground_max_share": 0.20},
+  "foreground_limits": {"max_foreground_reuse": 2, "max_foreground_duration_s": 16.0},
+  "low_end_ownership": {"max_simultaneous_bass_layers": 1, "low_conflict_warn": 0.34, "bass_ducking_required": true},
+  "masking_intelligibility": {"max_mid_mask": 0.62, "min_vocal_intelligibility": 0.45},
+  "acceptance_corpus_metrics": {"hook_top5_recall": 0.80, "pair_top10_min_approved_when_available": 3, "deterministic_plan_hash": true, "deterministic_render_hash": true}
+}

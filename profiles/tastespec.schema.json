@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EarCrate TasteSpec profile",
+  "type": "object",
+  "required": ["id", "version", "provenance", "permitted_roles", "role_salience", "hard_constraints", "objective_weights", "compatibility_relations", "transition_grammar", "transform_budgets", "coverage_obligations", "source_turnover", "foreground_limits", "low_end_ownership", "masking_intelligibility", "acceptance_corpus_metrics"],
+  "properties": {
+    "id": {"type": "string"},
+    "version": {"type": "string"},
+    "provenance": {"type": "object"},
+    "permitted_roles": {"type": "array", "items": {"type": "string"}},
+    "role_salience": {"type": "object"},
+    "hard_constraints": {"type": "object"},
+    "objective_weights": {"type": "object", "additionalProperties": {"type": "number"}},
+    "compatibility_relations": {"type": "object"},
+    "transition_grammar": {"type": "object"},
+    "transform_budgets": {"type": "object"},
+    "coverage_obligations": {"type": "object"},
+    "source_turnover": {"type": "object"},
+    "foreground_limits": {"type": "object"},
+    "low_end_ownership": {"type": "object"},
+    "masking_intelligibility": {"type": "object"},
+    "acceptance_corpus_metrics": {"type": "object"}
+  }
+}

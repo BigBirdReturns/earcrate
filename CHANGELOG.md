@@ -1,6 +1,16 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.5 — Persona Codex + craft ranking
+- UI DECLUTTER: removed the confusing 'Legacy two-world labels' control blocks from
+  the Jam and Mashup pages (voice/bed world queries, mix-mode, aux decks) — dead
+  weight from the pre-TasteSpec engine. `val()` is now null-safe so their removal
+  can't break the param builder. Verified in a headless browser: no JS errors.
+- OPEN FOLDER: new 'open folder' button by the render player and 'OPEN ARCHIVE
+  FOLDER' by the ingest/organize receipt, plus POST /api/open_folder (reveals a
+  path in the OS file manager, constrained to the configured workspace/library).
+  No more hunting through hidden AppData nests.
+- SANER DEFAULT: new setups default the workspace to a VISIBLE ~/EarCrate folder
+  instead of a hidden AppData nest.
 - VERSION: bumped so the header visibly changes on update (it stayed "v0.7.4"
   across every fix, which made "did the update land?" unanswerable). Going
   forward the version moves every shipped batch; the `· build <hash>` stamp

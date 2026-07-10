@@ -206,13 +206,58 @@ class EarcrateCore:
         music = home / "Music"
         if not music.exists():
             music = home
-        workspace = app_state_dir() / "workspace"
+        # Default the workspace to a VISIBLE folder the user can actually find and
+        # open, not a hidden AppData nest. Must not sit inside the music folder
+        # (INV-1 path separation), so use a sibling under the profile.
+        workspace = home / "EarCrate"
+        try:
+            if music.resolve() == (home / "Music").resolve():
+                workspace = home / "EarCrate"
+        except Exception:
+            pass
         return {
             "music_folder": str(music),
             "workspace_folder": str(workspace),
             "derived": self.derive_workspace_paths(str(music), str(workspace)),
             "configured": self.config.as_dict() if self.config else None,
         }
+
+    def open_folder(self, path: str) -> Dict[str, Any]:
+        """Reveal a folder in the OS file manager. The whole point of the receipts
+        is that a human can go look; opening AppData nests by hand is hostile."""
+        p = Path(str(path or "")).expanduser()
+        if p.is_file():
+            p = p.parent
+        c = self.config
+        roots = [r for r in ([c.master_root, c.working_root, c.agent_root, c.playlists_root, c.stems_root]
+                             if c else []) if r]
+        if not roots:
+            return {"ok": False, "error": "configure a workspace first"}
+        # Only reveal inside the configured workspace/library (and their parents so the
+        # workspace root itself opens). Never open an arbitrary path from a web request.
+        allowed = False
+        for r in roots:
+            try:
+                rp = r.resolve()
+                if p.resolve() == rp or p.resolve() in rp.parents or rp in p.resolve().parents or p.resolve() == rp.parent:
+                    allowed = True
+                    break
+            except Exception:
+                continue
+        if roots and not allowed:
+            return {"ok": False, "error": "refusing to open a path outside the workspace/library"}
+        if not p.exists():
+            return {"ok": False, "error": f"folder does not exist yet: {p}"}
+        try:
+            if os.name == "nt":
+                os.startfile(str(p))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(p)])
+            else:
+                subprocess.Popen(["xdg-open", str(p)])
+            return {"ok": True, "opened": str(p)}
+        except Exception as exc:
+            return {"ok": False, "error": f"could not open folder: {exc}", "path": str(p)}
 
     def derive_workspace_paths(self, music_folder: str, workspace_folder: str) -> Dict[str, str]:
         music = Path(music_folder).expanduser().resolve()

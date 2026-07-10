@@ -233,7 +233,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <div class="knav" id="nav_manifests" onclick="tab('manifests')"><span>&#8801;</span><span class="kw">Manifests</span></div>
 </aside><div class="kmainwrap"><div class="ktopbar">
 <input class="ksearch" id="ksearch" placeholder="Search the crate &mdash; try bpm:104-118 role:vocal" oninput="searchCrate(this.value)">
-<div class="krwidget" onclick="tab('crate')" title="Crate readiness for the selected resident"><div class="krlab"><span id="krwName">readiness</span><b id="krwPct">&ndash;</b></div><div class="kgauge"><i id="krwBar" style="width:0%"></i></div></div>
+<div class="krwidget" onclick="tab('crate')" title="CRATE FIT is a measurement, not a progress bar: how much of this resident's contract your crate can satisfy right now. Live task progress lives in the bottom bar."><div class="krlab"><span id="krwName">crate fit</span><b id="krwPct">&ndash;</b></div><div class="kgauge"><i id="krwBar" style="width:0%"></i></div></div>
 <button class="kiconbtn" id="kthemeBtn" onclick="ktheme()" title="Light / dark">&#9789;</button>
 </div>
 <main>
@@ -296,7 +296,7 @@ window.__stationProfile=localStorage.getItem('ec_profile')||'girl_talk_v1';windo
 function ktheme(){const a=document.getElementById('kapp');a.classList.toggle('light');localStorage.setItem('ec_theme',a.classList.contains('light')?'light':'dark')}
 function kthemeInit(){if(localStorage.getItem('ec_theme')==='light')document.getElementById('kapp').classList.add('light')}
 function kmmss(sec){sec=Math.max(0,Math.round(sec||0));return Math.floor(sec/60)+' min '+String(sec%60).padStart(2,'0')+' s'}
-function kupdateWidget(){const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);if(!r)return;document.getElementById('krwName').textContent='readiness · '+r.id;document.getElementById('krwPct').textContent=(r.readiness_pct!=null?r.readiness_pct+'%':'–');document.getElementById('krwBar').style.width=(r.readiness_pct||0)+'%'}
+function kupdateWidget(){const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);if(!r)return;document.getElementById('krwName').textContent='crate fit · '+r.id;document.getElementById('krwPct').textContent=(r.readiness_pct!=null?r.readiness_pct+'%':'–');document.getElementById('krwBar').style.width=(r.readiness_pct||0)+'%'}
 async function loadResidents(){const el=document.getElementById('residentCards');try{const j=await api('/api/residents');window.__residents=j.items||[];
  el.innerHTML=window.__residents.map(function(r,i){const pct=r.readiness_pct||0;const e=r.endless||{};const endl=e.no_repeat_seconds?('Can play <b>'+kmmss(e.no_repeat_seconds)+' endless</b> off your crate before a source must recur.'):'';
   const wants=(r.wants&&r.wants.length)?('Wants: <b>'+esc(r.wants[0])+'</b>'):(r.ready?'<b>Ready to play tonight.</b>':(r.error?esc(r.error):'Crate is empty — feed it on the Library tab.'));

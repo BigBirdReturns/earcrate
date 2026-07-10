@@ -1776,6 +1776,7 @@ class EarcrateCore:
         c = self.ensure_config()
         db = self.conn()
         self.set_status("TasteSpec: building ear crate", 0.0, True, None)
+        _t_crate = time.perf_counter()
         if force:
             db.execute("DELETE FROM compatibility_edges WHERE taste_profile=?", (taste_profile,))
             db.execute("DELETE FROM ear_atoms WHERE taste_profile=?", (taste_profile,))
@@ -1851,7 +1852,8 @@ class EarcrateCore:
                 failed.append({"loop_id": str(r["id"]), "error": str(exc)[:300]})
             if idx % 8 == 0:
                 db.commit()
-                self.set_status(f"TasteSpec: ear-crating {idx+1}/{len(rows)}", (idx + 1) / max(1, len(rows)), True)
+                _left = (time.perf_counter() - _t_crate) / max(1, idx + 1) * (len(rows) - idx - 1)
+                self.set_status(f"TasteSpec: ear-crating {idx+1}/{len(rows)} \u00b7 ~{int(_left // 60)}m{int(_left % 60):02d}s left", (idx + 1) / max(1, len(rows)), True)
         db.commit()
         approved = db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile=? AND status='approved'", (taste_profile,)).fetchone()["n"]
         self.set_status(f"TasteSpec ear crate complete: {approved} approved atoms", 1.0, False)
@@ -4043,7 +4045,11 @@ class EarcrateCore:
                 entry["readiness_pct"] = int(round(100 * sum(ratios) / len(ratios)))
                 entry["ready"] = bool(r.get("ready"))
                 entry["endless"] = r.get("endless")
-                entry["wants"] = list(r.get("failures") or [])
+                if int(r.get("pool_size") or 0) == 0:
+                    entry["wants"] = ["hasn't auditioned your library yet \u2014 Book a set ear-crates it automatically (first time on a big library takes a while; watch the bottom bar for the count + ETA)"]
+                    entry["never_auditioned"] = True
+                else:
+                    entry["wants"] = list(r.get("failures") or [])
             except Exception as exc:
                 entry["error"] = str(exc)[:200]
             items.append(entry)

@@ -1,6 +1,13 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.8 — House flavor (one design system, under law)
+- CLARITY: the topbar gauge is relabeled "CRATE FIT" with a tooltip — it is a
+  MEASUREMENT of how much of the selected resident's contract your crate
+  satisfies, not a progress bar (live task progress is the bottom bar). The
+  ear-crating stage now shows count + ETA like analyze does (it decodes
+  thousands of clips and previously read as hung). A resident with zero atoms
+  now says it "hasn't auditioned your library yet — Book a set ear-crates it
+  automatically" instead of listing generic shortages.
 - FIX: the station bar was nested inside the flex row, crushing the main
   column to 57px — the "squeezed card in an empty page" bug. Structure
   corrected; main column now fills the shell (verified by measured layout).

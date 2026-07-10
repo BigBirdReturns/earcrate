@@ -23,38 +23,62 @@ def app_state_dir() -> Path:
     return Path.home() / ".local" / "share" / APP_NAME
 
 
-def choose_directory_dialog(current: str = "") -> Dict[str, Any]:
-    """Open a local OS folder picker for the browser UI.
-
-    The HTTP UI runs on localhost, so this executes in the Python process on the
-    user's machine. If Tk is unavailable, the API returns an explicit recoverable
-    error and the user can paste a path manually.
-    """
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except Exception as exc:
-        return {"ok": False, "path": "", "error": f"folder picker unavailable: {exc}"}
+def _normalize_initial_dir(current: str) -> str:
     initial = str(current or "").strip()
     if initial:
         try:
             initial_path = Path(initial).expanduser()
             if not initial_path.exists():
                 initial_path = initial_path.parent
-            initial = str(initial_path)
+            return str(initial_path)
         except Exception:
-            initial = str(Path.home())
-    else:
-        initial = str(Path.home())
+            return str(Path.home())
+    return str(Path.home())
+
+
+def choose_directory_dialog(current: str = "") -> Dict[str, Any]:
+    """Open a local OS folder picker for the browser UI.
+
+    The HTTP UI runs on localhost, so this executes in the Python process on the
+    user's machine. On Windows the native FolderBrowserDialog is used via
+    PowerShell with a TopMost owner — a Tk dialog spawned from an HTTP worker
+    thread routinely opens BEHIND the browser and looks like a dead button.
+    Tk remains the cross-platform fallback; if neither works the API returns an
+    explicit recoverable error and the user can paste a path manually.
+    """
+    initial = _normalize_initial_dir(current)
+    if os.name == "nt":
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+            "$f.Description = 'Choose folder'; $f.ShowNewFolderButton = $true; "
+            f"$f.SelectedPath = {json.dumps(initial)}; "
+            "$owner = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; WindowState='Minimized'; ShowInTaskbar=$false}; "
+            "if ($f.ShowDialog($owner) -eq 'OK') { [Console]::Out.Write($f.SelectedPath) }; "
+            "$owner.Dispose()"
+        )
+        try:
+            r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                               capture_output=True, text=True, timeout=300)
+            if r.returncode == 0:
+                return {"ok": True, "path": (r.stdout or "").strip()}
+        except Exception:
+            pass  # fall through to Tk
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:
+        return {"ok": False, "path": "", "error": f"folder picker unavailable: {exc}; paste the path into the box instead"}
     try:
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        selected = filedialog.askdirectory(initialdir=initial, title="Choose folder")
+        root.update()
+        selected = filedialog.askdirectory(initialdir=initial, title="Choose folder", parent=root)
         root.destroy()
         return {"ok": True, "path": selected or ""}
     except Exception as exc:
-        return {"ok": False, "path": "", "error": f"folder picker failed: {exc}"}
+        return {"ok": False, "path": "", "error": f"folder picker failed: {exc}; paste the path into the box instead"}
 
 
 def sha256_file(path: Path, chunk: int = 1024 * 1024) -> str:

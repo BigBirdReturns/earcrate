@@ -55,7 +55,8 @@ except Exception as exc:  # pragma: no cover
     raise
 
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wv"}
-ENGINE_VERSION = "earcrate_v073"
+ENGINE_VERSION = "earcrate_v074"
+ENGINE_DISPLAY_VERSION = "v0.7.4"   # what the UI header shows; keep in step with CHANGELOG
 ANALYZER_VERSION = "gt-v0.6.1-earcrate-feasibility"
 APP_NAME = "JukebreakerGT"
 DEFAULT_SAMPLE_RATE = 44100

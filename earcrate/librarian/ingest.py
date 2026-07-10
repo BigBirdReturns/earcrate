@@ -189,6 +189,7 @@ def ingest_sources(self, data: Dict[str, Any]) -> Dict[str, Any]:
     result = self.execute_manifest(manifest, apply=apply)
     out = {"ok": True, "batch": batch, "planned": len(ops), "hashed_for_dedupe": hashed_count, "skipped_duplicates": len(skipped_dupe),
            "skipped_existing": len(skipped_exists), "manifest": manifest,
+           "output_root": str(c.master_root / "ingested" / batch),
            "dry_run": not apply, "result": result}
     if apply:
         out["scan"] = self.scan()
@@ -270,8 +271,17 @@ def organize_and_retag(self, data: Dict[str, Any]) -> Dict[str, Any]:
         planned_tree[routed][ident["album"]] += 1
     manifest = self.write_manifest("librarian", c.seed, f"Organize+retag {len(ops)} tracks into Artist/Album tree", ops)
     result = self.execute_manifest(manifest, apply=apply)
+    org_root = c.working_root / "organized"
+    samples = []
+    for op in ops[:8]:
+        try:
+            samples.append({"from": Path(op["args"]["src"]).name,
+                            "to": str(Path(op["args"]["dst"]).relative_to(org_root))})
+        except Exception:
+            pass
     return {"ok": True, "planned": len(ops), "artists": len(planned_tree),
             "albums": sum(len(v) for v in planned_tree.values()),
+            "output_root": str(org_root), "samples": samples,
             "tree_preview": {a: v for a, v in list(planned_tree.items())[:12]},
             "manifest": manifest, "dry_run": not apply, "result": result}
 

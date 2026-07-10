@@ -1,6 +1,12 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.4 — Persona Codex (unreleased)
+- PROOF OF WORK: ingest/organize now end with a human receipt — what happened,
+  WHERE the files landed (open-in-Explorer path), and before→after samples —
+  instead of a raw JSON wall; toasts on completion. Analysis status now shows
+  a live ETA ("analyzing 42/96 ×16 cores · ~3m10s left").
+- FIX: Library-tab Browse buttons called /api/choose_dir which never existed
+  (errors were silently swallowed); now /api/browse_dir with visible errors.
 - LIBRARIAN: folder-convention identity fallback — untagged files inherit
   Artist/Album from `.../Artist/Album/track` or `.../Artist/track` parents
   (generic dump/batch/drive folder names ignored; ingested/<batch>/<source>

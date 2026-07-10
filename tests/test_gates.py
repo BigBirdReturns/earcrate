@@ -91,6 +91,36 @@ def test_identity_from_folders():
     assert i["artist"] == "The Front Bottoms" and i["title"] == "Maps" and i["album"] == "Unknown Album", i
 
 
+def test_taste_duration_and_vocal_count():
+    """v0.7.4 regressions: (1) a target length must render near that length, not
+    4x it; (2) the scorer must count vocals placed by role, not only the legacy
+    two-world 'world' tag."""
+    core = EarcrateCore.__new__(EarcrateCore)
+    rng = random.Random(7)
+    roles = ["VOX_HOOK", "VOX_VERSE", "DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "TEXTURE", "VOX_SHOUT"]
+    rolemap = {"VOX_HOOK": "vocal", "VOX_VERSE": "vocal", "VOX_SHOUT": "vocal",
+               "DRUM_BREAK": "drum_anchor", "BASS_RIFF": "bass", "BED_CHORD": "harmony", "TEXTURE": "texture"}
+    pool = []
+    n = 0
+    for src in range(40):
+        key = rng.randint(0, 11); bpm = rng.choice([120, 122, 124, 126])
+        for r in rng.sample(roles, 4):
+            n += 1
+            pool.append({"id": f"L{n}", "atom_id": f"A{n}", "ear_role": r, "role": rolemap[r],
+                         "key_root": key, "bpm": bpm, "score": rng.uniform(0.5, 0.9),
+                         "hook_score": rng.uniform(0.4, 0.9), "title": f"song_{src}",
+                         "path": f"/m/song_{src}.mp3", "high_share": 0.3, "low_share": 0.2})
+    arr = core.compose_taste_arrangement(list(pool), {"taste_profile": "girl_talk_v1", "target_seconds": 120, "bpm": 124}, seed=1340)
+    bpm = float(arr["bpm"]); bars = sum(s["bars"] for s in arr["sections"])
+    minutes = bars * 4 / bpm   # beats / (beats per minute) = minutes
+    assert 1.6 <= minutes <= 2.4, f"120s target rendered {minutes:.2f} min ({bars} bars)"
+    # vocals were placed AND the scorer sees them
+    placed_vocals = sum(1 for s in arr["sections"] for ly in s["layers"] if ly.get("role") == "vocal")
+    assert placed_vocals > 0, "no vocal layers placed"
+    sc = core.score_arrangement(arr)
+    assert sc["voice_layers"] > 0 and sc["realized_vocal"] > 0.0, f"scorer blind to vocals: {sc['voice_layers']}"
+
+
 def test_endless_math_is_exact():
     """Persona endless-set gate: T = min(60*S/r, E*seconds_per_event); endless
     iff T clears the recycle gap. Numbers must be exact, not vibes."""

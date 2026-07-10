@@ -166,6 +166,8 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 .knp{min-width:0;flex:1}.knp .t{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.knp .m{font-size:11px;color:var(--kfaint);white-space:nowrap}
 .ktoast{font-size:12px;color:var(--kgo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
 .kact2{display:flex;align-items:center;gap:8px;background:var(--ksur2);border:1px solid var(--kedge);border-radius:12px;padding:5px 11px;font-size:11.5px;color:var(--kdim);cursor:pointer;min-width:0}.kact2:hover{border-color:var(--kacc);color:var(--kink)}
+.kbookbtn{flex:none;display:inline-flex;align-items:center;gap:7px;background:var(--kacc);color:var(--kaccink);border:none;border-radius:22px;padding:9px 16px;font:700 12.5px var(--disp);letter-spacing:.02em;cursor:pointer}
+.kbookbtn:hover{filter:brightness(1.07)}
 .kact2 .spin{width:8px;height:8px;border-radius:50%;background:var(--kacc);animation:kpulse 1.2s infinite;flex:none}
 @keyframes kpulse{50%{opacity:.25;transform:scale(.7)}}
 .kactbar{width:64px;height:5px;border-radius:4px;background:var(--kedge);overflow:hidden;flex:none}.kactbar i{display:block;height:100%;background:var(--kacc);width:0}
@@ -217,6 +219,18 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 #kapp .toast{background:var(--ksur);color:var(--kink);border:1px solid var(--kacc);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);font-family:var(--sans)}
 #kapp .toast b{color:var(--kacc);font-family:var(--disp)}
 #kapp .toast a{color:var(--kcool)}
+</style><style>
+.kmodalbg{position:fixed;inset:0;background:rgba(8,7,4,.62);display:none;align-items:center;justify-content:center;z-index:60}
+.kmodalbg.on{display:flex}
+.kmodal{background:var(--ksur);border:1px solid var(--kedge);border-radius:18px;padding:22px 22px 18px;width:min(470px,93vw);box-shadow:0 24px 70px rgba(0,0,0,.55)}
+.kmodal h3{font-family:var(--disp);font-size:22px;margin:0 0 3px;color:var(--kink)}
+.kmodal .kcontract{color:var(--kdim);font-size:12.5px;line-height:1.5;margin-bottom:16px}
+.kfield{margin-bottom:14px}
+.kfield>label{display:block;font:700 10.5px var(--disp);letter-spacing:.11em;text-transform:uppercase;color:var(--kfaint);margin-bottom:6px}
+.kseg{display:flex;gap:6px}
+.kseg button{flex:1;background:var(--ksur2);border:1px solid var(--kedge);color:var(--kdim);border-radius:10px;padding:8px 4px;font:600 12.5px var(--sans);cursor:pointer}
+.kseg button.on{background:var(--kacc);border-color:var(--kacc);color:var(--kaccink)}
+.kmodalfoot{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 </style></head><body><header style="display:none">
 <div class="brand" title="earcrate __ENGINE_VERSION__" aria-label="earcrate __ENGINE_VERSION__"><span class="mk">EAR<b>CRATE</b></span><span class="ver">__ENGINE_VERSION__ · Runtime ledger</span></div>
 <nav id="nav"></nav>
@@ -299,9 +313,18 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <div class="card"><b>Latest render:</b> <span class="muted">latest render dock</span><div class="playerBox"><a id="renderLink" href="#" target="_blank" rel="noopener">open audio link</a><button onclick="copyRenderPath()">copy file path</button><button onclick="openRenderFolder()">open folder</button><button onclick="refreshRenders(false)">refresh renders</button></div><p id="playerPath" class="small muted"></p><div id="renderList" class="renderList small muted"></div></div></section>
 </main></div></div>
 <div id="toast" class="toast"></div>
-<div class="kbar"><button class="kbtn p" onclick="oneClickJam()" title="Book a set with the selected resident">&#9654;</button>
+<div class="kmodalbg" id="bookModal"><div class="kmodal">
+<h3 id="bkTitle">Book a set</h3>
+<div class="kcontract" id="bkContract"></div>
+<div class="kfield"><label>Length</label><div class="kseg" id="bkLen"><button data-v="60">1 min</button><button data-v="120" class="on">2 min</button><button data-v="180">3 min</button><button data-v="300">5 min</button></div></div>
+<div class="kfield"><label>Energy</label><div class="kseg" id="bkEnergy"><button data-v="chill">Chill</button><button data-v="steady" class="on">Steady</button><button data-v="wild">Wild</button></div></div>
+<div class="kfield"><label>Vocals</label><div class="kseg" id="bkVocals"><button data-v="instrumental">Instrumental</button><button data-v="balanced" class="on">Balanced</button><button data-v="hooky">Hooky</button></div></div>
+<div class="kcontract" id="bkReady"></div>
+<div class="kmodalfoot"><button class="kbtn" onclick="closeBooking()">Cancel</button><button class="kbookbtn" onclick="doBooking()">&#9654; Book it</button></div>
+</div></div>
+<div class="kbar"><button class="kbookbtn" onclick="openBooking()" title="Compile a new set with the selected resident">&#10022; Book a set</button>
 <audio id="renderPlayer" controls preload="metadata"></audio>
-<div class="knp"><div class="t" id="playerName">none yet</div><div class="m" id="kNpMeta">press &#9654; to book a set</div></div>
+<div class="knp"><div class="t" id="playerName">none yet</div><div class="m" id="kNpMeta">no set loaded — hit Book a set</div></div>
 <button class="kbtn khidep" onclick="station('skip')" title="Next collision">&#9197;</button>
 <button class="kbtn" onclick="station('fire')" title="More like this">&#128293;</button>
 <button class="kbtn" onclick="station('ice')" title="Cool it down">&#129482;</button>
@@ -354,7 +377,25 @@ async function loadResidents(){const el=document.getElementById('residentCards')
  kupdateWidget();
  try{const sj=await api('/api/sessions');document.getElementById('residentSessions').innerHTML=(sj.items||[]).slice(0,2).map(ksessRow).join('')}catch(e){}
 }catch(e){el.textContent=String(e)}}
-function bookSet(pid){window.__stationProfile=pid;localStorage.setItem('ec_profile',pid);kupdateWidget();toast('Booking '+pid);oneClickJam()}
+function bookSet(pid){window.__stationProfile=pid;localStorage.setItem('ec_profile',pid);kupdateWidget();openBooking()}
+function ksegVal(id){const on=document.getElementById(id).querySelector('.on');return on?on.dataset.v:null}
+function openBooking(){const pid=window.__stationProfile||'girl_talk_v1';const r=(window.__residents||[]).find(x=>x.id===pid);
+ document.getElementById('bkTitle').textContent='Book a set \u2014 '+(r?r.name:pid);
+ document.getElementById('bkContract').textContent=r?(r.contract||''):'';
+ const e=(r&&r.endless)||{};document.getElementById('bkReady').textContent=r?((r.ready?'Ready to play. ':(r.never_auditioned?'First time: this ear-crates your library (watch Activity). ':''))+(e.no_repeat_seconds?('Endless for '+kmmss(e.no_repeat_seconds)+' before a source recurs.'):'')):'';
+ ['bkLen','bkEnergy','bkVocals'].forEach(id=>{const el=document.getElementById(id);if(!el.__wired){el.__wired=1;el.onclick=ev=>{if(ev.target.dataset.v)[...el.children].forEach(b=>b.classList.toggle('on',b===ev.target))}}});
+ document.getElementById('bookModal').classList.add('on')}
+function closeBooking(){document.getElementById('bookModal').classList.remove('on')}
+async function doBooking(){const pid=window.__stationProfile||'girl_talk_v1';
+ const energy=ksegVal('bkEnergy'),vocals=ksegVal('bkVocals'),len=+(ksegVal('bkLen')||120);
+ const em={chill:[35,40,25],steady:[58,65,55],wild:[85,85,88]}[energy]||[58,65,55];
+ const vd={instrumental:30,balanced:65,hooky:88}[vocals]||65;
+ const p={taste_profile:pid,tastespec:true,name:'EarCrate Sketch',target_seconds:len,track_budget:240,
+   chaos:em[0],drama:em[1],genre_whiplash:em[2],vocal_density:vd,recognizability_bias:85,
+   key_strictness:66,pitch_shift_budget:2,stretch_budget:8,anchor_stability:60,bpm:0,candidate_count:64};
+ closeBooking(); const rn=((window.__residents||[]).find(x=>x.id===pid)||{}).name||pid;
+ document.getElementById('jamOut').textContent='Booking '+rn+'\u2026\n'+JSON.stringify(p,null,2);
+ try{const j=await post('/api/one_click_bg',p);window.__oneClickPending=true;toast('Booking '+rn+' \u2014 watch Activity');tab('activity')}catch(e){toast('Booking failed: '+e.message)}}
 const KRAILS=[['Floor · drums/bass',['DRUM_BREAK','BASS_RIFF'],'var(--kacc)'],['Beds · harmony',['BED_CHORD','TEXTURE','RIFF_ID'],'var(--kgo)'],['Foreground · vocals',['VOX_HOOK','VOX_VERSE','VOX_SHOUT'],'var(--kwarn)'],['Sparks · hits/fills',['PICKUP_FILL','DROP_HIT','TRANSITION_TAIL'],'var(--kcool)']];
 async function loadCrateView(){const el=document.getElementById('crateCols');el.textContent='Ranking the crate…';try{const j=await post('/api/rank',{limit:400,taste_profile:window.__stationProfile});window.__crateRanked=j.ranked||[];renderCrate(window.__crateRanked);
  const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);const fx=document.getElementById('crateFix');
@@ -405,7 +446,7 @@ async function api(path, body){let r=await fetch(path,{method:body===undefined?'
 async function post(p,b){try{let j=await api(p,b); console.log(j); return j}catch(e){alert(e.message); throw e}}
 function audioUrl(path){return '/api/audio?path='+encodeURIComponent(path)+'&token='+encodeURIComponent(TOKEN)}
 function toast(msg,path){const t=document.getElementById('toast'); let body='<button onclick="document.getElementById(\'toast\').style.display=\'none\'">x</button><b>'+esc(msg)+'</b>'; if(path){body+='<a href="'+audioUrl(path)+'" target="_blank" rel="noopener">play/open render</a><br><span class="small muted">'+esc(path)+'</span>'} t.innerHTML=body; t.style.display='block'; clearTimeout(window.__jbToastTimer); window.__jbToastTimer=setTimeout(()=>{t.style.display='none'},15000)}
-function setPlayer(path){const a=document.getElementById('renderPlayer'); if(!path){window.__latestRenderPath=null; if(a){a.removeAttribute('src'); a.load();} document.getElementById('renderLink').href='#'; document.getElementById('playerName').textContent='none yet'; document.getElementById('playerPath').textContent='No passing current-engine render loaded.'; return;} window.__latestRenderPath=path; a.src=audioUrl(path); document.getElementById('renderLink').href=audioUrl(path); document.getElementById('playerName').textContent=path.split(/[\/]/).pop(); document.getElementById('playerPath').textContent=path; a.load();}
+function setPlayer(path){const a=document.getElementById('renderPlayer'); if(!path){window.__latestRenderPath=null; if(a){a.removeAttribute('src'); a.load();} document.getElementById('renderLink').href='#'; document.getElementById('playerName').textContent='none yet'; document.getElementById('playerPath').textContent='No passing current-engine render loaded.'; return;} window.__latestRenderPath=path; a.src=audioUrl(path); document.getElementById('renderLink').href=audioUrl(path); document.getElementById('playerName').textContent=path.split(/[\\/]/).pop(); document.getElementById('playerPath').textContent=path; a.load();}
 async function copyRenderPath(){if(!window.__latestRenderPath){toast('No render path yet');return} try{await navigator.clipboard.writeText(window.__latestRenderPath); toast('Copied render path',window.__latestRenderPath)}catch(e){prompt('Copy this path', window.__latestRenderPath)}}
 function renderPathFromResult(j){const done=(j&&j.done)||[]; for(const x of done){if(x&&x.type==='render_mashup'&&x.path)return x.path} if(j&&j.type==='render_mashup'&&j.path)return j.path; return null}
 function handleRenderResult(j){const p=renderPathFromResult(j); if(p){setPlayer(p); toast('Render complete',p); refreshRenders(false)} return p}
@@ -561,15 +602,16 @@ async function proposeMashup(){mirrorJamToMashup();document.getElementById('mash
 async function proposeOutcomeOnly(){mirrorJamToMashup(); tab('mashup'); await proposeMashup()}
 async function oneClickJam(){
   mirrorJamToMashup(); updateOutcomePreview();
-  const p=outcomeParams('o'); p.track_budget=+(val('o_budget')||240); p.force_loops=document.getElementById('o_force_loops').checked; p.taste_profile='girl_talk_v1'; p.tastespec=true;
+  const p=outcomeParams('o'); p.track_budget=+(val('o_budget')||240); p.force_loops=document.getElementById('o_force_loops').checked; p.taste_profile=window.__stationProfile||'girl_talk_v1'; p.tastespec=true;
   // Preflight first so a thin pool fails in seconds with a reason, not after a long render.
   let pre=null; try{pre=await runPreflight();}catch(e){}
   let readyLine='';
   if(pre&&pre.ok){readyLine=pre.ready?`\nReadiness: deck-ready at ${pre.chosen_bpm.toFixed(2)} BPM.`:`\nReadiness: pool is THIN. ${(pre.warnings||[])[0]||''} The lattice suggests ${(+pre.recommended_bpm).toFixed(2)} BPM. You can proceed anyway.`;}
   else if(pre&&!pre.ok){if(!confirm('No deck-ready pool yet: '+((pre.warnings||[])[0]||'approve loops first')+'\n\nRun anyway?'))return;}
-  if(!confirm(`Run TasteSpec compile?\n\nTrack budget: ${p.track_budget||'all'}\nOutcome: ${describeOutcome(p)}\nVoice world: ${p.voice_world_query||'auto'}\nBed world: ${p.bed_world_query||'auto'}\nTaste profile: girl_talk_v1${readyLine}\n\nThis writes only under working_root, but it may take several minutes.`))return;
+  const _rn=((window.__residents||[]).find(x=>x.id===p.taste_profile)||{}).name||p.taste_profile;
+  if(!confirm(`Book a set with ${_rn}?\n\nLength: ${Math.round((p.target_seconds||120)/60*10)/10} min\nOutcome: ${describeOutcome(p)}${readyLine}\n\nWrites only under the workspace; may take a few minutes. Watch Activity.`))return;
   document.getElementById('jamOut').textContent='Started TasteSpec compile. Watch Engine status. The player loads only an accepted render.\n'+JSON.stringify(p,null,2);
-  p.taste_profile=window.__stationProfile||'girl_talk_v1'; let j=await post('/api/one_click_bg',p); document.getElementById('jamOut').textContent+='\n'+JSON.stringify(j,null,2); window.__oneClickPending=true; toast('TasteSpec feasibility compile started');
+  let j=await post('/api/one_click_bg',p); document.getElementById('jamOut').textContent+='\n'+JSON.stringify(j,null,2); window.__oneClickPending=true; toast('TasteSpec feasibility compile started');
 }
 let MANIFESTS=[];
 async function refreshManifests(){let j=await api('/api/manifests'); MANIFESTS=j.items||[]; let h='<tr><th>Created</th><th>Summary</th><th>Ops</th><th>Path</th><th>Execute</th></tr>'; MANIFESTS.forEach((r,i)=>{h+=`<tr><td>${esc(r.created_at||'')}</td><td>${esc(r.summary||'')}</td><td>${r.operations}</td><td class="small">${esc(r.path)}</td><td><button onclick="execManifestDry(${i})">DRY RUN</button> <button class="danger" onclick="execManifestApplyNow(${i})">APPLY NOW</button> <button onclick="execManifestApplyBg(${i})">APPLY BG</button></td></tr>`}); document.getElementById('manifestTable').innerHTML=h}

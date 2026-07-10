@@ -1,6 +1,14 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.8 — House flavor (one design system, under law)
+- ACTIVITY TAB: a real view of what the engine is doing — current task, RUNNING
+  pill, progress %, a live ETA COUNTDOWN (parsed from measured-throughput ETAs,
+  ticking each second between polls), elapsed time, last error in ember, and
+  the per-stage ledger of the run. The sidebar dot glows amber while busy.
+- PINNED SHELL: the app is viewport-locked — sidebar and station bar always
+  visible, only the main column scrolls (verified: bar bottom == viewport).
+- TOASTS: moved inside the themed shell and restyled to the family (they were
+  outside #kapp, stuck in the old console look).
 - CLARITY: the topbar gauge is relabeled "CRATE FIT" with a tooltip — it is a
   MEASUREMENT of how much of the selected resident's contract your crate
   satisfies, not a progress bar (live task progress is the bottom bar). The

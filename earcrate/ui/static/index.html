@@ -122,6 +122,7 @@ pre{white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:#0a0b
 display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:var(--kink);font:14px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif}
 #kapp.dark{--kbg:#131210;--ksur:#1c1a17;--ksur2:#26231e;--kedge:#33302a;--kink:#ece7db;--kdim:#a49c8c;--kfaint:#6e675a;--kacc:#eaa93e;--kaccink:#241703;--kgo:#5cc08a;--kwarn:#e8705c;--kcool:#7ba3dd}
 .kbody{flex:1;display:flex;min-height:0}
+.kside{overflow:auto}
 .kside{width:206px;flex:none;background:var(--ksur);border-right:1px solid var(--kedge);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
 @media(max-width:860px){.kside{width:56px}.kside .kw{display:none}}
 .klogo{font-weight:700;font-size:17px;padding:2px 10px 4px;color:var(--kink)}.klogo em{font-style:normal;color:var(--kacc)}
@@ -180,6 +181,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
    (local-first; the acceptance-page precedent). Registry:
    axm-tools/identity/axm/PROPERTY-FLAVORS.md                       */
 #kapp{
+ height:100vh; overflow:hidden;
  --bg:#0d0c09; --chassis:#131109; --panel:#161410; --panel-2:#1d1a13; --edge:#2e2a20; --edge-hi:#443d2c;
  --ink:#ece7d8; --ink-dim:#a49a86; --ink-faint:#6e675a;
  --amber:#e6a23c; --amber-dim:#9a6a17; --cyan:#7fa3c4; --cyan-dim:#54718c; --coral:#c24b2c; --green:#4e9a6f;
@@ -212,17 +214,20 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 /* ember discipline: reserved meanings only (refusals, gate failures, thin rails) */
 #kapp .kpill.ref,#kapp .kcell.alert,#kapp .pill.bad,#kapp button.danger{color:var(--coral);border-color:var(--coral)}
 #kapp .kpill.pass,#kapp .pill.ok{color:var(--kgo)}
+#kapp .toast{background:var(--ksur);color:var(--kink);border:1px solid var(--kacc);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);font-family:var(--sans)}
+#kapp .toast b{color:var(--kacc);font-family:var(--disp)}
+#kapp .toast a{color:var(--kcool)}
 </style></head><body><header style="display:none">
 <div class="brand" title="earcrate __ENGINE_VERSION__" aria-label="earcrate __ENGINE_VERSION__"><span class="mk">EAR<b>CRATE</b></span><span class="ver">__ENGINE_VERSION__ · Runtime ledger</span></div>
 <nav id="nav"></nav>
 <div class="readout"><span id="statusLed" class="led"><span class="dot"></span><span id="status" class="val">idle</span></span></div>
 </header>
-<div id="toast" class="toast"></div>
 <div id="kapp" class=""><div class="kbody"><aside class="kside">
 <div class="klogo kw">ear<em>crate</em></div><div class="kver kw" id="ksideVer"></div>
 <div class="knav" id="nav_residents" onclick="tab('residents')"><span>&#9673;</span><span class="kw">Residents</span></div>
 <div class="knav" id="nav_crate" onclick="tab('crate')"><span>&#9638;</span><span class="kw">Crate</span></div>
 <div class="knav" id="nav_sessions" onclick="tab('sessions')"><span>&#8803;</span><span class="kw">Sessions</span></div>
+<div class="knav" id="nav_activity" onclick="tab('activity')"><span id="kactdot">&#9679;</span><span class="kw">Activity</span></div>
 <div class="kssec kw">workbench</div>
 <div class="knav" id="nav_jam" onclick="tab('jam')"><span>&#9654;</span><span class="kw">Jam</span></div>
 <div class="knav" id="nav_setup" onclick="tab('setup')"><span>&#9881;</span><span class="kw">Setup</span></div>
@@ -262,6 +267,23 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <details class="advanced"><summary>Advanced arranger controls (legacy Mashup surface)</summary><div class="card"><h2>Outcome Controls</h2><p class="muted">This is the inspectable control surface for the continuum compiler. Jam Now mirrors these values; the JSON preview shows exactly what will be sent to the arranger.</p><label>Name</label><input id="m_name" value="EarCrate Sketch"><div class="controlGrid"><div><label>Mode / mix outcome</label><select id="m_preset" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="album_collision" selected>Album Collision: two-world continuum</option><option value="notorious_mode">Notorious Mode: voice-over-bed bootleg album</option><option value="party_cutup">Party cut-up: fast hooks and genre jumps</option><option value="hook_ride">Hook ride: vocals up front, groove survives</option><option value="clean_blend">Clean blend: safer key and smoother edits</option><option value="max_chaos">Max chaos: dumb fun, fewer guardrails</option></select><label>Target length</label><select id="m_seconds" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="60">1 minute sketch</option><option value="120" selected>2 minute sketch</option><option value="180">3 minute sketch</option><option value="300">5 minute sketch</option></select></div><div><label>Edit speed</label><select id="m_edit_speed" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="steady">Steady: longer blends</option><option value="active" selected>Active: frequent swaps</option><option value="hypercut">Hypercut: 2 to 4 bar edits</option></select><label>Vocal hooks</label><select id="m_hooks" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="sparse">Sparse: mostly instrumental</option><option value="balanced">Balanced: hooks when useful</option><option value="hooky" selected>Hooky: recognizable vocals high</option></select></div><div><label>Genre jump</label><select id="m_genre_jump" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="smooth">Smooth: adjacent material</option><option value="mixed">Mixed: contrast with restraint</option><option value="whiplash" selected>Whiplash: sharp genre pivots</option></select><label>Beat/key safety</label><select id="m_safety" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="tight">Tight: safer, fewer clashes</option><option value="loose" selected>Loose: harmonic DJ stretch</option><option value="wild">Wild: permit uglier collisions</option></select></div><div><label>Groove backbone</label><select id="m_backbone" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="locked">Locked: one beat rides longer</option><option value="survive">Survive: beds persist through ticks</option><option value="restless" selected>Restless: beat can flip, grid stays locked</option></select><label>Render BPM</label><input id="m_bpm" value="" placeholder="blank = strongest tempo island" oninput="mirrorMashupToJam();updateOutcomePreview()"></div></div><button class="action" onclick="compileContinuum()">COMPILE CONTINUUM PLAN</button><button class="action" onclick="proposeMashup()">Propose arrangement manifest</button><button class="action bigJam" onclick="oneClickJam()">MAKE AND RENDER NOW</button><details class="advanced"><summary>Show low-level arranger numbers</summary><pre id="mashupMath"></pre></details><pre id="mashupOut"></pre></div></details></section>
 <section id="manifests"><div class="card"><h2>Manifests</h2><button class="action" onclick="refreshManifests()">Refresh</button><p class="muted">Execution is explicit. This is the manifest gate. Use EXECUTE NOW if you want the browser to wait and print the final render result. Use EXECUTE BG if you want it to run while the status bar updates.</p><pre id="manifestOut"></pre></div><div class="card"><table id="manifestTable"></table></div></section>
 
+
+<section id="activity"><div class="kh1">Activity</div>
+<p class="ksub">What the engine is doing right now, with the honest arithmetic: measured throughput &rarr; time remaining. Long stages are one-time costs &mdash; results are cached per file and per resident.</p>
+<div class="kcard" style="max-width:760px">
+<div class="kcolh"><span>current task</span><span id="actBusyPill"></span></div>
+<div id="actMsg" style="font-family:var(--disp);font-size:21px;margin:2px 0 10px">idle</div>
+<div class="kgauge" style="height:10px"><i id="actBar" style="width:0%"></i></div>
+<div style="display:flex;gap:26px;margin-top:12px;font-family:var(--mono);font-size:13px">
+<div><div class="kcolh"><span>progress</span></div><div id="actPct" style="font-size:20px">&ndash;</div></div>
+<div><div class="kcolh"><span>time left</span></div><div id="actEta" style="font-size:20px">&ndash;</div></div>
+<div><div class="kcolh"><span>elapsed</span></div><div id="actElapsed" style="font-size:20px">&ndash;</div></div>
+</div>
+<div id="actErr" style="margin-top:10px;color:var(--coral);font-family:var(--mono);font-size:12.5px"></div>
+</div>
+<div class="kssec" style="padding-left:0">Stages this run</div>
+<div class="kcard" style="max-width:760px"><pre id="actStages" style="margin:0;border:none;background:transparent">No timed run yet.</pre></div>
+</section>
 <section id="residents"><div class="kh1">Residents</div>
 <p class="ksub">Each resident is a taste contract, not a preset. It knows what it can honestly play from your crate tonight &mdash; and exactly what it's missing.</p>
 <div class="kcards" id="residentCards">Loading residents&hellip;</div>
@@ -276,6 +298,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <div id="sessionList">Loading sessions&hellip;</div>
 <div class="card"><b>Latest render:</b> <span class="muted">latest render dock</span><div class="playerBox"><a id="renderLink" href="#" target="_blank" rel="noopener">open audio link</a><button onclick="copyRenderPath()">copy file path</button><button onclick="openRenderFolder()">open folder</button><button onclick="refreshRenders(false)">refresh renders</button></div><p id="playerPath" class="small muted"></p><div id="renderList" class="renderList small muted"></div></div></section>
 </main></div></div>
+<div id="toast" class="toast"></div>
 <div class="kbar"><button class="kbtn p" onclick="oneClickJam()" title="Book a set with the selected resident">&#9654;</button>
 <audio id="renderPlayer" controls preload="metadata"></audio>
 <div class="knp"><div class="t" id="playerName">none yet</div><div class="m" id="kNpMeta">press &#9654; to book a set</div></div>
@@ -287,11 +310,34 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 </div></div>
 <script>
 const TOKEN = new URL(location.href).searchParams.get('token') || '';
-const tabs = ['residents','crate','sessions','jam','setup','library','analyze','loops','compose','manifests'];
+const tabs = ['residents','crate','sessions','activity','jam','setup','library','analyze','loops','compose','manifests'];
 /* nav lives in the k-sidebar now */
 function tab(t){for(const x of tabs){document.getElementById(x).classList.toggle('active',x===t);document.getElementById('nav_'+x).classList.toggle('active',x===t)} if(t==='library')refreshTracks(); if(t==='loops')refreshLoops(''); if(t==='manifests')refreshManifests(); if(t==='residents')loadResidents(); if(t==='crate')loadCrateView(); if(t==='sessions')loadSessions();}
 function val(id){const e=document.getElementById(id); return e?e.value:''}
 window.__ranked=[];window.__pairs=[];window.__plans=[];window.__composePlan=null;
+
+window.__eta={secs:null,at:0,msg:''};
+function kfmt(t){t=Math.max(0,Math.round(t));const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=t%60;return (h?h+'h ':'')+(m||h?m+'m ':'')+String(x).padStart(2,'0')+'s'}
+function renderActivity(j){if(!j)return;const busy=!!j.busy;
+ const pill=document.getElementById('actBusyPill'); if(pill)pill.innerHTML=busy?'<span class="kpill pass">RUNNING</span>':'<span class="kpill" style="color:var(--kfaint)">IDLE</span>';
+ const msg=document.getElementById('actMsg'); if(msg)msg.textContent=j.message||'idle';
+ const pr=(j.progress||0)*100; const bar=document.getElementById('actBar'); if(bar)bar.style.width=pr+'%';
+ const pct=document.getElementById('actPct'); if(pct)pct.textContent=busy?pr.toFixed(1)+'%':'–';
+ // ETA: parse '~XmYYs left' from the status message; tick locally between polls
+ const m=String(j.message||'').match(/~(?:(\d+)h)?(\d+)m(\d+)s left/);
+ if(m&&j.message!==window.__eta.msg){window.__eta={secs:(+(m[1]||0))*3600+(+m[2])*60+(+m[3]),at:performance.now(),msg:j.message}}
+ const el=document.getElementById('actEta');
+ if(el){if(!busy){el.textContent='–';window.__eta.secs=null}
+  else if(window.__eta.secs!=null){el.textContent=kfmt(window.__eta.secs-(performance.now()-window.__eta.at)/1000)}
+  else el.textContent='measuring…'}
+ const perf=j.perf_summary;
+ const elp=document.getElementById('actElapsed'); if(elp)elp.textContent=perf&&perf.elapsed_seconds!=null?kfmt(perf.elapsed_seconds):'–';
+ const err=document.getElementById('actErr'); if(err)err.textContent=j.last_error?('last error: '+j.last_error):'';
+ const st=document.getElementById('actStages');
+ if(st&&perf&&perf.top_stages&&perf.top_stages.length){st.textContent=perf.top_stages.map((x,i)=>String(i+1).padStart(2)+'. '+x.name+': '+kfmt(x.seconds)+(x.ok===false?'  ✖ FAILED':'')).join('\n')}
+ const dot=document.getElementById('kactdot'); if(dot)dot.style.color=busy?'var(--kacc)':'var(--kfaint)';
+}
+setInterval(()=>{const a=document.getElementById('activity');if(a&&a.classList.contains('active')&&window.__lastStatus)renderActivity(window.__lastStatus)},1000);
 window.__stationProfile=localStorage.getItem('ec_profile')||'girl_talk_v1';window.__residents=[];window.__crateRanked=[];
 function ktheme(){const a=document.getElementById('kapp');a.classList.toggle('light');localStorage.setItem('ec_theme',a.classList.contains('light')?'light':'dark')}
 function kthemeInit(){if(localStorage.getItem('ec_theme')==='light')document.getElementById('kapp').classList.add('light')}
@@ -533,7 +579,7 @@ async function execManifestApplyBg(i){const path=(MANIFESTS[i]||{}).path; if(!pa
 function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 function escAttr(s){return String(s??'').replace(/['\\]/g,'')}
 function fmt(x){return x===null||x===undefined?'':(+x).toFixed(2)}
-setInterval(async()=>{try{let j=await api('/api/status'); const msg=(j.busy?'BUSY ':'')+j.message; document.getElementById('status').textContent=msg; document.getElementById('status_big').textContent=msg; const kt=document.getElementById('kact_text'); if(kt)kt.textContent=msg; const kb2=document.getElementById('kact_bar'); if(kb2)kb2.style.width=((j.progress||0)*100)+'%'; const led=document.getElementById('statusLed'); if(led)led.classList.toggle('busy',!!j.busy); const err=j.last_error?'Last error: '+j.last_error:''; document.getElementById('last_error').textContent=err; const perf=j.perf_summary; if(perf){const top=perf.top_stages||[]; document.getElementById('perf_summary').textContent=`${perf.in_progress?'running':'last run'} · ${fmt(perf.elapsed_seconds)}s · ${perf.stage_count||0} stages`; document.getElementById('perfOut').textContent=top.map((x,i)=>`${i+1}. ${x.name}: ${fmt(x.seconds)}s ${x.ok===false?'FAILED':''}`).join('\n')+(j.perf_ledger_path?'\n\nLedger: '+j.perf_ledger_path:'');} const st=document.getElementById('statustext'); if(st) st.textContent=j.message+(j.last_error?' | '+j.last_error:''); const w=((j.progress||0)*100)+'%'; const pg=document.getElementById('prog'); if(pg) pg.style.width=w; document.getElementById('prog_global').style.width=w; if(j.last_render_path && j.last_render_path!==window.__latestRenderPath){setPlayer(j.last_render_path); toast('Render ready',j.last_render_path); refreshRenders(false)} if((window.__renderBgPending||window.__oneClickPending) && !j.busy && (String(j.message||'').includes('manifest executed')||String(j.message||'').includes('one-click complete')||String(j.message||'').includes('rejected all quality attempts')||String(j.message||'').includes('floor-safe rescue')||String(j.message||'').includes('TasteSpec one-click complete'))){window.__renderBgPending=false; window.__oneClickPending=false; if(!j.last_render_path && String(j.message||'').includes('rejected')) setPlayer(null); refreshRenders(true)}}catch(e){}},1000);
+setInterval(async()=>{try{let j=await api('/api/status'); const msg=(j.busy?'BUSY ':'')+j.message; window.__lastStatus=j; renderActivity(j); document.getElementById('status').textContent=msg; document.getElementById('status_big').textContent=msg; const kt=document.getElementById('kact_text'); if(kt)kt.textContent=msg; const kb2=document.getElementById('kact_bar'); if(kb2)kb2.style.width=((j.progress||0)*100)+'%'; const led=document.getElementById('statusLed'); if(led)led.classList.toggle('busy',!!j.busy); const err=j.last_error?'Last error: '+j.last_error:''; document.getElementById('last_error').textContent=err; const perf=j.perf_summary; if(perf){const top=perf.top_stages||[]; document.getElementById('perf_summary').textContent=`${perf.in_progress?'running':'last run'} · ${fmt(perf.elapsed_seconds)}s · ${perf.stage_count||0} stages`; document.getElementById('perfOut').textContent=top.map((x,i)=>`${i+1}. ${x.name}: ${fmt(x.seconds)}s ${x.ok===false?'FAILED':''}`).join('\n')+(j.perf_ledger_path?'\n\nLedger: '+j.perf_ledger_path:'');} const st=document.getElementById('statustext'); if(st) st.textContent=j.message+(j.last_error?' | '+j.last_error:''); const w=((j.progress||0)*100)+'%'; const pg=document.getElementById('prog'); if(pg) pg.style.width=w; document.getElementById('prog_global').style.width=w; if(j.last_render_path && j.last_render_path!==window.__latestRenderPath){setPlayer(j.last_render_path); toast('Render ready',j.last_render_path); refreshRenders(false)} if((window.__renderBgPending||window.__oneClickPending) && !j.busy && (String(j.message||'').includes('manifest executed')||String(j.message||'').includes('one-click complete')||String(j.message||'').includes('rejected all quality attempts')||String(j.message||'').includes('floor-safe rescue')||String(j.message||'').includes('TasteSpec one-click complete'))){window.__renderBgPending=false; window.__oneClickPending=false; if(!j.last_render_path && String(j.message||'').includes('rejected')) setPlayer(null); refreshRenders(true)}}catch(e){}},1000);
 loadDefaults().finally(()=>{updateOutcomePreview(); tab(window.__cfgd?'residents':'setup'); doctor().catch(()=>{}); refreshRenders(false).catch(()=>{}); kthemeInit(); const v=document.querySelector('.ver'); const kv=document.getElementById('ksideVer'); if(v&&kv)kv.textContent=v.textContent;});
 
 

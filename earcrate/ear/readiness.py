@@ -156,13 +156,15 @@ def crate_readiness_audit(pool: List[Dict[str, Any]], target_bpm: Optional[float
 # How Girl Talk (and mashup DJs generally) actually rank raw material, documented
 # in PERSONAS/GIRL_TALK_V1.md §11. Five priorities, highest first. Each maps to a
 # metric the analyzer already computes, so the ranking is grounded, not vibes.
-GT_RANK_WEIGHTS = {
+# Weights come from the versioned TasteSpec JSON (objective_weights) — the flat
+# profile carries them through; the literal here is only the shape contract.
+GT_RANK_WEIGHTS = dict(_GT.get("objective_weights") or {
     "recognizability": 0.34,   # the payoff: an instantly-known hook/riff ("oh, THAT song")
     "role_clarity":    0.24,   # a clean isolatable vocal OR a clean bed, never full mush
     "danceability":    0.18,   # party floor: energy + a steady, strong beat
     "deck_feasibility": 0.14,  # survives varispeed to a crate tempo island without artifacts
     "contrast":        0.10,   # genre/era/key distance from the crate = collision payoff
-}
+})
 _VOX_ROLES = {"VOX_HOOK", "VOX_VERSE", "VOX_SHOUT", "RIFF_ID"}
 _DRUM_ROLES = {"DRUM_BREAK"}
 _BASS_ROLES = {"BASS_RIFF"}
@@ -201,6 +203,7 @@ def rank_material(atoms: List[Dict[str, Any]], tempo_islands: Optional[List[floa
     contrast bonus for material that collides against the rest of the crate. Returns
     a ranked list with a per-atom receipt (the five sub-scores) so a human can see
     WHY a loop ranks where — the curation surface, not a black box."""
+    w = dict(((profile or {}).get("objective_weights") or GT_RANK_WEIGHTS))
     islands = list(tempo_islands or [])
     if not islands:
         cnt: Dict[float, int] = {}
@@ -247,14 +250,19 @@ def rank_material(atoms: List[Dict[str, Any]], tempo_islands: Optional[List[floa
         k = int(a.get("key_root") or key_mode) % 12
         circle = min((k - key_mode) % 12, (key_mode - k) % 12)  # 0..6
         contrast = circle / 6.0
-        total = (GT_RANK_WEIGHTS["recognizability"] * recog +
-                 GT_RANK_WEIGHTS["role_clarity"] * clarity +
-                 GT_RANK_WEIGHTS["danceability"] * dance +
-                 GT_RANK_WEIGHTS["deck_feasibility"] * feasible +
-                 GT_RANK_WEIGHTS["contrast"] * contrast)
+        total = (w["recognizability"] * recog +
+                 w["role_clarity"] * clarity +
+                 w["danceability"] * dance +
+                 w["deck_feasibility"] * feasible +
+                 w["contrast"] * contrast)
         ranked.append({
             "atom_id": a.get("atom_id") or a.get("id"),
             "source": str(a.get("title") or a.get("path") or "unknown"),
+            "artist": a.get("artist"),
+            "path": a.get("path"),
+            "preview_path": a.get("preview_path"),
+            "start_s": a.get("start_s"), "end_s": a.get("end_s"),
+            "bpm": a.get("bpm"), "key_root": a.get("key_root"),
             "ear_role": role,
             "rank_score": round(float(total), 4),
             "why": {"recognizability": round(recog, 3), "role_clarity": round(clarity, 3),
@@ -267,7 +275,7 @@ def rank_material(atoms: List[Dict[str, Any]], tempo_islands: Optional[List[floa
         by_role.setdefault(r["ear_role"] or "UNKNOWN", []).append(r)
     return {
         "model": "girl_talk_ranking_v1",
-        "weights": GT_RANK_WEIGHTS,
+        "weights": w,
         "tempo_islands": islands,
         "ranked": ranked,
         "top_by_role": {role: items[:8] for role, items in by_role.items()},

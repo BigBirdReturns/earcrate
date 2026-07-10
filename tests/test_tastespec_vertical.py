@@ -17,7 +17,8 @@ def configured_core(tmp_path: Path) -> EarcrateCore:
 def test_profile_hash_and_plan_receipt(tmp_path):
     core = configured_core(tmp_path)
     prof = load_tastespec("girl_talk_v1")
-    assert prof["version"] == "1.0.0"
+    import re
+    assert re.match(r"^\d+\.\d+\.\d+$", prof["version"]), "profile version must be semver"
     assert len(prof["hash"]) == 64
     plan = {"bpm": 124, "target_key": 0, "params": {"taste_profile": "girl_talk_v1"}, "sections": []}
     saved = core.save_plan("synthetic", plan, "girl_talk_v1")

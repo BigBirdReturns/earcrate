@@ -55,8 +55,8 @@ except Exception as exc:  # pragma: no cover
     raise
 
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wv"}
-ENGINE_VERSION = "earcrate_v075"
-ENGINE_DISPLAY_VERSION = "v0.7.5"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
+ENGINE_VERSION = "earcrate_v076"
+ENGINE_DISPLAY_VERSION = "v0.7.6"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
 BUILD_STAMP = "__BUILD_STAMP__"     # sentinel; the single-file builder replaces it with the package content hash
 ANALYZER_VERSION = "gt-v0.6.1-earcrate-feasibility"
 APP_NAME = "JukebreakerGT"
@@ -67,36 +67,15 @@ VALID_OPS = {"render_mashup", "create_playlist", "ingest_copy", "organize_copy"}
 ROLE_ORDER = ["drum_anchor", "bass", "harmony", "vocal", "texture", "fx", "full"]
 EAR_ROLE_ORDER = ["VOX_HOOK", "VOX_VERSE", "VOX_SHOUT", "DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "RIFF_ID", "TEXTURE", "PICKUP_FILL", "DROP_HIT", "TRANSITION_TAIL"]
 EAR_TO_RENDER_ROLE = {"VOX_HOOK": "vocal", "VOX_VERSE": "vocal", "VOX_SHOUT": "vocal", "DRUM_BREAK": "drum_anchor", "BASS_RIFF": "bass", "BED_CHORD": "harmony", "RIFF_ID": "harmony", "TEXTURE": "texture", "PICKUP_FILL": "texture", "DROP_HIT": "fx", "TRANSITION_TAIL": "texture"}
-# The persona is the single source of truth for style math. Density constants are
-# derived from his catalogued albums (see PERSONAS/GIRL_TALK_V1.md for the full
-# derivation and the code map):
-#   Night Ripper (2006):     ~167 samples / ~42 min -> ~4.0/min
-#   Feed the Animals (2008): ~300+ samples / ~53 min -> ~5.7/min
-#   All Day (2010):           372 samples / ~71 min -> ~5.2/min
-# Readiness (ear/readiness.py) reads its GT_* constants from this dict; do not
-# redefine them elsewhere.
+# ONE source of truth for style math: profiles/girl_talk_v1.json (versioned,
+# schema'd, hashed — see PERSONAS/GIRL_TALK_V1.md for the derivations and
+# profiles/tastespec.schema.json for the shape). This flat dict is a projection
+# of that JSON, never a place to define numbers. Adding a persona = adding a
+# JSON file, not editing code. Loading fails LOUDLY on a missing/corrupt
+# profile — a shadow literal here would be a second constitution.
+from earcrate.tastespec.profiles import load_tastespec, flat_profile, profile_summary, tastespec_hash
 TASTE_PROFILES = {
-    "girl_talk_v1": {
-        "name": "Girl Talk v1",
-        "contract": "recognizable foreground + stable floor + fast source turnover + phrase-grid transitions",
-        "source_seconds": 11.5,
-        "first_foreground_s": 8.0,
-        "max_source_run_s": 16.0,
-        "min_feasible_sources": 11,
-        "floor_coverage": 0.70,
-        "foreground_coverage": 0.50,
-        "max_silent_gap_s": 2.0,
-        "min_edge_score": 0.54,
-        # density model (mature-era 5.2-5.7 events/min band)
-        "seconds_per_event": 11.0,
-        "sources_per_minute": 5.5,
-        "min_layers": 2,
-        "max_layers": 4,
-        "max_source_share": 0.20,
-        # endless-set contract: played on loop, no source may recur sooner than
-        # this gap (observed foreground recurrences on All Day are >= ~15 min apart)
-        "min_recycle_gap_s": 900.0,
-    }
+    "girl_talk_v1": flat_profile(load_tastespec("girl_talk_v1")),
 }
 
 

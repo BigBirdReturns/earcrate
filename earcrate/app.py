@@ -1877,7 +1877,7 @@ class EarcrateCore:
 
     def approved_atom_pool(self, taste_profile: str = "girl_talk_v1") -> List[Dict[str, Any]]:
         rows = self.conn().execute(
-            """SELECT a.id atom_id,a.ear_role,a.render_role,a.score atom_score,a.hook_score,a.bed_score,a.floor_score,a.bass_score,a.spark_score,a.intelligibility,a.low_share,a.mid_share,a.high_share,a.loopability,a.transient_density,
+            """SELECT a.id atom_id,a.preview_path,a.ear_role,a.render_role,a.score atom_score,a.hook_score,a.bed_score,a.floor_score,a.bass_score,a.spark_score,a.intelligibility,a.low_share,a.mid_share,a.high_share,a.loopability,a.transient_density,
                       l.*, f.path, f.duration_s, t.artist,t.album,t.title,ft.bpm,ft.key_root,ft.key_mode,ft.energy,ft.vocal_likelihood,
                       (SELECT value FROM tags WHERE file_id=f.id AND key='genre' LIMIT 1) genre,
                       t.year
@@ -1999,7 +1999,12 @@ class EarcrateCore:
         beds = [x for x in pool if x.get("ear_role") in {"DRUM_BREAK","BED_CHORD","RIFF_ID","TEXTURE"}][:limit_per_side]
         basses = [x for x in pool if x.get("ear_role") == "BASS_RIFF"][:limit_per_side]
         sparks = [x for x in pool if x.get("ear_role") in {"PICKUP_FILL","DROP_HIT","TRANSITION_TAIL","TEXTURE","VOX_SHOUT"}][:limit_per_side]
-        db.execute("DELETE FROM compatibility_edges WHERE taste_profile=?", (taste_profile,))
+        # Durable edge identity: the id is a hash of (profile,left,right,relation),
+        # so rebuilding the graph updates scores IN PLACE and human pair_judgments
+        # (keyed by edge id, ON DELETE CASCADE) survive every regraph. The old
+        # delete-all + random ids erased judgments on rebuild — the exact
+        # "automated rescoring erasing judgments" the constitution forbids.
+        db.execute("DELETE FROM compatibility_edges WHERE taste_profile=? AND id NOT LIKE 'edg_%'", (taste_profile,))
         made = 0
         for relation, lefts, rights in [("vocal_over_bed", foreground, beds), ("bass_over_drums", basses, beds), ("spark_into_phrase", sparks, beds+foreground[:40])]:
             scored = []
@@ -2012,7 +2017,11 @@ class EarcrateCore:
                         scored.append((sc, a, b, reasons))
             scored.sort(reverse=True, key=lambda x: x[0])
             for sc, a, b, reasons in scored[:max(80, int(target_seconds))]:
-                db.execute("INSERT OR REPLACE INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,relation,score,reasons_json,created_at) VALUES(?,?,?,?,?,?,?,?)", (ulidish(), taste_profile, a.get("atom_id"), b.get("atom_id"), relation, float(sc), json.dumps(reasons, ensure_ascii=False), now_utc()))
+                eid = "edg_" + sha256_text(f"{taste_profile}|{a.get('atom_id')}|{b.get('atom_id')}|{relation}")[:20]
+                db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,relation,score,reasons_json,created_at)
+                              VALUES(?,?,?,?,?,?,?,?)
+                              ON CONFLICT(id) DO UPDATE SET score=excluded.score, reasons_json=excluded.reasons_json, created_at=excluded.created_at""",
+                           (eid, taste_profile, a.get("atom_id"), b.get("atom_id"), relation, float(sc), json.dumps(reasons, ensure_ascii=False), now_utc()))
                 made += 1
         db.commit()
         return {"ok": True, "taste_profile": taste_profile, "edges": made, "render_bpm": render_bpm, "target_key": target_key, "foreground": len(foreground), "beds": len(beds), "basses": len(basses), "sparks": len(sparks), "feasibility": deck.get("diagnostics")}
@@ -2181,6 +2190,23 @@ class EarcrateCore:
         stretch_budget = float(params.get("stretch_budget") or 8.0)
         key_strictness = int(params.get("key_strictness") or 72)
         graph_receipts: List[Dict[str, Any]] = []
+        # Curation loop closure: human judgments steer composition. Rejected pairs
+        # are vetoes the composer must obey; approved pairs and favorited atoms get
+        # a deterministic boost. Loaded once per composition; absent DB (synthetic
+        # test cores) means no judgments, not an error.
+        pair_verdicts: Dict[Tuple[str, str], str] = {}
+        favorite_atoms: set = set()
+        _profile_name = str(params.get("taste_profile") or "girl_talk_v1")
+        try:
+            _db = self.conn()
+            for _r in _db.execute("""SELECT e.left_atom_id la, e.right_atom_id ra, pj.status st
+                                     FROM pair_judgments pj JOIN compatibility_edges e ON e.id=pj.edge_id
+                                     WHERE pj.taste_profile=?""", (_profile_name,)).fetchall():
+                pair_verdicts[(str(_r["la"]), str(_r["ra"]))] = str(_r["st"])
+            for _r in _db.execute("SELECT atom_id FROM atom_judgments WHERE taste_profile=? AND favorite=1", (_profile_name,)).fetchall():
+                favorite_atoms.add(str(_r["atom_id"]))
+        except Exception:
+            pass
         source_use: Dict[str, int] = {}
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         need_sources = max(5, int(math.ceil(target_seconds / float(profile.get("source_seconds") or 11.5))))
@@ -2198,6 +2224,12 @@ class EarcrateCore:
             for x in cands:
                 if playable(x, role) is None:
                     continue
+                verdict = None
+                if prefer_against is not None and pair_verdicts:
+                    _k = (str(x.get("atom_id")), str(prefer_against.get("atom_id")))
+                    verdict = pair_verdicts.get(_k) or pair_verdicts.get((_k[1], _k[0]))
+                    if verdict == "rejected":
+                        continue  # a human said this pairing is bad; the composer obeys
                 src = source_of(x)
                 penalty = 0.0
                 if str(x.get("id")) in recent_loop_ids[-12:]:
@@ -2213,6 +2245,11 @@ class EarcrateCore:
                 if edge <= 0.0:
                     continue
                 novelty = 0.34 if src not in source_use else (0.12 if src not in recent_sources[-8:] else -0.16)
+                if str(x.get("atom_id")) in favorite_atoms:
+                    novelty += 0.15  # human favorite
+                if verdict == "approved":
+                    novelty += 0.25  # human-approved pairing
+                    reasons = dict(reasons); reasons["human_verdict"] = "approved"
                 balance = -0.18 * source_use.get(src, 0)
                 jitter = rng.random() * 0.01
                 scored.append((float(x.get("score") or 0.0) * 0.44 + edge * 0.38 + novelty + balance - penalty + jitter, x, edge, reasons))
@@ -3952,6 +3989,33 @@ class EarcrateCore:
         db.commit()
         return {"type": "render_mashup", "path": str(dst), "report": str(report_path), "drop_count": report["drop_count"], "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": sum(len(s.get("layers", [])) for s in sections), "presented": True}
 
+
+    def propose_plan(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Compose an arrangement for the timeline surface WITHOUT writing a
+        manifest, mashup row, or WAV. Pure planning: same composer, same
+        judgments, same receipts — a plan you can look at, save, and only then
+        decide to render."""
+        taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
+        pool = self.approved_atom_pool(taste_profile)
+        if not pool:
+            return {"ok": False, "error": "ear crate is empty — run Analyze, Extract Loops, and Ear Crate first"}
+        p = {"taste_profile": taste_profile,
+             "target_seconds": float(params.get("target_seconds") or 120),
+             "bpm": float(params.get("bpm") or 0.0),
+             "stretch_budget": float(params.get("stretch_budget") or 8.0),
+             "pitch_shift_budget": int(params.get("pitch_shift_budget") or 2)}
+        seed = int(params.get("seed") or 0) or self.next_render_seed(self.ensure_config().seed)
+        try:
+            arrangement = self.compose_taste_arrangement(pool, p, seed)
+        except RuntimeError as exc:
+            return {"ok": False, "error": str(exc)}
+        score = self.score_arrangement(arrangement)
+        gate = self.taste_arrangement_gate(arrangement)
+        return {"ok": True, "arrangement": arrangement, "score": score, "taste_gate": gate, "seed": seed}
+
+    def list_plans(self) -> Dict[str, Any]:
+        rows = self.conn().execute("SELECT id,name,taste_profile,plan_hash,created_at FROM saved_plans ORDER BY created_at DESC LIMIT 100").fetchall()
+        return {"ok": True, "items": [dict(r) for r in rows]}
 
     def taste_profile_receipt(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
         return profile_summary(taste_profile)

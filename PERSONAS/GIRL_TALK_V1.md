@@ -1,10 +1,13 @@
 # PERSONA: girl_talk_v1 — the complete math
 
-This is the canonical reference for the first TasteSpec persona. Every number the
+This is the canonical *narrative* reference for the first TasteSpec persona; the
+canonical *machine* source is `profiles/girl_talk_v1.json` (versioned, hashed,
+schema-validated) and a gate test forbids the two from drifting from the engine. Every number the
 engine uses to decide *readiness*, *compatibility*, *arrangement*, and *acceptance*
-is either stated here with its derivation, or it is a bug. The persona constants
-live in ONE place in code (`earcrate/core/deps.py: TASTE_PROFILES["girl_talk_v1"]`);
-everything else derives from them. Section 10 maps every number to its code home.
+is either stated here with its derivation, or it is a bug. Every constant lives in
+ONE machine-readable place — `profiles/girl_talk_v1.json` — and everything else
+(the flat runtime profile, the readiness aliases, the ranking weights) is a
+projection of it. Section 10 maps every number to its code home.
 
 The reference artist is Girl Talk (Gregg Gillis). The persona does not imitate any
 specific track; it encodes the *measurable mechanics* of the style: dense sample
@@ -217,7 +220,10 @@ curation surface — which of *your* loops the artist would actually pull, and w
 
 | Number | Where it lives |
 |---|---|
-| all persona constants | `earcrate/core/deps.py: TASTE_PROFILES["girl_talk_v1"]` |
+| **canonical source (versioned + hashed)** | `profiles/girl_talk_v1.json` (schema: `profiles/tastespec.schema.json`) |
+| runtime projection | `earcrate/core/deps.py: TASTE_PROFILES` = `flat_profile(load_tastespec(...))` — never edit numbers here |
+| loader / hash / projection | `earcrate/tastespec/profiles.py` |
+| drift protection | `tests/test_gates.py: test_persona_single_source` (JSON must equal enforced engine values) |
 | density aliases GT_* | `earcrate/ear/readiness.py` (derived from the profile) |
 | targets for length T | `earcrate/ear/readiness.py: girl_talk_targets` |
 | readiness audit | `earcrate/ear/readiness.py: crate_readiness_audit` |

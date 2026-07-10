@@ -118,6 +118,9 @@ class JBHandler(BaseHTTPRequestHandler):
                 q = urllib.parse.parse_qs(parsed.query)
                 self._json(200, self.core.list_ear_atoms((q.get("status") or ["approved"])[0], (q.get("taste_profile") or ["girl_talk_v1"])[0]))
                 return
+            if parsed.path == "/api/timeline/list":
+                self._json(200, self.core.list_plans())
+                return
             if parsed.path == "/api/taste/profile":
                 q = urllib.parse.parse_qs(parsed.query)
                 self._json(200, self.core.taste_profile_receipt((q.get("taste_profile") or ["girl_talk_v1"])[0]))
@@ -137,7 +140,18 @@ class JBHandler(BaseHTTPRequestHandler):
                 raw = (q.get("path") or [""])[0]
                 audio_path = Path(raw).expanduser().resolve()
                 c = self.core.ensure_config()
-                self.core.validate_path_in_root(audio_path, c.working_root / "renders")
+                # Read-only playback is allowed from renders, atom previews, and the
+                # source library itself (auditioning IS the product). Writes never
+                # happen here; path containment still enforced.
+                for _root in (c.working_root, c.master_root):
+                    try:
+                        self.core.validate_path_in_root(audio_path, _root)
+                        break
+                    except Exception:
+                        continue
+                else:
+                    self._json(403, {"error": "audio path outside workspace/library"})
+                    return
                 if not audio_path.exists() or not audio_path.is_file():
                     self._json(404, {"error": "audio file not found"})
                     return
@@ -192,6 +206,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.set_atom_judgment(str(data["atom_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("relabel_role") or ""), bool(data.get("favorite", False)), bool(data.get("locked", False)), str(data.get("reason") or ""))); return
             if path == "/api/taste/pair_judgment":
                 self._json(200, self.core.set_pair_judgment(str(data["edge_id"]), str(data.get("taste_profile") or "girl_talk_v1"), str(data["status"]), str(data.get("reason") or ""))); return
+            if path == "/api/timeline/propose":
+                self._json(200, self.core.propose_plan(data)); return
             if path == "/api/timeline/save":
                 self._json(200, self.core.save_plan(str(data.get("name") or "plan"), data["plan"], str(data.get("taste_profile") or "girl_talk_v1"))); return
             if path == "/api/timeline/load":

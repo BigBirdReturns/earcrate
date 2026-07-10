@@ -1,5 +1,35 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.7.6 — Compose (the rungs assembled)
+- MERGED PR #8 (Codex vertical slice): governance (AGENTS.md), versioned TasteSpec
+  JSON + schema + stable hash, atom/pair judgment tables, plan save/load, profile
+  provenance in arrangements and render reports.
+- ONE SOURCE OF TRUTH: profiles/girl_talk_v1.json (v1.1.0) is now canonical and
+  DRIVES the engine — TASTE_PROFILES is a projection of it (flat_profile), the
+  readiness aliases and ranking weights derive from it, and the single-file build
+  embeds it. v1.0.0's aspirational numbers (drum stretch 12% vs enforced 8%,
+  edge floor 0.42 vs enforced 0.54) corrected to tested reality; gate
+  test_persona_single_source forbids any future drift between JSON, projection,
+  and enforced deck limits.
+- CURATION LOOP CLOSED: the composer now OBEYS human judgments — a rejected
+  pairing is a veto (beats even a favorite), approved pairings get boosted,
+  favorited atoms get pulled forward. Gate test_curation_steers_composer proves
+  favorite flips the pick and veto beats favorite.
+- DURABLE JUDGMENTS: compatibility edge ids are now deterministic hashes of
+  (profile,left,right,relation), so rebuilding the pair graph updates scores in
+  place and pair judgments SURVIVE every regraph (the merged code deleted all
+  edges with random ids — every rebuild silently erased judgments).
+- COMPOSE SURFACE replaces the Mashup tab: (1) the crate ranked by the persona
+  with per-atom why-bars, audition, ★ favorite / ✗ reject; (2) pair explorer
+  with edge receipts and ✓/✗ judgments; (3) timeline — propose a plan WITHOUT
+  rendering, see sections/layers as colored rails, save/load named plans (hash +
+  tastespec provenance). Old Mashup controls preserved under an advanced fold.
+  New: POST /api/timeline/propose, GET /api/timeline/list, propose_plan(),
+  list_plans(); /api/audio now serves read-only source/preview audio (Range
+  supported) so atoms can be auditioned. Verified end-to-end in a real headless
+  browser: rank → pairs → judge → propose → gate PASSES → save → load, judgments
+  persisted in sqlite, zero page errors.
+
 ## v0.7.5 — Persona Codex + craft ranking
 - UI DECLUTTER: removed the confusing 'Legacy two-world labels' control blocks from
   the Jam and Mashup pages (voice/bed world queries, mix-mode, aux decks) — dead

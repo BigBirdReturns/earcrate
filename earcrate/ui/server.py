@@ -202,6 +202,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.run_background(self.core.scan)); return
             if path == "/api/analyze_bg":
                 self._json(200, self.core.run_background(self.core.analyze, int(data.get("limit") or 0))); return
+            if path == "/api/rescan_bg":
+                self._json(200, self.core.run_background(self.core.rescan_library, str(data.get("taste_profile") or "girl_talk_v1"))); return
             if path == "/api/extract_loops_bg":
                 self._json(200, self.core.run_background(self.core.extract_loops, int(data.get("limit") or 0), bool(data.get("auto_approve", True)), bool(data.get("force", False)))); return
             if path == "/api/loop_status":

@@ -1701,7 +1701,7 @@ class EarcrateCore:
         floor_params = dict(base_params)
         floor_params.pop("seed", None)
         floor_params.update({
-            "name": str(base_params.get("name") or "Jukebreaker Sketch") + " Floor-Safe Audible Rescue",
+            "name": str(base_params.get("name") or "EarCrate Sketch") + " Floor-Safe Audible Rescue",
             "safe_deck_rescue": True,
             "floor_safe_rescue": True,
             "quality_retry_index": attempts + 1,
@@ -2305,7 +2305,7 @@ class EarcrateCore:
         if not readiness.get("ready"):
             raise RuntimeError("TasteSpec crate is not ready: " + "; ".join(readiness.get("failures") or []))
         pool = self.approved_atom_pool(taste_profile)
-        name = safe_name(str(params.get("name") or "Jukebreaker TasteSpec"), "Jukebreaker TasteSpec")
+        name = safe_name(str(params.get("name") or "EarCrate TasteSpec"), "EarCrate TasteSpec")
         explicit_seed = params.get("seed") not in (None, "", 0, "0")
         seed = int(params.get("seed")) if explicit_seed else self.next_render_seed(c.seed)
         params = dict(params)
@@ -2871,7 +2871,7 @@ class EarcrateCore:
         if str(params.get("quality_mode") or "") in {"dry_deck", "stable_deck"}:
             self.set_status("preflight: measuring approved loop dry quality", 0.74, True, None)
             pool = self.annotate_pool_dry_quality(pool)
-        name = safe_name(str(params.get("name") or "Jukebreaker Mashup"), "Jukebreaker Mashup")
+        name = safe_name(str(params.get("name") or "EarCrate Mashup"), "EarCrate Mashup")
         explicit_seed = params.get("seed") not in (None, "", 0, "0")
         seed = int(params.get("seed")) if explicit_seed else self.next_render_seed(c.seed)
         params = dict(params)
@@ -4384,10 +4384,35 @@ class EarcrateCore:
         render_metrics = judge_audio_file(Path(render_path), ref_path=Path(ref_path) if ref_path else None)
         return render_metrics
 
+    def rescan_library(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """Honest 'do it right' pass: re-measure every file and re-crate its phrase
+        atoms with the CURRENT engine, ignoring the cache. This is what the old
+        'recheck by current scoring' button gestured at — but plainly: after an
+        engine/scoring improvement, cached measurements and atoms are stale, and
+        this forces them to be recomputed by today's code.
+
+        Deliberately NON-destructive to curation: it does NOT re-extract loops or
+        touch your approve/reject decisions. It re-measures (BPM/key/energy/vocal),
+        then re-scores the ear-crate atoms your approved loops produce. Your loop
+        pool and judgments survive."""
+        self.ensure_config()
+        self.set_status("rescan 1/2: re-measuring every track with the current engine", 0.02, True, None)
+        analyzed = self.analyze(limit=0, force=True)
+        self.set_status("rescan 2/2: re-crating phrase atoms with the current scoring", 0.55, True, None)
+        crated = self.build_ear_crate(limit=0, force=True, taste_profile=taste_profile, write_previews=False)
+        n_files = int((analyzed or {}).get("analyzed") or 0)
+        n_atoms = int((crated or {}).get("inserted") or 0) + int((crated or {}).get("updated") or 0)
+        n_approved = int((crated or {}).get("approved") or 0)
+        self.set_status(
+            f"rescan complete: re-measured {n_files} tracks, re-crated {n_atoms} atoms ({n_approved} approved) with current engine",
+            1.0, False, None,
+        )
+        return {"ok": True, "analyzed": analyzed, "ear_crate": crated, "taste_profile": taste_profile}
+
     def run_background(self, fn, *args, **kwargs) -> Dict[str, Any]:
         with self.status_lock:
             if self.status.get("busy"):
-                raise RuntimeError("Jukebreaker is already busy")
+                raise RuntimeError("EarCrate is already busy")
             self.status.update({"busy": True, "message": "starting", "progress": 0, "last_error": None})
         def target():
             try:

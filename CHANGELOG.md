@@ -1,5 +1,24 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.8.0 — honest "do it right" rescan + finished cruft purge
+- FORCE FULL RESCAN (the honest version of "recheck by current scoring"): after
+  an engine or scoring improvement, tracks you already analyzed keep their OLD
+  numbers — caches are never silently recomputed. The Analyze page now has one
+  clearly-labelled button that forces the redo: re-measure every track with
+  today's code, then re-crate and re-score its phrase atoms with the current
+  persona. It is NON-destructive to curation — it does not re-extract loops or
+  touch your approve/reject judgments; your pool survives. New core
+  `rescan_library()`, route POST /api/rescan_bg, honest progress/ETA in the
+  bottom bar, and a plain-language card that says exactly what it does and does
+  not touch. This is the "force a rescan that does shit right" ask, built plainly.
+- FINISHED THE CRUFT PURGE: killed the last four leftover "Jukebreaker" literals
+  that were plain renames (the "…is already busy" error and three default sketch
+  names → EarCrate). The remaining "Jukebreaker" references are ALL legitimate
+  legacy-workspace adoption (finding and reusing an old install's DB/cache) — those
+  keep the name on purpose. Still deliberately NOT renamed (need migration, not a
+  blind rename): APP_NAME/state-dir and ANALYZER_VERSION (cache key), plus the old
+  two-world arranger — the v2 ground-up rebuild.
+
 ## v0.7.9 — crate-librarian extracted + crate-digging (rebuild plan v2, phase 1)
 - DEAD-BUFFALO PURGE (partial, honest): the scorer's voice veto/bonus no longer
   depends on the legacy two-world concept — it's persona-agnostic now (asked for

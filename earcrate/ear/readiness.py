@@ -1,10 +1,44 @@
 from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.deck.lattice import *
-GT_SECONDS_PER_EVENT = 11.0     # new sample-event cadence
-GT_MIN_LAYERS = 2               # simultaneous recognizable elements
-GT_MAX_LAYERS = 4
-GT_SOURCES_PER_MINUTE = 5.5     # distinct source songs introduced per minute
+# Single-sourced from the persona (core/deps.py TASTE_PROFILES); the aliases keep
+# the readiness math readable and the old names importable.
+_GT = TASTE_PROFILES["girl_talk_v1"]
+GT_SECONDS_PER_EVENT = float(_GT["seconds_per_event"])      # new sample-event cadence
+GT_MIN_LAYERS = int(_GT["min_layers"])                      # simultaneous recognizable elements
+GT_MAX_LAYERS = int(_GT["max_layers"])
+GT_SOURCES_PER_MINUTE = float(_GT["sources_per_minute"])    # distinct source songs introduced per minute
+
+
+def endless_sustain(event_capacity: int, source_capacity: int, profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Exact endless-set math for a crate.
+
+    At persona density the set spends sources at r = sources_per_minute and
+    sample-events at 60/seconds_per_event per minute. A crate with S deck-safe
+    sources and E supplyable events therefore sustains a no-repeat run of
+        T = min(60*S/r, E*seconds_per_event) seconds.
+    Played on loop, every source recurs with period ~T, so the set is honestly
+    "endless" iff T clears the persona's minimum recycle gap: below that gap the
+    listener notices the rotation; above it each return reads as a callback.
+    """
+    p = profile or _GT
+    r = float(p.get("sources_per_minute") or GT_SOURCES_PER_MINUTE)
+    spe = float(p.get("seconds_per_event") or GT_SECONDS_PER_EVENT)
+    gap = float(p.get("min_recycle_gap_s") or 900.0)
+    by_sources = 60.0 * max(0, int(source_capacity)) / max(r, 1e-9)
+    by_events = max(0, int(event_capacity)) * spe
+    no_repeat = min(by_sources, by_events)
+    bottleneck = "sources" if by_sources <= by_events else "events"
+    return {
+        "no_repeat_seconds": round(no_repeat, 1),
+        "no_repeat_seconds_by_sources": round(by_sources, 1),
+        "no_repeat_seconds_by_events": round(by_events, 1),
+        "recycle_period_s": round(no_repeat, 1),
+        "min_recycle_gap_s": gap,
+        "endless_ready": no_repeat >= gap,
+        "bottleneck": bottleneck,
+        "sources_needed_for_endless": int(math.ceil(gap / 60.0 * r)),
+    }
 
 
 def girl_talk_targets(track_seconds: float) -> Dict[str, int]:
@@ -96,7 +130,9 @@ def crate_readiness_audit(pool: List[Dict[str, Any]], target_bpm: Optional[float
 
     ready = (event_capacity >= tgt["sample_events"] and source_capacity >= max(4, tgt["distinct_sources"] // 2)
              and beds >= 1 and foreground >= 1)
+    endless = endless_sustain(event_capacity, source_capacity)
     return {
+        "endless": endless,
         "chosen_bpm": round(chosen, 2),
         "pool_size": len(pool),
         "ready": ready,

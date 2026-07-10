@@ -1,5 +1,22 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.7.4 — Persona Codex (unreleased)
+- PERSONA: `PERSONAS/GIRL_TALK_V1.md` — the complete quantitative reference for the
+  first TasteSpec persona: documented sample densities, rails contract, varispeed and
+  harmony math, typed-edge and acceptance-gate thresholds, and a code map for every
+  number. Persona constants are now single-sourced in `TASTE_PROFILES["girl_talk_v1"]`
+  (density model + endless contract included); `ear/readiness.py` derives its GT_*
+  aliases from the profile instead of redefining them.
+- NEW: endless-set math (`endless_sustain`): no-repeat runtime
+  T = min(60·S/r, E·seconds_per_event); endless iff T ≥ min_recycle_gap_s (900 s),
+  ⇒ 83 deck-safe sources unlock an honestly endless crate. Reported as an `endless`
+  receipt by both `crate_readiness_audit` and `taste_readiness`, gated by
+  `test_endless_math_is_exact`.
+- DOCS: `LIBRARY_WORKFLOW.md` — the exact external-drive → archive → ear-crate
+  sequence (ingest/organize verified end-to-end against a torture library: scene
+  names, junk titles, ALLCAPS, year suffixes, feat. forms, albumartist-less
+  compilations, byte dupes, idempotent re-ingest).
+
 ## v0.7.1 — Buffalo Grade (scale + decades-of-dumps hardening)
 - SCALE: scan() parallelized (stat-filter -> threaded ffprobe/tag probes -> serial DB
   writes). Measured 234ms/probe single-threaded = ~3h for 50k files; now /N cores.

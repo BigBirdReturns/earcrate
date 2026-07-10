@@ -65,6 +65,14 @@ VALID_OPS = {"render_mashup", "create_playlist", "ingest_copy", "organize_copy"}
 ROLE_ORDER = ["drum_anchor", "bass", "harmony", "vocal", "texture", "fx", "full"]
 EAR_ROLE_ORDER = ["VOX_HOOK", "VOX_VERSE", "VOX_SHOUT", "DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "RIFF_ID", "TEXTURE", "PICKUP_FILL", "DROP_HIT", "TRANSITION_TAIL"]
 EAR_TO_RENDER_ROLE = {"VOX_HOOK": "vocal", "VOX_VERSE": "vocal", "VOX_SHOUT": "vocal", "DRUM_BREAK": "drum_anchor", "BASS_RIFF": "bass", "BED_CHORD": "harmony", "RIFF_ID": "harmony", "TEXTURE": "texture", "PICKUP_FILL": "texture", "DROP_HIT": "fx", "TRANSITION_TAIL": "texture"}
+# The persona is the single source of truth for style math. Density constants are
+# derived from his catalogued albums (see PERSONAS/GIRL_TALK_V1.md for the full
+# derivation and the code map):
+#   Night Ripper (2006):     ~167 samples / ~42 min -> ~4.0/min
+#   Feed the Animals (2008): ~300+ samples / ~53 min -> ~5.7/min
+#   All Day (2010):           372 samples / ~71 min -> ~5.2/min
+# Readiness (ear/readiness.py) reads its GT_* constants from this dict; do not
+# redefine them elsewhere.
 TASTE_PROFILES = {
     "girl_talk_v1": {
         "name": "Girl Talk v1",
@@ -77,6 +85,15 @@ TASTE_PROFILES = {
         "foreground_coverage": 0.50,
         "max_silent_gap_s": 2.0,
         "min_edge_score": 0.54,
+        # density model (mature-era 5.2-5.7 events/min band)
+        "seconds_per_event": 11.0,
+        "sources_per_minute": 5.5,
+        "min_layers": 2,
+        "max_layers": 4,
+        "max_source_share": 0.20,
+        # endless-set contract: played on loop, no source may recur sooner than
+        # this gap (observed foreground recurrences on All Day are >= ~15 min apart)
+        "min_recycle_gap_s": 900.0,
     }
 }
 

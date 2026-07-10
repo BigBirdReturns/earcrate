@@ -1764,7 +1764,11 @@ class EarcrateCore:
         for k, n in need.items():
             if have.get(k, 0) < n:
                 failures.append(f"{k} atoms short: have {have.get(k,0)}, need {n}")
-        return {"ok": True, "ready": not failures, "taste_profile": taste_profile, "profile": profile, "have": have, "need": need, "role_counts": by_role, "source_tracks": len(source_keys), "pool_size": len(pool), "failures": failures}
+        # Endless-set math: each approved atom supplies ~2 sample-events before it
+        # reads as a rerun; a source contributes at most ~3 fresh foreground moments.
+        atom_event_capacity = min(len(pool) * 2, len(source_keys) * 3)
+        endless = endless_sustain(atom_event_capacity, len(source_keys), profile)
+        return {"ok": True, "ready": not failures, "taste_profile": taste_profile, "profile": profile, "have": have, "need": need, "role_counts": by_role, "source_tracks": len(source_keys), "pool_size": len(pool), "failures": failures, "endless": endless}
 
     def atom_edge_score(self, left: Dict[str, Any], right: Dict[str, Any], relation: str, render_bpm: float, target_key: int, stretch_budget: float, pitch_budget: int) -> Tuple[float, Dict[str, Any]]:
         def key_of(x: Dict[str, Any]) -> int:

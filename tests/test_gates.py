@@ -4,7 +4,7 @@ import sys, random
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 from earcrate.deck.transform import plan_varispeed_transform
 from earcrate.deck.lattice import score_bpm_lattice
-from earcrate.ear.readiness import crate_readiness_audit, girl_talk_targets
+from earcrate.ear.readiness import crate_readiness_audit, girl_talk_targets, endless_sustain
 from earcrate.app import EarcrateCore
 
 def test_budget_knob_bites():
@@ -63,6 +63,26 @@ def test_percussion_is_keyless_but_vocals_are_not():
     voc = plan_varispeed_transform("vocal", 128.0, 128.0, 0, 6, 8.5, 2)
     assert not drum.get("violation"), f"drum should be keyless, got: {drum.get('violation')}"
     assert voc.get("violation"), "vocal at a tritone with no varispeed help must violate"
+
+def test_endless_math_is_exact():
+    """Persona endless-set gate: T = min(60*S/r, E*seconds_per_event); endless
+    iff T clears the recycle gap. Numbers must be exact, not vibes."""
+    # 55 sources at 5.5/min = exactly 600s no-repeat; below the 900s gap -> not endless.
+    e = endless_sustain(event_capacity=10_000, source_capacity=55)
+    assert e["no_repeat_seconds"] == 600.0 and e["bottleneck"] == "sources" and not e["endless_ready"], e
+    # the audit must state the exact source count that unlocks endless: ceil(900/60*5.5)=83
+    assert e["sources_needed_for_endless"] == 83, e
+    e2 = endless_sustain(event_capacity=10_000, source_capacity=83)
+    assert e2["endless_ready"] and e2["no_repeat_seconds"] >= 900.0, e2
+    # event-starved crate: 10 events * 11s = 110s regardless of source count
+    e3 = endless_sustain(event_capacity=10, source_capacity=1000)
+    assert e3["no_repeat_seconds"] == 110.0 and e3["bottleneck"] == "events", e3
+    # readiness audit must carry the endless receipt
+    pool = [{"role": r, "bpm": 125.0, "key_root": 0, "title": f"s{i}"}
+            for i, r in enumerate(["drum_anchor", "vocal", "bass", "full", "harmony"] * 4)]
+    a = crate_readiness_audit(pool, 125.0, 0, None, None, 120.0)
+    assert "endless" in a and a["endless"]["no_repeat_seconds"] > 0
+
 
 if __name__ == "__main__":
     fails = 0

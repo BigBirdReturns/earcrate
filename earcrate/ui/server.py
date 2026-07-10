@@ -118,6 +118,10 @@ class JBHandler(BaseHTTPRequestHandler):
                 q = urllib.parse.parse_qs(parsed.query)
                 self._json(200, self.core.list_ear_atoms((q.get("status") or ["approved"])[0], (q.get("taste_profile") or ["girl_talk_v1"])[0]))
                 return
+            if parsed.path == "/api/crate_facets":
+                q = urllib.parse.parse_qs(parsed.query)
+                self._json(200, self.core.crate_facets((q.get("taste_profile") or ["girl_talk_v1"])[0]))
+                return
             if parsed.path == "/api/residents":
                 self._json(200, self.core.residents())
                 return

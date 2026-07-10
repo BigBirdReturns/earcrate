@@ -54,6 +54,39 @@ def classify_atom_status(ear_role: str, metrics: Dict[str, float]) -> str:
     return "approved" if sc >= min_score else "candidate"
 
 
+
+
+def apply_source_filter(pool: List[Dict[str, Any]], sf: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Crate-dig: narrow the pool to what the booking asked for, using the metadata
+    the librarian already extracted (genre from tags, era from year). Empty/absent
+    filter = the whole crate. A too-narrow filter simply yields a small pool, and
+    readiness then refuses honestly rather than pretending."""
+    if not sf:
+        return pool
+    genre = str(sf.get("genre") or "").strip().lower()
+    yr_from = sf.get("era_from")
+    yr_to = sf.get("era_to")
+    def _yr(x):
+        try:
+            return int(str(x.get("year") or "")[:4])
+        except Exception:
+            return None
+    out = []
+    for x in pool:
+        if genre and genre not in str(x.get("genre") or "").lower():
+            continue
+        if yr_from or yr_to:
+            y = _yr(x)
+            if y is None:
+                continue
+            if yr_from and y < int(yr_from):
+                continue
+            if yr_to and y > int(yr_to):
+                continue
+        out.append(x)
+    return out
+
+
 class EarcrateCore:
     def __init__(self):
         self.state_dir = app_state_dir()
@@ -2022,7 +2055,7 @@ class EarcrateCore:
             counts.setdefault(str(r["ear_role"]), {})[str(r["status"])] = int(r["n"])
         return {"ok": True, "items": [dict(r) for r in rows], "counts": counts, "taste_profile": taste_profile}
 
-    def approved_atom_pool(self, taste_profile: str = "girl_talk_v1") -> List[Dict[str, Any]]:
+    def approved_atom_pool(self, taste_profile: str = "girl_talk_v1", source_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         rows = self.conn().execute(
             """SELECT a.id atom_id,a.preview_path,a.ear_role,a.render_role,a.score atom_score,a.hook_score,a.bed_score,a.floor_score,a.bass_score,a.spark_score,a.intelligibility,a.low_share,a.mid_share,a.high_share,a.loopability,a.transient_density,
                       l.*, f.path, f.duration_s, t.artist,t.album,t.title,ft.bpm,ft.key_root,ft.key_mode,ft.energy,ft.vocal_likelihood,
@@ -2046,7 +2079,7 @@ class EarcrateCore:
             d["dry_low200_share"] = float(d.get("low_share") or 0.0)
             d["dry_quality_veto"] = False
             out.append(d)
-        return out
+        return apply_source_filter(out, source_filter)
 
     def rank_crate(self, taste_profile: str = "girl_talk_v1", limit: int = 0) -> Dict[str, Any]:
         """Rank the approved ear crate by the persona's own selection priorities
@@ -2063,8 +2096,8 @@ class EarcrateCore:
         out["taste_profile"] = taste_profile
         return out
 
-    def taste_readiness(self, taste_profile: str = "girl_talk_v1", target_seconds: float = 120.0) -> Dict[str, Any]:
-        pool = self.approved_atom_pool(taste_profile)
+    def taste_readiness(self, taste_profile: str = "girl_talk_v1", target_seconds: float = 120.0, source_filter: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        pool = self.approved_atom_pool(taste_profile, source_filter)
         profile = TASTE_PROFILES.get(taste_profile, TASTE_PROFILES["girl_talk_v1"])
         by_role: Dict[str, int] = {r: 0 for r in EAR_ROLE_ORDER}
         source_keys = set()
@@ -2525,12 +2558,36 @@ class EarcrateCore:
                 out.append(line)
         return out
 
+    def crate_facets(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """What the crate actually contains, so booking offers real choices, not a
+        blank text box. Distinct genres (with counts) + the era span present."""
+        pool = self.approved_atom_pool(taste_profile)
+        genres: Dict[str, int] = {}
+        years: List[int] = []
+        srcs = set()
+        for x in pool:
+            src = track_identity(x)
+            g = str(x.get("genre") or "").strip()
+            if g and src not in srcs:
+                genres[g] = genres.get(g, 0) + 1
+            try:
+                years.append(int(str(x.get("year") or "")[:4]))
+            except Exception:
+                pass
+            srcs.add(src)
+        top = sorted(genres.items(), key=lambda kv: kv[1], reverse=True)[:16]
+        return {"ok": True, "taste_profile": taste_profile,
+                "genres": [{"genre": g, "sources": n} for g, n in top],
+                "era_min": min(years) if years else None, "era_max": max(years) if years else None,
+                "sources": len(srcs)}
+
     def one_click_taste_mix(self, data: Dict[str, Any]) -> Dict[str, Any]:
         c = self.ensure_config()
         taste_profile = str(data.get("taste_profile") or "girl_talk_v1")
         track_budget = int(data.get("track_budget") or 240)
         force_loops = bool(data.get("force_loops", False))
         target_seconds = float(self.outcome_params(data).get("target_seconds") or data.get("target_seconds") or 120)
+        source_filter = data.get("source_filter") or None
         ledger = self._perf_new_ledger("one_click_taste_mix", {
             "taste_profile": taste_profile,
             "track_budget": track_budget,
@@ -2560,7 +2617,7 @@ class EarcrateCore:
             harvest_log = []
             first_pass = True
             batch_idx = 0
-            readiness = self._perf_stage(ledger, "taste_readiness_initial", self.taste_readiness, taste_profile, target_seconds)
+            readiness = self._perf_stage(ledger, "taste_readiness_initial", self.taste_readiness, taste_profile, target_seconds, source_filter)
             while not readiness.get("ready"):
                 batch_idx += 1
                 analyzed_count = int(self.conn().execute("SELECT COUNT(*) n FROM features WHERE analyzer_version=?", (ANALYZER_VERSION,)).fetchone()["n"])
@@ -2573,7 +2630,7 @@ class EarcrateCore:
                 loop_result["inserted"] = int(loop_result.get("inserted") or 0) + int(lstep.get("inserted") or 0)
                 crate_result = self._perf_stage(ledger, f"harvest_b{batch_idx}_ear_crate", self.build_ear_crate, limit=0, force=(force_loops and first_pass), taste_profile=taste_profile, write_previews=False)
                 first_pass = False
-                readiness = self._perf_stage(ledger, f"harvest_b{batch_idx}_readiness", self.taste_readiness, taste_profile, target_seconds)
+                readiness = self._perf_stage(ledger, f"harvest_b{batch_idx}_readiness", self.taste_readiness, taste_profile, target_seconds, source_filter)
                 analyzed_count = int(self.conn().execute("SELECT COUNT(*) n FROM features WHERE analyzer_version=?", (ANALYZER_VERSION,)).fetchone()["n"])
                 harvest_log.append({"batch": batch_idx, "tracks_analyzed": analyzed_count, "have": dict(readiness.get("have") or {}), "need": dict(readiness.get("need") or {}), "ready": bool(readiness.get("ready"))})
                 if readiness.get("ready"):
@@ -2602,7 +2659,7 @@ class EarcrateCore:
             self.set_status("TasteSpec: building compatibility graph", 0.76, True, None)
             graph = self._perf_stage(ledger, "build_compatibility_graph", self.build_compatibility_graph, taste_profile, target_seconds, float(data.get("bpm") or 0.0))
             params = self.outcome_params(data)
-            params.update({"taste_profile": taste_profile, "name": str(data.get("name") or "Jukebreaker TasteSpec"), "target_seconds": int(target_seconds), "quality_mode": "stable_deck", "post_render_gate": True})
+            params.update({"taste_profile": taste_profile, "name": str(data.get("name") or "Jukebreaker TasteSpec"), "target_seconds": int(target_seconds), "quality_mode": "stable_deck", "post_render_gate": True, "source_filter": source_filter})
             # Station steering: crowd 🔥/🧊 receipts bias the compile intent.
             _bias = self.station_bias()
             for _k in ("chaos", "vocal_density", "drama"):
@@ -4150,7 +4207,7 @@ class EarcrateCore:
         judgments, same receipts — a plan you can look at, save, and only then
         decide to render."""
         taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
-        pool = self.approved_atom_pool(taste_profile)
+        pool = self.approved_atom_pool(taste_profile, params.get("source_filter"))
         if not pool:
             return {"ok": False, "error": "ear crate is empty — run Analyze, Extract Loops, and Ear Crate first"}
         p = {"taste_profile": taste_profile,

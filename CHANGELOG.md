@@ -1,6 +1,23 @@
 # Jukebreaker GT — CHANGELOG
 
-## v0.7.9 — crate-librarian extracted (rebuild plan v2, phase 1)
+## v0.7.9 — crate-librarian extracted + crate-digging (rebuild plan v2, phase 1)
+- CRATE-DIG BY METADATA: the jam no longer grabs the whole pool blind — it draws
+  from what you asked for. New `source_filter` (genre substring + era range)
+  narrows the approved pool before composing, threaded through readiness so a
+  too-narrow pick refuses honestly. `crate_facets` reports the genres/eras that
+  actually exist so the booking modal offers real chips (with source counts),
+  not a blank box. This is what the librarian's extracted metadata is FOR.
+  New: GET /api/crate_facets; gate test_source_filter_crate_digs; browser-verified
+  (Hip-Hop chip → source_filter posted → pool 5→2).
+- BOOKING FIX + MODAL: booking a resident now compiles THAT resident (taste_profile
+  was hardcoded girl_talk_v1, set only after the confirm — so Troubadour said
+  girl_talk and spewed dead two-world jargon). Replaced the browser confirm with a
+  persona-aware in-app modal: name + contract + real knobs (length / energy /
+  vocals / flavor). Browser-verified: booking Troubadour posts troubadour_v1.
+- STATION BAR: killed the second 'play triangle' (the amber compile button looked
+  identical to the audio player's ▶); Book is now a labelled '✦ Book a set' pill.
+  Windows render paths showed raw C:\Users\… because the basename split only
+  handled '/'; now shows the filename.
 - CI FIX (segfault): gate suite crashed (exit 139) on the runner inside
   test_personas_coexist_and_adopt — it spawned a fork-based ProcessPool with
   librosa/numba already imported, and fork() over live OpenBLAS threads segfaults

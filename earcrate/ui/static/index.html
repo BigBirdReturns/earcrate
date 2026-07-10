@@ -230,6 +230,8 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 .kseg{display:flex;gap:6px}
 .kseg button{flex:1;background:var(--ksur2);border:1px solid var(--kedge);color:var(--kdim);border-radius:10px;padding:8px 4px;font:600 12.5px var(--sans);cursor:pointer}
 .kseg button.on{background:var(--kacc);border-color:var(--kacc);color:var(--kaccink)}
+.kgchip{background:var(--ksur2);border:1px solid var(--kedge);color:var(--kdim);border-radius:16px;padding:5px 12px;font:600 12px var(--sans);cursor:pointer}
+.kgchip.on{background:var(--kcool);border-color:var(--kcool);color:var(--kbg)}
 .kmodalfoot{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 </style></head><body><header style="display:none">
 <div class="brand" title="earcrate __ENGINE_VERSION__" aria-label="earcrate __ENGINE_VERSION__"><span class="mk">EAR<b>CRATE</b></span><span class="ver">__ENGINE_VERSION__ · Runtime ledger</span></div>
@@ -319,6 +321,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <div class="kfield"><label>Length</label><div class="kseg" id="bkLen"><button data-v="60">1 min</button><button data-v="120" class="on">2 min</button><button data-v="180">3 min</button><button data-v="300">5 min</button></div></div>
 <div class="kfield"><label>Energy</label><div class="kseg" id="bkEnergy"><button data-v="chill">Chill</button><button data-v="steady" class="on">Steady</button><button data-v="wild">Wild</button></div></div>
 <div class="kfield"><label>Vocals</label><div class="kseg" id="bkVocals"><button data-v="instrumental">Instrumental</button><button data-v="balanced" class="on">Balanced</button><button data-v="hooky">Hooky</button></div></div>
+<div class="kfield" id="bkFlavorField" style="display:none"><label>Flavor <span style="text-transform:none;letter-spacing:0;color:var(--kfaint);font-weight:400">— crate-dig, don't grab the whole pool</span></label><div id="bkGenres" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
 <div class="kcontract" id="bkReady"></div>
 <div class="kmodalfoot"><button class="kbtn" onclick="closeBooking()">Cancel</button><button class="kbookbtn" onclick="doBooking()">&#9654; Book it</button></div>
 </div></div>
@@ -384,7 +387,15 @@ function openBooking(){const pid=window.__stationProfile||'girl_talk_v1';const r
  document.getElementById('bkContract').textContent=r?(r.contract||''):'';
  const e=(r&&r.endless)||{};document.getElementById('bkReady').textContent=r?((r.ready?'Ready to play. ':(r.never_auditioned?'First time: this ear-crates your library (watch Activity). ':''))+(e.no_repeat_seconds?('Endless for '+kmmss(e.no_repeat_seconds)+' before a source recurs.'):'')):'';
  ['bkLen','bkEnergy','bkVocals'].forEach(id=>{const el=document.getElementById(id);if(!el.__wired){el.__wired=1;el.onclick=ev=>{if(ev.target.dataset.v)[...el.children].forEach(b=>b.classList.toggle('on',b===ev.target))}}});
- document.getElementById('bookModal').classList.add('on')}
+ document.getElementById('bookModal').classList.add('on');
+ window.__bkGenre=''; const ff=document.getElementById('bkFlavorField'), gc=document.getElementById('bkGenres');
+ ff.style.display='none'; gc.innerHTML='';
+ api('/api/crate_facets?taste_profile='+encodeURIComponent(pid)).then(function(fac){
+   const gs=(fac&&fac.genres)||[]; if(!gs.length)return;
+   ff.style.display='';
+   gc.innerHTML='<button class="kgchip on" data-g="">Whole crate</button>'+gs.map(function(x){return '<button class="kgchip" data-g="'+esc(x.genre)+'">'+esc(x.genre)+' <span style="opacity:.6">'+x.sources+'</span></button>'}).join('');
+   gc.onclick=function(ev){const b=ev.target.closest('.kgchip'); if(!b)return; [...gc.children].forEach(c=>c.classList.toggle('on',c===b)); window.__bkGenre=b.dataset.g||''};
+ }).catch(function(){});}
 function closeBooking(){document.getElementById('bookModal').classList.remove('on')}
 async function doBooking(){const pid=window.__stationProfile||'girl_talk_v1';
  const energy=ksegVal('bkEnergy'),vocals=ksegVal('bkVocals'),len=+(ksegVal('bkLen')||120);
@@ -393,6 +404,7 @@ async function doBooking(){const pid=window.__stationProfile||'girl_talk_v1';
  const p={taste_profile:pid,tastespec:true,name:'EarCrate Sketch',target_seconds:len,track_budget:240,
    chaos:em[0],drama:em[1],genre_whiplash:em[2],vocal_density:vd,recognizability_bias:85,
    key_strictness:66,pitch_shift_budget:2,stretch_budget:8,anchor_stability:60,bpm:0,candidate_count:64};
+ if(window.__bkGenre){p.source_filter={genre:window.__bkGenre}}
  closeBooking(); const rn=((window.__residents||[]).find(x=>x.id===pid)||{}).name||pid;
  document.getElementById('jamOut').textContent='Booking '+rn+'\u2026\n'+JSON.stringify(p,null,2);
  try{const j=await post('/api/one_click_bg',p);window.__oneClickPending=true;toast('Booking '+rn+' \u2014 watch Activity');tab('activity')}catch(e){toast('Booking failed: '+e.message)}}

@@ -342,6 +342,27 @@ def test_endless_math_is_exact():
     assert "endless" in a and a["endless"]["no_repeat_seconds"] > 0
 
 
+
+def test_source_filter_crate_digs():
+    """The jam must crate-dig by the librarian's metadata, not grab the whole
+    pool: a genre/era filter narrows what the composer draws from, and a facet
+    scan reports only genres that actually exist."""
+    from earcrate.app import apply_source_filter
+    pool = [
+        {"atom_id": "a1", "genre": "Hip-Hop", "year": "2001", "title": "x", "path": "/a"},
+        {"atom_id": "a2", "genre": "Indie Rock", "year": "2014", "title": "y", "path": "/b"},
+        {"atom_id": "a3", "genre": "hip-hop/rap", "year": "1998", "title": "z", "path": "/c"},
+        {"atom_id": "a4", "genre": "", "year": "", "title": "w", "path": "/d"},
+    ]
+    assert len(apply_source_filter(pool, None)) == 4  # no filter = whole crate
+    hop = apply_source_filter(pool, {"genre": "hip-hop"})
+    assert {x["atom_id"] for x in hop} == {"a1", "a3"}, hop  # substring, case-insensitive
+    era = apply_source_filter(pool, {"era_from": 2000, "era_to": 2010})
+    assert {x["atom_id"] for x in era} == {"a1"}, era  # only 2001 in-window
+    both = apply_source_filter(pool, {"genre": "hip-hop", "era_from": 1990, "era_to": 1999})
+    assert {x["atom_id"] for x in both} == {"a3"}, both
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):

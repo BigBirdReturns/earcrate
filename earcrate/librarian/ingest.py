@@ -216,11 +216,31 @@ def execute_ingest_copy(self, op: Dict[str, Any]) -> Dict[str, Any]:
     return {"type": "ingest_copy", "path": str(dst), "src": str(src), "sha256": got}
 
 
+NAME_PATTERNS = {
+    "nn-title": "{nn}{title}",                    # 01 Song.mp3 (artist lives in the folder)
+    "artist-title": "{artist} - {title}",         # Artist - Song.mp3
+    "nn-artist-title": "{nn}{artist} - {title}",  # 01 Artist - Song.mp3
+    "title": "{title}",                           # Song.mp3
+}
+
+
+def _organized_filename(ident: Dict[str, Any], pattern: str, compilation: bool) -> str:
+    nn = f"{ident['track']:02d} " if ident.get("track") else ""
+    if compilation:
+        # compilations always carry the track artist, or the folder is meaningless
+        return f"{nn}{safe_name(ident['track_artist'])} - {safe_name(ident['title'])}"
+    tpl = NAME_PATTERNS.get(pattern, NAME_PATTERNS["nn-title"])
+    return tpl.format(nn=nn, artist=safe_name(ident["track_artist"]), title=safe_name(ident["title"]))
+
+
 def organize_and_retag(self, data: Dict[str, Any]) -> Dict[str, Any]:
-    """Build working/organized/Artist/Album/NN Title.ext copies with amended tags.
-    Master files stay verbatim (spec: copy-then-edit); manifest-gated, dry-run default."""
+    """Build working/organized/Artist/Album/<pattern>.ext copies with amended tags.
+    Master files stay verbatim (spec: copy-then-edit); manifest-gated, dry-run default.
+    Idempotent: a destination that already exists is skipped, so re-running organize
+    never duplicates the tree."""
     c = self.ensure_config()
     apply = bool(data.get("apply"))
+    pattern = str(data.get("pattern") or "nn-title")
     limit = int(data.get("limit") or 0)
     db = self.conn()
     rows = db.execute("SELECT id, path FROM files WHERE root='master' ORDER BY path" + (f" LIMIT {limit}" if limit > 0 else "")).fetchall()
@@ -243,20 +263,28 @@ def organize_and_retag(self, data: Dict[str, Any]) -> Dict[str, Any]:
         if ident["album"].lower() != "unknown album":
             album_artists.setdefault(ident["album"].lower(), set()).add(ident["track_artist"].lower())
     comp_albums = {a for a, artists in album_artists.items() if len(artists) >= 2}
+    already_organized = 0
     for p, tags, ident in derived:
         if ident["album"].lower() in comp_albums:
             ident["compilation"] = True
+        fn = _organized_filename(ident, pattern, ident["compilation"]) + p.suffix.lower()
         if ident["compilation"]:
             # Compilations stay together: Various Artists/Album/NN Track Artist - Title
-            fn = (f"{ident['track']:02d} " if ident["track"] else "") + safe_name(ident["track_artist"]) + " - " + safe_name(ident["title"]) + p.suffix.lower()
             dst = c.working_root / "organized" / "Various Artists" / safe_name(ident["album"]) / fn
         else:
-            fn = (f"{ident['track']:02d} " if ident["track"] else "") + safe_name(ident["title"]) + p.suffix.lower()
             dst = c.working_root / "organized" / safe_name(ident["artist"]) / safe_name(ident["album"]) / fn
+        # Idempotency: an existing destination means this file was organized on a
+        # previous run — skip it, never stack ' (2) (3)' suffixes. The numeric bump
+        # exists ONLY for two different files in THIS plan mapping to the same name,
+        # and it always derives from the base name so suffixes cannot accrete.
+        base = dst
         n = 2
-        while str(dst) in taken or dst.exists():
-            dst = dst.with_name(dst.stem + f" ({n})" + dst.suffix)
+        while str(dst) in taken:
+            dst = base.with_name(f"{base.stem} ({n}){base.suffix}")
             n += 1
+        if dst.exists():
+            already_organized += 1
+            continue
         taken.add(str(dst))
         amend = {"artist": ident["track_artist"], "albumartist": ("Various Artists" if ident["compilation"] else ident["artist"]), "album": ident["album"], "title": ident["title"]}
         if ident["track"]:
@@ -269,9 +297,14 @@ def organize_and_retag(self, data: Dict[str, Any]) -> Dict[str, Any]:
         routed = "Various Artists" if ident["compilation"] else ident["artist"]
         planned_tree.setdefault(routed, {}).setdefault(ident["album"], 0)
         planned_tree[routed][ident["album"]] += 1
+    org_root = c.working_root / "organized"
+    if not ops:
+        return {"ok": True, "planned": 0, "already_organized": already_organized,
+                "artists": 0, "albums": 0, "pattern": pattern, "output_root": str(org_root),
+                "samples": [], "tree_preview": {}, "manifest": None, "dry_run": not apply,
+                "message": f"nothing to do: {already_organized} track(s) already organized"}
     manifest = self.write_manifest("librarian", c.seed, f"Organize+retag {len(ops)} tracks into Artist/Album tree", ops)
     result = self.execute_manifest(manifest, apply=apply)
-    org_root = c.working_root / "organized"
     samples = []
     for op in ops[:8]:
         try:
@@ -279,9 +312,9 @@ def organize_and_retag(self, data: Dict[str, Any]) -> Dict[str, Any]:
                             "to": str(Path(op["args"]["dst"]).relative_to(org_root))})
         except Exception:
             pass
-    return {"ok": True, "planned": len(ops), "artists": len(planned_tree),
-            "albums": sum(len(v) for v in planned_tree.values()),
-            "output_root": str(org_root), "samples": samples,
+    return {"ok": True, "planned": len(ops), "already_organized": already_organized,
+            "artists": len(planned_tree), "albums": sum(len(v) for v in planned_tree.values()),
+            "pattern": pattern, "output_root": str(org_root), "samples": samples,
             "tree_preview": {a: v for a, v in list(planned_tree.items())[:12]},
             "manifest": manifest, "dry_run": not apply, "result": result}
 

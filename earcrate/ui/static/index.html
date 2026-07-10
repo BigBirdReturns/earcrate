@@ -336,7 +336,7 @@ function fmtReceipt(j,apply,kind){if(!j||j.ok===false)return JSON.stringify(j,nu
  if(kind==='ingest'){L.push((apply?'DONE: ':'PLAN ONLY (nothing written yet \u2014 hit APPLY to do it): ')+(j.planned||0)+' file(s) '+(apply?'copied in':'would be copied')+(j.skipped_duplicates?(' \u00b7 '+j.skipped_duplicates+' duplicate(s) skipped'):'')+(j.hashed_for_dedupe!==undefined?(' \u00b7 only '+j.hashed_for_dedupe+' needed hashing'):''));
   if(j.output_root)L.push('WHERE: '+j.output_root); if(j.message)L.push(j.message);
   L.push('Next: ORGANIZE builds the clean Artist/Album archive from these.');}
- else{L.push((apply?'DONE: ':'PLAN ONLY (nothing written yet \u2014 hit APPLY to do it): ')+(j.planned||0)+' track(s) \u2192 '+(j.artists||0)+' artist(s) / '+(j.albums||0)+' album(s)');
+ else{L.push((apply?'DONE: ':'PLAN ONLY (nothing written yet \u2014 hit APPLY to do it): ')+(j.planned||0)+' track(s) \u2192 '+(j.artists||0)+' artist(s) / '+(j.albums||0)+' album(s)'+(j.already_organized?(' \u00b7 '+j.already_organized+' already organized, skipped'):''));if(j.message)L.push(j.message);
   if(j.output_root)L.push('YOUR ARCHIVE (open this in Explorer): '+j.output_root);
   if((j.samples||[]).length){L.push('','What it did, first few:');(j.samples||[]).forEach(s2=>L.push('  '+s2.from+'\n      \u2192 '+s2.to));}}
  return L.join('\n')+'\n\n--- full receipt ---\n'+JSON.stringify(j,null,2)}

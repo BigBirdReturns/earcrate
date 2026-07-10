@@ -1,6 +1,12 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.4 — Persona Codex (unreleased)
+- FIX: organize is now idempotent — an existing destination means the track was
+  organized on a previous run and is skipped (receipt reports the count);
+  re-running can never duplicate the tree, and numeric collision suffixes derive
+  from the base name so ' (2) (3)' accretion is impossible. Naming stays the
+  canonical convention (Artist/Album/NN Title; compilations NN Artist - Title);
+  an API-level pattern hook exists for scripts, no UI knob.
 - PROOF OF WORK: ingest/organize now end with a human receipt — what happened,
   WHERE the files landed (open-in-Explorer path), and before→after samples —
   instead of a raw JSON wall; toasts on completion. Analysis status now shows

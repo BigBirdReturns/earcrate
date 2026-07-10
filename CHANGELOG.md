@@ -1,6 +1,10 @@
 # Jukebreaker GT — CHANGELOG
 
-## v0.7.4 — Persona Codex (unreleased)
+## v0.7.5 — Persona Codex + craft ranking
+- VERSION: bumped so the header visibly changes on update (it stayed "v0.7.4"
+  across every fix, which made "did the update land?" unanswerable). Going
+  forward the version moves every shipped batch; the `· build <hash>` stamp
+  still disambiguates within a version.
 - RANKING: the persona now ranks raw material the way the artist reaches for it,
   not just gates it. `rank_material` (five weighted priorities: recognizability
   0.34, role clarity 0.24, danceability 0.18, deck feasibility 0.14, contrast

@@ -1,5 +1,18 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.8.3 — the continuous player: a resident actually plays endless
+- THE 45-MINUTE CLAIM IS NOW REAL. An "Endless" transport plays the crate
+  continuously: it builds a shuffled queue of passing current-engine renders,
+  auto-advances on each track's `ended`, and reshuffles when the queue is
+  exhausted (avoiding an immediate repeat) — genuinely endless, not a single
+  sketch. `?endless=1` on the URL auto-starts it so one link just plays.
+- VERIFIED headless (Playwright/Chromium): from a seeded 10-render crate the
+  player started a full queue, auto-advanced through 13 track-endings, wrapped
+  past the queue and kept going (still endless), played multiple distinct
+  tracks, zero page errors. Autoplay in a real browser still needs one click
+  (browser policy); the queue is armed on load either way.
+- Verified: 14/14 gates + singlefile `SELF_TEST_OK`.
+
 ## v0.8.2 — honest player transport + Cast to TV
 - STOP ADVERTISING A PLAYER THAT DID NOT EXIST. The station `▶` used to call
   `oneClickJam()` — it started a long background compile, not playback — while

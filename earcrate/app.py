@@ -4,6 +4,56 @@ from earcrate.analyze.features import *
 from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_likelihood, _estimate_sections
 from earcrate.deck.transform import _artifact_cost
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
+
+
+def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
+    """Measure every loop of ONE file (decode once, DSP per segment) in a worker
+    process. Metrics are persona-independent; classification uses the same
+    thresholds the serial path used. DB writes stay in the parent."""
+    out: Dict[str, Any] = {"path": job["path"], "results": [], "error": None}
+    sr = int(job["sample_rate"])
+    try:
+        y = decode_audio(Path(job["path"]), sr)
+    except Exception as exc:
+        out["error"] = str(exc)[:300]
+        return out
+    for lp in job["loops"]:
+        try:
+            a = max(0, int(float(lp["start_s"]) * sr))
+            b = min(y.size, int(float(lp["end_s"]) * sr))
+            seg = y[a:b].astype(np.float32, copy=False)
+            metrics = EarcrateCore.ear_atom_metrics(None, seg, sr, int(lp["bars"] or 1), float(lp["vocal_likelihood"] or 0.0), str(lp["role"] or "full"))
+            ear_role = EarcrateCore.ear_role_from_metrics(None, str(lp["role"] or "full"), int(lp["bars"] or 1), metrics)
+            render_role = EAR_TO_RENDER_ROLE.get(ear_role, str(lp["role"] or "full"))
+            status = classify_atom_status(ear_role, metrics)
+            preview_path = None
+            if job.get("write_previews") and status != "rejected" and seg.size > 512:
+                preview = apply_edge_fades(normalize_layer_rms(seg.copy(), render_role), sr, True, True, 20)
+                preview = integrated_lufs_normalize(preview, sr, -16.0)
+                fname = f"{safe_name(str(lp.get('artist') or 'unknown'))}-{safe_name(str(lp.get('title') or 'track'))}-{ear_role}-{str(lp['id'])[:8]}.wav"
+                pp = Path(job["preview_dir"]) / fname
+                sf.write(str(pp), preview[:min(preview.size, sr * 12)], sr, subtype="PCM_16")
+                preview_path = str(pp)
+            out["results"].append({"loop_id": lp["id"], "metrics": metrics, "ear_role": ear_role,
+                                   "render_role": render_role, "status": status, "preview_path": preview_path})
+        except Exception as exc:
+            out["results"].append({"loop_id": lp["id"], "error": str(exc)[:300]})
+    return out
+
+
+def classify_atom_status(ear_role: str, metrics: Dict[str, float]) -> str:
+    """Persona-facing approval thresholds (unchanged values from the serial pass)."""
+    min_score = 0.46
+    if ear_role in {"VOX_HOOK", "VOX_VERSE"}:
+        min_score = 0.50
+    elif ear_role in {"DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "RIFF_ID"}:
+        min_score = 0.48
+    sc = float(metrics.get("score") or 0.0)
+    if sc < 0.30:
+        return "rejected"
+    return "approved" if sc >= min_score else "candidate"
+
+
 class EarcrateCore:
     def __init__(self):
         self.state_dir = app_state_dir()
@@ -478,12 +528,52 @@ class EarcrateCore:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA foreign_keys=ON")
         self.create_schema()
+        self.migrate_ear_atoms_per_profile()
 
     def conn(self) -> sqlite3.Connection:
         if self.db is None:
             self.connect_db()
         assert self.db is not None
         return self.db
+
+    def migrate_ear_atoms_per_profile(self) -> None:
+        """v0.7.8: ear_atoms had UNIQUE(loop_id) — one atom per loop GLOBALLY —
+        which made personas mutually destructive (building resident B's crate
+        overwrote or orphaned resident A's). Rebuild the table with
+        UNIQUE(loop_id, taste_profile). Existing rows carry over verbatim."""
+        db = self.db
+        row = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='ear_atoms'").fetchone()
+        if not row or "UNIQUE(loop_id, taste_profile)" in (row["sql"] or ""):
+            return
+        db.executescript("""
+            BEGIN;
+            CREATE TABLE ear_atoms_v2(
+              id TEXT PRIMARY KEY,
+              loop_id TEXT REFERENCES loops(id) ON DELETE CASCADE,
+              file_id TEXT REFERENCES files(id) ON DELETE CASCADE,
+              taste_profile TEXT NOT NULL DEFAULT 'girl_talk_v1',
+              ear_role TEXT NOT NULL,
+              render_role TEXT NOT NULL,
+              start_s REAL NOT NULL, end_s REAL NOT NULL, bars INTEGER NOT NULL,
+              bpm REAL, key_root INTEGER,
+              score REAL NOT NULL,
+              hook_score REAL DEFAULT 0, bed_score REAL DEFAULT 0,
+              floor_score REAL DEFAULT 0, bass_score REAL DEFAULT 0, spark_score REAL DEFAULT 0,
+              intelligibility REAL DEFAULT 0,
+              low_share REAL DEFAULT 0, mid_share REAL DEFAULT 0, high_share REAL DEFAULT 0,
+              loopability REAL DEFAULT 0, transient_density REAL DEFAULT 0,
+              phrase_position TEXT DEFAULT 'downbeat',
+              status TEXT CHECK(status IN ('candidate','approved','rejected')) DEFAULT 'candidate',
+              preview_path TEXT,
+              metrics_json TEXT NOT NULL DEFAULT '{}',
+              created_at TEXT NOT NULL,
+              UNIQUE(loop_id, taste_profile)
+            );
+            INSERT INTO ear_atoms_v2 SELECT * FROM ear_atoms;
+            DROP TABLE ear_atoms;
+            ALTER TABLE ear_atoms_v2 RENAME TO ear_atoms;
+            COMMIT;
+        """)
 
     def create_schema(self) -> None:
         db = self.conn()
@@ -554,7 +644,7 @@ class EarcrateCore:
             );
             CREATE TABLE IF NOT EXISTS ear_atoms(
               id TEXT PRIMARY KEY,
-              loop_id TEXT UNIQUE REFERENCES loops(id) ON DELETE CASCADE,
+              loop_id TEXT REFERENCES loops(id) ON DELETE CASCADE,
               file_id TEXT REFERENCES files(id) ON DELETE CASCADE,
               taste_profile TEXT NOT NULL DEFAULT 'girl_talk_v1',
               ear_role TEXT NOT NULL,
@@ -571,7 +661,8 @@ class EarcrateCore:
               status TEXT CHECK(status IN ('candidate','approved','rejected')) DEFAULT 'candidate',
               preview_path TEXT,
               metrics_json TEXT NOT NULL DEFAULT '{}',
-              created_at TEXT NOT NULL
+              created_at TEXT NOT NULL,
+              UNIQUE(loop_id, taste_profile)
             );
             CREATE TABLE IF NOT EXISTS compatibility_edges(
               id TEXT PRIMARY KEY,
@@ -1776,10 +1867,9 @@ class EarcrateCore:
         c = self.ensure_config()
         db = self.conn()
         self.set_status("TasteSpec: building ear crate", 0.0, True, None)
-        if force:
-            db.execute("DELETE FROM compatibility_edges WHERE taste_profile=?", (taste_profile,))
-            db.execute("DELETE FROM ear_atoms WHERE taste_profile=?", (taste_profile,))
-            db.commit()
+        _t_crate = time.perf_counter()
+        # force now means RE-MEASURE IN PLACE, never delete: atom identity is
+        # stable, so pair judgments and locked human calls survive every rebuild.
         _incr = "" if force else "AND l.id NOT IN (SELECT loop_id FROM ear_atoms WHERE taste_profile=?)"
         _args = ([taste_profile] if not force else []) + [limit if limit and limit > 0 else 1000000000]
         rows = db.execute(
@@ -1793,69 +1883,126 @@ class EarcrateCore:
                ) ORDER BY path""",
             tuple(_args),
         ).fetchall()
-        audio_cache: Dict[str, np.ndarray] = {}
         preview_dir = c.working_root / "ear_crate" / "previews"
         if write_previews:
             preview_dir.mkdir(parents=True, exist_ok=True)
-        inserted = 0; updated = 0; rejected = 0; failed: List[Dict[str, str]] = []
+        inserted = 0; updated = 0; rejected = 0; adopted = 0; failed: List[Dict[str, str]] = []
         counts: Dict[str, int] = {r: 0 for r in EAR_ROLE_ORDER}
+        locked_ids = {row["atom_id"] for row in db.execute(
+            "SELECT atom_id FROM atom_judgments WHERE taste_profile=? AND locked=1", (taste_profile,)).fetchall()}
+
+        def _upsert_atom(lr, metrics: Dict[str, Any], ear_role: str, render_role: str, status: str, preview_path):
+            nonlocal inserted, updated, rejected
+            existing = db.execute("SELECT id, ear_role, status FROM ear_atoms WHERE loop_id=? AND taste_profile=?",
+                                  (lr["id"], taste_profile)).fetchone()
+            aid = existing["id"] if existing else ("atm_" + sha256_text(f"{lr['id']}|{taste_profile}")[:20])
+            if existing and existing["id"] in locked_ids:
+                # a human locked this call; re-measurement must not overturn it
+                ear_role, status = existing["ear_role"], existing["status"]
+            if status == "rejected":
+                rejected += 1
+            values = (aid, lr["id"], lr["file_id"], taste_profile, ear_role, render_role,
+                      float(lr["start_s"]), float(lr["end_s"]), int(lr["bars"] or 1),
+                      float(lr["bpm"] or 0.0), int(lr["key_root"] or 0),
+                      float(metrics.get("score") or 0.0), float(metrics.get("hook_score") or 0.0),
+                      float(metrics.get("bed_score") or 0.0), float(metrics.get("floor_score") or 0.0),
+                      float(metrics.get("bass_score") or 0.0), float(metrics.get("spark_score") or 0.0),
+                      float(metrics.get("intelligibility") or 0.0), float(metrics.get("low_share") or 0.0),
+                      float(metrics.get("mid_share") or 0.0), float(metrics.get("high_share") or 0.0),
+                      float(metrics.get("loopability") or 0.0), float(metrics.get("transient_density") or 0.0),
+                      "downbeat", status, preview_path, json.dumps(metrics, ensure_ascii=False), now_utc())
+            db.execute(
+                """INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,bpm,key_root,score,hook_score,bed_score,floor_score,bass_score,spark_score,intelligibility,low_share,mid_share,high_share,loopability,transient_density,phrase_position,status,preview_path,metrics_json,created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(loop_id,taste_profile) DO UPDATE SET ear_role=excluded.ear_role,render_role=excluded.render_role,score=excluded.score,hook_score=excluded.hook_score,bed_score=excluded.bed_score,floor_score=excluded.floor_score,bass_score=excluded.bass_score,spark_score=excluded.spark_score,intelligibility=excluded.intelligibility,low_share=excluded.low_share,mid_share=excluded.mid_share,high_share=excluded.high_share,loopability=excluded.loopability,transient_density=excluded.transient_density,status=excluded.status,preview_path=excluded.preview_path,metrics_json=excluded.metrics_json,created_at=excluded.created_at""",
+                values)
+            if existing:
+                updated += 1
+            else:
+                inserted += 1
+            if status == "approved":
+                counts[ear_role] = counts.get(ear_role, 0) + 1
+
+        # ---- Phase A: ADOPT — metrics are persona-independent, so any other
+        # resident's measurement of the same loop is reused verbatim. A second
+        # resident auditions a big library in seconds, not hours. ----
+        need_dsp: List[Any] = []
         for idx, r in enumerate(rows):
-            try:
-                existing = db.execute("SELECT id FROM ear_atoms WHERE loop_id=? AND taste_profile=?", (r["id"], taste_profile)).fetchone()
-                if existing and not force:
+            donor = db.execute(
+                "SELECT metrics_json, ear_role, render_role, preview_path FROM ear_atoms WHERE loop_id=? AND taste_profile!=? LIMIT 1",
+                (r["id"], taste_profile)).fetchone()
+            metrics = None
+            if donor:
+                try:
+                    metrics = json.loads(donor["metrics_json"] or "{}") or None
+                except Exception:
+                    metrics = None
+            if metrics:
+                status = classify_atom_status(str(donor["ear_role"]), metrics)
+                _upsert_atom(r, metrics, str(donor["ear_role"]), str(donor["render_role"]), status, donor["preview_path"])
+                adopted += 1
+                if idx % 64 == 0:
+                    db.commit()
+                    self.set_status(f"TasteSpec: adopting measured atoms {idx+1}/{len(rows)}", (idx + 1) / max(1, len(rows)) * 0.2, True)
+            else:
+                need_dsp.append(r)
+        db.commit()
+
+        # ---- Phase B: MEASURE — decode each file once and fan the DSP across
+        # cores (the same ProcessPool discipline analyze uses). ----
+        by_path: Dict[str, List[Any]] = {}
+        for r in need_dsp:
+            by_path.setdefault(str(r["path"]), []).append(r)
+        jobs = [{"path": path, "sample_rate": c.sample_rate, "write_previews": bool(write_previews),
+                 "preview_dir": str(preview_dir),
+                 "loops": [{"id": r["id"], "start_s": float(r["start_s"]), "end_s": float(r["end_s"]),
+                            "bars": int(r["bars"] or 1), "role": str(r["role"] or "full"),
+                            "vocal_likelihood": float(r["vocal_likelihood"] or 0.0),
+                            "artist": r["artist"], "title": r["title"]} for r in lst]}
+                for path, lst in by_path.items()]
+        row_by_loop = {r["id"]: r for r in need_dsp}
+        workers = self._worker_count()
+        done_files = 0
+        _t_dsp = time.perf_counter()
+
+        def _consume(res: Dict[str, Any]):
+            nonlocal done_files
+            done_files += 1
+            if res.get("error"):
+                failed.append({"loop_id": "file:" + str(res.get("path")), "error": str(res["error"])[:300]})
+            for item in res.get("results") or []:
+                lr = row_by_loop.get(item.get("loop_id"))
+                if lr is None:
                     continue
-                path = str(r["path"])
-                if path not in audio_cache:
-                    # Rows arrive grouped by path; single-entry cache. The old dict
-                    # held every decoded track for the whole pass (multi-GB PCM).
-                    audio_cache.clear()
-                    audio_cache[path] = decode_audio(Path(path), c.sample_rate)
-                y = audio_cache[path]
-                a = max(0, int(float(r["start_s"]) * c.sample_rate))
-                b = min(y.size, int(float(r["end_s"]) * c.sample_rate))
-                seg = y[a:b].astype(np.float32, copy=False)
-                metrics = self.ear_atom_metrics(seg, c.sample_rate, int(r["bars"] or 1), float(r["vocal_likelihood"] or 0.0), str(r["role"] or "full"))
-                ear_role = self.ear_role_from_metrics(str(r["role"] or "full"), int(r["bars"] or 1), metrics)
-                render_role = EAR_TO_RENDER_ROLE.get(ear_role, str(r["role"] or "full"))
-                min_score = 0.46
-                if ear_role in {"VOX_HOOK", "VOX_VERSE"}:
-                    min_score = 0.50
-                elif ear_role in {"DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "RIFF_ID"}:
-                    min_score = 0.48
-                status = "approved" if float(metrics.get("score") or 0.0) >= min_score else "candidate"
-                if float(metrics.get("score") or 0.0) < 0.30:
-                    status = "rejected"; rejected += 1
-                preview_path = None
-                if write_previews and status != "rejected" and seg.size > 512:
-                    preview = apply_edge_fades(normalize_layer_rms(seg.copy(), render_role), c.sample_rate, True, True, 20)
-                    preview = integrated_lufs_normalize(preview, c.sample_rate, -16.0)
-                    fname = f"{safe_name(str(r['artist'] or 'unknown'))}-{safe_name(str(r['title'] or 'track'))}-{ear_role}-{str(r['id'])[:8]}.wav"
-                    pp = preview_dir / fname
-                    sf.write(str(pp), preview[:min(preview.size, c.sample_rate * 12)], c.sample_rate, subtype="PCM_16")
-                    preview_path = str(pp)
-                atom_id = existing["id"] if existing else ulidish()
-                values = (atom_id, r["id"], r["file_id"], taste_profile, ear_role, render_role, float(r["start_s"]), float(r["end_s"]), int(r["bars"] or 1), float(r["bpm"] or 0.0), int(r["key_root"] or 0), float(metrics["score"]), float(metrics["hook_score"]), float(metrics["bed_score"]), float(metrics["floor_score"]), float(metrics["bass_score"]), float(metrics["spark_score"]), float(metrics["intelligibility"]), float(metrics["low_share"]), float(metrics["mid_share"]), float(metrics["high_share"]), float(metrics["loopability"]), float(metrics["transient_density"]), "downbeat", status, preview_path, json.dumps(metrics, ensure_ascii=False), now_utc())
-                db.execute(
-                    """INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,bpm,key_root,score,hook_score,bed_score,floor_score,bass_score,spark_score,intelligibility,low_share,mid_share,high_share,loopability,transient_density,phrase_position,status,preview_path,metrics_json,created_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                       ON CONFLICT(loop_id) DO UPDATE SET ear_role=excluded.ear_role,render_role=excluded.render_role,score=excluded.score,hook_score=excluded.hook_score,bed_score=excluded.bed_score,floor_score=excluded.floor_score,bass_score=excluded.bass_score,spark_score=excluded.spark_score,intelligibility=excluded.intelligibility,low_share=excluded.low_share,mid_share=excluded.mid_share,high_share=excluded.high_share,loopability=excluded.loopability,transient_density=excluded.transient_density,status=excluded.status,preview_path=excluded.preview_path,metrics_json=excluded.metrics_json,created_at=excluded.created_at""",
-                    values,
-                )
-                if existing:
-                    updated += 1
-                else:
-                    inserted += 1
-                if status == "approved":
-                    counts[ear_role] = counts.get(ear_role, 0) + 1
+                if item.get("error"):
+                    failed.append({"loop_id": str(item.get("loop_id")), "error": str(item["error"])[:300]})
+                    continue
+                _upsert_atom(lr, item["metrics"], item["ear_role"], item["render_role"], item["status"], item.get("preview_path"))
+            db.commit()
+            _left = (time.perf_counter() - _t_dsp) / max(1, done_files) * (len(jobs) - done_files)
+            self.set_status(f"TasteSpec: ear-crating file {done_files}/{len(jobs)} \u00d7{workers} cores \u00b7 ~{int(_left // 60)}m{int(_left % 60):02d}s left",
+                            0.2 + 0.8 * done_files / max(1, len(jobs)), True)
+
+        used_parallel = False
+        if jobs and workers > 1:
+            try:
+                mp = __import__("multiprocessing")
+                method = "fork" if ("fork" in mp.get_all_start_methods() and os.name != "nt") else "spawn"
+                ctx = mp.get_context(method)
+                with concurrent.futures.ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as ex:
+                    for fut in concurrent.futures.as_completed({ex.submit(ear_crate_file_worker, job): job for job in jobs}):
+                        _consume(fut.result())
+                used_parallel = True
             except Exception as exc:
-                failed.append({"loop_id": str(r["id"]), "error": str(exc)[:300]})
-            if idx % 8 == 0:
-                db.commit()
-                self.set_status(f"TasteSpec: ear-crating {idx+1}/{len(rows)}", (idx + 1) / max(1, len(rows)), True)
+                self.set_status(f"ear-crate pool unavailable ({str(exc)[:60]}); using single core", None, True)
+                done_files = 0
+        if jobs and not used_parallel:
+            for job in jobs:
+                _consume(ear_crate_file_worker(job))
         db.commit()
         approved = db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile=? AND status='approved'", (taste_profile,)).fetchone()["n"]
         self.set_status(f"TasteSpec ear crate complete: {approved} approved atoms", 1.0, False)
-        return {"ok": True, "taste_profile": taste_profile, "scanned_loops": len(rows), "inserted": inserted, "updated": updated, "approved": int(approved), "role_counts": counts, "rejected": rejected, "failed": failed[:50]}
+        return {"ok": True, "taste_profile": taste_profile, "scanned_loops": len(rows), "inserted": inserted, "updated": updated, "adopted": adopted, "parallel_files": len(jobs), "approved": int(approved), "role_counts": counts, "rejected": rejected, "failed": failed[:50]}
 
     def list_ear_atoms(self, status: str = "approved", taste_profile: str = "girl_talk_v1", limit: int = 500) -> Dict[str, Any]:
         where = "WHERE a.taste_profile=?"
@@ -4043,7 +4190,11 @@ class EarcrateCore:
                 entry["readiness_pct"] = int(round(100 * sum(ratios) / len(ratios)))
                 entry["ready"] = bool(r.get("ready"))
                 entry["endless"] = r.get("endless")
-                entry["wants"] = list(r.get("failures") or [])
+                if int(r.get("pool_size") or 0) == 0:
+                    entry["wants"] = ["hasn't auditioned your library yet \u2014 Book a set ear-crates it automatically (first time on a big library takes a while; watch the bottom bar for the count + ETA)"]
+                    entry["never_auditioned"] = True
+                else:
+                    entry["wants"] = list(r.get("failures") or [])
             except Exception as exc:
                 entry["error"] = str(exc)[:200]
             items.append(entry)

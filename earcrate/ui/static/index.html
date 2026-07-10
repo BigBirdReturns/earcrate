@@ -122,6 +122,7 @@ pre{white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:#0a0b
 display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:var(--kink);font:14px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif}
 #kapp.dark{--kbg:#131210;--ksur:#1c1a17;--ksur2:#26231e;--kedge:#33302a;--kink:#ece7db;--kdim:#a49c8c;--kfaint:#6e675a;--kacc:#eaa93e;--kaccink:#241703;--kgo:#5cc08a;--kwarn:#e8705c;--kcool:#7ba3dd}
 .kbody{flex:1;display:flex;min-height:0}
+.kside{overflow:auto}
 .kside{width:206px;flex:none;background:var(--ksur);border-right:1px solid var(--kedge);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
 @media(max-width:860px){.kside{width:56px}.kside .kw{display:none}}
 .klogo{font-weight:700;font-size:17px;padding:2px 10px 4px;color:var(--kink)}.klogo em{font-style:normal;color:var(--kacc)}
@@ -164,7 +165,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 .kbar audio{height:30px;max-width:230px}
 .knp{min-width:0;flex:1}.knp .t{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.knp .m{font-size:11px;color:var(--kfaint);white-space:nowrap}
 .ktoast{font-size:12px;color:var(--kgo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
-.kact2{display:flex;align-items:center;gap:8px;background:var(--ksur2);border:1px solid var(--kedge);border-radius:12px;padding:5px 11px;font-size:11.5px;color:var(--kdim);cursor:pointer;min-width:0}
+.kact2{display:flex;align-items:center;gap:8px;background:var(--ksur2);border:1px solid var(--kedge);border-radius:12px;padding:5px 11px;font-size:11.5px;color:var(--kdim);cursor:pointer;min-width:0}.kact2:hover{border-color:var(--kacc);color:var(--kink)}
 .kact2 .spin{width:8px;height:8px;border-radius:50%;background:var(--kacc);animation:kpulse 1.2s infinite;flex:none}
 @keyframes kpulse{50%{opacity:.25;transform:scale(.7)}}
 .kactbar{width:64px;height:5px;border-radius:4px;background:var(--kedge);overflow:hidden;flex:none}.kactbar i{display:block;height:100%;background:var(--kacc);width:0}
@@ -180,6 +181,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
    (local-first; the acceptance-page precedent). Registry:
    axm-tools/identity/axm/PROPERTY-FLAVORS.md                       */
 #kapp{
+ height:100vh; overflow:hidden;
  --bg:#0d0c09; --chassis:#131109; --panel:#161410; --panel-2:#1d1a13; --edge:#2e2a20; --edge-hi:#443d2c;
  --ink:#ece7d8; --ink-dim:#a49a86; --ink-faint:#6e675a;
  --amber:#e6a23c; --amber-dim:#9a6a17; --cyan:#7fa3c4; --cyan-dim:#54718c; --coral:#c24b2c; --green:#4e9a6f;
@@ -212,17 +214,20 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 /* ember discipline: reserved meanings only (refusals, gate failures, thin rails) */
 #kapp .kpill.ref,#kapp .kcell.alert,#kapp .pill.bad,#kapp button.danger{color:var(--coral);border-color:var(--coral)}
 #kapp .kpill.pass,#kapp .pill.ok{color:var(--kgo)}
+#kapp .toast{background:var(--ksur);color:var(--kink);border:1px solid var(--kacc);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);font-family:var(--sans)}
+#kapp .toast b{color:var(--kacc);font-family:var(--disp)}
+#kapp .toast a{color:var(--kcool)}
 </style></head><body><header style="display:none">
 <div class="brand" title="earcrate __ENGINE_VERSION__" aria-label="earcrate __ENGINE_VERSION__"><span class="mk">EAR<b>CRATE</b></span><span class="ver">__ENGINE_VERSION__ · Runtime ledger</span></div>
 <nav id="nav"></nav>
 <div class="readout"><span id="statusLed" class="led"><span class="dot"></span><span id="status" class="val">idle</span></span></div>
 </header>
-<div id="toast" class="toast"></div>
 <div id="kapp" class=""><div class="kbody"><aside class="kside">
 <div class="klogo kw">ear<em>crate</em></div><div class="kver kw" id="ksideVer"></div>
 <div class="knav" id="nav_residents" onclick="tab('residents')"><span>&#9673;</span><span class="kw">Residents</span></div>
 <div class="knav" id="nav_crate" onclick="tab('crate')"><span>&#9638;</span><span class="kw">Crate</span></div>
 <div class="knav" id="nav_sessions" onclick="tab('sessions')"><span>&#8803;</span><span class="kw">Sessions</span></div>
+<div class="knav" id="nav_activity" onclick="tab('activity')"><span id="kactdot">&#9679;</span><span class="kw">Activity</span></div>
 <div class="kssec kw">workbench</div>
 <div class="knav" id="nav_jam" onclick="tab('jam')"><span>&#9654;</span><span class="kw">Jam</span></div>
 <div class="knav" id="nav_setup" onclick="tab('setup')"><span>&#9881;</span><span class="kw">Setup</span></div>
@@ -233,7 +238,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <div class="knav" id="nav_manifests" onclick="tab('manifests')"><span>&#8801;</span><span class="kw">Manifests</span></div>
 </aside><div class="kmainwrap"><div class="ktopbar">
 <input class="ksearch" id="ksearch" placeholder="Search the crate &mdash; try bpm:104-118 role:vocal" oninput="searchCrate(this.value)">
-<div class="krwidget" onclick="tab('crate')" title="Crate readiness for the selected resident"><div class="krlab"><span id="krwName">readiness</span><b id="krwPct">&ndash;</b></div><div class="kgauge"><i id="krwBar" style="width:0%"></i></div></div>
+<div class="krwidget" onclick="tab('crate')" title="CRATE FIT is a measurement, not a progress bar: how much of this resident's contract your crate can satisfy right now. Live task progress lives in the bottom bar."><div class="krlab"><span id="krwName">crate fit</span><b id="krwPct">&ndash;</b></div><div class="kgauge"><i id="krwBar" style="width:0%"></i></div></div>
 <button class="kiconbtn" id="kthemeBtn" onclick="ktheme()" title="Light / dark">&#9789;</button>
 </div>
 <main>
@@ -262,6 +267,23 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <details class="advanced"><summary>Advanced arranger controls (legacy Mashup surface)</summary><div class="card"><h2>Outcome Controls</h2><p class="muted">This is the inspectable control surface for the continuum compiler. Jam Now mirrors these values; the JSON preview shows exactly what will be sent to the arranger.</p><label>Name</label><input id="m_name" value="EarCrate Sketch"><div class="controlGrid"><div><label>Mode / mix outcome</label><select id="m_preset" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="album_collision" selected>Album Collision: two-world continuum</option><option value="notorious_mode">Notorious Mode: voice-over-bed bootleg album</option><option value="party_cutup">Party cut-up: fast hooks and genre jumps</option><option value="hook_ride">Hook ride: vocals up front, groove survives</option><option value="clean_blend">Clean blend: safer key and smoother edits</option><option value="max_chaos">Max chaos: dumb fun, fewer guardrails</option></select><label>Target length</label><select id="m_seconds" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="60">1 minute sketch</option><option value="120" selected>2 minute sketch</option><option value="180">3 minute sketch</option><option value="300">5 minute sketch</option></select></div><div><label>Edit speed</label><select id="m_edit_speed" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="steady">Steady: longer blends</option><option value="active" selected>Active: frequent swaps</option><option value="hypercut">Hypercut: 2 to 4 bar edits</option></select><label>Vocal hooks</label><select id="m_hooks" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="sparse">Sparse: mostly instrumental</option><option value="balanced">Balanced: hooks when useful</option><option value="hooky" selected>Hooky: recognizable vocals high</option></select></div><div><label>Genre jump</label><select id="m_genre_jump" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="smooth">Smooth: adjacent material</option><option value="mixed">Mixed: contrast with restraint</option><option value="whiplash" selected>Whiplash: sharp genre pivots</option></select><label>Beat/key safety</label><select id="m_safety" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="tight">Tight: safer, fewer clashes</option><option value="loose" selected>Loose: harmonic DJ stretch</option><option value="wild">Wild: permit uglier collisions</option></select></div><div><label>Groove backbone</label><select id="m_backbone" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="locked">Locked: one beat rides longer</option><option value="survive">Survive: beds persist through ticks</option><option value="restless" selected>Restless: beat can flip, grid stays locked</option></select><label>Render BPM</label><input id="m_bpm" value="" placeholder="blank = strongest tempo island" oninput="mirrorMashupToJam();updateOutcomePreview()"></div></div><button class="action" onclick="compileContinuum()">COMPILE CONTINUUM PLAN</button><button class="action" onclick="proposeMashup()">Propose arrangement manifest</button><button class="action bigJam" onclick="oneClickJam()">MAKE AND RENDER NOW</button><details class="advanced"><summary>Show low-level arranger numbers</summary><pre id="mashupMath"></pre></details><pre id="mashupOut"></pre></div></details></section>
 <section id="manifests"><div class="card"><h2>Manifests</h2><button class="action" onclick="refreshManifests()">Refresh</button><p class="muted">Execution is explicit. This is the manifest gate. Use EXECUTE NOW if you want the browser to wait and print the final render result. Use EXECUTE BG if you want it to run while the status bar updates.</p><pre id="manifestOut"></pre></div><div class="card"><table id="manifestTable"></table></div></section>
 
+
+<section id="activity"><div class="kh1">Activity</div>
+<p class="ksub">What the engine is doing right now, with the honest arithmetic: measured throughput &rarr; time remaining. Long stages are one-time costs &mdash; results are cached per file and per resident.</p>
+<div class="kcard" style="max-width:760px">
+<div class="kcolh"><span>current task</span><span id="actBusyPill"></span></div>
+<div id="actMsg" style="font-family:var(--disp);font-size:21px;margin:2px 0 10px">idle</div>
+<div class="kgauge" style="height:10px"><i id="actBar" style="width:0%"></i></div>
+<div style="display:flex;gap:26px;margin-top:12px;font-family:var(--mono);font-size:13px">
+<div><div class="kcolh"><span>progress</span></div><div id="actPct" style="font-size:20px">&ndash;</div></div>
+<div><div class="kcolh"><span>time left</span></div><div id="actEta" style="font-size:20px">&ndash;</div></div>
+<div><div class="kcolh"><span>elapsed</span></div><div id="actElapsed" style="font-size:20px">&ndash;</div></div>
+</div>
+<div id="actErr" style="margin-top:10px;color:var(--coral);font-family:var(--mono);font-size:12.5px"></div>
+</div>
+<div class="kssec" style="padding-left:0">Stages this run</div>
+<div class="kcard" style="max-width:760px"><pre id="actStages" style="margin:0;border:none;background:transparent">No timed run yet.</pre></div>
+</section>
 <section id="residents"><div class="kh1">Residents</div>
 <p class="ksub">Each resident is a taste contract, not a preset. It knows what it can honestly play from your crate tonight &mdash; and exactly what it's missing.</p>
 <div class="kcards" id="residentCards">Loading residents&hellip;</div>
@@ -276,6 +298,7 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <div id="sessionList">Loading sessions&hellip;</div>
 <div class="card"><b>Latest render:</b> <span class="muted">latest render dock</span><div class="playerBox"><a id="renderLink" href="#" target="_blank" rel="noopener">open audio link</a><button onclick="copyRenderPath()">copy file path</button><button onclick="openRenderFolder()">open folder</button><button onclick="refreshRenders(false)">refresh renders</button></div><p id="playerPath" class="small muted"></p><div id="renderList" class="renderList small muted"></div></div></section>
 </main></div></div>
+<div id="toast" class="toast"></div>
 <div class="kbar"><button class="kbtn p" onclick="oneClickJam()" title="Book a set with the selected resident">&#9654;</button>
 <audio id="renderPlayer" controls preload="metadata"></audio>
 <div class="knp"><div class="t" id="playerName">none yet</div><div class="m" id="kNpMeta">press &#9654; to book a set</div></div>
@@ -283,20 +306,43 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <button class="kbtn" onclick="station('fire')" title="More like this">&#128293;</button>
 <button class="kbtn" onclick="station('ice')" title="Cool it down">&#129482;</button>
 <span class="ktoast khidep" id="ktoastline"></span>
-<div class="kact2" onclick="kmode()" title="Click to switch gentle / full send"><span class="spin"></span><span class="nowrap" id="kact_text">idle</span><span class="kactbar"><i id="kact_bar"></i></span><span class="nowrap" id="kact_mode"></span></div>
+<div class="kact2" onclick="kmode()" title="Engine activity + performance. Click to switch: GENTLE uses a few cores (keep using your PC), FULL SEND uses all cores (fastest, laptop becomes a jet engine)."><span class="spin"></span><span class="nowrap" id="kact_text">idle</span><span class="kactbar"><i id="kact_bar"></i></span><span class="nowrap" id="kact_mode"></span></div>
 </div></div>
 <script>
 const TOKEN = new URL(location.href).searchParams.get('token') || '';
-const tabs = ['residents','crate','sessions','jam','setup','library','analyze','loops','compose','manifests'];
+const tabs = ['residents','crate','sessions','activity','jam','setup','library','analyze','loops','compose','manifests'];
 /* nav lives in the k-sidebar now */
 function tab(t){for(const x of tabs){document.getElementById(x).classList.toggle('active',x===t);document.getElementById('nav_'+x).classList.toggle('active',x===t)} if(t==='library')refreshTracks(); if(t==='loops')refreshLoops(''); if(t==='manifests')refreshManifests(); if(t==='residents')loadResidents(); if(t==='crate')loadCrateView(); if(t==='sessions')loadSessions();}
 function val(id){const e=document.getElementById(id); return e?e.value:''}
 window.__ranked=[];window.__pairs=[];window.__plans=[];window.__composePlan=null;
+
+window.__eta={secs:null,at:0,msg:''};
+function kfmt(t){t=Math.max(0,Math.round(t));const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=t%60;return (h?h+'h ':'')+(m||h?m+'m ':'')+String(x).padStart(2,'0')+'s'}
+function renderActivity(j){if(!j)return;const busy=!!j.busy;
+ const pill=document.getElementById('actBusyPill'); if(pill)pill.innerHTML=busy?'<span class="kpill pass">RUNNING</span>':'<span class="kpill" style="color:var(--kfaint)">IDLE</span>';
+ const msg=document.getElementById('actMsg'); if(msg)msg.textContent=j.message||'idle';
+ const pr=(j.progress||0)*100; const bar=document.getElementById('actBar'); if(bar)bar.style.width=pr+'%';
+ const pct=document.getElementById('actPct'); if(pct)pct.textContent=busy?pr.toFixed(1)+'%':'–';
+ // ETA: parse '~XmYYs left' from the status message; tick locally between polls
+ const m=String(j.message||'').match(/~(?:(\d+)h)?(\d+)m(\d+)s left/);
+ if(m&&j.message!==window.__eta.msg){window.__eta={secs:(+(m[1]||0))*3600+(+m[2])*60+(+m[3]),at:performance.now(),msg:j.message}}
+ const el=document.getElementById('actEta');
+ if(el){if(!busy){el.textContent='–';window.__eta.secs=null}
+  else if(window.__eta.secs!=null){el.textContent=kfmt(window.__eta.secs-(performance.now()-window.__eta.at)/1000)}
+  else el.textContent='measuring…'}
+ const perf=j.perf_summary;
+ const elp=document.getElementById('actElapsed'); if(elp)elp.textContent=perf&&perf.elapsed_seconds!=null?kfmt(perf.elapsed_seconds):'–';
+ const err=document.getElementById('actErr'); if(err)err.textContent=j.last_error?('last error: '+j.last_error):'';
+ const st=document.getElementById('actStages');
+ if(st&&perf&&perf.top_stages&&perf.top_stages.length){st.textContent=perf.top_stages.map((x,i)=>String(i+1).padStart(2)+'. '+x.name+': '+kfmt(x.seconds)+(x.ok===false?'  ✖ FAILED':'')).join('\n')}
+ const dot=document.getElementById('kactdot'); if(dot)dot.style.color=busy?'var(--kacc)':'var(--kfaint)';
+}
+setInterval(()=>{const a=document.getElementById('activity');if(a&&a.classList.contains('active')&&window.__lastStatus)renderActivity(window.__lastStatus)},1000);
 window.__stationProfile=localStorage.getItem('ec_profile')||'girl_talk_v1';window.__residents=[];window.__crateRanked=[];
 function ktheme(){const a=document.getElementById('kapp');a.classList.toggle('light');localStorage.setItem('ec_theme',a.classList.contains('light')?'light':'dark')}
 function kthemeInit(){if(localStorage.getItem('ec_theme')==='light')document.getElementById('kapp').classList.add('light')}
 function kmmss(sec){sec=Math.max(0,Math.round(sec||0));return Math.floor(sec/60)+' min '+String(sec%60).padStart(2,'0')+' s'}
-function kupdateWidget(){const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);if(!r)return;document.getElementById('krwName').textContent='readiness · '+r.id;document.getElementById('krwPct').textContent=(r.readiness_pct!=null?r.readiness_pct+'%':'–');document.getElementById('krwBar').style.width=(r.readiness_pct||0)+'%'}
+function kupdateWidget(){const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);if(!r)return;document.getElementById('krwName').textContent='crate fit · '+r.id;document.getElementById('krwPct').textContent=(r.readiness_pct!=null?r.readiness_pct+'%':'–');document.getElementById('krwBar').style.width=(r.readiness_pct||0)+'%'}
 async function loadResidents(){const el=document.getElementById('residentCards');try{const j=await api('/api/residents');window.__residents=j.items||[];
  el.innerHTML=window.__residents.map(function(r,i){const pct=r.readiness_pct||0;const e=r.endless||{};const endl=e.no_repeat_seconds?('Can play <b>'+kmmss(e.no_repeat_seconds)+' endless</b> off your crate before a source must recur.'):'';
   const wants=(r.wants&&r.wants.length)?('Wants: <b>'+esc(r.wants[0])+'</b>'):(r.ready?'<b>Ready to play tonight.</b>':(r.error?esc(r.error):'Crate is empty — feed it on the Library tab.'));
@@ -336,7 +382,7 @@ async function station(sig){try{const j=await post('/api/station/feedback',{sign
 async function kmode(){try{const cfg=window.__cfg;if(!cfg){toast('Configure a workspace first');return}
  const cores=navigator.hardwareConcurrency||8;const gentle=Math.max(1,Math.floor(cores/3));
  const cur=parseInt(cfg.workers||0);const next=cur===0?gentle:0;cfg.workers=next;
- const j=await post('/api/config',cfg);if(j.ok){window.__cfg=j.config;document.getElementById('kact_mode').textContent=next===0?('full send: all cores'):('gentle: '+next+' of '+cores);toast('Workers → '+(next===0?'auto (all cores − 2)':next))}}catch(e){toast('mode switch failed: '+e.message)}}
+ const j=await post('/api/config',cfg);if(j.ok){window.__cfg=j.config;document.getElementById('kact_mode').textContent=(next===0?'\u26a1 full send':'\ud83c\udf31 gentle: '+next+' cores')+' \u21c4';toast('Workers → '+(next===0?'auto (all cores − 2)':next))}}catch(e){toast('mode switch failed: '+e.message)}}
 
 function roleColor(r){return ({VOX_HOOK:'#f5a623',VOX_VERSE:'#f5c56b',VOX_SHOUT:'#ff8c42',DRUM_BREAK:'#4fc3f7',BASS_RIFF:'#9575cd',BED_CHORD:'#81c784',RIFF_ID:'#e57373',TEXTURE:'#90a4ae',PICKUP_FILL:'#ce93d8',DROP_HIT:'#ef5350',TRANSITION_TAIL:'#a1887f'})[r]||'#666'}
 function playClip(path,preview,start,end){const a=document.getElementById('cratePlayer');if(!path&&!preview){toast('No audio for this atom');return}let src=audioUrl(preview||path);if(!preview&&start!=null){src+='#t='+Number(start).toFixed(2)+(end!=null?','+Number(end).toFixed(2):'')}a.src=src;a.play().catch(()=>{})}
@@ -375,7 +421,7 @@ function deriveWorkspaceFields(){
 async function browseInto(id){let j=await post('/api/browse_dir',{current:val(id)}); if(j.path){setVal(id,j.path); deriveWorkspaceFields();} else if(j.error){toast('Folder picker: '+j.error); const d=document.getElementById('doctorOut'); if(d){d.textContent=JSON.stringify(j,null,2)}}}
 async function suggestWorkspace(){const box=document.getElementById('wsCandidates');box.textContent='scouting drives...';const j=await post('/api/workspace_candidates',{music_folder:val('music_folder')});if(!j.ok){box.textContent=(j.error||'scout failed');return}
 box.innerHTML='';(j.candidates||[]).forEach(c=>{const d=document.createElement('div');d.style.cssText='padding:6px 8px;margin:4px 0;border:1px solid rgba(255,255,255,.14);cursor:'+(c.rejected?'not-allowed':'pointer')+';opacity:'+(c.rejected?'.45':'1');d.innerHTML='<b>'+esc(c.path)+'</b> <span class="accent">score '+c.score+'</span><br>'+ (c.reasons||[]).map(esc).join(' &middot; ');if(!c.rejected){d.onclick=()=>{setVal('workspace_folder',c.path);deriveWorkspaceFields();box.querySelectorAll('div').forEach(x=>x.style.background='');d.style.background='rgba(255,255,255,.08)'}}box.appendChild(d)});if(j.recommended){setVal('workspace_folder',j.recommended);deriveWorkspaceFields()}}
-async function loadDefaults(){try{let j=await api('/api/defaults'); if(j.configured){window.__cfgd=true; window.__cfg=j.configured; setConfigFields(j.configured)} else {setVal('music_folder',j.music_folder); setVal('workspace_folder',j.workspace_folder); deriveWorkspaceFields();}}catch(e){}}
+async function loadDefaults(){try{let j=await api('/api/defaults'); if(j.configured){window.__cfgd=true; window.__cfg=j.configured; setConfigFields(j.configured);const w=parseInt(j.configured.workers||0); const km=document.getElementById('kact_mode'); if(km)km.textContent=(w===0?'\u26a1 full send':'\ud83c\udf31 gentle: '+w+' cores')+' \u21c4';} else {setVal('music_folder',j.music_folder); setVal('workspace_folder',j.workspace_folder); deriveWorkspaceFields();}}catch(e){}}
 function setConfigFields(c){for(const k of ['master_root','working_root','agent_root','playlists_root','stems_root'])if(c[k])setVal(k,c[k]); if(c.master_root)setVal('music_folder',c.master_root); if(c.agent_root){let a=String(c.agent_root); let m=a.match(/^(.*)[\\/]agent$/i); if(m)setVal('workspace_folder',m[1]);} if(c.analysis_seconds)setVal('analysis_seconds',c.analysis_seconds); if(c.workers!=null)setVal('workers',c.workers); deriveWorkspaceFields();}
 async function saveWorkspaceConfig(){deriveWorkspaceFields(); const body={music_folder:val('music_folder'),workspace_folder:val('workspace_folder')}; const as=val('analysis_seconds'); if(as)body.analysis_seconds=+as; const w=val('workers'); if(w!=='')body.workers=+w; let j=await post('/api/config_workspace',body); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
 async function saveConfig(){deriveWorkspaceFields(); let j=await post('/api/config',{master_root:val('master_root'),working_root:val('working_root'),agent_root:val('agent_root'),playlists_root:val('playlists_root'),stems_root:val('stems_root')}); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
@@ -533,7 +579,7 @@ async function execManifestApplyBg(i){const path=(MANIFESTS[i]||{}).path; if(!pa
 function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 function escAttr(s){return String(s??'').replace(/['\\]/g,'')}
 function fmt(x){return x===null||x===undefined?'':(+x).toFixed(2)}
-setInterval(async()=>{try{let j=await api('/api/status'); const msg=(j.busy?'BUSY ':'')+j.message; document.getElementById('status').textContent=msg; document.getElementById('status_big').textContent=msg; const kt=document.getElementById('kact_text'); if(kt)kt.textContent=msg; const kb2=document.getElementById('kact_bar'); if(kb2)kb2.style.width=((j.progress||0)*100)+'%'; const led=document.getElementById('statusLed'); if(led)led.classList.toggle('busy',!!j.busy); const err=j.last_error?'Last error: '+j.last_error:''; document.getElementById('last_error').textContent=err; const perf=j.perf_summary; if(perf){const top=perf.top_stages||[]; document.getElementById('perf_summary').textContent=`${perf.in_progress?'running':'last run'} · ${fmt(perf.elapsed_seconds)}s · ${perf.stage_count||0} stages`; document.getElementById('perfOut').textContent=top.map((x,i)=>`${i+1}. ${x.name}: ${fmt(x.seconds)}s ${x.ok===false?'FAILED':''}`).join('\n')+(j.perf_ledger_path?'\n\nLedger: '+j.perf_ledger_path:'');} const st=document.getElementById('statustext'); if(st) st.textContent=j.message+(j.last_error?' | '+j.last_error:''); const w=((j.progress||0)*100)+'%'; const pg=document.getElementById('prog'); if(pg) pg.style.width=w; document.getElementById('prog_global').style.width=w; if(j.last_render_path && j.last_render_path!==window.__latestRenderPath){setPlayer(j.last_render_path); toast('Render ready',j.last_render_path); refreshRenders(false)} if((window.__renderBgPending||window.__oneClickPending) && !j.busy && (String(j.message||'').includes('manifest executed')||String(j.message||'').includes('one-click complete')||String(j.message||'').includes('rejected all quality attempts')||String(j.message||'').includes('floor-safe rescue')||String(j.message||'').includes('TasteSpec one-click complete'))){window.__renderBgPending=false; window.__oneClickPending=false; if(!j.last_render_path && String(j.message||'').includes('rejected')) setPlayer(null); refreshRenders(true)}}catch(e){}},1000);
+setInterval(async()=>{try{let j=await api('/api/status'); const msg=(j.busy?'BUSY ':'')+j.message; window.__lastStatus=j; renderActivity(j); document.getElementById('status').textContent=msg; document.getElementById('status_big').textContent=msg; const kt=document.getElementById('kact_text'); if(kt)kt.textContent=msg; const kb2=document.getElementById('kact_bar'); if(kb2)kb2.style.width=((j.progress||0)*100)+'%'; const led=document.getElementById('statusLed'); if(led)led.classList.toggle('busy',!!j.busy); const err=j.last_error?'Last error: '+j.last_error:''; document.getElementById('last_error').textContent=err; const perf=j.perf_summary; if(perf){const top=perf.top_stages||[]; document.getElementById('perf_summary').textContent=`${perf.in_progress?'running':'last run'} · ${fmt(perf.elapsed_seconds)}s · ${perf.stage_count||0} stages`; document.getElementById('perfOut').textContent=top.map((x,i)=>`${i+1}. ${x.name}: ${fmt(x.seconds)}s ${x.ok===false?'FAILED':''}`).join('\n')+(j.perf_ledger_path?'\n\nLedger: '+j.perf_ledger_path:'');} const st=document.getElementById('statustext'); if(st) st.textContent=j.message+(j.last_error?' | '+j.last_error:''); const w=((j.progress||0)*100)+'%'; const pg=document.getElementById('prog'); if(pg) pg.style.width=w; document.getElementById('prog_global').style.width=w; if(j.last_render_path && j.last_render_path!==window.__latestRenderPath){setPlayer(j.last_render_path); toast('Render ready',j.last_render_path); refreshRenders(false)} if((window.__renderBgPending||window.__oneClickPending) && !j.busy && (String(j.message||'').includes('manifest executed')||String(j.message||'').includes('one-click complete')||String(j.message||'').includes('rejected all quality attempts')||String(j.message||'').includes('floor-safe rescue')||String(j.message||'').includes('TasteSpec one-click complete'))){window.__renderBgPending=false; window.__oneClickPending=false; if(!j.last_render_path && String(j.message||'').includes('rejected')) setPlayer(null); refreshRenders(true)}}catch(e){}},1000);
 loadDefaults().finally(()=>{updateOutcomePreview(); tab(window.__cfgd?'residents':'setup'); doctor().catch(()=>{}); refreshRenders(false).catch(()=>{}); kthemeInit(); const v=document.querySelector('.ver'); const kv=document.getElementById('ksideVer'); if(v&&kv)kv.textContent=v.textContent;});
 
 

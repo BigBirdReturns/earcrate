@@ -1,6 +1,59 @@
 # Jukebreaker GT — CHANGELOG
 
+## v0.7.9 — crate-librarian extracted (rebuild plan v2, phase 1)
+- NEW STANDALONE TOOL `crate-librarian/`: the library engine cut loose as a
+  reusable, mutagen-only package (no audio analysis, no personas, no UI, no
+  network). scan → identify (the tested decades-of-dumps heuristics) → dedup →
+  idempotent journaled organize into Artist/Album/NN Title, all emitting a
+  versioned `library.json` contract (LIBRARY_CONTRACT.md) any project can read.
+  CLI: `crate-librarian scan|report|organize|rollback`. Point it at the SSD to
+  turn it into a usable, deduped, tagged archive whose manifest your NEXT
+  project consumes without any mashup machinery.
+- Own acceptance corpus (identity nasty-cases, full scan→dedup→organize→
+  rollback pipeline, CLI) + a cross-agreement gate in earcrate
+  (test_librarian_identity_agrees_with_earcrate) so the standalone identity and
+  earcrate's inline identity cannot drift before the planned cutover.
+- EarCrate runtime unchanged (single-file build + selftest still green);
+  crate-librarian is a sibling package, extractable to its own repo per the
+  plan. Next: phase B (the RTX 4060 stems provider seam).
+
 ## v0.7.8 — House flavor (one design system, under law)
+- SCHEMA FIX (the big one): ear_atoms had UNIQUE(loop_id) — one atom per loop
+  GLOBALLY — so personas were mutually destructive: building Troubadour's
+  crate destroyed Girl Talk's (via loop-rebuild cascade), which is why it
+  "required a full rebuild" and took hours. Now UNIQUE(loop_id,taste_profile)
+  with an in-place migration for existing workspaces.
+- ADOPT, DON'T RE-MEASURE: segment measurements are persona-independent, so a
+  new resident now ADOPTS existing measurements and only re-judges them —
+  measured in the gate: second resident's audition adopted 12/12 atoms in
+  0.01s vs 3.0s of DSP for the first. Your two-hour Troubadour audition
+  becomes seconds next time.
+- PARALLEL FIRST AUDITION: the one time DSP must run, it decodes each file
+  once and fans across cores (same ProcessPool discipline as analyze), with
+  per-file ETA. force now re-measures IN PLACE (never deletes), and a locked
+  human judgment survives force rebuilds. Gate:
+  test_personas_coexist_and_adopt (includes the schema migration).
+- PLAN: EARCRATE_REBUILD_PLAN_v2.md — the "fully fully" rebuild: 12-lesson
+  ledger (each already gated), crate-librarian extracted as a standalone
+  reusable package with a stable library.json contract (the buffalo for the
+  next project), prepared attachment seams (stems, identify, progression,
+  transcribe, twin, export), migration that loses nothing, cutover only on
+  green.
+- ACTIVITY TAB: a real view of what the engine is doing — current task, RUNNING
+  pill, progress %, a live ETA COUNTDOWN (parsed from measured-throughput ETAs,
+  ticking each second between polls), elapsed time, last error in ember, and
+  the per-stage ledger of the run. The sidebar dot glows amber while busy.
+- PINNED SHELL: the app is viewport-locked — sidebar and station bar always
+  visible, only the main column scrolls (verified: bar bottom == viewport).
+- TOASTS: moved inside the themed shell and restyled to the family (they were
+  outside #kapp, stuck in the old console look).
+- CLARITY: the topbar gauge is relabeled "CRATE FIT" with a tooltip — it is a
+  MEASUREMENT of how much of the selected resident's contract your crate
+  satisfies, not a progress bar (live task progress is the bottom bar). The
+  ear-crating stage now shows count + ETA like analyze does (it decodes
+  thousands of clips and previously read as hung). A resident with zero atoms
+  now says it "hasn't auditioned your library yet — Book a set ear-crates it
+  automatically" instead of listing generic shortages.
 - FIX: the station bar was nested inside the flex row, crushing the main
   column to 57px — the "squeezed card in an empty page" bug. Structure
   corrected; main column now fills the shell (verified by measured layout).

@@ -1836,6 +1836,21 @@ class EarcrateCore:
             out.append(d)
         return out
 
+    def rank_crate(self, taste_profile: str = "girl_talk_v1", limit: int = 0) -> Dict[str, Any]:
+        """Rank the approved ear crate by the persona's own selection priorities
+        (recognizable hooks first, clean role material, danceable, deck-feasible,
+        contrast bonus). The curation surface: which of YOUR loops the artist would
+        actually reach for, and why — every entry carries its five sub-scores."""
+        pool = self.approved_atom_pool(taste_profile)
+        profile = TASTE_PROFILES.get(taste_profile, TASTE_PROFILES["girl_talk_v1"])
+        islands = build_bpm_lattice(pool, None)[:4] if pool else []
+        out = rank_material(pool, tempo_islands=islands, profile=profile)
+        if limit and limit > 0:
+            out["ranked"] = out["ranked"][:limit]
+        out["ok"] = True
+        out["taste_profile"] = taste_profile
+        return out
+
     def taste_readiness(self, taste_profile: str = "girl_talk_v1", target_seconds: float = 120.0) -> Dict[str, Any]:
         pool = self.approved_atom_pool(taste_profile)
         profile = TASTE_PROFILES.get(taste_profile, TASTE_PROFILES["girl_talk_v1"])
@@ -2077,7 +2092,11 @@ class EarcrateCore:
         if not pool:
             # Preserve an inspectable failure instead of rendering emptiness.
             pool = self.approved_atom_pool(str(params.get("taste_profile") or "girl_talk_v1"))
-        total_bars = max(16, int(round(target_seconds * render_bpm / 60.0 / 4.0)) * 4)
+        # bars = beats/4; target_seconds*bpm/60 is beats, /4 is bars already. The old
+        # code then multiplied by 4 again, quadrupling every render (a 2-min target
+        # became ~8 min). Round to the nearest whole 4-bar phrase instead.
+        bars_exact = target_seconds * render_bpm / 60.0 / 4.0
+        total_bars = max(16, int(round(bars_exact / 4.0)) * 4)
         section_bars = 4
         sections = []
         foreground = [x for x in pool if x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}]
@@ -2590,8 +2609,18 @@ class EarcrateCore:
         hard_air = sum(1 for t in transitions if t.get("type") == "hard_cut_to_air")
         duration_bars = sum(int(sec.get("bars") or 0) for sec in sections)
         predicted_silence = cut_bars / max(1, duration_bars)
-        voice = worlds.count("voice")
-        bed = worlds.count("bed")
+        # Count voice/bed by the layer's actual role, not only the legacy two-world
+        # "world" tag. The TasteSpec composer tags every layer world="taste" and
+        # marks vocals via role/ear_role, so the old worlds.count("voice") read 0 on
+        # every TasteSpec render — blinding the vocal_density intent-match and the
+        # voice-missing veto. Recognize both vocabularies.
+        _VOX_EAR = {"VOX_HOOK", "VOX_VERSE", "VOX_SHOUT"}
+        _BED_ROLE = {"drum_anchor", "bass", "harmony", "full"}
+        _BED_EAR = {"DRUM_BREAK", "BED_CHORD", "RIFF_ID", "TEXTURE", "BASS_RIFF"}
+        voice = sum(1 for ly in layers if str(ly.get("world")) == "voice"
+                    or str(ly.get("role")) == "vocal" or str(ly.get("ear_role")) in _VOX_EAR)
+        bed = sum(1 for ly in layers if str(ly.get("world")) == "bed"
+                  or str(ly.get("role")) in _BED_ROLE or str(ly.get("ear_role")) in _BED_EAR)
         music_sections = [sec for sec in sections if str(sec.get("type") or "") != "cut"]
         empty_music_sections = sum(1 for sec in music_sections if not sec.get("layers"))
         covered_bars_set = set()

@@ -60,6 +60,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         core = EarcrateCore()
         print(json.dumps(core.organize_and_retag({"apply": ns.apply, "limit": ns.limit}), ensure_ascii=False, indent=2))
         return 0
+    if argv and argv[0] == "rank":
+        rp = argparse.ArgumentParser(prog="earcrate rank", description="Rank the ear crate by the persona's selection priorities (curation surface)")
+        rp.add_argument("--profile", default="girl_talk_v1")
+        rp.add_argument("--limit", type=int, default=40)
+        ns = rp.parse_args(argv[1:])
+        core = EarcrateCore()
+        print(json.dumps(core.rank_crate(ns.profile, ns.limit), ensure_ascii=False, indent=2))
+        return 0
     if argv and argv[0] == "taste-readiness":
         tp = argparse.ArgumentParser(prog="earcrate taste-readiness", description="Audit whether the ear crate can satisfy a TasteSpec profile")
         tp.add_argument("--profile", default="girl_talk_v1")

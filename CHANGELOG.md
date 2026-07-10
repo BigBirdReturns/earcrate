@@ -1,6 +1,26 @@
 # Jukebreaker GT — CHANGELOG
 
 ## v0.7.4 — Persona Codex (unreleased)
+- RANKING: the persona now ranks raw material the way the artist reaches for it,
+  not just gates it. `rank_material` (five weighted priorities: recognizability
+  0.34, role clarity 0.24, danceability 0.18, deck feasibility 0.14, contrast
+  0.10) grounds each on a metric the analyzer already computes, and every ranked
+  entry carries its five sub-scores as a receipt — the curation surface. Deck
+  feasibility is a hard reality (an unbeatmatchable loop sinks regardless of
+  contrast). Surfaced via `rank_crate`, CLI `earcrate rank`, `POST /api/rank`;
+  documented in PERSONAS/GIRL_TALK_V1.md §11; gate test_girl_talk_ranking.
+- FIX (duration): every TasteSpec render came out ~4x its target length (a
+  2-min pick became ~8 min). total_bars computed beats/4 (already bars) then
+  multiplied by 4 again; now rounds to the nearest whole 4-bar phrase. A 120s
+  target renders ~1.95 min.
+- FIX (vocals invisible to the scorer): score_arrangement counted voice/bed via
+  the legacy two-world 'world' tag, but the TasteSpec composer tags every layer
+  world='taste' and marks vocals by role/ear_role — so voice_layers/realized_vocal
+  read 0 on every render even when dozens of vocal layers were placed. This
+  blinded the vocal_density intent-match and the voice-missing veto and made
+  render reports lie. Now counts by role/ear_role too. (Vocals were being placed
+  and rendered; the report was wrong. Vocal VARIETY is still capped by the
+  single-key deck — see backlog.) Gate: test_taste_duration_and_vocal_count.
 - JANITOR: launch-time cleanup of old-version leftovers, automatic. Purges caches
   keyed to dead analyzer/engine versions, archives ' (N)' accretion duplicates in
   the organized tree, finds legacy Jukebreaker/earcrate workspaces (AppData,

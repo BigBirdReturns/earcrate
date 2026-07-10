@@ -91,6 +91,57 @@ def test_identity_from_folders():
     assert i["artist"] == "The Front Bottoms" and i["title"] == "Maps" and i["album"] == "Unknown Album", i
 
 
+def test_taste_duration_and_vocal_count():
+    """v0.7.4 regressions: (1) a target length must render near that length, not
+    4x it; (2) the scorer must count vocals placed by role, not only the legacy
+    two-world 'world' tag."""
+    core = EarcrateCore.__new__(EarcrateCore)
+    rng = random.Random(7)
+    roles = ["VOX_HOOK", "VOX_VERSE", "DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "TEXTURE", "VOX_SHOUT"]
+    rolemap = {"VOX_HOOK": "vocal", "VOX_VERSE": "vocal", "VOX_SHOUT": "vocal",
+               "DRUM_BREAK": "drum_anchor", "BASS_RIFF": "bass", "BED_CHORD": "harmony", "TEXTURE": "texture"}
+    pool = []
+    n = 0
+    for src in range(40):
+        key = rng.randint(0, 11); bpm = rng.choice([120, 122, 124, 126])
+        for r in rng.sample(roles, 4):
+            n += 1
+            pool.append({"id": f"L{n}", "atom_id": f"A{n}", "ear_role": r, "role": rolemap[r],
+                         "key_root": key, "bpm": bpm, "score": rng.uniform(0.5, 0.9),
+                         "hook_score": rng.uniform(0.4, 0.9), "title": f"song_{src}",
+                         "path": f"/m/song_{src}.mp3", "high_share": 0.3, "low_share": 0.2})
+    arr = core.compose_taste_arrangement(list(pool), {"taste_profile": "girl_talk_v1", "target_seconds": 120, "bpm": 124}, seed=1340)
+    bpm = float(arr["bpm"]); bars = sum(s["bars"] for s in arr["sections"])
+    minutes = bars * 4 / bpm   # beats / (beats per minute) = minutes
+    assert 1.6 <= minutes <= 2.4, f"120s target rendered {minutes:.2f} min ({bars} bars)"
+    # vocals were placed AND the scorer sees them
+    placed_vocals = sum(1 for s in arr["sections"] for ly in s["layers"] if ly.get("role") == "vocal")
+    assert placed_vocals > 0, "no vocal layers placed"
+    sc = core.score_arrangement(arr)
+    assert sc["voice_layers"] > 0 and sc["realized_vocal"] > 0.0, f"scorer blind to vocals: {sc['voice_layers']}"
+
+
+def test_girl_talk_ranking():
+    """The persona ranker must reach for a recognizable, clean, on-tempo hook
+    before a mushy off-tempo bed, and expose the five sub-scores as receipts."""
+    from earcrate.ear.readiness import rank_material, GT_RANK_WEIGHTS
+    assert abs(sum(GT_RANK_WEIGHTS.values()) - 1.0) < 1e-9, "rank weights must sum to 1"
+    atoms = [
+        {"atom_id": "hit", "ear_role": "VOX_HOOK", "hook_score": 0.95, "score": 0.9,
+         "intelligibility": 0.9, "mid_share": 0.6, "bpm": 124, "key_root": 0, "energy": 0.8, "transient_density": 0.5},
+        {"atom_id": "mush", "ear_role": "BED_CHORD", "hook_score": 0.2, "score": 0.4,
+         "floor_score": 0.3, "bpm": 171, "key_root": 6, "energy": 0.3, "transient_density": 0.2},
+        {"atom_id": "break", "ear_role": "DRUM_BREAK", "hook_score": 0.3, "score": 0.7,
+         "transient_density": 0.9, "low_share": 0.5, "bpm": 124, "key_root": 0, "energy": 0.85},
+    ]
+    r = rank_material(atoms, tempo_islands=[124])
+    assert r["ranked"][0]["atom_id"] == "hit", "recognizable hook must rank first"
+    assert r["ranked"][-1]["atom_id"] == "mush", "off-tempo mush must rank last"
+    assert set(r["ranked"][0]["why"]) == set(GT_RANK_WEIGHTS), "receipt must expose every sub-score"
+    # deck feasibility must dominate: the off-tempo loop is unusable regardless of contrast
+    assert r["ranked"][-1]["why"]["deck_feasibility"] == 0.0
+
+
 def test_endless_math_is_exact():
     """Persona endless-set gate: T = min(60*S/r, E*seconds_per_event); endless
     iff T clears the recycle gap. Numbers must be exact, not vibes."""

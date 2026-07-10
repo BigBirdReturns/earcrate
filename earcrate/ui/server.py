@@ -154,6 +154,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.ingest_sources(data)); return
             if path == "/api/organize":
                 self._json(200, self.core.organize_and_retag(data)); return
+            if path == "/api/rank":
+                self._json(200, self.core.rank_crate(str(data.get("taste_profile") or "girl_talk_v1"), int(data.get("limit") or 40))); return
             if path == "/api/config_workspace":
                 self._json(200, self.core.configure_workspace(data)); return
             if path == "/api/workspace_candidates":

@@ -1,0 +1,703 @@
+# Jukebreaker GT — CHANGELOG
+
+## v0.7.4 — Persona Codex (unreleased)
+- PERSONA: `PERSONAS/GIRL_TALK_V1.md` — the complete quantitative reference for the
+  first TasteSpec persona: documented sample densities, rails contract, varispeed and
+  harmony math, typed-edge and acceptance-gate thresholds, and a code map for every
+  number. Persona constants are now single-sourced in `TASTE_PROFILES["girl_talk_v1"]`
+  (density model + endless contract included); `ear/readiness.py` derives its GT_*
+  aliases from the profile instead of redefining them.
+- NEW: endless-set math (`endless_sustain`): no-repeat runtime
+  T = min(60·S/r, E·seconds_per_event); endless iff T ≥ min_recycle_gap_s (900 s),
+  ⇒ 83 deck-safe sources unlock an honestly endless crate. Reported as an `endless`
+  receipt by both `crate_readiness_audit` and `taste_readiness`, gated by
+  `test_endless_math_is_exact`.
+- DOCS: `LIBRARY_WORKFLOW.md` — the exact external-drive → archive → ear-crate
+  sequence (ingest/organize verified end-to-end against a torture library: scene
+  names, junk titles, ALLCAPS, year suffixes, feat. forms, albumartist-less
+  compilations, byte dupes, idempotent re-ingest).
+
+## v0.7.1 — Buffalo Grade (scale + decades-of-dumps hardening)
+- SCALE: scan() parallelized (stat-filter -> threaded ffprobe/tag probes -> serial DB
+  writes). Measured 234ms/probe single-threaded = ~3h for 50k files; now /N cores.
+- SCALE: ingest uses size-ladder dedupe (size prefilter, hash only colliders, verify
+  at copy time) — "gigs and gigs" over USB no longer means reading every byte twice.
+  Torture run: 6 files, 0 hashed up front when no sizes collide.
+- BUFFALO: albumartist key variants (TPE2/TXXX/vorbis chaos), ALLCAPS/lowercase case
+  repair, album "(1998)" year extraction into date tag, "Track NN" junk-title
+  rejection with honest fallback, scene "NN - Artist - Title" + underscore parsing
+  with track capture, feat. canonicalization.
+- BUFFALO: compilation handling — albumartist/VA detection PLUS album-level
+  clustering (2+ distinct track artists on one album = compilation even with no
+  albumartist tag). Comps route to Various Artists/Album/NN Artist - Title and get
+  albumartist amended on the copies. No more shattered NOW-That's-Music folders.
+
+
+## v0.7.0 — Library Forge (this build)
+- RESTRUCTURE: the 5,728-line monolith is now the `jukebreaker/` package per
+  JUKEBREAKER_REBUILD_PLAN v1 (modules: core, analyze, deck, ear, judge, librarian, ui).
+  Single-file distribution preserved: `build/make_singlefile.py` emits `dist/jukebreaker_gt.py`
+  deterministically; VERIFY_PACKAGE checks it. The 56KB embedded HTML string is now a real
+  file at `jukebreaker/ui/static/index.html`.
+- NEW: multi-folder ingest. Select any number of source folders (external SSD etc.);
+  audio is copied into `master/ingested/<batch>/` — content-hash deduped against the whole
+  library, manifest-gated (dry-run default), journaled, rollback-able, sources never touched.
+  UI panel on the Library tab; CLI: `ingest <folders...> [--apply]`.
+- NEW: organize + retag. Builds `working/organized/Artist/Album/NN Title.ext` copies with
+  amended tags (artist/albumartist/album/title/track normalized deterministically). Masters
+  stay verbatim per spec copy-then-edit. UI buttons; CLI: `organize [--apply] [--limit N]`.
+- New executor op types `ingest_copy` / `organize_copy` with full prevalidation
+  (path-root checks, dst_absent, copy-hash verification) and archive_move inverses.
+- DEPLOY HYGIENE: 22 PATCH_NOTES files consolidated into this one CHANGELOG.md.
+
+---
+# Historical patch notes (v0.2 → v0.6.3), newest first
+
+
+## v0.6.3
+
+Jukebreaker GT v0.6.3 - Workspace Scout
+
+Purpose
+- Stop making the user guess where the workspace should live. The engine
+  knows its own constraints; setup should apply them.
+
+Changes
+- Added workspace_candidates(): enumerates candidate locations (existing
+  configured workspace, per-drive roots on fixed drives, user-profile
+  locations) and scores each against the constraints the engine itself
+  imposes. Receipts per candidate: free headroom (analysis .npz cache,
+  renders, previews, rollback archives all accumulate), drive kind
+  (fixed / removable / network via GetDriveTypeW on Windows), sync-client
+  detection (OneDrive/Dropbox/Google Drive/iCloud path markers plus
+  OneDrive env roots; sync clients fight the fsync JSONL journals and
+  SQLite locks), and a live fsync probe (3x256KB fsynced temp write,
+  reported in ms). Hard rejects: candidate inside the music folder, or
+  music folder inside the candidate; the executor's path-containment
+  invariant (INV-1) requires the separation, so setup enforces it up front.
+- Existing workspaces are detected and score a bonus: adopting one
+  preserves the database and analysis cache.
+- Setup UI: a Suggest button next to Browse fills the workspace field with
+  the top candidate and renders the ranked list with reasons; click any
+  non-rejected candidate to select it.
+- API: POST /api/workspace_candidates {music_folder}.
+- CLI: python jukebreaker_gt.py workspace-candidates --music PATH.
+- Nothing is created on disk by the scout; it is read-only apart from the
+  self-deleting fsync probe file.
+
+Correction carried in this patch
+- ANALYZER_VERSION is reverted to gt-v0.6.1-earcrate-feasibility. The
+  v0.6.2 runtime-ledger patch bumped it to gt-v0.6.2-runtime-ledger while
+  analyze_file_worker was byte-identical to v0.6.1. Because the features
+  query selects on analyzer_version and the disk cache is keyed
+  {sha}-{ANALYZER_VERSION}.npz, that bump orphaned every cached analysis
+  and forced a full library re-analysis to add instrumentation. The pin
+  moves only when the DSP actually changes.
+
+Lineage note
+- Built on the v0.6.2 Runtime Ledger branch. Does NOT include the
+  fail-fast batched harvest from the parallel v0.6.2 branch; that merge
+  is still pending as v0.6.4 if desired.
+- Engine marker: gt_tastespec_v0603.
+
+Validation
+- python -m py_compile jukebreaker_gt.py VERIFY_PACKAGE.py
+- python jukebreaker_gt.py --self-test
+- python VERIFY_PACKAGE.py
+- workspace-candidates CLI run against a container filesystem: ranked
+  output with fsync timings; inside-music candidates hard-rejected;
+  existing workspace adopted as top recommendation.
+
+## v0.5.1
+
+Jukebreaker GT v0.5.1
+
+This package fixes the handoff failure in v0.5.0. The source-only zip did not include a local .venv and did not include a bootstrap launcher, so a fresh folder could not start from the command the assistant kept repeating.
+
+Added:
+- START_HERE.cmd: creates .venv, installs requirements, launches the app.
+- RESET_LOCAL_ENV_AND_START.cmd: rebuilds only the local Python environment.
+- README_FIRST.txt: explains the two-folder setup model.
+
+The application UI still uses Music folder + Jukebreaker workspace and Browse buttons.
+
+## v0.5.16
+
+Jukebreaker GT v0.5.16 - audible rescue lattice
+
+Intent:
+- Keep fast failure for bad expressive candidates.
+- Stop leaving the user with a silent/product-purity outcome when a conservative audible deck can be made.
+
+Changes:
+- Clears stale Last error banners at the start of a new run and after successful completion.
+- Keeps expressive candidate preflight fast: failed expressive plans still skip full WAV render.
+- Makes the repaired varispeed rescue less brittle: non-structural dry-quality preflight failures are allowed to proceed to the post-render gate, because stable_presence_restore runs only during render.
+- Adds a final floor-safe audible rescue after expressive and repaired candidates fail.
+- Floor-safe rescue abandons two-world ambition before abandoning audio output: single-crate, one auxiliary deck, low chaos, low stretch, zero residual pitch budget, high key strictness, short 75-120 second proof mix.
+- Floor-safe rescue still writes only under working_root/renders and still requires the post-render quality gate before loading the player.
+- Failure copy now says expressive, repaired, and floor-safe candidates failed, rather than implying a previous render should be trusted.
+
+Analyzer note:
+- The analyzer cache version remains gt-v0.5.15-librosa-varispeed-lattice-dna because v0.5.16 changes execution policy, not analysis features.
+
+## v0.5.17
+
+Jukebreaker GT v0.5.17 — Audible Truth Gate
+
+Problem fixed:
+- v0.5.15/v0.5.16 could bless a correctly sized WAV that contained microscopic noise for most of the timeline and a small audible tail near the end. The old post-render silence metric was relative to the median frame RMS, so near-zero noise could count as non-silence.
+
+Changes:
+- Post-render gate now measures absolute audible coverage: active_coverage_ratio, audible_seconds, first_audible_s, last_audible_s, largest_silence_gap_s, global_rms, and audible_rms_floor.
+- Long renders fail if audible coverage is too low, first audible material starts too late, or a dead gap is too long.
+- Arrangement preflight now rejects structurally empty plans before rendering: too few layer events, low covered_bar_ratio, late first layer, too many empty music sections, and missing vocal identity when hooky two-world mode asks for vocals.
+- Arrangement scoring now rewards covered musical timeline and layer depth, and it vetoes one-layer-tail plans before they can waste a render.
+- Judge silence gate direction corrected.
+
+Fast fail remains fast. The change is that a passing render now has to be audible as a song body, not merely a WAV-shaped receipt.
+
+## v0.6.1
+
+Jukebreaker GT v0.6.1 — TasteSpec feasibility compiler
+
+This patch fixes the root exposed by v0.6.0: the ear crate had inventory, but the composer was allowed to select atoms that could not actually play at the chosen BPM/key. add_layer() then silently dropped them, producing a mostly empty pre-render plan that the new gate correctly rejected.
+
+Changes:
+- Adds tempo-octave folding before varispeed planning, so half-time and double-time analyzer disagreements no longer destroy valid DJ tempo islands.
+- Treats the BPM input as a taste hint in the one-click TasteSpec path rather than a hard pin. The compiler now chooses the BPM/key deck with the strongest playable foreground, floor, bass, spark, and source-turnover feasibility.
+- Filters the approved ear crate into a transform-feasible pool before composition. The composer no longer discovers illegal atoms after the plan has already been built.
+- Makes source rotation part of deterministic composition so one source cannot become the whole floor rail by accident.
+- Forces the first phrase to carry a recognizable foreground when foreground atoms exist.
+- Adds adaptive harvest expansion: if a bounded track budget is too short for Girl Talk density, one-click expands to all scanned tracks before refusing.
+- Updates UI defaults: the BPM box is blank by default, and the track budget defaults to all scanned tracks because Girl Talk-style source turnover is source-hungry.
+
+This is not a rescue fallback. It is a feasibility correction: choose a playable deck from the material before composing, then render only if the TasteSpec rail contract passes.
+
+## v0.5.12
+
+Jukebreaker GT v0.5.12 — Full Buffalo Deck
+
+Purpose
+- This is not a rollback. It keeps the continuum/two-world/multideck feature stack and fixes the failure loop that made bad ideas cost full WAV render time.
+
+Durable changes
+- Engine marker: gt_fullbuffalo_v0512.
+- Adds approved-loop dry quality preflight before arrangement selection.
+- Adds arrangement_preflight_gate so doomed candidates can be rejected before a full WAV render.
+- Candidate search still compiles up to 64 arrangements, but only a preflight-approved candidate reaches the renderer.
+- One-click renders one expressive candidate and, if needed, one repaired full-buffalo rescue candidate. It does not spend twenty minutes rendering four known-bad full WAVs.
+- Tightens transform budgets by role: drum/bass/floor material must stay near native tempo and key; vocals remain readable.
+- Dry deck rendering uses deterministic varispeed/resample for small approved corrections instead of phase-vocoder time-stretch in stable/dry mode.
+- The post-render quality gate separates catastrophic failures from warnings, so the engine still blocks degraded audio but does not turn every imperfect sketch into a dead-end failure.
+- Reports include candidate preflight receipts, dry loop quality receipts, transform policy, cache stats, deck receipts, and quality gate warnings/failures.
+
+Preserved capabilities
+- Two-world continuum controls.
+- Album collision / Notorious mode.
+- Multideck tail overlay.
+- Role-locked voice/bed worlds.
+- Named DJ transitions.
+- Transform cache.
+- Source/workspace separation.
+- Quota approval, not landfill bulk approval.
+- Current-engine render filtering.
+
+Validation
+- python -m py_compile jukebreaker_gt.py
+- python jukebreaker_gt.py --self-test
+- python VERIFY_PACKAGE.py
+- node --check extracted_ui_v0512.js
+
+## v0.5.13.1
+
+Jukebreaker GT v0.5.13.1  — Lattice completion + readiness dashboard + console UI
+
+WHY: v0.5.13 shipped the varispeed transform math but the "lattice" it was named
+after did not exist in code — render_bpm was still a single median/pinned value.
+Two receipt bugs and a dead UI knob were also present.
+
+ENGINE
+- NEW  build_bpm_lattice / score_bpm_lattice: scores candidate deck speeds (native
+       BPM clusters + a symmetric lattice around the target) by total clean-transform
+       cost over the approved pool. Pure, render-free, deterministic.
+- NEW  crate_readiness_audit: per-role usable counts, native-BPM window histogram,
+       transform-tier histogram, source-dominance warnings, recommended BPM.
+- WIRED arrange() now picks render_bpm from the lattice when BPM is blank (was: raw
+       median); honours a user pin but records the lattice cost either way. Arrangement
+       and render report now carry a bpm_lattice receipt.
+- FIX  budget no-op: allowed_varispeed = min(lim, max(lim, user)) always collapsed to
+       lim, so the stretch-budget knob did nothing. User budget now actually constrains.
+- FIX  incoming_downbeat_error_ms was hardcoded 0.0; now measured from actual placement.
+       outgoing_energy_zero_before_boundary now measured from the tail, not asserted False.
+
+API
+- NEW  POST /api/preflight -> readiness audit for the current outcome params.
+
+UI (no-network, system fonts only)
+- Full restyle to a "mixing console" identity: graphite chassis, amber tempo-readout
+  LED accent, cyan cue accent, coral warnings.
+- SIGNATURE: the lattice rendered as a pitch-fader ladder — bar height = usable loops,
+  amber = recommended speed, dashed = your target.
+- Deck-readiness panel on Jam: role counts (short roles flagged coral), clean-vs-synthetic
+  transform tier bar, and plain-language warnings — so a thin pool fails in seconds with a
+  reason instead of after a long render.
+- One-click jam auto-runs preflight and surfaces the verdict before you commit.
+
+VALIDATION: py_compile OK, --self-test SELF_TEST_OK, VERIFY_PACKAGE ok:true.
+
+## v0.5.14
+
+Jukebreaker GT v0.5.14 — Settings that actually steer + grounded readiness
+
+WHY: two renders felt identical despite "drastic" setting changes. Measured: the two
+files were bit-identical audio (correlation 1.0000). Root causes, all fixed:
+
+1. ALIASED MODE. album_collision / two_world_continuum / notorious_mode were one code
+   path — toggling changed only the output hash. Mix-mode dropdown collapsed to two
+   honest choices (two-world vs single-crate); creative character lives in the preset.
+2. FIXED-IDEAL SCORER. score_arrangement rewarded a constant ideal (always more
+   diversity/edits), so same pool+seed always won regardless of sliders. Replaced with
+   an INTENT-TARGETING scorer: rewards realized-vs-requested chaos, drama, genre
+   whiplash, and vocal density; keeps only true failures (transform violations, role
+   leaks, dead-air, over-reuse) as hard vetoes. Verified: HIGH chaos/drama now selects
+   a choppy dynamic plan, LOW selects a calm one — the winner flips with the sliders.
+3. HARD CAPS. pitch_budget=min(2) and stretch_budget=min(8.5) silently ignored the
+   knobs above the cap. Removed; user budgets honored up to role-tier ceilings.
+
+READINESS, NOW GROUNDED IN GIRL TALK DENSITY (not invented minimums):
+   Feed the Animals ~300+ samples/53min, All Day ~372/71min => ~5.5 samples/min,
+   a new element every ~11s, 2-4 layers, ~15-25 sources per 4-5 min stretch.
+   The audit reports have-vs-need sample-events, distinct sources, bed riders, and
+   foreground for the requested track length, and names the real bottleneck. For 40
+   random songs that is almost always clean drums + isolatable vocals -> recommends
+   stems. The old "pool thin" verdict fired on healthy pools; it had no basis.
+
+DOCS: JUKEBREAKER_SPEC_v2_CONSOLIDATED.md supersedes BUILD_SPEC v1.0 + ADDENDUM A v1.1,
+which described an architecture the code never implemented. v2 describes the real code,
+grounds thresholds in Girl Talk numbers, and defines runnable acceptance gates.
+
+VALIDATION: py_compile OK; --self-test SELF_TEST_OK; VERIFY_PACKAGE ok:true; intent
+scorer flips winner with sliders; grounded readiness READY on balanced 40-song pool.
+
+## v0.5.8
+
+Jukebreaker GT v0.5.8 — Dry Deck Stable Build
+
+This build is a rollback-hardening pass, not a feature expansion.
+
+Durable fixes:
+- Engine marker: gt_drydeck_v058.
+- Defaults now favor dry-deck playback over cave/wash artifacts.
+- Strict transform budgets are enforced before arrangement and again during render.
+- Vocals: max ±2 semitones and <=5% stretch.
+- Drum anchors: max ±1 semitone and <=6% stretch.
+- Bass/harmony/texture/full roles have conservative dry budgets.
+- Two-world mode now locks roles: voice world supplies vocals; bed world supplies drums, bass, harmony, texture, and full beds.
+- Candidate search penalizes or vetoes transform violations, role leaks, false bass swaps, same-source overuse, and excessive tail density.
+- Multideck tails are pruned by transition type. Bass swaps carry only low + rhythm by default; hook blends carry the dry floor, not the whole previous section.
+- Tiny timing corrections avoid the heavy phase-vocoder path when possible.
+- Post-render dry-deck quality metrics are written to the render report. For renders >=60 seconds, failed gates raise an error instead of silently presenting degraded audio as a success.
+
+This should stop the specific degraded failure mode heard in v0.5.7: cave tone, phase smear, over-transformed vocals/drums, role leakage, and too many wet outgoing tails.
+
+## v0.5.10
+
+Jukebreaker GT v0.5.10 — Floor Safe Deck
+
+Purpose
+- Fix the v0.5.9 behavior where all stable-deck attempts could be rejected and the UI still showed an old v0.5.8 render, creating a false success state.
+- Keep degraded audio blocked while adding a conservative floor-safe rescue pass that is built to be dry, continuous, and transform-light.
+
+Changes
+- Engine marker: gt_floorsafe_v0510.
+- Analyzer marker: gt-v0.5.10-librosa-floor-safe-dna.
+- Added final floor-safe rescue after expressive stable-deck retries fail.
+- Rescue mode uses low chaos, low drama, strict key safety, max ±1 pitch shift, max 4.5% stretch, one auxiliary deck, no true-air cuts, and continuous build/sustain sections.
+- Candidate scorer now penalizes same-source overuse, low source diversity, hard-air transitions, excess predicted silence, and excess tail density more aggressively.
+- Presence repair is still dry and conservative, but stronger against the specific cave/muffle failure.
+- Render list now marks current-engine and gate status from render reports.
+- UI hides old/stale renders by default when there is no passing current-engine render.
+- UI can clear the audio player instead of leaving the last old render loaded after a failed run.
+- HTTP server now suppresses benign browser-aborted socket writes instead of printing scary ConnectionAbortedError traces.
+
+Non-goals
+- Does not bypass the quality gate.
+- Does not load rejected renders.
+- Does not remove continuum, multideck, two-world, transform cache, or transition receipts.
+
+## v0.5.9
+
+Jukebreaker GT v0.5.9 — Stable Deck Quality-Retry Build
+
+Purpose:
+- Turn the v0.5.8 dry-deck gate from a blunt user-facing stop into a durable autopilot.
+- Bad audio is still blocked, but Jam Now now retries safer candidate plans before reporting failure.
+
+Changes:
+- Engine marker: gt_stabledeck_v059.
+- Failed quality-gate renders are quarantined under agent/rejected_renders instead of being loaded into the player.
+- Jam Now performs up to four quality attempts, reducing dead-air/drama/tail density on retries.
+- Candidate search now penalizes predicted silence, excess hard-air cuts, and over-dynamic plans.
+- Stable-deck planning limits true air sections before render.
+- Added mild deterministic presence restoration before the dry-deck quality gate.
+- Kept v0.5.8 guardrails: transform budgets, strict two-world roles, pruned multideck tails, transform cache, manifest/rollback records.
+
+## v0.5.5
+
+Jukebreaker GT v0.5.5 — Multideck Tail Overlay build
+
+This build fixes the structural DJ bug in v0.5.4: a crossfade cannot be built by splicing the incoming head early into the already-summed past. DJing requires live decks. This renderer now treats sections as decks with outgoing tails.
+
+Changes:
+- Engine marker: gt_multideck_v055.
+- Replaced single-timeline pre-boundary splice with multi-deck tail overlay.
+- Incoming section downbeats stay on the planned grid; transition window starts at the section boundary.
+- Outgoing sections render an overhang tail when the next transition is a blend type.
+- Layer fade-out is suppressed when the layer participates in an outgoing tail; the transition curve is the fade-out.
+- Transition reports now include deck_model, overlap_side, tail_deck_count, source_tail_sections, incoming_downbeat_error_ms, transition window samples, and outgoing_energy_zero_before_boundary.
+- Supports up to four live tail decks in the mixer path, with the current arrangement usually using the main outgoing deck plus the incoming deck.
+- Kept v0.5.4 DJ primitives: beatmatch_blend, bass_swap, acapella_bridge, impact_drop, hard_cut_pickup, hard_cut_to_air.
+- Kept v0.5.3 guardrails: source immutability posture, quota approval, no landfill bulk approval, verifier, loopback token, and source-only packaging.
+
+Validation:
+- python -m py_compile jukebreaker_gt.py
+- python jukebreaker_gt.py --self-test
+- python VERIFY_PACKAGE.py
+
+## v0.5.3
+
+Jukebreaker GT v0.5.3 Right Build
+
+This package is the cleaned source package built from the v0.5.2 fresh-start upload plus the earlier GT fixes and shortcuts.
+
+Fixed:
+- Internal engine/version marker now matches the package: gt_right_build_v053.
+- Browse buttons now call a real local Tk folder picker. If Tk is unavailable, the UI receives a recoverable error and the user can paste paths.
+- Default workspace no longer sits inside the Music folder, which prevented first-run setup from satisfying source immutability.
+- Loop extraction no longer defaults to direct bulk approval.
+- Loop Review now exposes quota approval as the main shortcut and removes the two landfill buttons.
+- API-level bulk approval is blocked, so stale UI or direct calls cannot approve the whole candidate pool by accident.
+- Self-test now exercises quota approval before proposing and rendering the synthetic mashup.
+
+Still intentionally source-only:
+- No .venv is bundled. START_HERE.cmd creates it locally.
+- No user music, cache, database, renders, or generated workspace files are bundled.
+- No network behavior is added to the core application. Dependency installation uses pip only during setup.
+
+## v0.5.15
+
+Jukebreaker GT v0.5.15 — Spec-authority realignment for manifest execution
+
+WHY: the previous pass let implementation reality rewrite the safety spec. This patch drags the executor back to the spec boundary while keeping the useful musical work from v0.5.14 inside that boundary. The varispeed lattice, intent scoring, and Girl Talk density audit remain features; they do not replace the safety model.
+
+CHANGES:
+- Manifest execution is dry-run by default. API callers must pass apply=true, and CLI callers must pass --apply, before outputs are written.
+- Whole-manifest prevalidation is now factored into prevalidate_manifest(), which returns the same execution plan used by dry-run and apply-mode execution.
+- The browser manifest table now separates DRY RUN from APPLY NOW and APPLY BG so the default button is non-mutating.
+- Added rollback_outputs(), a real rollback executor for generated artifacts recorded in rollback.jsonl. It archives generated renders, playlists, and render-report sidecars under agent/archive/rollback instead of deleting them.
+- Added guarded CLI twins: jukebreaker-gt manifest <path> [--apply] and jukebreaker-gt rollback [--manifest-id ID] [--limit N] [--apply]. Both are dry-run by default.
+- Added rollback source validation so rollback can only touch generated-output roots, never the master music library.
+- Operation journals now record apply-mode execution explicitly, and rollback application writes rollback_applied.jsonl receipts.
+
+VALIDATION PERFORMED HERE:
+- python -m py_compile jukebreaker_gt.py VERIFY_PACKAGE.py passed.
+- Synthetic manifest self-test passed: dry-run created no playlist, apply created the playlist, rollback dry-run moved nothing, rollback --apply archived the generated playlist, and an unknown operation type was rejected before mutation.
+
+## v0.5.2
+
+Jukebreaker GT v0.5.2
+
+Fixes the startup UI JavaScript syntax error in v0.5.1 that left the page showing only the header/status/player and no navigation or setup tabs. The broken string was in Judge Render UI code.
+
+Fresh start:
+1. Unzip.
+2. Double-click START_HERE.cmd.
+3. Use Setup with Music folder and Jukebreaker workspace.
+
+## v0.5.6
+
+Jukebreaker GT v0.5.6 — Continuum Compiler
+
+This build turns v0.5.5 from a multideck batch renderer into the first continuum-oriented compiler.
+
+Changes:
+- Engine marker: gt_continuum_v056.
+- Adds candidate arrangement search before audio render, so the engine can reject weak plans before paying WAV cost.
+- Adds two-world / album-collision crate logic: voice world supplies hooks and lead identity, bed world supplies drums, bass, harmony, and texture.
+- Adds world receipts per layer: world, source_track_key, native_key, and source_bpm.
+- Upgrades multideck tail overlay into role-group aux decks: low, rhythm, voice, texture, and mixed tails.
+- Adds transform cache under agent/cache/transforms/<engine>, keyed by loop, target length, pitch shift, sample rate, and engine version.
+- Adds transform cache hit/miss receipts in render reports.
+- Adds hook_blend_over_bed so the engine does not falsely report a bass handoff when the floor owner is intentionally preserved.
+- Adds continuum lookahead compile API (/api/continuum/compile), which writes a local plan JSON without requiring immediate full render.
+- Keeps the right-build guardrails: source/workspace separation, quota approval, no landfill bulk approval, manifest-gated execution, and package verification.
+
+Known scope:
+- This is still source-only and local-first.
+- Live audio device output is not bundled; Continuum is compiled lookahead plus stream-ready planning, not a cross-platform audio driver.
+
+## v0.5.13.2
+
+Jukebreaker GT v0.5.13.2  — Performance: parallel analysis, JIT warmup, sane cap
+
+WHY: analysis felt slow. Measured cause was structural, not algorithmic — every
+individual op is fast in steady state. The three real offenders:
+  1. analyze() was single-threaded (used 1 of N cores). Spec called for a process
+     pool; it was never built.
+  2. librosa's numba JIT compiled on the FIRST analyze/render call (~5-10s), on the
+     request path, with no progress — looked like a freeze.
+  3. MAX_ANALYSIS_SECONDS was 12 minutes, so every file was decoded + beat-tracked
+     up to 12 min deep. Fine for songs, catastrophic for any long mix/set/podcast.
+NOT a cause (verified): the 64-candidate arrangement search. arrange() is pure
+planning + dict-math preflight, no decode/DSP. Do not "optimize" it by lowering
+candidate_count; that is not where time goes.
+
+CHANGES
+- PARALLEL analyze(): decode + DSP now run across cores via ProcessPoolExecutor.
+  * fork context on Unix (workers inherit the imported module, no re-import, no risk
+    of a child re-running server startup); spawn on Windows; freeze_support() added.
+  * Worker count = config.workers, or auto = max(1, cpu_count - 2).
+  * Cache-hit fast path: already-analyzed files load from npz in-process (no pool).
+  * All DB writes stay in the parent process (workers return plain feature dicts).
+  * Robust serial fallback: any pool/spawn failure degrades to single-core, never
+    breaks analysis. Result reports parallel=true/false and worker count.
+- WARMUP: warmup_dsp() pays the numba JIT cost once at server start, in a daemon
+  thread off the request path. First real analyze/render no longer stalls.
+- CONFIGURABLE analysis depth: new analysis_seconds (default 180, hard ceiling 720)
+  replaces the fixed 12-minute cap. Exposed in Setup > Performance, persisted to
+  config.json and config.toml.
+- SETUP UI: Performance section adds "Analysis depth per track" and "Analysis
+  workers" (0 = auto). Populated on load, saved with the workspace.
+
+REFACTor (no behavior change): the three self-free DSP helpers (estimate_downbeats,
+vocal_likelihood, estimate_sections) are now module-level functions so a worker
+process can call them; the instance methods delegate to them.
+
+VALIDATION: py_compile OK; --self-test SELF_TEST_OK; VERIFY_PACKAGE ok:true;
+end-to-end 7-file analyze with pool (parallel=true, 0 failures), warm-cache re-run
+0.00s, Setup round-trips analysis_seconds=90/workers=3.
+
+## v0.6.2
+
+Jukebreaker GT v0.6.2 - Runtime Ledger
+
+Purpose
+- Add wall-clock runtime instrumentation to the TasteSpec one-click path so performance work is evidence-driven.
+- Preserve the v0.6.1 TasteSpec feasibility architecture and analysis worker path.
+
+Changes
+- Added a durable runtime ledger for one-click TasteSpec runs.
+- The ledger records named stage durations for doctor, scan, bounded analysis, loop extraction, ear-crate build, readiness, graph build, composition/gating, expanded harvest passes, and render execution.
+- Analysis now returns internal phase timings: row selection, cache load, compute, DB write, total, cache hits, compute jobs, workers, and parallel mode.
+- The UI now shows a Runtime Ledger card with elapsed time, stage count, top stages by wall-clock time, and the path to the JSON ledger.
+- The latest runtime ledger is written to agent/perf/last_run.runtime_ledger.json and each run also gets a stable run_id.runtime_ledger.json file.
+- Added /api/perf for inspecting the last ledger from the local UI/API.
+
+Validation
+- python -m py_compile jukebreaker_gt.py VERIFY_PACKAGE.py
+- python jukebreaker_gt.py --self-test
+- python VERIFY_PACKAGE.py
+
+## v0.5.13
+
+Jukebreaker GT v0.5.13 - Varispeed Lattice Deck
+
+Purpose
+- Fix the deck-theory category error: tempo movement and pitch movement are not always separate DSP operations.
+- Model turntable/DJ varispeed first: changing deck speed changes BPM and pitch together cleanly by resampling.
+- Use synthetic pitch shifting only for the small residual after varispeed.
+
+Core changes
+- Added tempo-key lattice planning:
+  speed_ratio = target_bpm / source_bpm
+  natural_pitch_shift = 12 * log2(speed_ratio)
+  residual_pitch_shift = desired_key_shift - natural_pitch_shift
+- Candidate selection now rewards clean varispeed solutions and penalizes synthetic residual correction.
+- Arrangement layers now carry transform receipts: transform_mode, speed_ratio, varispeed_pct, natural_pitch_shift, desired_key_shift, residual_pitch_shift, artifact_risk.
+- Render cache keys include the residual pitch plan and engine version.
+- Stable/dry render mode uses varispeed resample first, then small residual pitch correction.
+- Dry-deck transform budgets now separate clean varispeed percentage from synthetic residual pitch budget.
+- Self-test is shortened so package verification does not become a long render loop.
+
+Non-goals
+- This does not bypass dry-deck quality gates.
+- This does not revert continuum, two-world crates, multideck tails, role locks, transform cache, or render quarantine behavior.
+
+## v0.5.4
+
+Jukebreaker GT v0.5.4 — DJ Compiler build
+
+This is the first source package that treats the mashup engine as a DJ/mix compiler rather than a loop placer.
+
+Changes:
+- Engine marker: gt_dj_compiler_v054.
+- Added phrase-aware transition metadata per section.
+- Added named transition primitives: beatmatch_blend, bass_swap, acapella_bridge, impact_drop, hard_cut_pickup, hard_cut_to_air.
+- Added equal-power and S-curve fade curves.
+- Added low/high split transition blending so bass swaps keep one low-end owner.
+- Added harmonic route planner to prevent two-minute sketches from collapsing into one or two pitch centers.
+- Added beat_dna and chord_dna summaries into arrangement sections.
+- Fixed energy-plan repair so mandatory cuts/breakdowns do not shorten the requested render length.
+- Render reports now include transitions with fade type, phrase boundary, harmonic relation, bass owner before/after, xfade beats, and xfade samples.
+- Kept v0.5.3 guardrails: source immutability posture, quota approval, no landfill bulk approval, verifier, loopback token, and source-only packaging.
+
+Validation:
+- python -m py_compile jukebreaker_gt.py
+- python jukebreaker_gt.py --self-test
+- python VERIFY_PACKAGE.py
+
+## v0.6.0
+
+Jukebreaker GT v0.6.0 — TasteSpec Ear Crate
+
+Purpose
+- Stop treating a render gate as the product.
+- Encode taste as deterministic, inspectable rules before the arranger is allowed to compose.
+- Use Girl Talk as the first acceptance profile, not as a fallback or degraded mode.
+
+New architecture
+- Added TasteSpec profile support with girl_talk_v1 as the first contract.
+- Added EarAtom role taxonomy: VOX_HOOK, VOX_VERSE, VOX_SHOUT, DRUM_BREAK, BASS_RIFF, BED_CHORD, RIFF_ID, TEXTURE, PICKUP_FILL, DROP_HIT, TRANSITION_TAIL.
+- Added ear_atoms SQLite table. A song slice is not arrangement material until it becomes an approved EarAtom.
+- Added compatibility_edges SQLite table. The compiler now stores typed relations such as vocal_over_bed, bass_over_drums, and spark_into_phrase.
+- Added deterministic floor rail, foreground rail, and spark rail composer.
+
+Rules now enforced before render
+- Approved crate must contain enough foreground, floor, bass, spark, and source-identity material for the requested duration.
+- First recognizable foreground must arrive early.
+- Floor coverage and foreground coverage are measured as timeline obligations.
+- Source identity turnover is part of the style contract.
+- A plan cannot render if the crate or style contract is structurally empty.
+
+New callable paths
+- UI one-click now defaults to TasteSpec girl_talk_v1.
+- Track budget default raised to 240 because this profile needs source turnover.
+- Added API endpoints:
+  - GET /api/ear_atoms
+  - POST /api/ear_crate/build
+  - POST /api/taste/readiness
+  - POST /api/taste/graph
+- Added CLI twins:
+  - python jukebreaker_gt.py ear-crate --force --previews
+  - python jukebreaker_gt.py taste-readiness --seconds 120
+  - python jukebreaker_gt.py taste-graph --seconds 120
+
+Validation
+- python -m py_compile jukebreaker_gt.py passed.
+- python jukebreaker_gt.py --self-test passed.
+- python VERIFY_PACKAGE.py passed.
+
+Known validation note
+- The local container segfaults inside the inherited librosa analysis path when running full PCM feature extraction. The same crash reproduces in v0.5.17, so it is not introduced by TasteSpec. Static verification and guarded-executor self-test pass here; full audio validation should be run on the target Windows environment where the prior versions already analyzed the user's library.
+
+## v0.5.7
+
+Jukebreaker GT v0.5.7 — Continuum Control Surface Fix
+
+This build fixes the v0.5.6 UI exposure gap. The continuum compiler existed in the backend, but Jam Now still showed the older v0.5.5/v0.5.6 batch controls.
+
+Changes:
+- Engine marker: gt_continuum_v057.
+- Header now displays Jukebreaker GT v0.5.7 Continuum.
+- Jam Now exposes Album Collision / Notorious Mode.
+- Jam Now exposes two-world controls: mix mode, voice world query, bed world query, candidate arrangement count, lookahead seconds, max auxiliary decks, and transition priority.
+- Defaults match the current test doctrine: 2 minute sketch, track budget 80, 126.05 BPM, 64 candidate plans, voice world "2017 top 40", bed world "2014 indie".
+- Adds a COMPILE CONTINUUM PLAN button wired to /api/continuum/compile.
+- Advanced Outcome Controls mirror the same continuum fields.
+- Keeps v0.5.6 continuum compiler, transform cache, multideck aux tails, source/workspace separation, quota approval, and package verification.
+
+## v0.7.2 - Organ Transplant (2026-07-09)
+
+The v0.7.x rebuild forked from the v0.6.2 runtime-ledger branch and lost
+four battle-tested fixes from the v0.6.4/v0.6.5 line. This release ports
+them into the modular layout. No architecture changes.
+
+- Keyless percussion (v0.6.5): KEYLESS_ROLES = {drum_anchor, fx} in
+  deck/transform.py. Percussive material is no longer key-gated on
+  analyzer key noise. Measured on the reference 64-track library: the
+  refused deck (129.2 BPM, key 9) goes from 9/11 to 28 distinct sources.
+- Turnover contract (v0.6.4): deck selection restricted to decks that
+  keep needed_sources when any exist; pre-compose refusal with the deck
+  named when none can; hard source rotation in the composer's pick().
+- Fail-fast batched harvest (v0.6.4): per-batch readiness checks under
+  the runtime ledger (harvest_bN_* stages), early refusal with per-axis
+  yield projection, batched gate-miss recovery (missN_* stages).
+- Honest veto reporting (v0.6.4): arrangement-score vetoes name only the
+  violated conditions with values; voice_missing exposed in the score.
+- Ear-crate memory fix (v0.6.4): loops processed grouped by source file
+  with a single-entry decode cache instead of holding every track's PCM.
+- dj_compiler stamp corrected from the stale v0.6.2 to v0.7.2.
+- ENGINE_VERSION: gt_library_forge_v072. ANALYZER_VERSION unchanged.
+
+### v0.7.2 addendum: key discipline was silently disabled in v0.7.0/v0.7.1
+
+deck/transform.py never imported pitch_distance (the module cycle
+harmony -> judge -> lattice -> transform -> harmony made the direct
+import impossible), and the bare `except Exception` in
+nearest_harmonic_shift converted the resulting NameError into raw=0.0.
+Effect: every loop was treated as already in the target key, for every
+role including vocals. The entire dry-deck harmonic doctrine was off,
+and the gates could not catch it because they consult the same planner.
+
+Fixes:
+- pitch_distance moved to deck/dsp.py (cycle-free, pure function);
+  harmony and transform both import it from there.
+- The except in nearest_harmonic_shift narrowed to (TypeError,
+  ValueError): missing key metadata degrades gracefully, infrastructure
+  failures die loud.
+- New regression gate test_percussion_is_keyless_but_vocals_are_not:
+  a tritone vocal at equal tempo must violate; a drum break must not.
+- test_budget_knob_bites repaired to be key-neutral; its previous key
+  pair only passed because key discipline was dead.
+
+## v0.7.3 - Incremental Crate (2026-07-09)
+
+Diagnosed from a 5,255s / 22-stage run on an enlarged library. The eight
+slowest stages (~4,700s, 90% of the run) were all missN_ear_crate and
+missN_extract_loops across four gate-miss recovery passes. Root cause was
+two-part:
+
+1. Real work, badly amortized. Each miss pass analyzed a fresh ~48-track
+   batch; ~15s/track of librosa analysis on full-length pop is genuinely
+   ~700s/batch, and the deck-feasibility gate demanded four passes.
+2. Full-table re-walks between passes. extract_loops and build_ear_crate
+   guarded correctness with per-row skip probes but still SELECTed the
+   entire files/loops tables every pass, re-touching every already
+   processed row.
+
+Fixes:
+- extract_loops: when not forcing, excludes files that already have loops
+  at the SQL layer (WHERE f.id NOT IN ...). A fully-extracted library is
+  now a no-op select, not a full walk. Per-row skip retained for safety.
+- build_ear_crate: when not forcing, excludes loops that already have an
+  atom for the profile at the SQL layer. Path-grouped + top-N-by-score
+  ordering preserved.
+- Default harvest batch 48 -> 96, so large libraries converge in fewer,
+  larger analysis passes with less per-pass graph-rebuild and table-walk
+  overhead. Override with data.harvest_batch.
+
+Honest note: the analyzer is inherently the floor. On a large library the
+first full harvest is still bounded below by ~15s/track. These changes
+remove the redundant re-walks and halve the pass count; they do not and
+cannot make librosa analysis of new audio free. The cached-rerun path,
+however, is now near-instant.
+
+Also confirmed healthy from the same run: the merged organs all fired.
+veto:false, quality_gate passed, 142 layers over 23 source tracks, 0
+transform_violations, 0 role_leaks, voice_missing:false, 2% silence. The
+render succeeded; only its cost was wrong.
+
+ENGINE_VERSION: gt_library_forge_v073. ANALYZER_VERSION unchanged;
+existing analysis and atom caches remain valid.
+
+## v0.7.3 rename: earcrate
+
+Jukebreaker GT is renamed earcrate, after the mechanism that defines the
+system: only auditioned material exists to the composer. Package dir is
+now earcrate/, entry point `python -m earcrate`, single file
+dist/earcrate.py, ENGINE_VERSION earcrate_v073. Sketch filenames are
+prefixed Earcrate_Sketch. Existing workspaces survive: a legacy
+jukebreaker.sqlite is adopted in place, and ANALYZER_VERSION is unchanged
+so all analysis caches remain valid. Historical references in this
+changelog are left as written.

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EarCrate — one-click setup</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #101014; color: #e8e6e3;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  main { max-width: 560px; width: 100%; }
+  h1 { font-size: 2rem; letter-spacing: -0.02em; }
+  h1 span { color: #f5a623; }
+  p.tag { color: #9a97a0; margin: 8px 0 28px; line-height: 1.5; }
+  a.button {
+    display: block; text-align: center; text-decoration: none;
+    background: #f5a623; color: #17130a; font-size: 1.35rem; font-weight: 700;
+    padding: 20px; border-radius: 14px; margin-bottom: 28px;
+  }
+  a.button:hover { background: #ffbc42; }
+  a.button small { display: block; font-size: 0.8rem; font-weight: 500; margin-top: 4px; opacity: 0.75; }
+  ol { padding-left: 22px; line-height: 1.7; }
+  ol li { margin-bottom: 10px; }
+  ol b { color: #fff; }
+  .note { background: #1a1a21; border: 1px solid #2a2a33; border-radius: 10px;
+          padding: 14px 16px; margin-top: 24px; font-size: 0.9rem; color: #b5b2bb; line-height: 1.6; }
+  .note b { color: #e8e6e3; }
+  footer { margin-top: 28px; font-size: 0.85rem; color: #706d78; line-height: 1.6; }
+  footer a { color: #9a97a0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ear<span>crate</span></h1>
+  <p class="tag">Local-first mashup engine. Your music never leaves your machine —
+  this button just fetches a tiny setup file that does everything for you.</p>
+
+  <a class="button" href="get-earcrate.cmd" download>⬇ Download EarCrate Setup
+    <small>Windows · installs / updates in one double-click</small></a>
+
+  <ol>
+    <li><b>Click the button</b> — it saves <code>get-earcrate.cmd</code> to your Downloads.</li>
+    <li><b>Double-click the file.</b> If Windows shows a blue "protected your PC"
+        screen, click <b>More info → Run anyway</b> (it's your own file from your
+        own repo).</li>
+    <li><b>That's it.</b> It installs Python + ffmpeg if you don't have them,
+        downloads the latest EarCrate, builds it, puts an <b>EarCrate</b> icon on
+        your Desktop, and opens the app. If it says it installed missing pieces,
+        double-click the file one more time.</li>
+  </ol>
+
+  <div class="note">
+    <b>After it opens:</b> pick a workspace folder, then use the <b>Library</b> tab —
+    Ingest (point it at your external drive), Organize (builds your clean
+    Artist/Album archive), Ear Crate (builds your mashup reference from your own
+    music). Dry-run is always the default; your source files are never touched.
+    <br><br>
+    <b>To update later:</b> just run the same setup file again.
+  </div>
+
+  <footer>
+    <a href="https://github.com/BigBirdReturns/earcrate">Source on GitHub</a> ·
+    <a href="https://github.com/BigBirdReturns/earcrate/blob/main/LIBRARY_WORKFLOW.md">Library workflow</a> ·
+    <a href="https://github.com/BigBirdReturns/earcrate/blob/main/PERSONAS/GIRL_TALK_V1.md">The persona math</a>
+  </footer>
+</main>
+</body>
+</html>

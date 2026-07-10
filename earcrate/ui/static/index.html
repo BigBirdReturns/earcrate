@@ -1,0 +1,344 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>earcrate</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/* earcrate — "mixing console at night". Amber = tempo readout (Technics pitch LED),
+   cyan = cue/active, coral = warning. System fonts only: this is a no-network local app. */
+:root{
+  --bg:#0e0f13; --chassis:#15171d; --panel:#191c24; --panel-2:#1f232d; --edge:#2a2f3b; --edge-hi:#39404f;
+  --ink:#e8ebf2; --ink-dim:#98a1b3; --ink-faint:#6b7488;
+  --amber:#ffb02e; --amber-dim:#a8741f; --cyan:#3fd6e6; --cyan-dim:#2a8b96; --coral:#ff5a52; --green:#54d08a;
+  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --lbl:.14em;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;
+  background-image:radial-gradient(1200px 500px at 80% -10%,rgba(255,176,46,.05),transparent),radial-gradient(900px 500px at 0% 0%,rgba(63,214,230,.045),transparent)}
+/* console header */
+header{position:sticky;top:0;z-index:40;display:flex;gap:20px;align-items:center;padding:12px 22px;
+  background:linear-gradient(180deg,#1a1d25,#131519);border-bottom:1px solid var(--edge);box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 6px 22px rgba(0,0,0,.4)}
+.brand{display:flex;flex-direction:column;line-height:1.05}
+.brand .mk{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.04em}
+.brand .mk b{color:var(--amber)}
+.brand .ver{font-family:var(--mono);font-size:10.5px;letter-spacing:var(--lbl);text-transform:uppercase;color:var(--ink-faint);margin-top:2px}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);
+  background:transparent;border:1px solid transparent;border-radius:7px;padding:7px 11px;cursor:pointer;transition:.12s}
+nav button:hover{color:var(--ink);background:var(--panel-2)}
+nav button.active{color:var(--bg);background:var(--amber);border-color:var(--amber);font-weight:700;box-shadow:0 0 16px rgba(255,176,46,.35)}
+/* live tempo readout in header */
+.readout{margin-left:auto;display:flex;align-items:center;gap:12px}
+.led{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
+  display:flex;align-items:center;gap:7px}
+.led .dot{width:8px;height:8px;border-radius:50%;background:var(--edge-hi);box-shadow:0 0 0 rgba(0,0,0,0)}
+.led.busy .dot{background:var(--amber);box-shadow:0 0 10px var(--amber);animation:pulse 1s infinite}
+.led .val{color:var(--ink);text-transform:none}
+@keyframes pulse{50%{opacity:.35}}
+main{padding:20px;max-width:1200px;margin:0 auto}
+section{display:none;animation:fade .18s ease}
+section.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+h1{font-size:18px;margin:0}
+h2{font-family:var(--mono);font-size:13px;letter-spacing:var(--lbl);text-transform:uppercase;color:var(--ink);margin:0 0 4px;font-weight:700}
+h2 .accent{color:var(--amber)}
+/* panels look like console modules with a silkscreen top rule */
+.card{background:linear-gradient(180deg,var(--panel),#16191f);border:1px solid var(--edge);border-radius:12px;padding:16px;margin-bottom:14px;position:relative}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);border-radius:12px 12px 0 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.muted{color:var(--ink-dim)}.small{font-size:12px}.mono{font-family:var(--mono)}
+label{display:block;margin:12px 0 5px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+label .muted{text-transform:none;letter-spacing:0;font-size:11px}
+input,select,textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--edge);border-radius:8px;padding:9px 11px;font-family:var(--sans);font-size:13.5px;transition:.12s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(63,214,230,.14)}
+input.mononum{font-family:var(--mono);letter-spacing:.02em}
+button.action{font-family:var(--mono);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;
+  background:var(--panel-2);color:var(--ink);border:1px solid var(--edge-hi);border-radius:8px;padding:10px 14px;margin:8px 8px 0 0;cursor:pointer;transition:.12s}
+button.action:hover{border-color:var(--cyan);color:#fff;background:#232834}
+button.action.primary{background:linear-gradient(180deg,#2ca6b4,#1f8593);border-color:#3fd6e6;color:#05171a;text-shadow:0 1px 0 rgba(255,255,255,.2)}
+button.action.primary:hover{filter:brightness(1.08)}
+button.danger{border-color:#6e2f34;color:#ffb4af;background:#241416}button.danger:hover{border-color:var(--coral);color:#fff}
+.bigJam{font-size:14px;padding:16px 24px;letter-spacing:.09em;border-radius:11px;
+  background:linear-gradient(180deg,#ffc255,#f59a15)!important;border-color:#ffb02e!important;color:#1a1200!important;font-weight:800!important;box-shadow:0 8px 26px rgba(255,155,20,.28)}
+.bigJam:hover{filter:brightness(1.05)}
+.bar{height:6px;background:#0a0b0f;border-radius:6px;overflow:hidden;border:1px solid var(--edge)}
+.bar span{display:block;height:100%;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));width:0;transition:width .3s}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:8px;border-bottom:1px solid var(--edge)}
+td{border-bottom:1px solid #20242e;padding:8px;vertical-align:top}
+tr:hover td{background:rgba(255,255,255,.015)}
+code,.k{font-family:var(--mono)}
+.pill{display:inline-block;padding:2px 9px;border:1px solid var(--edge-hi);border-radius:20px;font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+.pill.ok{border-color:var(--green);color:var(--green)}.pill.warn{border-color:var(--amber);color:var(--amber)}.pill.bad{border-color:var(--coral);color:var(--coral)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.pathLine{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.pathLine input{min-width:min(680px,64vw);flex:1;width:auto}
+pre{white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:#0a0b0f;color:#c8cfdd;padding:13px;border-radius:9px;max-height:340px;overflow:auto;border:1px solid var(--edge)}
+.toast{position:fixed;right:18px;bottom:18px;max-width:520px;background:linear-gradient(180deg,#1c2530,#141a22);border:1px solid var(--cyan-dim);box-shadow:0 16px 40px rgba(0,0,0,.55);border-radius:12px;padding:14px 16px;display:none;z-index:60}
+.toast b{display:block;margin-bottom:6px;font-family:var(--mono);letter-spacing:.03em}.toast a{color:var(--cyan)}
+.toast button{float:right;background:var(--panel-2);color:var(--ink);border:1px solid var(--edge-hi);border-radius:7px;padding:3px 9px;cursor:pointer;font-family:var(--mono)}
+.playerBox{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.playerBox audio{width:min(720px,100%);filter:sepia(.15) hue-rotate(160deg) saturate(1.1)}
+.renderList{margin-top:10px}.renderList a{color:var(--cyan)}.renderList>div{padding:6px 0;border-top:1px solid #20242e}.renderList button{margin-left:6px}
+.hero{background:linear-gradient(150deg,#1c2029,#141821 60%,#181320);border-color:var(--edge-hi)}
+.controlGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.outcomeHint{min-height:38px;color:var(--ink);font-size:13.5px}
+.advanced{border-top:1px solid var(--edge);margin-top:14px;padding-top:6px}
+.advanced summary{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);cursor:pointer;padding:6px 0}
+.advanced summary:hover{color:var(--cyan)}
+/* ===== SIGNATURE: the pitch-fader lattice ===== */
+.readiness{display:grid;grid-template-columns:1fr;gap:16px}
+@media(min-width:820px){.readiness{grid-template-columns:1.3fr 1fr}}
+.latticeWrap{background:#0a0b0f;border:1px solid var(--edge);border-radius:10px;padding:16px 16px 10px}
+.latticeHead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+.latticeHead .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+.latticeHead .rec{font-family:var(--mono);font-size:12px;color:var(--amber)}
+.ladder{display:flex;align-items:flex-end;gap:10px;height:150px;overflow-x:auto;padding-bottom:4px}
+.rung{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:56px;height:100%}
+.rung .col{width:38px;background:linear-gradient(180deg,var(--cyan-dim),#1a3b40);border:1px solid var(--cyan-dim);border-radius:4px 4px 2px 2px;transition:.2s;position:relative}
+.rung.best .col{background:linear-gradient(180deg,var(--amber),var(--amber-dim));border-color:var(--amber);box-shadow:0 0 18px rgba(255,176,46,.4)}
+.rung.target .col{outline:2px dashed var(--ink-dim);outline-offset:2px}
+.rung .n{font-family:var(--mono);font-size:11px;color:var(--ink);margin-top:7px}
+.rung .u{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);margin-top:1px}
+.rung.best .n{color:var(--amber);font-weight:700}
+.rung .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:4px;height:11px}
+.rung.best .tag{color:var(--amber)}.rung.target .tag{color:var(--ink-dim)}
+.roleGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin-top:4px}
+.roleCell{background:var(--panel-2);border:1px solid var(--edge);border-radius:8px;padding:9px 10px;text-align:center}
+.roleCell .num{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1}
+.roleCell .lab{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-top:5px}
+.roleCell.short .num{color:var(--coral)}.roleCell.ok .num{color:var(--green)}
+.warnList{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
+.warnList li{display:flex;gap:9px;align-items:flex-start;font-size:13px;background:#231613;border:1px solid #4a2b23;border-radius:8px;padding:9px 11px;color:#ffcabf}
+.warnList li::before{content:"\25B2";color:var(--coral);font-size:9px;margin-top:3px}
+.verdict{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:8px 13px;border-radius:8px;border:1px solid}
+.verdict.go{color:var(--green);border-color:var(--green);background:rgba(84,208,138,.08)}
+.verdict.hold{color:var(--coral);border-color:var(--coral);background:rgba(255,90,82,.08)}
+.tierbar{display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid var(--edge);margin-top:6px}
+.tierbar span{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;color:#06121a;min-width:0;overflow:hidden}
+.tier-native{background:var(--green)}.tier-vari{background:var(--cyan)}.tier-varires{background:var(--amber)}.tier-reject{background:#59323a;color:#ffb4af}
+@media(max-width:640px){.pathLine input{min-width:100%}main{padding:14px}}
+</style>
+</head><body><header>
+<div class="brand" title="earcrate v0.6.2 TasteSpec Feasibility" aria-label="earcrate v0.6.2 TasteSpec Feasibility"><span class="mk"><b>JUKE</b>BREAKER · GT</span><span class="ver">v0.6.2 · Runtime ledger</span></div>
+<nav id="nav"></nav>
+<div class="readout"><span id="statusLed" class="led"><span class="dot"></span><span id="status" class="val">idle</span></span></div>
+</header>
+<div id="toast" class="toast"></div>
+<main>
+<div class="card"><b>Engine status:</b> <span id="status_big" class="muted">idle</span><div class="bar"><span id="prog_global"></span></div><p id="last_error" class="muted"></p></div>
+<div class="card"><b>Runtime ledger:</b> <span id="perf_summary" class="muted">none yet</span><pre id="perfOut" style="max-height:160px">No timed run yet.</pre></div>
+<div class="card"><b>Latest render:</b> <span id="playerName" class="muted">none yet</span><div class="playerBox"><audio id="renderPlayer" controls preload="metadata"></audio><a id="renderLink" href="#" target="_blank" rel="noopener">open audio link</a><button onclick="copyRenderPath()">copy file path</button><button onclick="refreshRenders(false)">refresh renders</button></div><p id="playerPath" class="small muted"></p><div id="renderList" class="renderList small muted"></div></div>
+
+<section id="jam"><div class="card hero"><h2>Jam Now</h2><p class="muted">TasteSpec surface: first build an ear-crated bank of phrase atoms, then compile a deterministic floor rail, foreground rail, and spark rail. No raw loop is allowed to masquerade as a song.</p><div class="controlGrid"><div><label>Mode / mix outcome</label><select id="o_preset" onchange="updateOutcomePreview()"><option value="album_collision" selected>Album Collision: two-world continuum</option><option value="notorious_mode">Notorious Mode: voice-over-bed bootleg album</option><option value="party_cutup">Party cut-up: fast hooks and genre jumps</option><option value="hook_ride">Hook ride: vocals up front, groove survives</option><option value="clean_blend">Clean blend: safer key and smoother edits</option><option value="max_chaos">Max chaos: dumb fun, fewer guardrails</option></select><label>Target length</label><select id="o_seconds" onchange="updateOutcomePreview()"><option value="60">1 minute sketch</option><option value="120" selected>2 minute sketch</option><option value="180">3 minute sketch</option><option value="300">5 minute sketch</option></select></div><div><label>Track budget this pass</label><input id="o_budget" value="0"><p class="muted small">TasteSpec needs source turnover. Default is all scanned tracks; use 80 only for a fast diagnostic.</p><label><input id="o_force_loops" type="checkbox" style="min-width:auto"> rebuild loop pool first</label></div><div><label>Edit speed</label><select id="o_edit_speed" onchange="updateOutcomePreview()"><option value="steady">Steady: longer blends</option><option value="active" selected>Active: frequent swaps</option><option value="hypercut">Hypercut: 2 to 4 bar edits</option></select><label>Vocal hooks</label><select id="o_hooks" onchange="updateOutcomePreview()"><option value="sparse">Sparse: mostly instrumental</option><option value="balanced">Balanced: hooks when useful</option><option value="hooky" selected>Hooky: recognizable vocals high</option></select></div><div><label>Genre jump</label><select id="o_genre_jump" onchange="updateOutcomePreview()"><option value="smooth">Smooth: adjacent material</option><option value="mixed">Mixed: contrast with restraint</option><option value="whiplash" selected>Whiplash: sharp genre pivots</option></select><label>Beat/key safety</label><select id="o_safety" onchange="updateOutcomePreview()"><option value="tight">Tight: safer, fewer clashes</option><option value="loose" selected>Loose: harmonic DJ stretch</option><option value="wild">Wild: permit uglier collisions</option></select></div><div><label>Groove backbone</label><select id="o_backbone" onchange="updateOutcomePreview()"><option value="locked">Locked: one beat rides longer</option><option value="survive">Survive: beds persist through ticks</option><option value="restless" selected>Restless: beat can flip, grid stays locked</option></select><label>Render BPM</label><input id="o_bpm" value="" placeholder="blank = strongest tempo island"></div></div><details class="advanced" open><summary>Legacy two-world labels / TasteSpec still builds from EarAtoms</summary><div class="controlGrid"><div><label>Mix mode</label><select id="o_mix_mode" onchange="updateOutcomePreview()"><option value="two_world_continuum" selected>Two-world (voice crate + bed crate)</option><option value="single_crate">Single crate (one pool)</option></select><label>Candidate arrangements</label><input id="o_candidates" value="64"></div><div><label>Voice world query <span class="muted small">hooks / vocals / lead identity</span></label><input id="o_voice_world" value="2017 top 40"><label>Bed world query <span class="muted small">drums / bass / harmony / texture</span></label><input id="o_bed_world" value="2014 indie"></div><div><label>Lookahead seconds</label><input id="o_lookahead" value="90"><label>Max auxiliary decks</label><input id="o_max_aux_decks" value="3"></div><div><label>Transition priority</label><textarea id="o_transition_priority">hook_blend_over_bed, beatmatch_blend, bass_swap, acapella_bridge, impact_drop</textarea></div></div></details><div class="card" style="margin-top:14px"><h2>Deck readiness <span class="accent">// lattice</span></h2><p class="muted small">Before spending a full render, score the approved pool against candidate deck speeds. The ladder shows how many loops stay clean at each BPM &mdash; taller and amber is the speed the varispeed lattice recommends. No audio is rendered here; this runs in seconds.</p><button class="action" onclick="runPreflight()">CHECK READINESS</button><span id="readyVerdict"></span><div id="readinessPanel" style="display:none;margin-top:14px" class="readiness"><div class="latticeWrap"><div class="latticeHead"><span class="t">Pitch-fader lattice &mdash; usable loops per candidate BPM</span><span id="latticeRec" class="rec"></span></div><div id="ladder" class="ladder"></div></div><div><div class="latticeHead"><span class="t">Usable loops per role at chosen speed</span></div><div id="roleGrid" class="roleGrid"></div><div class="latticeHead" style="margin-top:14px"><span class="t">Transform tiers &mdash; clean vs. synthetic</span></div><div id="tierBar" class="tierbar"></div><ul id="warnList" class="warnList"></ul></div></div></div>
+<button class="action primary" onclick="compileContinuum()">COMPILE CONTINUUM PLAN</button><button class="action bigJam" onclick="oneClickJam()">MAKE A MIX NOW</button><button class="action" onclick="proposeOutcomeOnly()">Propose only</button><button class="action" onclick="tab('mashup')">Open advanced controls</button><div class="grid"><div class="card"><b>Outcome translation</b><div id="outcomeHint" class="outcomeHint"></div><pre id="outcomePreview"></pre></div><div class="card"><b>One-click log</b><pre id="jamOut">Ready.</pre></div></div></div></section>
+<section id="setup"><div class="card"><h2>Setup</h2><p class="muted">Pick your <b>Music folder</b> and one <b>Jukebreaker workspace</b>. Jukebreaker will create its database, cache, manifests, renders, playlists, and stems inside the workspace. Your Music folder is treated as read-only source material.</p><div class="controlGrid"><div><label>Music folder <span class="muted small">read-only source</span></label><div class="pathLine"><input id="music_folder" placeholder="Choose the folder that contains your music"><button class="action" onclick="browseInto('music_folder')">Browse...</button></div></div><div><label>Jukebreaker workspace <span class="muted small">all app output lives here</span></label><div class="pathLine"><input id="workspace_folder" placeholder="Example: C:\Users\BAM-Gram\Music\Jukebreaker" oninput="deriveWorkspaceFields()"><button class="action" onclick="browseInto('workspace_folder')">Browse...</button><button class="action" onclick="suggestWorkspace()">Suggest</button></div><div id="wsCandidates" class="muted small" style="margin-top:8px"></div></div></div><button class="action bigJam" onclick="saveWorkspaceConfig()">Save setup</button><button class="action" onclick="doctor()">Doctor</button><details class="advanced"><summary>Show derived folders</summary><p class="muted small">These are derived from the workspace. You normally should not edit them.</p><label>Library root used internally</label><input id="master_root" placeholder="derived from Music folder"><label>Work folder</label><input id="working_root" placeholder="workspace\work"><label>Agent state folder</label><input id="agent_root" placeholder="workspace\agent"><label>Playlists folder</label><input id="playlists_root" placeholder="workspace\playlists"><label>Stems folder</label><input id="stems_root" placeholder="workspace\stems"></details><details class="advanced"><summary>Performance</summary><div class="controlGrid"><div><label>Analysis depth per track <span class="muted small">seconds of audio to characterize</span></label><input id="analysis_seconds" class="mononum" type="number" min="30" max="720" placeholder="180"><p class="muted small">Lower is faster. 180s is plenty for BPM/key. Raise only if you have long DJ sets or mixes where the useful part starts late.</p></div><div><label>Analysis workers <span class="muted small">0 = auto (cores &minus; 2)</span></label><input id="workers" class="mononum" type="number" min="0" max="64" placeholder="0"><p class="muted small">Parallel decode + analysis across CPU cores. Auto uses all but two.</p></div></div></details><pre id="doctorOut"></pre></div></section>
+<section id="library">
+<div class="card"><h2>Add music <span class="accent">// multi-folder ingest</span></h2>
+<p class="muted small">Copy music from anywhere (external SSD, downloads, old drives) into the managed library. Sources are never modified; copies land under <code>master/ingested/&lt;batch&gt;/</code>, content-hash deduped, manifest-journaled, rollback-able. Then <b>Organize + Retag</b> builds the clean <code>Artist/Album/NN Title</code> tree with amended tags under <code>working/organized/</code> — your originals stay verbatim.</p>
+<div id="ingestPaths"><div class="pathLine"><input placeholder="E:\Music or /Volumes/SSD/music" class="ingestSrc"><button class="action" onclick="pickIngestDir(this)">Browse&hellip;</button></div></div>
+<button class="action" onclick="addIngestRow()">+ another folder</button>
+<div style="margin-top:8px"><button class="action" onclick="runIngest(false)">DRY-RUN PLAN</button><button class="action primary" onclick="runIngest(true)">INGEST NOW</button>
+<button class="action" onclick="runOrganize(false)">ORGANIZE DRY-RUN</button><button class="action" onclick="runOrganize(true)">ORGANIZE + RETAG</button></div>
+<pre id="ingestOut"></pre></div>
+<div class="card"><h2>Library</h2><button class="action" onclick="post('/api/scan_bg',{})">Scan</button><button class="action" onclick="refreshTracks()">Refresh tracks</button><div class="bar"><span id="prog"></span></div><p id="statustext" class="muted"></p></div><div class="card"><table id="tracks"></table></div></section>
+<section id="analyze"><div class="grid"><div class="card"><h2>Analyze</h2><label>Limit, 0 means all</label><input id="analysis_limit" value="0"><button class="action" onclick="post('/api/analyze_bg',{limit:+val('analysis_limit')||0})">Analyze audio</button><p class="muted">Computes BPM, downbeats, key, LUFS, energy, sections, and vocal likelihood.</p></div><div class="card"><h2>Extract loops</h2><label>Limit, 0 means all</label><input id="loop_limit" value="0"><label><input id="auto_approve" type="checkbox" style="min-width:auto"> auto-approve extracted loops directly, not recommended</label><button class="action" onclick="post('/api/extract_loops_bg',{limit:+val('loop_limit')||0,auto_approve:document.getElementById('auto_approve').checked,force:false})">Extract loop candidates</button><button class="action" onclick="post('/api/extract_loops_bg',{limit:+val('loop_limit')||0,auto_approve:document.getElementById('auto_approve').checked,force:true})">Re-extract with current scoring</button><p class="muted">Downbeat-only candidates, ≤12 per track, role-gated drum anchors. Leave auto-approve off, then use quota approval in Loop Review to build a bounded hot pool.</p></div></div></section>
+<section id="loops"><div class="card"><h2>Loop Review</h2><button class="action" onclick="refreshLoops('')">All</button><button class="action" onclick="refreshLoops('candidate')">Candidates</button><button class="action" onclick="refreshLoops('approved')">Approved</button><button class="action" onclick="refreshLoops('rejected')">Rejected</button><button class="action" onclick="autoApproveQuota()">Approve hot pool by quota</button><button class="action" onclick="bulkLoopStatus('rejected','candidate')">Reject all candidates</button><button class="action" onclick="bulkLoopStatus('candidate','')">Reset all to candidate</button><p id="loopCounts" class="muted">Loop counts pending.</p><p class="muted">Mashups use approved loops only. Quota approval keeps the pool bounded, role-balanced, and reviewable. Use individual approve/reject for manual curation.</p><pre id="loopOut"></pre></div><div class="card"><table id="loopsTable"></table></div></section>
+<section id="mashup"><div class="card"><h2>Outcome Controls</h2><p class="muted">This is the inspectable control surface for the continuum compiler. Jam Now mirrors these values; the JSON preview shows exactly what will be sent to the arranger.</p><label>Name</label><input id="m_name" value="Jukebreaker Sketch"><div class="controlGrid"><div><label>Mode / mix outcome</label><select id="m_preset" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="album_collision" selected>Album Collision: two-world continuum</option><option value="notorious_mode">Notorious Mode: voice-over-bed bootleg album</option><option value="party_cutup">Party cut-up: fast hooks and genre jumps</option><option value="hook_ride">Hook ride: vocals up front, groove survives</option><option value="clean_blend">Clean blend: safer key and smoother edits</option><option value="max_chaos">Max chaos: dumb fun, fewer guardrails</option></select><label>Target length</label><select id="m_seconds" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="60">1 minute sketch</option><option value="120" selected>2 minute sketch</option><option value="180">3 minute sketch</option><option value="300">5 minute sketch</option></select></div><div><label>Edit speed</label><select id="m_edit_speed" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="steady">Steady: longer blends</option><option value="active" selected>Active: frequent swaps</option><option value="hypercut">Hypercut: 2 to 4 bar edits</option></select><label>Vocal hooks</label><select id="m_hooks" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="sparse">Sparse: mostly instrumental</option><option value="balanced">Balanced: hooks when useful</option><option value="hooky" selected>Hooky: recognizable vocals high</option></select></div><div><label>Genre jump</label><select id="m_genre_jump" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="smooth">Smooth: adjacent material</option><option value="mixed">Mixed: contrast with restraint</option><option value="whiplash" selected>Whiplash: sharp genre pivots</option></select><label>Beat/key safety</label><select id="m_safety" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="tight">Tight: safer, fewer clashes</option><option value="loose" selected>Loose: harmonic DJ stretch</option><option value="wild">Wild: permit uglier collisions</option></select></div><div><label>Groove backbone</label><select id="m_backbone" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="locked">Locked: one beat rides longer</option><option value="survive">Survive: beds persist through ticks</option><option value="restless" selected>Restless: beat can flip, grid stays locked</option></select><label>Render BPM</label><input id="m_bpm" value="" placeholder="blank = strongest tempo island" oninput="mirrorMashupToJam();updateOutcomePreview()"></div></div><details class="advanced" open><summary>Legacy two-world labels / TasteSpec still builds from EarAtoms</summary><div class="controlGrid"><div><label>Mix mode</label><select id="m_mix_mode" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="two_world_continuum" selected>Two-world (voice crate + bed crate)</option><option value="single_crate">Single crate (one pool)</option></select><label>Candidate arrangements</label><input id="m_candidates" value="64" oninput="mirrorMashupToJam();updateOutcomePreview()"></div><div><label>Voice world query</label><input id="m_voice_world" value="2017 top 40" oninput="mirrorMashupToJam();updateOutcomePreview()"><label>Bed world query</label><input id="m_bed_world" value="2014 indie" oninput="mirrorMashupToJam();updateOutcomePreview()"></div><div><label>Lookahead seconds</label><input id="m_lookahead" value="90" oninput="mirrorMashupToJam();updateOutcomePreview()"><label>Max auxiliary decks</label><input id="m_max_aux_decks" value="6" oninput="mirrorMashupToJam();updateOutcomePreview()"></div><div><label>Transition priority</label><textarea id="m_transition_priority" oninput="mirrorMashupToJam();updateOutcomePreview()">hook_blend_over_bed, beatmatch_blend, bass_swap, acapella_bridge, impact_drop</textarea></div></div></details><button class="action" onclick="compileContinuum()">COMPILE CONTINUUM PLAN</button><button class="action" onclick="proposeMashup()">Propose arrangement manifest</button><button class="action bigJam" onclick="oneClickJam()">MAKE AND RENDER NOW</button><details class="advanced"><summary>Show low-level arranger numbers</summary><pre id="mashupMath"></pre></details><pre id="mashupOut"></pre></div></section>
+<section id="manifests"><div class="card"><h2>Manifests</h2><button class="action" onclick="refreshManifests()">Refresh</button><p class="muted">Execution is explicit. This is the manifest gate. Use EXECUTE NOW if you want the browser to wait and print the final render result. Use EXECUTE BG if you want it to run while the status bar updates.</p><pre id="manifestOut"></pre></div><div class="card"><table id="manifestTable"></table></div></section>
+</main>
+<script>
+const TOKEN = new URL(location.href).searchParams.get('token') || '';
+const tabs = ['jam','setup','library','analyze','loops','mashup','manifests'];
+document.getElementById('nav').innerHTML = tabs.map(t=>`<button onclick="tab('${t}')" id="nav_${t}">${t}</button>`).join('');
+function tab(t){for(const x of tabs){document.getElementById(x).classList.toggle('active',x===t);document.getElementById('nav_'+x).classList.toggle('active',x===t)} if(t==='library')refreshTracks(); if(t==='loops')refreshLoops(''); if(t==='manifests')refreshManifests();}
+function val(id){return document.getElementById(id).value}
+async function api(path, body){let r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-JB-Token':TOKEN},body:body===undefined?undefined:JSON.stringify(body)}); let txt=await r.text(); let j; try{j=JSON.parse(txt)}catch(e){j={raw:txt}} if(!r.ok){throw new Error(j.error||txt)} return j}
+async function post(p,b){try{let j=await api(p,b); console.log(j); return j}catch(e){alert(e.message); throw e}}
+function audioUrl(path){return '/api/audio?path='+encodeURIComponent(path)+'&token='+encodeURIComponent(TOKEN)}
+function toast(msg,path){const t=document.getElementById('toast'); let body='<button onclick="document.getElementById(\'toast\').style.display=\'none\'">x</button><b>'+esc(msg)+'</b>'; if(path){body+='<a href="'+audioUrl(path)+'" target="_blank" rel="noopener">play/open render</a><br><span class="small muted">'+esc(path)+'</span>'} t.innerHTML=body; t.style.display='block'; clearTimeout(window.__jbToastTimer); window.__jbToastTimer=setTimeout(()=>{t.style.display='none'},15000)}
+function setPlayer(path){const a=document.getElementById('renderPlayer'); if(!path){window.__latestRenderPath=null; if(a){a.removeAttribute('src'); a.load();} document.getElementById('renderLink').href='#'; document.getElementById('playerName').textContent='none yet'; document.getElementById('playerPath').textContent='No passing current-engine render loaded.'; return;} window.__latestRenderPath=path; a.src=audioUrl(path); document.getElementById('renderLink').href=audioUrl(path); document.getElementById('playerName').textContent=path.split(/[\/]/).pop(); document.getElementById('playerPath').textContent=path; a.load();}
+async function copyRenderPath(){if(!window.__latestRenderPath){toast('No render path yet');return} try{await navigator.clipboard.writeText(window.__latestRenderPath); toast('Copied render path',window.__latestRenderPath)}catch(e){prompt('Copy this path', window.__latestRenderPath)}}
+function renderPathFromResult(j){const done=(j&&j.done)||[]; for(const x of done){if(x&&x.type==='render_mashup'&&x.path)return x.path} if(j&&j.type==='render_mashup'&&j.path)return j.path; return null}
+function handleRenderResult(j){const p=renderPathFromResult(j); if(p){setPlayer(p); toast('Render complete',p); refreshRenders(false)} return p}
+async function refreshRenders(pop){let j=await api('/api/renders'); let all=j.items||[]; let items=all.filter(r=>r.current_engine&&r.quality_gate_passed!==false); let h=''; for(const r of items.slice(0,8)){const p=JSON.stringify(r.path).replace(/"/g,'&quot;'); const tag=r.current_engine?'current':'old'; h+=`<div><a href="${audioUrl(r.path)}" target="_blank" rel="noopener">${esc(r.name)}</a> <button onclick="setPlayer(${p})">play here</button> <button onclick="judgeRender(${p})">judge</button> <span>${(r.size_bytes/1048576).toFixed(1)} MB</span> <span>${tag}</span><br><span>${esc(r.path)}</span></div>`} document.getElementById('renderList').innerHTML=h||'No passing current-engine renders found. Old renders are hidden so a rejected run cannot look successful.'; if(items[0]&&!window.__latestRenderPath){setPlayer(items[0].path)} if(pop&&items[0]){setPlayer(items[0].path); toast('Latest passing render found',items[0].path)} if(pop&&!items[0]){setPlayer(null); toast('No passing current-engine render yet','Rejected artifacts stayed quarantined.')} return j}
+async function judgeRender(path){const ref=prompt('Optional reference path. Leave blank for gate metrics only.',''); let j=await post('/api/judge',{path,ref}); document.getElementById('jamOut').textContent='Judge result:\\n'+JSON.stringify(j,null,2); toast('Judge complete',JSON.stringify(j.v1_1_gates||{}));}
+
+function setVal(id,v){const el=document.getElementById(id); if(el&&v!==undefined&&v!==null)el.value=v}
+function pathJoin(base,leaf){base=(base||'').trim().replace(/[\\/]+$/,''); return base?base+'\\'+leaf:''}
+function deriveWorkspaceFields(){
+  const music=val('music_folder').trim(); const ws=val('workspace_folder').trim();
+  setVal('master_root',music); setVal('working_root',pathJoin(ws,'work')); setVal('agent_root',pathJoin(ws,'agent')); setVal('playlists_root',pathJoin(ws,'playlists')); setVal('stems_root',pathJoin(ws,'stems'));
+}
+async function browseInto(id){let j=await post('/api/browse_dir',{current:val(id)}); if(j.path){setVal(id,j.path); deriveWorkspaceFields();} else if(j.error){document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2)}}
+async function suggestWorkspace(){const box=document.getElementById('wsCandidates');box.textContent='scouting drives...';const j=await post('/api/workspace_candidates',{music_folder:val('music_folder')});if(!j.ok){box.textContent=(j.error||'scout failed');return}
+box.innerHTML='';(j.candidates||[]).forEach(c=>{const d=document.createElement('div');d.style.cssText='padding:6px 8px;margin:4px 0;border:1px solid rgba(255,255,255,.14);cursor:'+(c.rejected?'not-allowed':'pointer')+';opacity:'+(c.rejected?'.45':'1');d.innerHTML='<b>'+esc(c.path)+'</b> <span class="accent">score '+c.score+'</span><br>'+ (c.reasons||[]).map(esc).join(' &middot; ');if(!c.rejected){d.onclick=()=>{setVal('workspace_folder',c.path);deriveWorkspaceFields();box.querySelectorAll('div').forEach(x=>x.style.background='');d.style.background='rgba(255,255,255,.08)'}}box.appendChild(d)});if(j.recommended){setVal('workspace_folder',j.recommended);deriveWorkspaceFields()}}
+async function loadDefaults(){try{let j=await api('/api/defaults'); if(j.configured){setConfigFields(j.configured)} else {setVal('music_folder',j.music_folder); setVal('workspace_folder',j.workspace_folder); deriveWorkspaceFields();}}catch(e){}}
+function setConfigFields(c){for(const k of ['master_root','working_root','agent_root','playlists_root','stems_root'])if(c[k])setVal(k,c[k]); if(c.master_root)setVal('music_folder',c.master_root); if(c.agent_root){let a=String(c.agent_root); let m=a.match(/^(.*)[\\/]agent$/i); if(m)setVal('workspace_folder',m[1]);} if(c.analysis_seconds)setVal('analysis_seconds',c.analysis_seconds); if(c.workers!=null)setVal('workers',c.workers); deriveWorkspaceFields();}
+async function saveWorkspaceConfig(){deriveWorkspaceFields(); const body={music_folder:val('music_folder'),workspace_folder:val('workspace_folder')}; const as=val('analysis_seconds'); if(as)body.analysis_seconds=+as; const w=val('workers'); if(w!=='')body.workers=+w; let j=await post('/api/config_workspace',body); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
+async function saveConfig(){deriveWorkspaceFields(); let j=await post('/api/config',{master_root:val('master_root'),working_root:val('working_root'),agent_root:val('agent_root'),playlists_root:val('playlists_root'),stems_root:val('stems_root')}); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
+async function doctor(){let j=await post('/api/doctor',{}); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
+async function refreshTracks(){let j=await api('/api/tracks'); let h='<tr><th>Title</th><th>Artist</th><th>BPM</th><th>Key</th><th>Vocal</th><th>Loops</th><th>Path</th></tr>'; for(const r of j.items){h+=`<tr><td>${esc(r.title||'')}</td><td>${esc(r.artist||'')}</td><td>${fmt(r.bpm)}</td><td>${r.key_root??''}</td><td>${fmt(r.vocal_likelihood)}</td><td>${r.loop_count||0}</td><td class="small">${esc(r.path)}</td></tr>`} document.getElementById('tracks').innerHTML=h}
+async function refreshLoops(status){let j=await api('/api/loops?status='+encodeURIComponent(status||'')); let c=j.counts||{}; document.getElementById('loopCounts').textContent=`Total ${c.total||0} | approved ${c.approved||0} | candidate ${c.candidate||0} | rejected ${c.rejected||0}`; let h='<tr><th>Status</th><th>Role</th><th>Score</th><th>Bars</th><th>Start</th><th>End</th><th>Track</th><th>Actions</th></tr>'; for(const r of j.items){h+=`<tr><td><span class="pill">${r.status}</span></td><td>${r.role}</td><td>${fmt(r.score)}</td><td>${r.bars}</td><td>${fmt(r.start_s)}</td><td>${fmt(r.end_s)}</td><td>${esc((r.artist||'')+' - '+(r.title||''))}<br><span class="small muted">${esc(r.path)}</span></td><td><button onclick="loopStatus('${r.id}','approved')">approve</button> <button onclick="loopStatus('${r.id}','candidate')">candidate</button> <button onclick="loopStatus('${r.id}','rejected')">reject</button></td></tr>`} document.getElementById('loopsTable').innerHTML=h}
+async function loopStatus(id,status){let j=await post('/api/loop_status',{loop_id:id,status}); document.getElementById('loopOut').textContent=JSON.stringify(j,null,2); refreshLoops('')}
+async function bulkLoopStatus(status,from_status){if(!confirm(`Set all ${from_status||'loops'} loops to ${status}?`))return; let j=await post('/api/loops/bulk_status',{status,from_status}); document.getElementById('loopOut').textContent=JSON.stringify(j,null,2); if(j.error){alert(j.error)}else{alert(`Updated ${j.updated} loops.`)} refreshLoops('')}
+async function autoApproveQuota(){let j=await post('/api/loops/auto_approve_quota',{max_loops:60}); document.getElementById('loopOut').textContent=JSON.stringify(j,null,2); toast('Quota approval complete',j.message||''); refreshLoops('approved')}
+function outcomeParams(prefix){
+  const preset=val(prefix+'_preset');
+  const presets={
+    clean_blend:{chaos:38,key_strictness:82,pitch_shift_budget:1,stretch_budget:7,genre_whiplash:25,vocal_density:45,anchor_stability:88,recognizability_bias:55},
+    hook_ride:{chaos:58,key_strictness:72,pitch_shift_budget:2,stretch_budget:10,genre_whiplash:48,vocal_density:88,anchor_stability:78,recognizability_bias:86},
+    party_cutup:{chaos:72,key_strictness:64,pitch_shift_budget:2,stretch_budget:8,genre_whiplash:74,vocal_density:78,anchor_stability:72,recognizability_bias:84},
+    max_chaos:{chaos:86,key_strictness:54,pitch_shift_budget:2,stretch_budget:9,genre_whiplash:90,vocal_density:80,anchor_stability:44,recognizability_bias:92},
+    album_collision:{chaos:68,key_strictness:64,pitch_shift_budget:2,stretch_budget:8,genre_whiplash:82,vocal_density:84,anchor_stability:54,recognizability_bias:92},
+    notorious_mode:{chaos:62,key_strictness:66,pitch_shift_budget:2,stretch_budget:7,genre_whiplash:76,vocal_density:86,anchor_stability:60,recognizability_bias:94}
+  };
+  let p=Object.assign({},presets[preset]||presets.album_collision);
+  const edit=val(prefix+'_edit_speed');
+  if(edit==='steady')p.chaos=Math.min(p.chaos,45); else if(edit==='active')p.chaos=Math.max(52,Math.min(p.chaos,68)); else if(edit==='hypercut')p.chaos=Math.max(p.chaos,84);
+  const hooks=val(prefix+'_hooks');
+  if(hooks==='sparse'){p.vocal_density=35;p.recognizability_bias=Math.max(50,p.recognizability_bias-15)} else if(hooks==='balanced'){p.vocal_density=Math.max(58,Math.min(p.vocal_density,72))} else {p.vocal_density=Math.max(p.vocal_density,84);p.recognizability_bias=Math.max(p.recognizability_bias,82)}
+  const jump=val(prefix+'_genre_jump');
+  if(jump==='smooth'){p.genre_whiplash=22;p.key_strictness=Math.max(p.key_strictness,78)} else if(jump==='mixed'){p.genre_whiplash=Math.max(45,Math.min(p.genre_whiplash,62))} else {p.genre_whiplash=Math.max(p.genre_whiplash,82)}
+  const safety=val(prefix+'_safety');
+  if(safety==='tight'){p.key_strictness=Math.max(p.key_strictness,82);p.pitch_shift_budget=Math.min(p.pitch_shift_budget,1);p.stretch_budget=Math.min(p.stretch_budget,7)}
+  else if(safety==='loose'){p.key_strictness=Math.max(58,Math.min(p.key_strictness,72));p.pitch_shift_budget=Math.min(Math.max(p.pitch_shift_budget,2),2);p.stretch_budget=Math.min(Math.max(p.stretch_budget,7),8.5)}
+  else {p.key_strictness=Math.min(p.key_strictness,54);p.pitch_shift_budget=2;p.stretch_budget=9}
+  const backbone=val(prefix+'_backbone');
+  if(backbone==='locked')p.anchor_stability=92; else if(backbone==='survive')p.anchor_stability=Math.max(72,Math.min(p.anchor_stability,84)); else p.anchor_stability=Math.min(p.anchor_stability,48);
+  p.target_seconds=+(val(prefix+'_seconds')||120); p.bpm=val(prefix+'_bpm')?+val(prefix+'_bpm'):0;
+  p.name=(prefix==='m'?val('m_name'):'Jukebreaker Sketch');
+  p.preset=preset;
+  p.mix_mode=val(prefix+'_mix_mode')||((preset==='album_collision'||preset==='notorious_mode')?'two_world_continuum':'single_crate');
+  p.voice_world_query=val(prefix+'_voice_world')||'';
+  p.bed_world_query=val(prefix+'_bed_world')||'';
+  p.candidate_count=+(val(prefix+'_candidates')||64);
+  p.max_aux_decks=+(val(prefix+'_max_aux_decks')||3);
+  p.quality_mode='stable_deck'; p.strict_world_roles=true; p.post_render_gate=true; p.auto_retry_quality=true;
+  p.lookahead_seconds=+(val(prefix+'_lookahead')||90);
+  p.transition_priority=val(prefix+'_transition_priority')||'hook_blend_over_bed, beatmatch_blend, bass_swap, acapella_bridge, impact_drop';
+  return p;
+}
+function describeOutcome(p){
+  let edit=p.chaos>=84?'hypercut edits every 2 to 4 bars':(p.chaos>=60?'active swaps with short sections':'longer blends');
+  let hooks=p.vocal_density>=82?'vocal hooks pushed forward':(p.vocal_density>=55?'balanced vocals':'mostly instrumental');
+  let jump=p.genre_whiplash>=80?'hard genre pivots':(p.genre_whiplash>=45?'some contrast':'smooth adjacency');
+  let safe=p.key_strictness>=80?'tight beat/key safety':(p.key_strictness>=50?'harmonic DJ looseness':'wild collisions allowed');
+  let bed=p.anchor_stability>=80?'groove survives through ticks':(p.anchor_stability>=60?'backbone survives most edits':'beat can flip often while grid stays locked');
+  let world=p.mix_mode&&p.mix_mode!=='single_crate'?` voice world "${p.voice_world_query||'auto'}" over bed world "${p.bed_world_query||'auto'}"`: 'single-crate mode';
+  return `${edit}; ${hooks}; ${jump}; ${safe}; ${bed}; ${world}; ${p.candidate_count||0} candidate plans.`;
+}
+function updateOutcomePreview(){
+  let p=outcomeParams('o');
+  const hint=document.getElementById('outcomeHint'); if(hint)hint.textContent=describeOutcome(p);
+  const prev=document.getElementById('outcomePreview'); if(prev)prev.textContent=JSON.stringify(p,null,2);
+  const math=document.getElementById('mashupMath'); if(math)math.textContent=JSON.stringify(outcomeParams('m'),null,2)+'\n\nTranslation: '+describeOutcome(outcomeParams('m'));
+}
+function mirrorMashupToJam(){
+  const pairs=['preset','seconds','edit_speed','hooks','genre_jump','safety','backbone','bpm','mix_mode','voice_world','bed_world','candidates','lookahead','max_aux_decks','transition_priority'];
+  for(const k of pairs){let m=document.getElementById('m_'+k), o=document.getElementById('o_'+k); if(m&&o)o.value=m.value}
+}
+function mirrorJamToMashup(){
+  const pairs=['preset','seconds','edit_speed','hooks','genre_jump','safety','backbone','bpm','mix_mode','voice_world','bed_world','candidates','lookahead','max_aux_decks','transition_priority'];
+  for(const k of pairs){let o=document.getElementById('o_'+k), m=document.getElementById('m_'+k); if(m&&o)m.value=o.value}
+}
+async function compileContinuum(){
+  mirrorJamToMashup(); updateOutcomePreview();
+  let p=outcomeParams('m');
+  document.getElementById('mashupOut').textContent='Compiling continuum lookahead plan...\n'+JSON.stringify(p,null,2);
+  document.getElementById('jamOut').textContent='Compiling continuum lookahead plan...\n'+JSON.stringify(p,null,2);
+  let j=await post('/api/continuum/compile',p);
+  const txt=JSON.stringify(j,null,2)+'\n\nNext: render transition auditions or full WAV after the plan has receipts.';
+  document.getElementById('mashupOut').textContent=txt; document.getElementById('jamOut').textContent=txt;
+  toast('Continuum plan compiled',j.plan_path||j.arrangement_sha||''); refreshManifests();
+}
+const ROLE_ORDER=['drum_anchor','bass','vocal','harmony','texture','fx','full'];
+const ROLE_MIN={drum_anchor:2,bass:1,vocal:1};
+function renderLattice(audit){
+  const panel=document.getElementById('readinessPanel'); panel.style.display='grid';
+  const lat=audit.bpm_lattice||[]; const rec=audit.recommended_bpm;
+  const maxU=Math.max(1,...lat.map(c=>c.usable_loops||0));
+  const ladder=document.getElementById('ladder'); ladder.innerHTML='';
+  for(const c of lat){
+    const h=Math.max(6,Math.round((c.usable_loops/maxU)*120));
+    const best=Math.abs(c.bpm-rec)<0.05; const isTarget=c.is_user_target;
+    const div=document.createElement('div'); div.className='rung'+(best?' best':'')+(isTarget?' target':'');
+    div.innerHTML=`<div class="col" style="height:${h}px"></div><div class="n">${c.bpm.toFixed(2)}</div><div class="u">${c.usable_loops} clean</div><div class="tag">${best?'pick':(isTarget?'yours':'')}</div>`;
+    ladder.appendChild(div);
+  }
+  document.getElementById('latticeRec').textContent=rec?('recommended '+(+rec).toFixed(2)+' BPM'):'';
+}
+function renderRoles(audit){
+  const roles=audit.usable_by_role||{}; const g=document.getElementById('roleGrid'); g.innerHTML='';
+  for(const r of ROLE_ORDER){
+    const n=roles[r]||0; const min=ROLE_MIN[r]||0; const cls=min?(n<min?'short':'ok'):'';
+    const cell=document.createElement('div'); cell.className='roleCell '+cls;
+    cell.innerHTML=`<div class="num">${n}</div><div class="lab">${r.replace('_',' ')}</div>`;
+    g.appendChild(cell);
+  }
+  const t=audit.transform_tiers||{}; const total=Math.max(1,(t.native||0)+(t.varispeed||0)+(t.varispeed_residual_pitch||0)+(t.reject||0));
+  const tb=document.getElementById('tierBar'); tb.innerHTML='';
+  const segs=[['native',t.native||0,'tier-native'],['varispeed',t.varispeed||0,'tier-vari'],['residual',t.varispeed_residual_pitch||0,'tier-varires'],['reject',t.reject||0,'tier-reject']];
+  for(const [lab,n,cls] of segs){ if(!n)continue; const s=document.createElement('span'); s.className=cls; s.style.flex=n; s.title=lab+': '+n; s.textContent=(n/total>0.09)?(lab+' '+n):n; tb.appendChild(s);}
+  const wl=document.getElementById('warnList'); wl.innerHTML=''; for(const w of (audit.warnings||[])){const li=document.createElement('li');li.textContent=w;wl.appendChild(li);}
+}
+async function runPreflight(){
+  mirrorJamToMashup(); const p=outcomeParams('o');
+  const v=document.getElementById('readyVerdict'); v.innerHTML='<span class="verdict hold" style="margin-left:12px">scoring lattice&hellip;</span>';
+  try{
+    const j=await api('/api/preflight',p);
+    if(!j.ok){v.innerHTML='<span class="verdict hold" style="margin-left:12px">'+esc((j.warnings&&j.warnings[0])||'no approved loops')+'</span>';document.getElementById('readinessPanel').style.display='none';return j}
+    renderLattice(j); renderRoles(j); renderDensity(j);
+    const go=j.ready;
+    const cap=j.capacity||{}, tgt=j.girl_talk_targets||{};
+    v.innerHTML='<span class="verdict '+(go?'go':'hold')+'" style="margin-left:12px">'+(go?'\u25B6 deck-ready \u00b7 '+j.chosen_bpm.toFixed(2)+' BPM':'\u25A0 pool thin \u00b7 '+(cap.sample_events||0)+'/'+(tgt.sample_events||0)+' events')+'</span>';
+    return j;
+  }catch(e){v.innerHTML='<span class="verdict hold" style="margin-left:12px">'+esc(e.message)+'</span>'}
+}
+function renderDensity(j){
+  const cap=j.capacity||{}, tgt=j.girl_talk_targets||{};
+  let el=document.getElementById('densityRow');
+  if(!el){el=document.createElement('div');el.id='densityRow';el.style.cssText='grid-column:1/-1;margin-top:6px';
+    document.getElementById('readinessPanel').appendChild(el);}
+  const rows=[['sample-events',cap.sample_events||0,tgt.sample_events||0],
+              ['distinct sources',cap.distinct_sources||0,tgt.distinct_sources||0],
+              ['bed riders',cap.beds||0,1],['vocal/harmony foreground',cap.foreground||0,1]];
+  let h='<div class="latticeHead"><span class="t">Girl Talk density &mdash; have vs. need for '+(j.track_seconds||120)+'s</span><span class="rec" style="color:var(--ink-faint)">~1 new element / '+11+'s</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">';
+  for(const [lab,have,need] of rows){const ok=have>=need;
+    h+='<div class="roleCell '+(ok?'ok':'short')+'"><div class="num">'+have+'<span style="font-size:12px;color:var(--ink-faint)"> / '+need+'</span></div><div class="lab">'+lab+'</div></div>';}
+  h+='</div>';
+  el.innerHTML=h;
+}
+async function proposeMashup(){mirrorJamToMashup();document.getElementById('mashupOut').textContent='Proposing arrangement from approved loops...'; let p=outcomeParams('m'); let j=await post('/api/mashup/propose',p); document.getElementById('mashupOut').textContent=JSON.stringify(j,null,2)+'\n\nNext: open Manifests and execute the new render manifest, or use MAKE AND RENDER NOW.'; refreshManifests()}
+async function proposeOutcomeOnly(){mirrorJamToMashup(); tab('mashup'); await proposeMashup()}
+async function oneClickJam(){
+  mirrorJamToMashup(); updateOutcomePreview();
+  const p=outcomeParams('o'); p.track_budget=+(val('o_budget')||240); p.force_loops=document.getElementById('o_force_loops').checked; p.taste_profile='girl_talk_v1'; p.tastespec=true;
+  // Preflight first so a thin pool fails in seconds with a reason, not after a long render.
+  let pre=null; try{pre=await runPreflight();}catch(e){}
+  let readyLine='';
+  if(pre&&pre.ok){readyLine=pre.ready?`\nReadiness: deck-ready at ${pre.chosen_bpm.toFixed(2)} BPM.`:`\nReadiness: pool is THIN. ${(pre.warnings||[])[0]||''} The lattice suggests ${(+pre.recommended_bpm).toFixed(2)} BPM. You can proceed anyway.`;}
+  else if(pre&&!pre.ok){if(!confirm('No deck-ready pool yet: '+((pre.warnings||[])[0]||'approve loops first')+'\n\nRun anyway?'))return;}
+  if(!confirm(`Run TasteSpec compile?\n\nTrack budget: ${p.track_budget||'all'}\nOutcome: ${describeOutcome(p)}\nVoice world: ${p.voice_world_query||'auto'}\nBed world: ${p.bed_world_query||'auto'}\nTaste profile: girl_talk_v1${readyLine}\n\nThis writes only under working_root, but it may take several minutes.`))return;
+  document.getElementById('jamOut').textContent='Started TasteSpec compile. Watch Engine status. The player loads only an accepted render.\n'+JSON.stringify(p,null,2);
+  let j=await post('/api/one_click_bg',p); document.getElementById('jamOut').textContent+='\n'+JSON.stringify(j,null,2); window.__oneClickPending=true; toast('TasteSpec feasibility compile started');
+}
+let MANIFESTS=[];
+async function refreshManifests(){let j=await api('/api/manifests'); MANIFESTS=j.items||[]; let h='<tr><th>Created</th><th>Summary</th><th>Ops</th><th>Path</th><th>Execute</th></tr>'; MANIFESTS.forEach((r,i)=>{h+=`<tr><td>${esc(r.created_at||'')}</td><td>${esc(r.summary||'')}</td><td>${r.operations}</td><td class="small">${esc(r.path)}</td><td><button onclick="execManifestDry(${i})">DRY RUN</button> <button class="danger" onclick="execManifestApplyNow(${i})">APPLY NOW</button> <button onclick="execManifestApplyBg(${i})">APPLY BG</button></td></tr>`}); document.getElementById('manifestTable').innerHTML=h}
+async function execManifestDry(i){const path=(MANIFESTS[i]||{}).path; if(!path){alert('No manifest path');return} document.getElementById('manifestOut').textContent='Dry-running...\n'+path; let j=await post('/api/manifest/execute',{path}); document.getElementById('manifestOut').textContent=JSON.stringify(j,null,2); refreshManifests()}
+async function execManifestApplyNow(i){const path=(MANIFESTS[i]||{}).path; if(!path){alert('No manifest path');return} if(!confirm('APPLY this manifest and write output under working roots? The browser will wait until render finishes.'))return; document.getElementById('manifestOut').textContent='Applying now...\n'+path; let j=await post('/api/manifest/execute',{path,apply:true}); document.getElementById('manifestOut').textContent=JSON.stringify(j,null,2); handleRenderResult(j); refreshManifests()}
+async function execManifestApplyBg(i){const path=(MANIFESTS[i]||{}).path; if(!path){alert('No manifest path');return} if(!confirm('APPLY this manifest in background and write output under working roots?'))return; document.getElementById('manifestOut').textContent='Started background apply...\n'+path+'\nWatch Engine status above. The player will refresh when the job reports done.'; let j=await post('/api/manifest/execute_bg',{path,apply:true}); document.getElementById('manifestOut').textContent+='\n'+JSON.stringify(j,null,2); toast('Render started'); window.__renderBgPending=true; refreshManifests()}
+function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function escAttr(s){return String(s??'').replace(/['\\]/g,'')}
+function fmt(x){return x===null||x===undefined?'':(+x).toFixed(2)}
+setInterval(async()=>{try{let j=await api('/api/status'); const msg=(j.busy?'BUSY ':'')+j.message; document.getElementById('status').textContent=msg; document.getElementById('status_big').textContent=msg; const led=document.getElementById('statusLed'); if(led)led.classList.toggle('busy',!!j.busy); const err=j.last_error?'Last error: '+j.last_error:''; document.getElementById('last_error').textContent=err; const perf=j.perf_summary; if(perf){const top=perf.top_stages||[]; document.getElementById('perf_summary').textContent=`${perf.in_progress?'running':'last run'} · ${fmt(perf.elapsed_seconds)}s · ${perf.stage_count||0} stages`; document.getElementById('perfOut').textContent=top.map((x,i)=>`${i+1}. ${x.name}: ${fmt(x.seconds)}s ${x.ok===false?'FAILED':''}`).join('\n')+(j.perf_ledger_path?'\n\nLedger: '+j.perf_ledger_path:'');} const st=document.getElementById('statustext'); if(st) st.textContent=j.message+(j.last_error?' | '+j.last_error:''); const w=((j.progress||0)*100)+'%'; const pg=document.getElementById('prog'); if(pg) pg.style.width=w; document.getElementById('prog_global').style.width=w; if(j.last_render_path && j.last_render_path!==window.__latestRenderPath){setPlayer(j.last_render_path); toast('Render ready',j.last_render_path); refreshRenders(false)} if((window.__renderBgPending||window.__oneClickPending) && !j.busy && (String(j.message||'').includes('manifest executed')||String(j.message||'').includes('one-click complete')||String(j.message||'').includes('rejected all quality attempts')||String(j.message||'').includes('floor-safe rescue')||String(j.message||'').includes('TasteSpec one-click complete'))){window.__renderBgPending=false; window.__oneClickPending=false; if(!j.last_render_path && String(j.message||'').includes('rejected')) setPlayer(null); refreshRenders(true)}}catch(e){}},1000);
+loadDefaults().finally(()=>{updateOutcomePreview(); tab('setup'); doctor().catch(()=>{}); refreshRenders(false).catch(()=>{});});
+
+function addIngestRow(){const d=document.createElement('div');d.className='pathLine';d.innerHTML='<input placeholder="another source folder" class="ingestSrc"><button class="action" onclick="pickIngestDir(this)">Browse&hellip;</button>';document.getElementById('ingestPaths').appendChild(d)}
+async function pickIngestDir(btn){try{const j=await api('/api/choose_dir',{});if(j&&j.path)btn.parentElement.querySelector('input').value=j.path}catch(e){}}
+function ingestSrcList(){return Array.from(document.querySelectorAll('.ingestSrc')).map(i=>i.value.trim()).filter(Boolean)}
+async function runIngest(apply){const s=ingestSrcList();const o=document.getElementById('ingestOut');if(!s.length){o.textContent='Add at least one source folder.';return}
+ if(apply&&!confirm('Copy audio from '+s.length+' folder(s) into the managed library?\nSources are read-only; copies are journaled and rollback-able.'))return;
+ o.textContent=(apply?'Ingesting':'Planning')+'\u2026';try{const j=await post('/api/ingest',{sources:s,apply:apply});o.textContent=JSON.stringify(j,null,2)}catch(e){o.textContent=String(e)}}
+async function runOrganize(apply){const o=document.getElementById('ingestOut');
+ if(apply&&!confirm('Copy the library into Artist/Album/NN Title under working/organized with amended tags?\nOriginals are untouched.'))return;
+ o.textContent=(apply?'Organizing':'Planning organize')+'\u2026';try{const j=await post('/api/organize',{apply:apply});o.textContent=JSON.stringify(j,null,2)}catch(e){o.textContent=String(e)}}
+
+</script></body></html>

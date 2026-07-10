@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+dist/
+*.wav
+*.mp3
+*.flac
+workspace/
+agent/
+*.sqlite
+*.npz
+.venv/

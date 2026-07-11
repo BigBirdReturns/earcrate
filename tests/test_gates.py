@@ -356,9 +356,9 @@ def test_workspace_migration_previews_then_executes():
     import tempfile, sqlite3, os
     from pathlib import Path
     tmp = Path(tempfile.mkdtemp())
-    saved_home = os.environ.get("HOME")
+    saved_home = os.environ.get("HOME"); saved_ech = os.environ.get("EARCRATE_HOME")
     os.environ["HOME"] = str(tmp)          # isolate the legacy-workspace scan
-    os.environ.pop("EARCRATE_HOME", None)
+    os.environ["EARCRATE_HOME"] = str(tmp) # isolate the workspace pointer (no cwd cross-test pollution)
     try:
         music = tmp / "The Sample Factory"; music.mkdir()
         (music / "song.mp3").write_bytes(b"\x00" * 512)
@@ -397,8 +397,9 @@ def test_workspace_migration_previews_then_executes():
         assert Path(res["journal"]).exists()
         assert {p.name for p in music.iterdir()} == before_music, "music library must be untouched"
     finally:
-        if saved_home is not None:
-            os.environ["HOME"] = saved_home
+        if saved_home is not None: os.environ["HOME"] = saved_home
+        if saved_ech is not None: os.environ["EARCRATE_HOME"] = saved_ech
+        else: os.environ.pop("EARCRATE_HOME", None)
 
 
 def test_reorganize_source_in_place_previews_and_reverses():
@@ -431,7 +432,7 @@ def test_reorganize_source_in_place_previews_and_reverses():
         assert any(t.startswith("_unsorted/") for t in tree), "unidentifiable must be quarantined, not lost"
         db = core.conn()
         assert all(Path(r["path"]).exists() for r in db.execute("SELECT path FROM files WHERE root='master'").fetchall())
-        rb = core.rollback_reorganize({"journal": res["journal"]})
+        rb = core.rollback_reorganize({"journal": res["journal"], "apply": True})
         assert rb["ok"] and rb["restored"] >= 2
         assert (src / "dump" / "Aphex Twin - Windowlicker.wav").exists(), "rollback must restore originals"
     finally:

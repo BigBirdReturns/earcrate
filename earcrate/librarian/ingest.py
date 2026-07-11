@@ -441,13 +441,23 @@ def reorganize_source(self, data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def rollback_reorganize(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Undo a reorganize using its journal. DRY-RUN by default (matches the rest
+    of the tool) -- pass apply=True to actually move files back."""
     journal = Path(str(data.get("journal") or ""))
     if not journal.exists():
         return {"ok": False, "error": "reorg journal not found"}
+    apply = bool(data.get("apply"))
+    lines = [json.loads(l) for l in journal.read_text(encoding="utf-8").splitlines() if l.strip()]
+    would = [rec for rec in reversed(lines) if Path(rec["from"]).exists()]
+    if not apply:
+        return {"ok": True, "dry_run": True, "would_restore": len(would),
+                "total_in_journal": len(lines),
+                "samples": [{"from": Path(r["from"]).name, "to": r["restore_to"]} for r in would[:10]],
+                "human": (f"Would move {len(would)} file(s) back to their pre-reorganize "
+                          f"locations. Nothing moved yet -- pass --apply to undo for real.")}
     db = self.conn()
     restored, errors = 0, []
-    lines = [json.loads(l) for l in journal.read_text(encoding="utf-8").splitlines() if l.strip()]
-    for rec in reversed(lines):
+    for rec in would:
         try:
             frm, to = Path(rec["from"]), Path(rec["restore_to"])
             if frm.exists():
@@ -459,7 +469,7 @@ def rollback_reorganize(self, data: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as exc:
             errors.append(str(exc)[:140])
     db.commit()
-    return {"ok": not errors, "restored": restored, "errors": errors}
+    return {"ok": not errors, "dry_run": False, "restored": restored, "errors": errors}
 
 
 def _prune_empty_dirs(self, root) -> None:

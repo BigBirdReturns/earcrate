@@ -130,11 +130,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(core.reorganize_source(data), ensure_ascii=False, indent=2))
         return 0
     if argv and argv[0] == "reorganize-rollback":
-        rp = argparse.ArgumentParser(prog="earcrate reorganize-rollback", description="Undo a reorganize using its journal")
+        rp = argparse.ArgumentParser(prog="earcrate reorganize-rollback", description="Undo a reorganize using its journal. Dry-run preview by default; --apply to move files back.")
         rp.add_argument("journal")
+        rp.add_argument("--apply", action="store_true", help="execute the undo; default is a dry-run preview")
         ns = rp.parse_args(argv[1:])
         core = EarcrateCore()
-        print(json.dumps(core.rollback_reorganize({"journal": ns.journal}), ensure_ascii=False, indent=2))
+        print(json.dumps(core.rollback_reorganize({"journal": ns.journal, "apply": ns.apply}), ensure_ascii=False, indent=2))
         return 0
     parser = argparse.ArgumentParser(prog="earcrate", description="earcrate: local-first layered mashup engine; only auditioned material exists to the composer")
     parser.add_argument("--serve", action="store_true", help="start local UI server")

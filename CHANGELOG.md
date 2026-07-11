@@ -1,5 +1,22 @@
 # EarCrate — CHANGELOG
 
+## v0.8.13 — reorganize-rollback is dry-run by default (safety fix)
+- REAL FOOTGUN CLOSED: `reorganize-rollback` executed IMMEDIATELY with no
+  preview or `--apply` gate, unlike everything else in the tool. Someone
+  (or an agent) running it "just to look" would have silently undone their
+  whole reorganize. Now it's DRY-RUN by default (shows how many files it would
+  move back) and only undoes for real with `--apply` — across the core method,
+  the CLI, and the web UI (whose confirm-dialog button now passes apply=true).
+  Verified: dry-run moves nothing; --apply restores the original layout.
+- Hardened the workspace-migration gate to isolate its workspace pointer via
+  EARCRATE_HOME, so a sibling test's pointer written to the repo dir can't make
+  it see a phantom legacy source (flaky-gate fix, not a product change).
+- Verification note: single-file builds + SELF_TEST_OK; 15/16 gates pass in
+  isolation. The 1 non-pass is a pre-existing NATIVE DSP segfault in
+  `personas_coexist` that reproduces on untouched main — a degraded state in
+  this build container's numba/librosa stack after a restart, not a code issue
+  and not on the Windows path users run.
+
 ## v0.8.12 — CLI you can drive headlessly + fix a single-file deep-clean crash
 - NEW CLI COMMANDS so an agent (or you) can run the whole cleanup from the
   command line, no web UI: `configure` (set music+workspace, persists),

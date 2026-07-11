@@ -1,5 +1,23 @@
 # EarCrate — CHANGELOG
 
+## v0.8.14 — online music identity (AcoustID/MusicBrainz), opt-in
+- NEW `identify_tracks` + `_fingerprint_file` + `_acoustid_lookup` (CLI
+  `identify`, route `/api/identify`): fingerprints each file with fpcalc
+  (Chromaprint) and looks up the real recording from AcoustID -> MusicBrainz,
+  proposing artist/title/album/MBID from the AUDIO, not the (lying) tags or
+  playlist folder. Dry-run only: it proposes, nothing is written. Rate-limited
+  to ~3 req/s. Needs fpcalc on PATH + a free AcoustID key (--key or
+  EARCRATE_ACOUSTID_KEY) -- the key + network stay opt-in, off by default.
+- This is the fix for the untagged-classical / playlist-name-as-artist cases
+  from the real-library run: feed confident matches into a reorganize/retag pass.
+- Gate `test_identify_parses_acoustid_and_guards_key`: best-score selection +
+  artist/title/album/mbid extraction, empty/error handling, real fpcalc
+  fingerprinting (when present), and the no-key refusal. CLI verified through
+  the single-file.
+- Verified: 16/17 gates pass in isolation (the 1 non-pass is the pre-existing
+  native DSP segfault in personas_coexist, reproduced on main -- container
+  degradation, not code); single-file builds + SELF_TEST_OK.
+
 ## v0.8.13 — reorganize-rollback is dry-run by default (safety fix)
 - REAL FOOTGUN CLOSED: `reorganize-rollback` executed IMMEDIATELY with no
   preview or `--apply` gate, unlike everything else in the tool. Someone

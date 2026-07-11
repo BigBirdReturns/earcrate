@@ -137,6 +137,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         core = EarcrateCore()
         print(json.dumps(core.rollback_reorganize({"journal": ns.journal, "apply": ns.apply}), ensure_ascii=False, indent=2))
         return 0
+    if argv and argv[0] == "identify":
+        ip = argparse.ArgumentParser(prog="earcrate identify", description="Propose real identities via AcoustID/MusicBrainz (needs fpcalc on PATH + a free key). Dry-run; nothing written.")
+        ip.add_argument("--key", default="", help="AcoustID client key (or set EARCRATE_ACOUSTID_KEY)")
+        ip.add_argument("--limit", type=int, default=0)
+        ns = ip.parse_args(argv[1:])
+        core = EarcrateCore()
+        print(json.dumps(core.identify_tracks({"api_key": ns.key, "limit": ns.limit}), ensure_ascii=False, indent=2))
+        return 0
     parser = argparse.ArgumentParser(prog="earcrate", description="earcrate: local-first layered mashup engine; only auditioned material exists to the composer")
     parser.add_argument("--serve", action="store_true", help="start local UI server")
     parser.add_argument("--no-browser", action="store_true", help="do not open browser")

@@ -474,3 +474,40 @@ def test_deep_clean_hears_junk_but_keeps_voice():
     finally:
         if saved is not None:
             os.environ["HOME"] = saved
+
+
+def test_identify_parses_acoustid_and_guards_key():
+    """v0.8.14 gate: AcoustID response parsing picks the best-score recording and
+    extracts artist/title/album/mbid; empty/error responses are handled; the
+    fingerprint path works when fpcalc is present; identify refuses without a key."""
+    import shutil, tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    core = EarcrateCore.__new__(EarcrateCore)
+    sample = {"status": "ok", "results": [
+        {"score": 0.42, "id": "x", "recordings": [{"id": "wrong", "title": "Nope", "artists": [{"name": "NopeBand"}]}]},
+        {"score": 0.98, "id": "y", "recordings": [{"id": "mbid-123", "title": "Ace of Spades",
+            "artists": [{"id": "a", "name": "Motörhead"}], "releasegroups": [{"id": "rg", "title": "Ace of Spades"}]}]}]}
+    m = core._parse_acoustid(sample)["match"]
+    assert m["artist"] == "Motörhead" and m["title"] == "Ace of Spades" and m["album"] == "Ace of Spades"
+    assert m["mbid"] == "mbid-123" and m["score"] == 0.98
+    assert core._parse_acoustid({"status": "ok", "results": []})["match"] is None
+    assert core._parse_acoustid({"status": "error", "error": {"message": "bad"}})["ok"] is False
+    if shutil.which("fpcalc"):
+        tmpwav = Path(tempfile.mkdtemp()) / "fp.wav"
+        t = np.arange(44100 * 12) / 44100
+        sf.write(str(tmpwav), (0.4 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
+        fp = core._fingerprint_file(tmpwav)
+        assert fp.get("fingerprint") and fp.get("duration", 0) > 0, "fpcalc must yield a fingerprint"
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME"); sk = os.environ.get("EARCRATE_ACOUSTID_KEY")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp); os.environ.pop("EARCRATE_ACOUSTID_KEY", None)
+    try:
+        (tmp / "m").mkdir(); sf.write(str(tmp / "m" / "x.wav"), np.zeros((1000, 2), "float32"), 44100)
+        c = EarcrateCore(); c.configure({"master_root": str(tmp / "m"), "working_root": str(tmp / "w"), "agent_root": str(tmp / "a")})
+        assert c.identify_tracks({})["ok"] is False, "identify must refuse without an API key"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+        if sk is not None: os.environ["EARCRATE_ACOUSTID_KEY"] = sk

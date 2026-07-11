@@ -3040,6 +3040,92 @@ class EarcrateCore:
                           f"Nothing moved — this is the assessment.")}
 
 
+
+    # ---- Online music identity (opt-in): AcoustID fingerprint -> MusicBrainz --
+    # Fixes lying tags and playlist-name-as-artist by looking up the actual
+    # recording from the audio itself. Needs `fpcalc` (Chromaprint) on PATH and a
+    # free AcoustID client key (https://acoustid.org/new-application). Network +
+    # key stay opt-in; nothing here mutates files -- it proposes identities.
+    def _fingerprint_file(self, path) -> Optional[Dict[str, Any]]:
+        try:
+            r = subprocess.run(["fpcalc", "-json", str(path)], capture_output=True, text=True, timeout=120)
+        except FileNotFoundError:
+            return {"error": "fpcalc (Chromaprint) not installed"}
+        except Exception as exc:
+            return {"error": str(exc)[:100]}
+        if r.returncode != 0:
+            return {"error": (r.stderr or "fpcalc failed").strip()[:100]}
+        try:
+            d = json.loads(r.stdout)
+        except Exception:
+            return {"error": "fpcalc gave no JSON"}
+        return {"duration": float(d.get("duration") or 0.0), "fingerprint": str(d.get("fingerprint") or "")}
+
+    def _parse_acoustid(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if data.get("status") != "ok":
+            return {"ok": False, "error": (data.get("error") or {}).get("message", "lookup failed")}
+        results = [r for r in (data.get("results") or []) if r.get("recordings")]
+        if not results:
+            return {"ok": True, "match": None}
+        best = max(results, key=lambda r: r.get("score", 0.0))
+        rec = (best.get("recordings") or [None])[0]
+        if not rec:
+            return {"ok": True, "match": None, "score": round(float(best.get("score", 0.0)), 3)}
+        artists = rec.get("artists") or []
+        artist = "; ".join(a.get("name", "") for a in artists if a.get("name")) or None
+        rgs = rec.get("releasegroups") or []
+        album = rgs[0].get("title") if rgs and rgs[0].get("title") else None
+        return {"ok": True, "match": {"artist": artist, "title": rec.get("title"), "album": album,
+                                      "mbid": rec.get("id"), "score": round(float(best.get("score", 0.0)), 3)}}
+
+    def _acoustid_lookup(self, fingerprint: str, duration: float, api_key: str) -> Dict[str, Any]:
+        import urllib.request, urllib.parse
+        body = urllib.parse.urlencode({
+            "client": api_key, "duration": str(int(round(duration))), "fingerprint": fingerprint,
+            "meta": "recordings+releasegroups+compress", "format": "json",
+        }).encode("utf-8")
+        req = urllib.request.Request("https://api.acoustid.org/v2/lookup", data=body,
+                                     headers={"User-Agent": "earcrate/1.0", "Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return self._parse_acoustid(json.loads(resp.read().decode("utf-8")))
+
+    def identify_tracks(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Propose real identities for scanned tracks via AcoustID. Dry-run: nothing
+        is written. Feed the proposals into reorganize/retag to actually apply."""
+        c = self.ensure_config()
+        api_key = str(data.get("api_key") or os.environ.get("EARCRATE_ACOUSTID_KEY") or "").strip()
+        if not api_key:
+            return {"ok": False, "error": ("AcoustID API key required. Get a free key at "
+                                           "https://acoustid.org/new-application, then pass --key or set "
+                                           "EARCRATE_ACOUSTID_KEY.")}
+        limit = int(data.get("limit") or 0)
+        db = self.conn()
+        rows = db.execute("SELECT id, path FROM files WHERE root='master' ORDER BY path"
+                          + (f" LIMIT {limit}" if limit > 0 else "")).fetchall()
+        proposals, failed = [], []
+        for row in rows:
+            p = Path(row["path"])
+            if not p.exists():
+                continue
+            fp = self._fingerprint_file(p)
+            if not fp or fp.get("error") or not fp.get("fingerprint"):
+                failed.append({"path": str(p), "reason": (fp or {}).get("error") or "no fingerprint"}); continue
+            try:
+                res = self._acoustid_lookup(fp["fingerprint"], fp["duration"], api_key)
+            except Exception as exc:
+                failed.append({"path": str(p), "reason": str(exc)[:120]}); continue
+            m = res.get("match") if res.get("ok") else None
+            if m and (m.get("artist") or m.get("title")):
+                proposals.append({"path": str(p), "file_id": row["id"], **m})
+            else:
+                failed.append({"path": str(p), "reason": res.get("error") or "no confident match"})
+            time.sleep(0.34)  # AcoustID asks for <= 3 requests/sec
+        return {"ok": True, "dry_run": True, "identified": len(proposals), "unmatched": len(failed),
+                "proposals": proposals[:500], "failed": failed[:100],
+                "note": ("proposed identities from AcoustID/MusicBrainz; nothing written. Next: feed these "
+                         "into reorganize/retag to correct artist/album on disk.")}
+
+
     def list_renders(self) -> Dict[str, Any]:
         c = self.ensure_config()
         render_dir = c.working_root / "renders"

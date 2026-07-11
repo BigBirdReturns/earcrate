@@ -132,3 +132,18 @@ silence, broadband static, non-decodable/corrupt files, and sub-1s fragments are
 flagged. `reorganize` never deletes — unidentifiable files go to `_unsorted/`.
 Online music identity (AcoustID/MusicBrainz) is a separate opt-in that needs
 network + `fpcalc` + a free key on the machine.
+
+### Online identity (opt-in: AcoustID/MusicBrainz)
+
+Fixes lying tags and playlist-name-as-artist by identifying the recording from
+the audio itself. Prereqs: `fpcalc` (Chromaprint) on PATH, and a **free** client
+key from https://acoustid.org/new-application.
+
+```
+set EARCRATE_ACOUSTID_KEY=your_key_here      # or pass --key
+python dist\earcrate.py identify --limit 50  # dry-run: proposes artist/title/album/mbid per file
+```
+
+`identify` is dry-run only — it proposes identities (nothing written). Rate-limited
+to ~3 req/sec. Feed the confident matches into a reorganize/retag pass to correct
+metadata on disk.

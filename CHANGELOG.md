@@ -1,5 +1,23 @@
 # EarCrate — CHANGELOG
 
+## v0.8.15 — apply identities: close the identify -> fix loop (reversible)
+- NEW `apply_identities` + `rollback_identities` (CLI `apply-identities`,
+  `identify-rollback`; routes `/api/identify/apply|rollback`): takes identify's
+  AcoustID proposals and rewrites artist/title/album/albumartist on the files
+  AND in the DB, so a following `reorganize` files them by the corrected tags.
+  Simulate -> approve -> execute: dry-run by default, signature-gated apply,
+  confidence-gated (--min-score, default 0.85), and every old tag is backed up
+  to a journal so `identify-rollback` restores it. `identify` now saves its
+  proposals to agent/identify_proposals.json for the apply step to read.
+- The identify -> fix loop is now closed: identify (get truth) -> apply-identities
+  (retag, reversible) -> reorganize (re-file). Each step dry-run-first.
+- Gate `test_apply_identities_retags_and_reverses`: dry-run changes nothing,
+  --apply rewrites disk+DB, stale signature refuses, sub-threshold matches are
+  skipped, rollback restores. CLI verified through the single-file.
+- Verified: 18/18 gates pass in isolation this run; single-file builds +
+  SELF_TEST_OK. (The personas_coexist native DSP segfault seen earlier is an
+  intermittent container-degradation issue, not code.)
+
 ## v0.8.14 — online music identity (AcoustID/MusicBrainz), opt-in
 - NEW `identify_tracks` + `_fingerprint_file` + `_acoustid_lookup` (CLI
   `identify`, route `/api/identify`): fingerprints each file with fpcalc

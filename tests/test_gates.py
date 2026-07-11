@@ -511,3 +511,45 @@ def test_identify_parses_acoustid_and_guards_key():
         if se is not None: os.environ["EARCRATE_HOME"] = se
         else: os.environ.pop("EARCRATE_HOME", None)
         if sk is not None: os.environ["EARCRATE_ACOUSTID_KEY"] = sk
+
+
+def test_apply_identities_retags_and_reverses():
+    """v0.8.15 gate: apply-identities rewrites tags from AcoustID proposals --
+    dry-run changes nothing, --apply writes artist/title/album to disk AND the
+    DB (so reorganize sees it), gated by a signature, and identify-rollback
+    restores the original tags."""
+    import tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from mutagen import File as MF
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        lib = tmp / "lib"; lib.mkdir()
+        f = lib / "track.flac"
+        t = np.arange(44100 * 3) / 44100
+        sf.write(str(f), (0.3 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
+        mf = MF(str(f), easy=True); mf["artist"] = ["BIRP Playlist"]; mf["title"] = ["wrong"]; mf.save()
+        core = EarcrateCore(); core.configure({"master_root": str(lib), "working_root": str(tmp / "w"), "agent_root": str(tmp / "a")})
+        core.scan()
+        fid = core.conn().execute("SELECT id FROM files WHERE root='master' LIMIT 1").fetchone()["id"]
+        props = [{"path": str(f), "file_id": fid, "artist": "Motörhead", "title": "Ace of Spades", "album": "Ace of Spades", "score": 0.98}]
+        dry = core.apply_identities({"proposals": props, "apply": False})
+        assert dry["dry_run"] and dry["would_retag"] == 1
+        assert MF(str(f), easy=True).get("artist")[0] == "BIRP Playlist", "dry-run must not change tags"
+        assert core.apply_identities({"proposals": props, "apply": True, "signature": "stale"})["ok"] is False
+        res = core.apply_identities({"proposals": props, "apply": True, "signature": dry["signature"]})
+        assert res["ok"] and res["retagged"] == 1
+        assert MF(str(f), easy=True).get("artist")[0] == "Motörhead"
+        assert core.conn().execute("SELECT value FROM tags WHERE file_id=? AND key='artist'", (fid,)).fetchone()["value"] == "Motörhead"
+        # low-confidence proposals are skipped
+        low = core.apply_identities({"proposals": [{"path": str(f), "file_id": fid, "artist": "X", "score": 0.4}], "apply": False})
+        assert low["would_retag"] == 0, "sub-threshold matches must not be applied"
+        rb = core.rollback_identities({"journal": res["journal"]})
+        assert rb["ok"] and rb["restored"] == 1
+        assert MF(str(f), easy=True).get("artist")[0] == "BIRP Playlist", "rollback must restore tags"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)

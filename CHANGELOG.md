@@ -1,5 +1,21 @@
 # EarCrate — CHANGELOG
 
+## v0.8.12 — CLI you can drive headlessly + fix a single-file deep-clean crash
+- NEW CLI COMMANDS so an agent (or you) can run the whole cleanup from the
+  command line, no web UI: `configure` (set music+workspace, persists),
+  `scan`, `analyze`, `deepclean` (audio-graph assessment), `reorganize`
+  (dry-run plan; `--apply --signature` to execute), `reorganize-rollback`.
+  Dry-run by default; JSON out. Verified end-to-end as separate processes
+  through the single-file: configure -> scan -> deepclean -> reorganize plan
+  -> apply (moved, journaled) -> stale-signature refusal.
+- BUGFIX (would have shipped broken): `assess_track_audio` imported
+  `decode_audio` INSIDE the function, which works in package mode but crashes
+  in the single-file build users actually run ("earcrate is not a package").
+  Hoisted to a top-level import the builder strips; deep-clean now works via
+  `dist/earcrate.py`. Caught by testing the real artifact, not just the package.
+- LIBRARY_WORKFLOW.md: added the agent-driven cleanup recipe.
+- Verified: 16/16 gates + singlefile SELF_TEST_OK.
+
 ## v0.8.11 — deep clean: hear real songs vs static junk by the audio graph
 - NEW `assess_track_audio` + `deep_clean_scan` (route `/api/deepclean/scan`):
   decodes each file and judges it by the SOUND, not tags or genre. Flags only

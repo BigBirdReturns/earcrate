@@ -85,6 +85,57 @@ def main(argv: Optional[List[str]] = None) -> int:
         core = EarcrateCore()
         print(json.dumps(core.build_compatibility_graph(ns.profile, ns.seconds, ns.bpm), ensure_ascii=False, indent=2))
         return 0
+    if argv and argv[0] == "configure":
+        cp = argparse.ArgumentParser(prog="earcrate configure", description="Set the music folder + workspace (persists; run this once before scan/organize/deepclean)")
+        cp.add_argument("--music", required=True, help="your music/source folder (read-only source)")
+        cp.add_argument("--workspace", default="", help="workspace folder; default is a visible sibling of the music folder")
+        cp.add_argument("--workers", type=int, default=None)
+        cp.add_argument("--analysis-seconds", type=int, default=0)
+        ns = cp.parse_args(argv[1:])
+        data = {"music_folder": ns.music, "workspace_folder": ns.workspace}
+        if ns.workers is not None: data["workers"] = ns.workers
+        if ns.analysis_seconds: data["analysis_seconds"] = ns.analysis_seconds
+        core = EarcrateCore()
+        print(json.dumps(core.configure_workspace(data), ensure_ascii=False, indent=2))
+        return 0
+    if argv and argv[0] == "scan":
+        core = EarcrateCore()
+        print(json.dumps(core.scan(), ensure_ascii=False, indent=2))
+        return 0
+    if argv and argv[0] == "analyze":
+        ap = argparse.ArgumentParser(prog="earcrate analyze", description="Compute BPM/key/energy/vocal features for scanned tracks")
+        ap.add_argument("--limit", type=int, default=0)
+        ap.add_argument("--force", action="store_true")
+        ns = ap.parse_args(argv[1:])
+        core = EarcrateCore()
+        print(json.dumps(core.analyze(limit=ns.limit, force=ns.force), ensure_ascii=False, indent=2))
+        return 0
+    if argv and argv[0] == "deepclean":
+        dp = argparse.ArgumentParser(prog="earcrate deepclean", description="Listen to each file's audio graph: separate real songs from silence/static/corrupt; find empty + art-only folders. Assessment only (nothing moved).")
+        dp.add_argument("--root", default="", help="folder to assess; default is the configured music folder")
+        dp.add_argument("--limit", type=int, default=0, help="assess only the first N audio files (0 = all)")
+        ns = dp.parse_args(argv[1:])
+        core = EarcrateCore()
+        print(json.dumps(core.deep_clean_scan({"root": ns.root, "limit": ns.limit}), ensure_ascii=False, indent=2))
+        return 0
+    if argv and argv[0] == "reorganize":
+        rp = argparse.ArgumentParser(prog="earcrate reorganize", description="Reorganize the source IN PLACE into Artist/Album/NN-Title. Dry-run plan by default; --apply moves (journaled, reversible).")
+        rp.add_argument("--root", default="", help="folder to reorganize; default is the configured music folder")
+        rp.add_argument("--apply", action="store_true", help="execute the moves; default is a dry-run plan")
+        rp.add_argument("--signature", default="", help="approved plan signature from a prior dry-run (apply refuses if the library changed)")
+        ns = rp.parse_args(argv[1:])
+        core = EarcrateCore()
+        data = {"root": ns.root, "apply": ns.apply}
+        if ns.signature: data["signature"] = ns.signature
+        print(json.dumps(core.reorganize_source(data), ensure_ascii=False, indent=2))
+        return 0
+    if argv and argv[0] == "reorganize-rollback":
+        rp = argparse.ArgumentParser(prog="earcrate reorganize-rollback", description="Undo a reorganize using its journal")
+        rp.add_argument("journal")
+        ns = rp.parse_args(argv[1:])
+        core = EarcrateCore()
+        print(json.dumps(core.rollback_reorganize({"journal": ns.journal}), ensure_ascii=False, indent=2))
+        return 0
     parser = argparse.ArgumentParser(prog="earcrate", description="earcrate: local-first layered mashup engine; only auditioned material exists to the composer")
     parser.add_argument("--serve", action="store_true", help="start local UI server")
     parser.add_argument("--no-browser", action="store_true", help="do not open browser")

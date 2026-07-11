@@ -1,5 +1,24 @@
 # EarCrate — CHANGELOG
 
+## v0.8.6 — in-place source reorganize + a real desktop icon
+- IN-PLACE LIBRARY REORGANIZE (item 5), simulate -> approve -> execute.
+  `reorganize_source` MOVES files within your chosen music root into
+  Artist/Album/NN-Title (routes `/api/reorganize/plan|apply|rollback`). The
+  preview shows the exact move plan and touches nothing; a signed plan refuses
+  if the library changed; apply is journaled and DB paths follow the move;
+  unidentifiable files are quarantined to `_unsorted/` (never lost); rollback
+  fully restores the original layout. Nothing is deleted. Unlike
+  `organize_and_retag` (which copies into working/organized), this reorganizes
+  the source itself, as requested. New gate
+  `test_reorganize_source_in_place_previews_and_reverses` locks it.
+- DESKTOP ICON: `Create-Desktop-Shortcut.cmd` drops a clean "EarCrate" icon on
+  the Desktop (and removes any leftover "Jukebreaker" shortcut). It points at
+  the new `Launch-EarCrate.cmd` fast launcher (checks for Python, installs deps
+  only once, rebuilds the single-file, starts the server + opens the browser).
+  Windows-only scripts, authored to convention but verified by the user on
+  Windows (not click-testable from the build environment).
+- Verified: 15/15 gates + singlefile SELF_TEST_OK.
+
 ## v0.8.5 — finish the rename: the app no longer calls itself Jukebreaker
 - HONEST CORRECTION: earlier releases claimed the rebrand was done. It wasn't —
   the app still named your work "Jukebreaker" in five user-facing places. Fixed

@@ -233,7 +233,7 @@ class JBHandler(BaseHTTPRequestHandler):
             if path == "/api/reorganize/plan":
                 self._json(200, self.core.reorganize_source({**data, "apply": False})); return
             if path == "/api/reorganize/apply":
-                self._json(200, self.core.run_background(self.core.reorganize_source, {**data, "apply": True})); return
+                self._json(200, self.core.reorganize_source({**data, "apply": True})); return
             if path == "/api/reorganize/rollback":
                 self._json(200, self.core.rollback_reorganize(data)); return
             if path == "/api/demo/seed":

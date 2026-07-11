@@ -1,5 +1,15 @@
 # EarCrate — CHANGELOG
 
+## v0.8.7 — reorganize gets a UI card (preview -> apply -> rollback)
+- The in-place source reorganize is now a Library-tab card, not just an API:
+  PREVIEW REORGANIZE (dry-run, shows the exact move plan and the _unsorted/
+  count, moves nothing, enables Apply only if there is something to do),
+  APPLY (confirm dialog; moves in place; synchronous since same-volume moves are
+  fast; returns the journal), and ROLLBACK LAST (restores the original layout).
+- Verified with a headless-Chromium button-click run: Apply stays disabled until
+  Preview; Preview renders the plan with files untouched; Apply reports "Moved N
+  file(s)" and reveals Rollback; no page errors. 15/15 gates + SELF_TEST_OK.
+
 ## v0.8.6 — in-place source reorganize + a real desktop icon
 - IN-PLACE LIBRARY REORGANIZE (item 5), simulate -> approve -> execute.
   `reorganize_source` MOVES files within your chosen music root into

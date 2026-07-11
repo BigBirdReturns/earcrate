@@ -257,6 +257,10 @@ display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:
 <div style="margin-top:8px"><button class="action" onclick="runIngest(false)">DRY-RUN PLAN</button><button class="action primary" onclick="runIngest(true)">INGEST NOW</button>
 <button class="action" onclick="runOrganize(false)">ORGANIZE DRY-RUN</button><button class="action" onclick="runOrganize(true)">ORGANIZE + RETAG</button></div>
 <div style="margin:6px 0"><button class="action" onclick="openFolder(window.__lastArchiveRoot)">OPEN ARCHIVE FOLDER</button></div><pre id="ingestOut"></pre></div>
+<div class="card"><h2>Reorganize the source <span class="accent">// in place</span></h2>
+<p class="muted small"><b>Moves your ORIGINAL files</b> inside the music folder into <code>Artist/Album/NN Title</code>. Unlike Organize+Retag (which copies to a new tree), this rewrites the source layout itself. It is <b>reversible</b> (every move is journaled) and never deletes: anything it can't identify goes to <code>_unsorted/</code>. Always <b>Preview</b> first — nothing moves until you Apply.</p>
+<div style="margin-top:8px"><button class="action" onclick="reorgPreview()">PREVIEW REORGANIZE</button><button class="action primary" id="reorgApplyBtn" onclick="reorgApply()" disabled>APPLY (move in place)</button><button class="action" id="reorgRollbackBtn" onclick="reorgRollback()" style="display:none">ROLLBACK LAST</button></div>
+<pre id="reorgOut">Preview to see exactly what will move.</pre></div>
 <div class="card"><h2>Library</h2><button class="action" onclick="post('/api/scan_bg',{})">Scan</button><button class="action" onclick="refreshTracks()">Refresh tracks</button><div class="bar"><span id="prog"></span></div><p id="statustext" class="muted"></p></div><div class="card"><table id="tracks"></table></div></section>
 <section id="analyze"><div class="grid"><div class="card"><h2>Analyze</h2><label>Limit, 0 means all</label><input id="analysis_limit" value="0"><button class="action" onclick="post('/api/analyze_bg',{limit:+val('analysis_limit')||0})">Analyze audio</button><p class="muted">Computes BPM, downbeats, key, LUFS, energy, sections, and vocal likelihood.</p></div><div class="card"><h2>Extract loops</h2><label>Limit, 0 means all</label><input id="loop_limit" value="0"><label><input id="auto_approve" type="checkbox" style="min-width:auto"> auto-approve extracted loops directly, not recommended</label><button class="action" onclick="post('/api/extract_loops_bg',{limit:+val('loop_limit')||0,auto_approve:document.getElementById('auto_approve').checked,force:false})">Extract loop candidates</button><button class="action" onclick="post('/api/extract_loops_bg',{limit:+val('loop_limit')||0,auto_approve:document.getElementById('auto_approve').checked,force:true})">Re-extract with current scoring</button><p class="muted">Downbeat-only candidates, ≤12 per track, role-gated drum anchors. Leave auto-approve off, then use quota approval in Loop Review to build a bounded hot pool.</p></div></div></section>
 <section id="loops"><div class="card"><h2>Loop Review</h2><button class="action" onclick="refreshLoops('')">All</button><button class="action" onclick="refreshLoops('candidate')">Candidates</button><button class="action" onclick="refreshLoops('approved')">Approved</button><button class="action" onclick="refreshLoops('rejected')">Rejected</button><button class="action" onclick="autoApproveQuota()">Approve hot pool by quota</button><button class="action" onclick="bulkLoopStatus('rejected','candidate')">Reject all candidates</button><button class="action" onclick="bulkLoopStatus('candidate','')">Reset all to candidate</button><p id="loopCounts" class="muted">Loop counts pending.</p><p class="muted">Mashups use approved loops only. Quota approval keeps the pool bounded, role-balanced, and reviewable. Use individual approve/reject for manual curation.</p><pre id="loopOut"></pre></div><div class="card"><table id="loopsTable"></table></div></section>
@@ -630,6 +634,27 @@ function ingestSrcList(){return Array.from(document.querySelectorAll('.ingestSrc
 async function runIngest(apply){const s=ingestSrcList();const o=document.getElementById('ingestOut');if(!s.length){o.textContent='Add at least one source folder.';return}
  if(apply&&!confirm('Copy audio from '+s.length+' folder(s) into the managed library?\nSources are read-only; copies are journaled and rollback-able.'))return;
  o.textContent=(apply?'Ingesting':'Planning')+'\u2026';try{const j=await post('/api/ingest',{sources:s,apply:apply});o.textContent=fmtReceipt(j,apply,'ingest');if(apply&&j.ok)toast('Ingest complete: '+(j.planned||0)+' copied, '+(j.skipped_duplicates||0)+' dupes skipped')}catch(e){o.textContent=String(e)}}
+window.__reorg={sig:null,journal:null};
+async function reorgPreview(){var o=document.getElementById('reorgOut');o.textContent='Planning\u2026';try{var j=await post('/api/reorganize/plan',{});
+  if(j.ok===false){o.textContent=JSON.stringify(j,null,2);var b0=document.getElementById('reorgApplyBtn');if(b0)b0.disabled=true;return;}
+  window.__reorg.sig=j.signature||null; var b=document.getElementById('reorgApplyBtn'); if(b)b.disabled=!(j.planned>0);
+  var L=['PLAN ONLY \u2014 nothing moved yet.', j.human||'', ''];
+  L.push('Move '+(j.planned||0)+' file(s) \u00b7 '+(j.quarantined||0)+' \u2192 _unsorted/ \u00b7 '+(j.already_conforming||0)+' already tidy.');
+  if(j.tree_preview){L.push('','Top folders: '+Object.keys(j.tree_preview).map(function(k){return k+' ('+j.tree_preview[k]+')';}).join(', '));}
+  if((j.samples||[]).length){L.push('','First few:');(j.samples||[]).forEach(function(x){L.push('  '+x.from+'\n      \u2192 '+x.to);});}
+  o.textContent=L.join('\n')+'\n\n--- full receipt ---\n'+JSON.stringify(j,null,2);
+ }catch(e){o.textContent=String(e);}}
+async function reorgApply(){if(!window.__reorg.sig){toast('Preview first.');return;}
+  if(!confirm('Move your ORIGINAL files in place into Artist/Album/NN-Title?\nReversible (journaled), nothing deleted. What you previewed is exactly what runs.'))return;
+  var o=document.getElementById('reorgOut');o.textContent='Moving files\u2026';
+  try{var j=await post('/api/reorganize/apply',{signature:window.__reorg.sig});
+    if(j.journal){window.__reorg.journal=j.journal;var rb=document.getElementById('reorgRollbackBtn');if(rb)rb.style.display='inline-flex';}
+    o.textContent=(j.ok?('Moved '+(j.moved||0)+' file(s) in place. Reversible via ROLLBACK LAST.'):'Completed with errors:')+'\n\n'+JSON.stringify(j,null,2);
+    toast(j.ok?('Reorganized '+(j.moved||0)+' file(s) in place'):'Reorganize had errors'); refreshTracks();
+  }catch(e){o.textContent=String(e);}}
+async function reorgRollback(){if(!window.__reorg.journal){toast('No journal to roll back.');return;}
+  if(!confirm('Undo the last reorganize and restore the original layout?'))return;
+  try{var j=await post('/api/reorganize/rollback',{journal:window.__reorg.journal});toast('Rollback: restored '+(j.restored||0)+' file(s)');document.getElementById('reorgOut').textContent=JSON.stringify(j,null,2);refreshTracks();}catch(e){toast(String(e));}}
 async function runOrganize(apply){const o=document.getElementById('ingestOut');
  if(apply&&!confirm('Copy the library into Artist/Album/NN Title under working/organized with amended tags?\nOriginals are untouched.'))return;
  o.textContent=(apply?'Organizing':'Planning organize')+'\u2026';try{const j=await post('/api/organize',{apply:apply});o.textContent=fmtReceipt(j,apply,'organize');if(apply&&j.ok)toast('Organized '+(j.planned||0)+' tracks \u2192 '+(j.output_root||'workspace\\work\\organized'))}catch(e){o.textContent=String(e)}}

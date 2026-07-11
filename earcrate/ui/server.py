@@ -236,6 +236,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.reorganize_source({**data, "apply": True})); return
             if path == "/api/reorganize/rollback":
                 self._json(200, self.core.rollback_reorganize(data)); return
+            if path == "/api/deepclean/scan":
+                self._json(200, self.core.run_background(self.core.deep_clean_scan, data)); return
             if path == "/api/demo/seed":
                 self._json(200, self.core.seed_demo_renders(int(data.get("count") or 8))); return
             if path == "/api/migrate/plan":

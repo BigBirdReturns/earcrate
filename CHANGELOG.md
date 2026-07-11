@@ -1,5 +1,15 @@
 # EarCrate — CHANGELOG
 
+## v0.8.8 — fresh-download hygiene: stop shipping a runtime pointer
+- BUG (would confuse a fresh install): three `earcrate_workspace.json` runtime
+  pointer files had been swept into the repo by `git add -A` during dev runs —
+  one pointed at a `/tmp/...` path from a test machine. A fresh download would
+  boot trying to load a workspace that doesn't exist. Removed all three and
+  gitignored `earcrate_workspace.json` / `.deps_installed` / `config.json` so
+  per-machine runtime state can never be committed again. (Boot already degraded
+  gracefully to the setup screen on a dangling pointer, but the repo should be
+  clean.)
+
 ## v0.8.7 — reorganize gets a UI card (preview -> apply -> rollback)
 - The in-place source reorganize is now a Library-tab card, not just an API:
   PREVIEW REORGANIZE (dry-run, shows the exact move plan and the _unsorted/

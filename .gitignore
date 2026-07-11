@@ -9,3 +9,8 @@ agent/
 *.sqlite
 *.npz
 .venv/
+
+# runtime, per-machine (never commit)
+earcrate_workspace.json
+.deps_installed
+config.json

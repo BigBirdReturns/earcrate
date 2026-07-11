@@ -651,7 +651,7 @@ async function reorgApply(){if(!window.__reorg.sig){toast('Preview first.');retu
   }catch(e){o.textContent=String(e);}}
 async function reorgRollback(){if(!window.__reorg.journal){toast('No journal to roll back.');return;}
   if(!confirm('Undo the last reorganize and restore the original layout?'))return;
-  try{var j=await post('/api/reorganize/rollback',{journal:window.__reorg.journal});toast('Rollback: restored '+(j.restored||0)+' file(s)');document.getElementById('reorgOut').textContent=JSON.stringify(j,null,2);refreshTracks();}catch(e){toast(String(e));}}
+  try{var j=await post('/api/reorganize/rollback',{journal:window.__reorg.journal,apply:true});toast('Rollback: restored '+(j.restored||0)+' file(s)');document.getElementById('reorgOut').textContent=JSON.stringify(j,null,2);refreshTracks();}catch(e){toast(String(e));}}
 async function runOrganize(apply){const o=document.getElementById('ingestOut');
  if(apply&&!confirm('Copy the library into Artist/Album/NN Title under working/organized with amended tags?\nOriginals are untouched.'))return;
  o.textContent=(apply?'Organizing':'Planning organize')+'\u2026';try{const j=await post('/api/organize',{apply:apply});o.textContent=fmtReceipt(j,apply,'organize');if(apply&&j.ok)toast('Organized '+(j.planned||0)+' tracks \u2192 '+(j.output_root||'workspace\\work\\organized'))}catch(e){o.textContent=String(e)}}

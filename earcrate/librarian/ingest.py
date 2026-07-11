@@ -338,3 +338,135 @@ def execute_organize_copy(self, op: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:
         return {"type": "organize_copy", "path": str(dst), "tags_amended": [], "tag_error": str(exc)[:200]}
     return {"type": "organize_copy", "path": str(dst), "tags_amended": amended}
+
+
+# ---- In-place source reorganize (item 5): simulate -> approve -> execute ----
+# Unlike organize_and_retag (copy-then-edit into working/organized), this MOVES
+# files within the user's chosen source root into Artist/Album/NN-Title. Journaled
+# and reversible; unidentifiable files quarantined to _unsorted/; idempotent;
+# never loses a file; DB paths follow the move so the library stays valid.
+def reorganize_source(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    c = self.ensure_config()
+    apply = bool(data.get("apply"))
+    pattern = str(data.get("pattern") or "nn-title")
+    root = Path(str(data.get("root") or c.master_root)).expanduser().resolve()
+    master = c.master_root.resolve()
+    if not (root == master or master in root.parents or root in master.parents):
+        return {"ok": False, "error": "root must be the music library (or a folder within it)"}
+    db = self.conn()
+    rows = db.execute("SELECT id, path FROM files WHERE root='master' ORDER BY path").fetchall()
+    if not rows:
+        return {"ok": False, "error": "library not scanned; run Scan first"}
+    derived = []
+    for fid, fpath in rows:
+        p = Path(fpath)
+        try:
+            rp = p.resolve()
+            if not (rp == root or root in rp.parents):
+                continue
+        except Exception:
+            continue
+        if not p.exists():
+            continue
+        tags = {str(k).lower(): (v or "") for k, v in db.execute("SELECT key, value FROM tags WHERE file_id=?", (fid,)).fetchall()}
+        derived.append((fid, p, tags, _derive_identity(p, tags, root)))
+    album_artists: Dict[str, set] = {}
+    for _, _, _, ident in derived:
+        if ident["album"].lower() != "unknown album":
+            album_artists.setdefault(ident["album"].lower(), set()).add(ident["track_artist"].lower())
+    comp_albums = {a for a, arts in album_artists.items() if len(arts) >= 2}
+    moves, taken, already, quarantined = [], set(), 0, 0
+    for fid, p, tags, ident in derived:
+        if ident["album"].lower() in comp_albums:
+            ident["compilation"] = True
+        unknown = ident["artist"] == "Unknown Artist" and ident["album"] == "Unknown Album"
+        fn = _organized_filename(ident, pattern, ident["compilation"]) + p.suffix.lower()
+        if unknown:
+            dst = root / "_unsorted" / p.name
+        elif ident["compilation"]:
+            dst = root / "Various Artists" / safe_name(ident["album"]) / fn
+        else:
+            dst = root / safe_name(ident["artist"]) / safe_name(ident["album"]) / fn
+        if dst.resolve() == p.resolve():
+            already += 1
+            continue
+        base, n = dst, 2
+        while str(dst) in taken or (dst.exists() and dst.resolve() != p.resolve()):
+            dst = base.with_name(f"{base.stem} ({n}){base.suffix}")
+            n += 1
+        taken.add(str(dst))
+        moves.append((fid, str(p), str(dst), unknown))
+        if unknown:
+            quarantined += 1
+    sig = sha256_text(json_dumps([[s, d] for _, s, d, _ in sorted(moves, key=lambda m: m[1])]))
+    if not apply:
+        tree: Dict[str, int] = {}
+        for _, s, d, unk in moves:
+            rel = Path(d).relative_to(root)
+            top = rel.parts[0] if rel.parts else "?"
+            tree[top] = tree.get(top, 0) + 1
+        return {"ok": True, "dry_run": True, "root": str(root), "planned": len(moves),
+                "already_conforming": already, "quarantined": quarantined, "signature": sig,
+                "tree_preview": dict(list(tree.items())[:20]),
+                "samples": [{"from": Path(s).name, "to": str(Path(d).relative_to(root))} for _, s, d, _ in moves[:10]],
+                "human": (f"Move {len(moves)} file(s) IN PLACE into Artist/Album/NN-Title under "
+                          f"{root.name}; {quarantined} unidentifiable -> _unsorted/; {already} already "
+                          f"conforming. Journaled and fully reversible; nothing deleted.")}
+    approved = str(data.get("signature") or "")
+    if approved and approved != sig:
+        return {"ok": False, "error": "library changed since you approved this plan; re-run the preview",
+                "expected_signature": sig}
+    journal = c.agent_root / "reorg_journal" / f"reorg-{ulidish()}.jsonl"
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    moved, errors = 0, []
+    for fid, s, d, unk in moves:
+        try:
+            sp, dp = Path(s), Path(d)
+            if not sp.exists():
+                continue
+            dp.parent.mkdir(parents=True, exist_ok=True)
+            if dp.exists():
+                dp = dp.with_name(dp.stem + "__" + ulidish()[:6] + dp.suffix)
+            shutil.move(str(sp), str(dp))
+            db.execute("UPDATE files SET path=? WHERE id=?", (str(dp), fid))
+            fsync_append_jsonl(journal, {"from": str(dp), "restore_to": str(sp), "file_id": fid})
+            moved += 1
+        except Exception as exc:
+            errors.append({"src": s, "error": str(exc)[:160]})
+    db.commit()
+    self._prune_empty_dirs(root)
+    return {"ok": not errors, "moved": moved, "errors": errors, "journal": str(journal), "root": str(root),
+            "note": ("reorganized in place; DB paths updated to follow the move; reversible via the journal; "
+                     "unidentifiable files quarantined under _unsorted/; nothing deleted")}
+
+
+def rollback_reorganize(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    journal = Path(str(data.get("journal") or ""))
+    if not journal.exists():
+        return {"ok": False, "error": "reorg journal not found"}
+    db = self.conn()
+    restored, errors = 0, []
+    lines = [json.loads(l) for l in journal.read_text(encoding="utf-8").splitlines() if l.strip()]
+    for rec in reversed(lines):
+        try:
+            frm, to = Path(rec["from"]), Path(rec["restore_to"])
+            if frm.exists():
+                to.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(frm), str(to))
+                if rec.get("file_id"):
+                    db.execute("UPDATE files SET path=? WHERE id=?", (str(to), rec["file_id"]))
+                restored += 1
+        except Exception as exc:
+            errors.append(str(exc)[:140])
+    db.commit()
+    return {"ok": not errors, "restored": restored, "errors": errors}
+
+
+def _prune_empty_dirs(self, root) -> None:
+    root = Path(root)
+    for d in sorted([p for p in root.rglob("*") if p.is_dir()], key=lambda x: len(x.parts), reverse=True):
+        try:
+            if d.resolve() != root.resolve() and not any(d.iterdir()):
+                d.rmdir()
+        except Exception:
+            pass

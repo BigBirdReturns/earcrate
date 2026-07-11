@@ -399,3 +399,41 @@ def test_workspace_migration_previews_then_executes():
     finally:
         if saved_home is not None:
             os.environ["HOME"] = saved_home
+
+
+def test_reorganize_source_in_place_previews_and_reverses():
+    """v0.8.6 gate: in-place source reorganize SIMULATES (touching nothing), a
+    stale plan refuses, APPLY moves files into Artist/Album/NN-Title within the
+    source (unidentifiable -> _unsorted/, DB paths follow), and ROLLBACK fully
+    restores the original layout. Nothing is deleted."""
+    import tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    tmp = Path(tempfile.mkdtemp()); saved = os.environ.get("HOME"); os.environ["HOME"] = str(tmp)
+    try:
+        src = tmp / "The Sample Factory"; (src / "dump").mkdir(parents=True)
+        def wav(p): sf.write(str(p), np.zeros((2000, 2), dtype='float32'), 44100)
+        wav(src / "dump" / "Aphex Twin - Windowlicker.wav")
+        wav(src / "dump" / "Boards of Canada - Roygbiv.wav")
+        wav(src / "noise.wav")
+        core = EarcrateCore()
+        core.configure({"master_root": str(src), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+        core.scan()
+        before = set(p.relative_to(src).as_posix() for p in src.rglob("*.wav"))
+        plan = core.reorganize_source({"apply": False})
+        assert plan["dry_run"] and plan["planned"] >= 2 and plan["quarantined"] == 1
+        assert before == set(p.relative_to(src).as_posix() for p in src.rglob("*.wav")), "dry run must not move anything"
+        assert core.reorganize_source({"apply": True, "signature": "stale"})["ok"] is False
+        res = core.reorganize_source({"apply": True, "signature": plan["signature"]})
+        assert res["ok"] and res["moved"] >= 2
+        tree = set(p.relative_to(src).as_posix() for p in src.rglob("*.wav"))
+        assert "Aphex Twin/Unknown Album/Windowlicker.wav" in tree
+        assert any(t.startswith("_unsorted/") for t in tree), "unidentifiable must be quarantined, not lost"
+        db = core.conn()
+        assert all(Path(r["path"]).exists() for r in db.execute("SELECT path FROM files WHERE root='master'").fetchall())
+        rb = core.rollback_reorganize({"journal": res["journal"]})
+        assert rb["ok"] and rb["restored"] >= 2
+        assert (src / "dump" / "Aphex Twin - Windowlicker.wav").exists(), "rollback must restore originals"
+    finally:
+        if saved is not None:
+            os.environ["HOME"] = saved

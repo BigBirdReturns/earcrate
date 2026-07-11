@@ -3768,5 +3768,9 @@ class EarcrateCore:
 from earcrate.librarian.ingest import ingest_sources, organize_and_retag, execute_ingest_copy, execute_organize_copy
 EarcrateCore.ingest_sources = ingest_sources
 EarcrateCore.organize_and_retag = organize_and_retag
+from earcrate.librarian.ingest import reorganize_source, rollback_reorganize, _prune_empty_dirs
+EarcrateCore.reorganize_source = reorganize_source
+EarcrateCore.rollback_reorganize = rollback_reorganize
+EarcrateCore._prune_empty_dirs = _prune_empty_dirs
 EarcrateCore.execute_ingest_copy = execute_ingest_copy
 EarcrateCore.execute_organize_copy = execute_organize_copy

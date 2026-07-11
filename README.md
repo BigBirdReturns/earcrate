@@ -8,7 +8,10 @@ contract, pre-render and post-render quality gates, runtime ledger with
 per-stage receipts. No fallback render is allowed.
 
 ## Run
-- Windows: `START_HERE.cmd`
+- Windows (first time): `START_HERE.cmd` — installs deps, builds, launches.
+- Windows (desktop icon): run `Create-Desktop-Shortcut.cmd` once for an
+  "EarCrate" desktop icon (it also removes any stale "Jukebreaker" one). The icon
+  runs `Launch-EarCrate.cmd`, the fast path that skips reinstalling deps.
 - Dev: `python -m earcrate`
 - Single file: `python build/make_singlefile.py` then `python dist/earcrate.py`
 

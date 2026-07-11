@@ -145,6 +145,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         core = EarcrateCore()
         print(json.dumps(core.identify_tracks({"api_key": ns.key, "limit": ns.limit}), ensure_ascii=False, indent=2))
         return 0
+    if argv and argv[0] == "apply-identities":
+        ap = argparse.ArgumentParser(prog="earcrate apply-identities", description="Rewrite tags from identify's AcoustID proposals. Dry-run by default; --apply writes (reversible).")
+        ap.add_argument("--min-score", type=float, default=0.85, help="only apply matches at or above this AcoustID score")
+        ap.add_argument("--proposals", default="", help="proposals JSON path (default: workspace agent/identify_proposals.json)")
+        ap.add_argument("--apply", action="store_true", help="write tags; default is a dry-run preview")
+        ap.add_argument("--signature", default="")
+        ns = ap.parse_args(argv[1:])
+        core = EarcrateCore()
+        d = {"min_score": ns.min_score, "apply": ns.apply}
+        if ns.proposals: d["proposals_path"] = ns.proposals
+        if ns.signature: d["signature"] = ns.signature
+        print(json.dumps(core.apply_identities(d), ensure_ascii=False, indent=2))
+        return 0
+    if argv and argv[0] == "identify-rollback":
+        rp = argparse.ArgumentParser(prog="earcrate identify-rollback", description="Restore the tags a retag pass overwrote, using its journal")
+        rp.add_argument("journal")
+        ns = rp.parse_args(argv[1:])
+        core = EarcrateCore()
+        print(json.dumps(core.rollback_identities({"journal": ns.journal}), ensure_ascii=False, indent=2))
+        return 0
     parser = argparse.ArgumentParser(prog="earcrate", description="earcrate: local-first layered mashup engine; only auditioned material exists to the composer")
     parser.add_argument("--serve", action="store_true", help="start local UI server")
     parser.add_argument("--no-browser", action="store_true", help="do not open browser")

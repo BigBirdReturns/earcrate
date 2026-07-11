@@ -147,3 +147,19 @@ python dist\earcrate.py identify --limit 50  # dry-run: proposes artist/title/al
 `identify` is dry-run only — it proposes identities (nothing written). Rate-limited
 to ~3 req/sec. Feed the confident matches into a reorganize/retag pass to correct
 metadata on disk.
+
+### Closing the loop: apply identities, then re-file
+
+After `identify` proposes real identities, rewrite the tags and re-file:
+
+```
+python dist\earcrate.py identify --limit 50               # proposes; saves agent/identify_proposals.json
+python dist\earcrate.py apply-identities                  # dry-run: what tags would change (score >= 0.85)
+python dist\earcrate.py apply-identities --apply --signature <SIG>   # write tags (reversible)
+python dist\earcrate.py identify-rollback <journal>       # undo the retag if needed
+python dist\earcrate.py reorganize                        # re-file by the now-correct tags (dry-run first)
+```
+
+`apply-identities` only touches matches at or above `--min-score` (default 0.85),
+backs up every old tag to a journal, and updates both the file and the DB so the
+following `reorganize` files it correctly.

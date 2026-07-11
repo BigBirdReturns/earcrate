@@ -236,6 +236,10 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.reorganize_source({**data, "apply": True})); return
             if path == "/api/reorganize/rollback":
                 self._json(200, self.core.rollback_reorganize(data)); return
+            if path == "/api/identify/apply":
+                self._json(200, self.core.run_background(self.core.apply_identities, data)); return
+            if path == "/api/identify/rollback":
+                self._json(200, self.core.rollback_identities(data)); return
             if path == "/api/identify":
                 self._json(200, self.core.run_background(self.core.identify_tracks, data)); return
             if path == "/api/deepclean/scan":

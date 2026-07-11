@@ -3120,10 +3120,135 @@ class EarcrateCore:
             else:
                 failed.append({"path": str(p), "reason": res.get("error") or "no confident match"})
             time.sleep(0.34)  # AcoustID asks for <= 3 requests/sec
+        try:
+            (c.agent_root / "identify_proposals.json").write_text(json.dumps(proposals, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
         return {"ok": True, "dry_run": True, "identified": len(proposals), "unmatched": len(failed),
                 "proposals": proposals[:500], "failed": failed[:100],
                 "note": ("proposed identities from AcoustID/MusicBrainz; nothing written. Next: feed these "
                          "into reorganize/retag to correct artist/album on disk.")}
+
+
+
+    # ---- Apply AcoustID identities: retag on disk (reversible) ---------------
+    # Takes identify's proposals and rewrites artist/title/album/albumartist on
+    # the files (and the DB) so a following reorganize files them correctly.
+    # Simulate -> approve -> execute; every change backs up the old tags to a
+    # journal so identify-rollback can restore them. Confidence-gated.
+    def apply_identities(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        c = self.ensure_config()
+        apply = bool(data.get("apply"))
+        min_score = float(data.get("min_score") if data.get("min_score") is not None else 0.85)
+        proposals = data.get("proposals")
+        if not proposals:
+            pf = Path(str(data.get("proposals_path") or (c.agent_root / "identify_proposals.json")))
+            if not pf.exists():
+                return {"ok": False, "error": f"no proposals given and none saved at {pf}; run identify first"}
+            proposals = json.loads(pf.read_text(encoding="utf-8"))
+        db = self.conn()
+        fields = ["artist", "title", "album", "albumartist"]
+        changes = []
+        for p in proposals:
+            if float(p.get("score") or 0) < min_score:
+                continue
+            if not (p.get("artist") or p.get("title")):
+                continue
+            path = Path(p["path"])
+            if not path.exists():
+                continue
+            new: Dict[str, str] = {}
+            if p.get("artist"):
+                new["artist"] = p["artist"]; new["albumartist"] = p["artist"]
+            if p.get("title"):
+                new["title"] = p["title"]
+            if p.get("album"):
+                new["album"] = p["album"]
+            try:
+                mf = MutagenFile(str(path), easy=True)
+            except Exception:
+                mf = None
+            old = {}
+            if mf is not None:
+                for k in fields:
+                    v = mf.get(k)
+                    old[k] = (v[0] if v else "")
+            if all(old.get(k, "") == v for k, v in new.items()):
+                continue  # already correct
+            changes.append({"path": str(path), "file_id": p.get("file_id"), "old": old, "new": new,
+                            "score": p.get("score")})
+        sig = sha256_text(json_dumps([[ch["path"], ch["new"]] for ch in sorted(changes, key=lambda x: x["path"])]))
+        if not apply:
+            return {"ok": True, "dry_run": True, "would_retag": len(changes),
+                    "samples": [{"file": Path(ch["path"]).name, "old": ch["old"], "new": ch["new"],
+                                 "score": ch["score"]} for ch in changes[:15]],
+                    "signature": sig,
+                    "human": (f"Would rewrite tags on {len(changes)} file(s) at score >= {min_score}. "
+                              f"Nothing written yet -- reversible via identify-rollback after --apply.")}
+        approved = str(data.get("signature") or "")
+        if approved and approved != sig:
+            return {"ok": False, "error": "library changed since preview; re-run the dry-run",
+                    "expected_signature": sig}
+        journal = c.agent_root / "identify_journal" / f"retag-{ulidish()}.jsonl"
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        retagged, errors = 0, []
+        for ch in changes:
+            try:
+                mf = MutagenFile(str(Path(ch["path"])), easy=True)
+                if mf is None:
+                    errors.append({"path": ch["path"], "error": "unsupported tag format"}); continue
+                for k, v in ch["new"].items():
+                    mf[k] = [v]
+                mf.save()
+                if ch.get("file_id"):
+                    for k, v in ch["new"].items():
+                        db.execute("INSERT OR REPLACE INTO tags(file_id,key,value) VALUES(?,?,?)", (ch["file_id"], k, v))
+                fsync_append_jsonl(journal, {"path": ch["path"], "file_id": ch.get("file_id"),
+                                             "old": ch["old"], "new": ch["new"]})
+                retagged += 1
+            except Exception as exc:
+                errors.append({"path": ch["path"], "error": str(exc)[:120]})
+        db.commit()
+        return {"ok": not errors, "retagged": retagged, "errors": errors, "journal": str(journal),
+                "note": ("tags rewritten from AcoustID identities; DB updated; reversible via "
+                         "identify-rollback. Run reorganize next to file them by the corrected tags.")}
+
+    def rollback_identities(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        journal = Path(str(data.get("journal") or ""))
+        if not journal.exists():
+            return {"ok": False, "error": "identify journal not found"}
+        db = self.conn()
+        restored, errors = 0, []
+        for line in journal.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            try:
+                path = Path(rec["path"])
+                if not path.exists():
+                    continue
+                mf = MutagenFile(str(path), easy=True)
+                if mf is None:
+                    continue
+                for k in (rec.get("new") or {}):
+                    oldv = (rec.get("old") or {}).get(k, "")
+                    if oldv:
+                        mf[k] = [oldv]
+                    elif k in mf:
+                        del mf[k]
+                mf.save()
+                if rec.get("file_id"):
+                    for k in (rec.get("new") or {}):
+                        oldv = (rec.get("old") or {}).get(k, "")
+                        if oldv:
+                            db.execute("INSERT OR REPLACE INTO tags(file_id,key,value) VALUES(?,?,?)", (rec["file_id"], k, oldv))
+                        else:
+                            db.execute("DELETE FROM tags WHERE file_id=? AND key=?", (rec["file_id"], k))
+                restored += 1
+            except Exception as exc:
+                errors.append(str(exc)[:120])
+        db.commit()
+        return {"ok": not errors, "restored": restored, "errors": errors}
 
 
     def list_renders(self) -> Dict[str, Any]:

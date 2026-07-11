@@ -1,5 +1,11 @@
 # EarCrate — CHANGELOG
 
+## v0.8.9 — add the Install-Dependencies.cmd the error message promised
+- The import-error banner told users to "Run Install-Dependencies.cmd" but that
+  file did not exist in the repo. Added it (Python check + `pip install -r
+  requirements.txt`), so a dependency failure points at a real tool instead of a
+  ghost. Windows helper; user-verified on Windows.
+
 ## v0.8.8 — fresh-download hygiene: stop shipping a runtime pointer
 - BUG (would confuse a fresh install): three `earcrate_workspace.json` runtime
   pointer files had been swept into the repo by `git add -A` during dev runs —

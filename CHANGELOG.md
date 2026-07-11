@@ -1,5 +1,24 @@
 # EarCrate — CHANGELOG
 
+## v0.8.11 — deep clean: hear real songs vs static junk by the audio graph
+- NEW `assess_track_audio` + `deep_clean_scan` (route `/api/deepclean/scan`):
+  decodes each file and judges it by the SOUND, not tags or genre. Flags only
+  silence, broadband static/noise, non-decodable/corrupt files (a JPEG renamed
+  .mp3 dies at decode), and sub-1s fragments. Real music, classical, lo-fi, and
+  SPOKEN WORD all pass — the classifier is deliberately genre-blind, so a
+  comedian's timing is kept, not thrown away. Also finds empty folders and
+  art-only folders, and counts loose images/sidecars. Dry-run assessment only;
+  nothing is moved.
+- Gate `test_deep_clean_hears_junk_but_keeps_voice` proves music AND a
+  voice-like signal pass while silence/static/corrupt are flagged, and that
+  empty + art-only folders are detected.
+- This is the first piece of the "point it at the drive and find the real
+  songs" cleanup. Still to come (honest): a UI card, the execute pass that
+  quarantines junk to _junk/ (reversible), and online music ID
+  (AcoustID/MusicBrainz) — which needs network + fpcalc + a key on your
+  machine and can't be fingerprinted from the build box.
+- Verified: 16/16 gates + singlefile SELF_TEST_OK.
+
 ## v0.8.10 — trim the buffalo: kill the dead two-world UI + a nav divider
 - The two-world arranger backend was deleted in v0.8.0, but the UI still
   OFFERED it: "Album Collision" and "Notorious Mode" presets in BOTH the Jam and

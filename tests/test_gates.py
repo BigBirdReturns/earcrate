@@ -437,3 +437,39 @@ def test_reorganize_source_in_place_previews_and_reverses():
     finally:
         if saved is not None:
             os.environ["HOME"] = saved
+
+
+def test_deep_clean_hears_junk_but_keeps_voice():
+    """v0.8.11 gate: the deep-clean classifier judges by the AUDIO GRAPH, not
+    tags or genre. Real music AND voice/spoken-word both pass; only silence,
+    broadband static, and non-decodable/corrupt files are flagged. Empty and
+    art-only folders are detected. Nothing is moved (assessment only)."""
+    import tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    tmp = Path(tempfile.mkdtemp()); saved = os.environ.get("HOME"); os.environ["HOME"] = str(tmp)
+    try:
+        root = tmp / "lib"; root.mkdir()
+        sr = 22050; t = np.arange(sr * 20) / sr
+        def w(n, y): sf.write(str(root / n), np.clip(y, -1, 1).astype(np.float32), sr)
+        w("music.wav", 0.4 * (np.sin(2*np.pi*220*t) + 0.5*np.sin(2*np.pi*440*t)))
+        env = 0.5 + 0.5*np.sin(2*np.pi*3*t)
+        w("voice.wav", env * (np.sin(2*np.pi*140*t) + 0.4*np.sin(2*np.pi*280*t)) + 0.05*np.random.default_rng(1).standard_normal(t.size))
+        w("silence.wav", np.zeros_like(t))
+        w("static.wav", 0.3 * np.random.default_rng(2).standard_normal(t.size))
+        (root / "notaudio.mp3").write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF" + os.urandom(3000))
+        (root / "Empty").mkdir()
+        (root / "ArtOnly").mkdir(); (root / "ArtOnly" / "cover.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+        core = EarcrateCore()
+        core.configure({"master_root": str(root), "working_root": str(tmp / "w"), "agent_root": str(tmp / "a")})
+        assert core.assess_track_audio(root / "music.wav")["real"] is True
+        assert core.assess_track_audio(root / "voice.wav")["real"] is True, "spoken-word-like audio must NOT be junk"
+        assert core.assess_track_audio(root / "silence.wav")["real"] is False
+        assert core.assess_track_audio(root / "static.wav")["real"] is False
+        assert core.assess_track_audio(root / "notaudio.mp3")["real"] is False
+        res = core.deep_clean_scan({})
+        assert res["dry_run"] and res["real_songs"] == 2 and res["junk_count"] == 3
+        assert res["empty_folder_count"] >= 1 and res["art_only_folder_count"] >= 1
+    finally:
+        if saved is not None:
+            os.environ["HOME"] = saved

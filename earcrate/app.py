@@ -2962,6 +2962,84 @@ class EarcrateCore:
         return {"ok": True, "seeded": len(made), "dir": str(renders),
                 "note": "demo warm-up renders written; press Endless to play them continuously"}
 
+
+    # ---- Deep clean: look at each file's audio GRAPH, not its tags ----------
+    # Separates real songs from static junk by decoding and measuring the sound
+    # itself. It does NOT judge genre: spoken word, classical, lo-fi, and Elvis
+    # all pass. Only silence, broadband static/noise, non-decodable/corrupt
+    # files, and empty fragments are flagged. Also finds empty and art-only
+    # folders. Dry-run / assessment only; nothing is moved here.
+    def assess_track_audio(self, path, sr: int = 22050, probe: float = 45.0) -> Dict[str, Any]:
+        from earcrate.analyze.decode import decode_audio
+        try:
+            y = decode_audio(Path(path), sr=sr, start=0.0, duration=probe)
+        except Exception as exc:
+            return {"real": False, "reason": "does not decode (corrupt or not really audio)", "detail": str(exc)[:80]}
+        y = np.asarray(y, dtype=np.float32)
+        if y.size < sr:  # under ~1 second of samples
+            return {"real": False, "reason": "empty / under 1s fragment", "seconds": round(float(y.size) / sr, 2)}
+        rms = float(np.sqrt(np.mean(y ** 2)))
+        frames = librosa.feature.rms(y=y)[0]
+        silent_frac = float(np.mean(frames < 1e-3)) if frames.size else 1.0
+        S = np.abs(librosa.stft(y))
+        flat = float(np.mean(librosa.feature.spectral_flatness(S=S)[0])) if S.size else 1.0
+        if rms < 1e-3 or silent_frac > 0.97:
+            return {"real": False, "reason": "silent", "rms": round(rms, 5), "silent_frac": round(silent_frac, 3)}
+        if flat > 0.5:
+            return {"real": False, "reason": "broadband static / noise (no tonal or rhythmic structure)",
+                    "flatness": round(flat, 3)}
+        return {"real": True, "reason": "real audio", "seconds": round(float(y.size) / sr, 1),
+                "rms": round(rms, 5), "flatness": round(flat, 3)}
+
+    def deep_clean_scan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        c = self.ensure_config()
+        root = Path(str(data.get("root") or c.master_root)).expanduser().resolve()
+        if not root.is_dir():
+            return {"ok": False, "error": f"not a folder: {root}"}
+        limit = int(data.get("limit") or 0)
+        image_exts = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+        sidecar_exts = {".nfo", ".txt", ".m3u", ".m3u8", ".cue", ".log", ".ini", ".db", ".url", ".sfv", ".pls"}
+        all_files = [p for p in root.rglob("*") if p.is_file()]
+        audio = [p for p in all_files if p.suffix.lower() in AUDIO_EXTS]
+        images = [p for p in all_files if p.suffix.lower() in image_exts]
+        sidecars = [p for p in all_files if p.suffix.lower() in sidecar_exts]
+        checked = audio[:limit] if limit > 0 else audio
+        real, junk = 0, []
+        for p in checked:
+            verdict = self.assess_track_audio(p)
+            if verdict.get("real"):
+                real += 1
+            else:
+                junk.append({"path": str(p), "reason": verdict.get("reason"), **{k: verdict[k] for k in ("flatness", "rms", "detail", "seconds") if k in verdict}})
+        # folder-level junk: empty folders, and folders that hold files but no audio anywhere below
+        empty_folders, art_only_folders = [], []
+        for d in [p for p in root.rglob("*") if p.is_dir()]:
+            try:
+                entries = list(d.iterdir())
+            except Exception:
+                continue
+            files_below = [f for f in d.rglob("*") if f.is_file()]
+            if not files_below and not any(x.is_dir() for x in entries):
+                empty_folders.append(str(d)); continue
+            has_audio_below = any(f.suffix.lower() in AUDIO_EXTS for f in files_below)
+            if files_below and not has_audio_below and not any((sub / "x").exists() for sub in []):
+                # a leaf-ish folder with files but zero audio anywhere under it = art/nfo clutter
+                if not any(x.is_dir() for x in entries):
+                    art_only_folders.append(str(d))
+        sig = sha256_text(json_dumps(sorted([j["path"] for j in junk] + empty_folders + art_only_folders)))
+        return {"ok": True, "dry_run": True, "root": str(root),
+                "audio_files": len(audio), "checked": len(checked),
+                "real_songs": real, "junk_count": len(junk),
+                "image_files": len(images), "sidecar_files": len(sidecars),
+                "empty_folders": empty_folders[:50], "empty_folder_count": len(empty_folders),
+                "art_only_folders": art_only_folders[:50], "art_only_folder_count": len(art_only_folders),
+                "junk": junk[:200], "signature": sig,
+                "human": (f"Listened to {len(checked)} of {len(audio)} audio file(s): {real} real, "
+                          f"{len(junk)} static/junk. Plus {len(empty_folders)} empty and "
+                          f"{len(art_only_folders)} art-only folder(s), {len(images)} loose image(s). "
+                          f"Nothing moved — this is the assessment.")}
+
+
     def list_renders(self) -> Dict[str, Any]:
         c = self.ensure_config()
         render_dir = c.working_root / "renders"

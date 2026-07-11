@@ -1,5 +1,23 @@
 # EarCrate — CHANGELOG
 
+## v0.8.10 — trim the buffalo: kill the dead two-world UI + a nav divider
+- The two-world arranger backend was deleted in v0.8.0, but the UI still
+  OFFERED it: "Album Collision" and "Notorious Mode" presets in BOTH the Jam and
+  legacy-compose dropdowns — and "Album Collision" was the DEFAULT selected, so a
+  fresh compile targeted a preset that no longer exists and silently fell back.
+  The client-side presets map still carried both (and used album_collision as its
+  fallback), plus a dead `mix_mode` line branching on them. All removed; the
+  default is now a real preset (party_cutup).
+- Killed the "Re-extract with current scoring" dev-cruft button label (the very
+  first thing flagged this project) -> honest "Re-extract loops (force rebuild)".
+- Added a "Setup & workbench" divider in the sidebar so the product path
+  (Residents / Crate / Sessions / Activity / Jam) reads as distinct from the
+  mechanical/legacy surfaces (Setup / Library / Analyze / Loops / Compose /
+  Manifests).
+- Verified headless (Playwright): no Album Collision / Notorious Mode / dead
+  label anywhere, Jam defaults to party_cutup, divider present,
+  updateOutcomePreview runs clean, no page errors. 15/15 gates + SELF_TEST_OK.
+
 ## v0.8.9 — add the Install-Dependencies.cmd the error message promised
 - The import-error banner told users to "Run Install-Dependencies.cmd" but that
   file did not exist in the repo. Added it (Python check + `pip install -r

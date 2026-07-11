@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Jukebreaker GT v0.6.3 Workspace Scout
+EarCrate runtime (descends from the Jukebreaker GT line)
 Local-first TasteSpec runtime-ledger compiler: scans songs into ear-crated phrase atoms, builds deterministic compatibility graphs, records wall-clock stage timings, then renders only taste-contract-satisfying mashups.
 
 This is a single-file build intended for zipapp packaging. It uses Python for the
@@ -49,14 +49,14 @@ try:
     import pyloudnorm as pyln
     from mutagen import File as MutagenFile
 except Exception as exc:  # pragma: no cover
-    print("Jukebreaker GT could not import required audio packages.", file=sys.stderr)
+    print("EarCrate could not import required audio packages.", file=sys.stderr)
     print("Run Install-Dependencies.cmd or pip install -r requirements.txt", file=sys.stderr)
     print(f"Import error: {exc}", file=sys.stderr)
     raise
 
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wv"}
-ENGINE_VERSION = "earcrate_v084"
-ENGINE_DISPLAY_VERSION = "v0.8.4"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
+ENGINE_VERSION = "earcrate_v085"
+ENGINE_DISPLAY_VERSION = "v0.8.5"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
 BUILD_STAMP = "__BUILD_STAMP__"     # sentinel; the single-file builder replaces it with the package content hash
 ANALYZER_VERSION = "gt-v0.6.1-earcrate-feasibility"
 APP_NAME = "JukebreakerGT"

@@ -1,4 +1,17 @@
-# Jukebreaker GT — CHANGELOG
+# EarCrate — CHANGELOG
+
+## v0.8.5 — finish the rename: the app no longer calls itself Jukebreaker
+- HONEST CORRECTION: earlier releases claimed the rebrand was done. It wasn't —
+  the app still named your work "Jukebreaker" in five user-facing places. Fixed
+  now: the import-error banner, the default set names ("Jukebreaker Sketch" ->
+  "EarCrate Sketch", "Jukebreaker TasteSpec" -> "EarCrate Set"), the
+  "...is already busy" error, the module header, and the CHANGELOG title all
+  read EarCrate.
+- KEPT ON PURPOSE (these find and migrate your OLD install, so renaming them
+  would break adoption): the \\Jukebreaker drive scout, jukebreaker.sqlite
+  adoption, APP_NAME/legacy hidden-dir key, and the historical CHANGELOG entries
+  + README lineage note (rewriting shipped history would be its own lie).
+- Verified: 14/14 gates + singlefile SELF_TEST_OK.
 
 ## v0.8.4 — first-run "press play": an instant demo warm-up set
 - YOU CAN PRESS PLAY ON A FRESH INSTALL. Endless plays renders, and a brand-new

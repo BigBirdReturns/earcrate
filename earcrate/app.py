@@ -1704,7 +1704,7 @@ class EarcrateCore:
 
         default_candidates = 12
         params = {
-            "name": str(data.get("name") or "Jukebreaker Sketch"),
+            "name": str(data.get("name") or "EarCrate Sketch"),
             "target_seconds": int(data.get("target_seconds") or 180),
             "bpm": float(data.get("bpm") or 0),
             "drama": int(data.get("drama") or (82 if preset in ("party_cutup", "max_chaos") else 58)),
@@ -2275,7 +2275,7 @@ class EarcrateCore:
         if not readiness.get("ready"):
             raise RuntimeError("TasteSpec crate is not ready: " + "; ".join(readiness.get("failures") or []))
         pool = self.approved_atom_pool(taste_profile)
-        name = safe_name(str(params.get("name") or "Jukebreaker TasteSpec"), "Jukebreaker TasteSpec")
+        name = safe_name(str(params.get("name") or "EarCrate Set"), "EarCrate Set")
         explicit_seed = params.get("seed") not in (None, "", 0, "0")
         seed = int(params.get("seed")) if explicit_seed else self.next_render_seed(c.seed)
         params = dict(params)
@@ -2605,7 +2605,7 @@ class EarcrateCore:
             self.set_status("TasteSpec: building compatibility graph", 0.76, True, None)
             graph = self._perf_stage(ledger, "build_compatibility_graph", self.build_compatibility_graph, taste_profile, target_seconds, float(data.get("bpm") or 0.0))
             params = self.outcome_params(data)
-            params.update({"taste_profile": taste_profile, "name": str(data.get("name") or "Jukebreaker TasteSpec"), "target_seconds": int(target_seconds), "quality_mode": "stable_deck", "post_render_gate": True})
+            params.update({"taste_profile": taste_profile, "name": str(data.get("name") or "EarCrate Set"), "target_seconds": int(target_seconds), "quality_mode": "stable_deck", "post_render_gate": True})
             # Station steering: crowd 🔥/🧊 receipts bias the compile intent.
             _bias = self.station_bias()
             for _k in ("chaos", "vocal_density", "drama"):
@@ -3750,7 +3750,7 @@ class EarcrateCore:
     def run_background(self, fn, *args, **kwargs) -> Dict[str, Any]:
         with self.status_lock:
             if self.status.get("busy"):
-                raise RuntimeError("Jukebreaker is already busy")
+                raise RuntimeError("EarCrate is already busy")
             self.status.update({"busy": True, "message": "starting", "progress": 0, "last_error": None})
         def target():
             try:

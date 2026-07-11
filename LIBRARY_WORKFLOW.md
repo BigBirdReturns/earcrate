@@ -112,3 +112,23 @@ songs off the SSD clears it comfortably.
 - Everything mutating goes through the guarded executor: whole-manifest
   prevalidation, rollback inverse recorded *before* each write, fsync journals.
   Power loss mid-ingest leaves receipts, not corruption.
+
+## Agent-driven cleanup (Claude Code local, CLI, dry-run by default)
+
+Run these from a machine that can see your drives. Every destructive step is
+dry-run unless you pass `--apply`, and JSON is printed for the agent to read.
+
+```
+python dist\earcrate.py configure --music "E:\Music"      # once; persists. workspace defaults to a visible sibling
+python dist\earcrate.py scan                                # index the drive into the DB
+python dist\earcrate.py deepclean                           # LISTEN to each file: real songs vs silence/static/corrupt; find empty + art-only folders (assessment only)
+python dist\earcrate.py reorganize                          # dry-run: exact in-place Artist/Album/NN-Title move plan (+ signature)
+python dist\earcrate.py reorganize --apply --signature <SIG># execute the approved plan; journaled + reversible
+python dist\earcrate.py reorganize-rollback <journal-path>  # undo it
+```
+
+`deepclean` is genre-blind: spoken word, classical, and lo-fi all pass; only
+silence, broadband static, non-decodable/corrupt files, and sub-1s fragments are
+flagged. `reorganize` never deletes — unidentifiable files go to `_unsorted/`.
+Online music identity (AcoustID/MusicBrainz) is a separate opt-in that needs
+network + `fpcalc` + a free key on the machine.

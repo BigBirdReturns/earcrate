@@ -3,6 +3,7 @@ from earcrate.core.deps import _dt
 from earcrate.analyze.features import *
 from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_likelihood, _estimate_sections
 from earcrate.deck.transform import _artifact_cost
+from earcrate.analyze.decode import decode_audio
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
 
 
@@ -2970,7 +2971,6 @@ class EarcrateCore:
     # files, and empty fragments are flagged. Also finds empty and art-only
     # folders. Dry-run / assessment only; nothing is moved here.
     def assess_track_audio(self, path, sr: int = 22050, probe: float = 45.0) -> Dict[str, Any]:
-        from earcrate.analyze.decode import decode_audio
         try:
             y = decode_audio(Path(path), sr=sr, start=0.0, duration=probe)
         except Exception as exc:

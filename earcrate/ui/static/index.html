@@ -374,15 +374,20 @@ async function renderWorkbench(){
     +'<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">'
     +'<div style="width:250px;flex:0 0 auto" class="card"><div class="lbl" style="margin-bottom:10px">[ Pipeline // order is law ]</div><div id="wbPipe"></div></div>'
     +'<div style="flex:1;min-width:420px" class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><span class="lbl">[ Three-rail plan ]</span><span id="wbPlanMeta" style="font:500 9px/1 var(--mono);color:var(--faint)">propose a plan</span></div><div id="wbPlan"><div class="lbl" style="color:var(--faint)">no plan yet</div></div>'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--edge)"><button class="btn" onclick="proposePlan()">Propose plan</button><button class="btn" onclick="buildGraph()">Build pair graph</button><button class="btn primary" onclick="renderMix()">Render ▸</button><span style="margin-left:auto;font:600 8px/1.2 var(--mono);color:var(--fault);border:1px solid var(--fault);padding:5px 8px">event that can\'t render ⇒ FAIL</span></div></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--edge)"><button class="btn" onclick="proposePlan()">Propose plan</button><button class="btn" onclick="buildGraph()">Build pair graph</button><button class="btn" onclick="preflight()">Preflight</button><button class="btn" onclick="savePlan()">Save plan</button><button class="btn primary" onclick="renderMix()">Render ▸</button><span style="margin-left:auto;font:600 8px/1.2 var(--mono);color:var(--fault);border:1px solid var(--fault);padding:5px 8px">event that can\'t render ⇒ FAIL</span></div>'
+    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--edge)"><div class="lbl" style="margin-bottom:7px">[ Saved plans // load one back ]</div><div id="wbPlans" style="display:flex;gap:6px;flex-wrap:wrap"></div></div></div>'
     +'<div style="width:280px;flex:0 0 auto" class="card"><div class="lbl" style="margin-bottom:9px">[ Gates ]</div>'
     +'<div style="font:600 8px/1 var(--mono);color:var(--dim);margin-bottom:6px">PRE-RENDER · must pass to write</div><div id="wbPre" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px"></div>'
     +'<div style="font:600 8px/1 var(--mono);color:var(--dim);margin-bottom:6px">POST-RENDER · audible truth</div><div style="display:flex;flex-wrap:wrap;gap:5px">'
     +['rms_std ≥4.5','silence ≥1%','low200 ≥.48','≥4 pitch ctr','audible cov'].map(g=>'<span style="font:500 8.5px/1 var(--mono);color:var(--faint);border:1px dashed var(--edge2);padding:4px 7px">'+g+'</span>').join('')
     +'</div><div style="font:400 8.5px/1.4 var(--mono);color:var(--faint);margin-top:9px">no WAV on gate failure · no fallback · fail ⇒ quarantine</div></div>'
     +'</div>';
-  renderPipe(null); renderPre([]);
+  renderPipe(null); renderPre([]); loadPlans();
 }
+async function savePlan(){ if(!window.__plan){toast('Propose a plan first');return;} const name=prompt('Save plan as:','set '+new Date().toISOString().slice(0,10)); if(!name)return; try{ const j=await post('/api/timeline/save',{name, plan:window.__plan, taste_profile:S.resident}); toast(j.ok!==false?('Saved "'+name+'" · '+String(j.plan_hash||'').slice(0,8)):(j.error||'save failed')); loadPlans(); }catch(e){} }
+async function loadPlans(){ const host=el('wbPlans'); if(!host)return; try{ const j=await api('/api/timeline/list'); window.__plans=j.items||[]; host.innerHTML=window.__plans.length? window.__plans.map((p,i)=>'<span class="btn clk" onclick="loadPlan('+i+')">'+esc(p.name||'plan')+' ·'+String(p.plan_hash||'').slice(0,6)+'</span>').join('') : '<span style="font:500 9px/1 var(--mono);color:var(--faint)">no saved plans yet</span>'; }catch(e){ host.innerHTML='<span style="font:500 9px/1 var(--mono);color:var(--faint)">plans unavailable</span>'; } }
+async function loadPlan(i){ const p=(window.__plans||[])[i]; if(!p)return; try{ const j=await post('/api/timeline/load',{plan_hash:p.plan_hash}); if(j.ok!==false){ window.__plan=j.plan||j.arrangement; renderPlanRails(window.__plan); el('wbPlanMeta').textContent='loaded "'+esc(j.name||p.name||'')+'"'; toast('Loaded plan "'+(j.name||p.name||'')+'"'); } else toast(j.error||'load failed'); }catch(e){} }
+async function preflight(){ toast('Preflight…'); try{ const j=await post('/api/preflight',{taste_profile:S.resident, target_seconds:120}); const ok=j.ok!==false && !(j.failures&&j.failures.length); toast('Preflight: '+(ok?'READY to render':('NOT READY — '+((j.failures||[])[0]||j.error||'see crate')))); }catch(e){} }
 function renderPipe(active){
   const steps=[['Scan','sources'],['Analyze','bpm · key · downbeats'],['Extract','loops ≤12/track'],['Ear crate','auditioned atoms'],['Graph','typed edges'],['Choose deck','feasible sources'],['Compose rails','floor · fgnd · spark'],['Pre-gates','must pass'],['Render','write wav'],['Post-gate','audible truth']];
   el('wbPipe').innerHTML=steps.map((s,i)=>{
@@ -427,18 +432,24 @@ async function renderMix(){ toast('Rendering — watch Activity…'); try{ await
 async function renderSessions(){
   const scr=el('scr_sessions'); scr.innerHTML='<div class="h1">Sessions</div><div class="lbl">loading…</div>';
   let items=[]; try{ const j=await api('/api/sessions'); items=j.items||[]; }catch(e){}
-  scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Sessions</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">every render AND every refusal · a refusal is a session too</span></div>'
-    + items.map(s=>{
+  const rows = items.length ? items.map(s=>{
       const pass=s.passed!==false; const ink=pass?'var(--dim)':'var(--fault)'; const accent=pass?'var(--edge2)':'var(--fault)';
       const playable=s.kind==='render'&&pass;
       return '<div style="display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--edge);border-left:3px solid '+accent+';padding:12px 15px">'
         +'<span style="flex:0 0 auto;width:34px;height:34px;background:var(--panel2);border:1px solid var(--edge2);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--mono);color:var(--dim)">'+(pass?'♪':'⊘')+'</span>'
         +'<div style="min-width:0;flex:1"><div style="font-family:var(--disp);font-weight:600;font-size:16px;letter-spacing:.03em;color:var(--ink);text-transform:uppercase">'+esc(s.name||'')+'</div><div style="font:500 9.5px/1.3 var(--mono);color:var(--faint);margin-top:2px">'+esc((s.meta||'')+' · '+(s.mtime||''))+'</div><div style="font:500 9px/1.3 var(--mono);color:'+ink+'">'+esc(s.receipts||'')+'</div></div>'
         +'<span style="font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:'+ink+'">'+(pass?'PASS':'REFUSED')+'</span>'
-        +(playable?('<span onclick=\'setPlayer('+JSON.stringify(s.path)+')\' class="btn clk">PLAY ▸</span>'):('<span onclick="go(\'crate\')" class="btn clk">WHY ▸</span>'))
+        +(playable?('<span onclick=\'setPlayer('+JSON.stringify(s.path)+')\' class="btn clk">PLAY ▸</span><span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span><span onclick=\'openFolder('+JSON.stringify(s.path)+')\' class="btn clk">OPEN</span>'):('<span onclick="go(\'crate\')" class="btn clk">WHY ▸</span>'))
         +'</div>';
-    }).join('') || '<div class="lbl" style="color:var(--faint)">no sessions yet — book a set from Play</div>';
+    }).join('') : '<div class="lbl" style="color:var(--faint)">no sessions yet — book a set from Play</div>';
+  scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Sessions</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">every render AND every refusal · a refusal is a session too</span></div>'
+    + rows
+    + '<div class="card" style="margin-top:8px"><div class="lbl" style="margin-bottom:9px">[ Manifests // reversible operation journals ]</div><div id="sessManifests"><div class="lbl" style="color:var(--faint)">loading…</div></div></div>';
+  loadManifests();
 }
+async function judgeRender(path){ if(!path){return;} toast('Judging render against the gates…'); try{ const j=await post('/api/judge',{path, ref:''}); const g=j.v1_1_gates||j.quality_gate||j.gates||{}; const failed=Object.entries(g).filter(([k,v])=>v===false).map(([k])=>k); toast('Judge: '+(failed.length?('FAIL — '+failed.slice(0,3).join(', ')):'all gates pass')); }catch(e){} }
+async function loadManifests(){ const host=el('sessManifests'); if(!host)return; try{ const j=await api('/api/manifests'); const items=j.items||[]; host.innerHTML=items.length? items.slice(0,20).map(m=>{ const p=m.path||m.manifest_path||''; return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--edge)"><div style="min-width:0;flex:1"><div style="font:600 10px/1.2 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(m.label||m.type||m.name||p.split(/[\\/]/).pop()||'manifest')+'</div><div style="font:500 8px/1 var(--mono);color:var(--faint);margin-top:2px">'+esc((m.ops!=null?m.ops+' ops · ':'')+(m.created_at||m.mtime||''))+'</div></div><span onclick=\'execManifest('+JSON.stringify(p)+',false)\' class="btn clk">preview</span><span onclick=\'execManifest('+JSON.stringify(p)+',true)\' class="btn clk">execute</span></div>'; }).join('') : '<div class="lbl" style="color:var(--faint)">no manifests yet — ingest/organize write them</div>'; }catch(e){ host.innerHTML='<div class="lbl" style="color:var(--faint)">manifests unavailable</div>'; } }
+async function execManifest(path, apply){ if(!path){toast('No manifest path');return;} if(apply && !window.confirm('Execute this manifest for real? (writes outputs)')) return; try{ const j=await post(apply?'/api/manifest/execute_bg':'/api/manifest/execute',{path, apply}); toast('Manifest '+(apply?'executing — watch Activity':('preview: '+(j.dry_run?'dry-run, nothing written':(j.ok!==false?'ok':(j.error||'')))))); if(apply) go('activity'); }catch(e){} }
 
 /* ---------- ACTIVITY ---------- */
 async function renderActivity(){
@@ -471,7 +482,7 @@ async function renderLibrary(){
   const mods=[
     {name:'Ingest', top:'var(--acc)', desc:'Copy from any drive into the managed library. Content-hash deduped, manifest-journaled, rollback-able.', actions:[['Dry-run',"libAction('/api/ingest',{apply:false})",0],['Ingest now',"libAction('/api/ingest',{apply:true})",1]]},
     {name:'Organize + retag', top:'var(--edge2)', desc:'Build the Artist/Album/NN Title tree with amended tags — copies only, masters untouched.', actions:[['Preview',"libAction('/api/organize',{apply:false})",0],['Organize',"libAction('/api/organize',{apply:true})",0]]},
-    {name:'Reorganize', top:'var(--edge2)', desc:'Move the ORIGINAL files in place into a clean tree. Reversible; unidentifiable → _unsorted/.', actions:[['Preview',"libAction('/api/reorganize/plan',{})",0],['Apply',"libAction('/api/reorganize/apply',{})",0]]},
+    {name:'Reorganize', top:'var(--edge2)', desc:'Move the ORIGINAL files in place into a clean tree. Reversible; unidentifiable → _unsorted/. Preview → Apply → Rollback.', actions:[['Preview',"reorgPreview()",0],['Apply',"reorgApply()",0],['Rollback',"reorgRollback()",0]]},
     {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default, dry-run proposals.', actions:[['Identify (opt-in)',"libAction('/api/identify',{})",0]]},
     {name:'Deep clean', top:'var(--edge2)', desc:'Listen to each file: real songs vs silence/static/corrupt; find empty + art-only folders.', actions:[['Scan',"libAction('/api/deepclean/scan',{})",0]]},
   ];
@@ -486,11 +497,30 @@ async function renderLibrary(){
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">'
     +mods.map(m=>'<div style="background:var(--panel);border:1px solid var(--edge);border-top:2px solid '+m.top+';padding:13px 14px;display:flex;flex-direction:column;gap:8px"><div style="font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.04em;color:var(--ink);text-transform:uppercase">'+m.name+'</div><div style="font:400 10px/1.5 var(--mono);color:var(--dim);flex:1">'+m.desc+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'+m.actions.map(a=>'<span onclick="'+a[1]+'" class="clk" style="font:600 8.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:'+(a[2]?'var(--accink)':'var(--dim)')+';background:'+(a[2]?'var(--acc)':'var(--panel2)')+';border:1px solid '+(a[2]?'var(--acc)':'var(--edge2)')+';padding:8px 11px">'+a[0]+'</span>').join('')+'</div></div>').join('')
     +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div class="card" style="flex:1;min-width:320px"><div class="lbl" style="margin-bottom:10px">[ Loop review // quota approval ]</div>'
+      +'<div id="loopCounts" style="font:500 10px/1.4 var(--mono);color:var(--dim);margin-bottom:9px">loading…</div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font:500 9px/1 var(--mono);color:var(--faint)">approve up to</span><input id="quotaN" value="60" style="width:70px;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)"><button class="btn primary" onclick="quotaApprove()">Approve quota</button><button class="btn" onclick="loadLoopReview()">Refresh</button></div>'
+      +'<div style="font:400 8.5px/1.4 var(--mono);color:var(--faint);margin-top:8px">bounded, role-balanced promotion of candidate loops → the hot pool, then Build ear crate.</div></div>'
+    +'<div class="card" style="flex:1;min-width:320px"><div class="lbl" style="margin-bottom:10px">[ Playlist // query → m3u8 ]</div>'
+      +'<div style="display:flex;flex-direction:column;gap:7px"><input id="plName" placeholder="playlist name" value="set" style="background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)">'
+      +'<input id="plQuery" placeholder="query e.g. bpm:110-124 role:vox" style="background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font:500 9px/1 var(--mono);color:var(--faint)">minutes</span><input id="plMin" value="60" style="width:64px;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)"><button class="btn primary" onclick="proposePlaylist()">Build playlist</button></div></div>'
+      +'<div id="plOut" style="font:400 9px/1.4 var(--mono);color:var(--faint);margin-top:8px"></div></div>'
+    +'</div>'
     +'<div class="card"><div id="libTracksHdr" class="lbl" style="margin-bottom:10px">[ Tracks ]</div>'
     +'<div style="display:flex;font:600 8px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:0 0 8px;border-bottom:1px solid var(--edge)"><span style="flex:2">Title</span><span style="flex:1.4">Artist</span><span style="width:60px">BPM</span><span style="width:50px">Key</span><span style="width:60px">Vocal</span><span style="width:60px">Loops</span></div>'
     +'<div id="libTracks"><div class="lbl" style="color:var(--faint);padding-top:10px">loading…</div></div></div>';
-  loadTracks();
+  loadTracks(); loadLoopReview();
 }
+let REORG={signature:null, journal:null};
+async function reorgPreview(){ toast('Reorganize preview…'); try{ const j=await post('/api/reorganize/plan',{}); if(j.ok===false){toast(j.error||'preview failed');return;} REORG.signature=j.signature; toast('DRY-RUN: '+(j.planned||0)+' moves, '+(j.quarantined||0)+' → _unsorted. Nothing moved — press Apply.'); }catch(e){} }
+async function reorgApply(){ if(!REORG.signature){toast('Preview first (dry-run before any move)');return;} try{ const j=await post('/api/reorganize/apply',{signature:REORG.signature}); if(j.ok){REORG.journal=j.journal; toast('Reorganized '+(j.moved||0)+' files. Rollback is now available.'); loadTracks();} else toast(j.error||'apply refused (re-preview)'); }catch(e){} }
+async function reorgRollback(){ if(!REORG.journal){toast('Nothing to undo — no applied reorganize this session');return;} try{ const dry=await post('/api/reorganize/rollback',{journal:REORG.journal, apply:false}); const n=dry.restored||dry.would_restore||dry.planned||0; if(!window.confirm('Undo the reorganize? Restores ~'+n+' files to their original locations.')) return; const j=await post('/api/reorganize/rollback',{journal:REORG.journal, apply:true}); toast(j.ok?('Undo complete: '+(j.restored||0)+' files restored'):(j.error||'undo failed')); loadTracks(); }catch(e){} }
+async function loadLoopReview(){ const h=el('loopCounts'); if(!h)return; try{ const j=await api('/api/loops'); const c=j.counts||{}; h.innerHTML='candidates <b style="color:var(--ink)">'+(c.candidate||0)+'</b> · approved <b style="color:var(--acc)">'+(c.approved||0)+'</b> · rejected '+(c.rejected||0)+' · total '+(c.total||0); }catch(e){ h.textContent='loops unavailable'; } }
+async function quotaApprove(){ const n=parseInt(el('quotaN').value)||60; try{ const j=await post('/api/loops/auto_approve_quota',{max_loops:n}); toast('Quota approved '+(j.approved||j.promoted||j.count||0)+' loops → hot pool'); loadLoopReview(); }catch(e){} }
+async function proposePlaylist(){ const name=el('plName').value||'playlist', q=el('plQuery').value||'', mins=parseInt(el('plMin').value)||60; toast('Building playlist…'); try{ const j=await post('/api/playlist/propose',{name, query:q, target_minutes:mins}); const nT=(j.entries&&j.entries.length)||j.count||j.tracks||0; el('plOut').innerHTML=(j.path?('<span class="clk" style="color:var(--acc)" onclick=\'openFolder('+JSON.stringify(j.path)+')\'>open ▸</span> '+esc(j.path)+' · '):'')+nT+' tracks'; toast('Playlist "'+name+'": '+nT+' tracks'); }catch(e){} }
+async function openFolder(path){ if(!path){toast('No path');return;} try{ const j=await post('/api/open_folder',{path}); if(j&&j.ok===false) toast(j.error||'open failed'); }catch(e){} }
 async function loadTracks(){
   try{ const j=await api('/api/tracks'); const items=j.items||[];
     el('libTracksHdr').textContent='[ Tracks // '+items.length+' ]';
@@ -512,7 +542,7 @@ async function renderSetup(){
       +'<input id="setMusic" value="'+esc(music)+'" style="width:100%;background:var(--panel2);border:1px solid var(--edge);padding:9px 11px;font:500 10.5px/1 var(--mono);color:var(--ink);margin-bottom:11px">'
       +'<div style="font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:5px">Workspace · all output lives here</div>'
       +'<input id="setWs" value="'+esc(ws)+'" style="width:100%;background:var(--panel2);border:1px solid var(--edge);padding:9px 11px;font:500 10.5px/1 var(--mono);color:var(--ink)">'
-      +'<div style="display:flex;gap:7px;margin-top:11px"><button class="btn" onclick="browseInto(\'setMusic\')">Browse…</button><button class="btn primary" onclick="saveWorkspace()">Save workspace</button></div></div>'
+      +'<div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap"><button class="btn" onclick="browseInto(\'setMusic\')">Browse…</button><button class="btn" onclick="scoutDrives()">Scout drives</button><button class="btn" onclick="openFolder(el(\'setWs\').value)">Open workspace</button><button class="btn primary" onclick="saveWorkspace()">Save workspace</button></div></div>'
     +'<div class="card"><div class="lbl" style="margin-bottom:11px">[ Performance ]</div>'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="font:500 10.5px/1 var(--mono);color:var(--dim)">Analysis workers</span><button class="btn primary" onclick="toggleWorkers()">'+(workers?('GENTLE · '+workers+' CORES'):'FULL SEND')+'</button></div>'
       +'<div style="font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:5px">Analysis depth · seconds/track</div>'
@@ -530,6 +560,7 @@ async function renderSetup(){
     +'</div></div>';
 }
 async function browseInto(id){ try{ const j=await post('/api/browse_dir',{current:el(id).value}); if(j.ok&&j.path) el(id).value=j.path; }catch(e){} }
+async function scoutDrives(){ toast('Scouting for a workspace next to your music…'); try{ const j=await post('/api/workspace_candidates',{music_folder:el('setMusic').value}); const cands=j.candidates||j.items||(j.workspace_folder?[{path:j.workspace_folder}]:[]); if(cands.length){ el('setWs').value=cands[0].path||cands[0]; toast('Scouted '+cands.length+' workspace candidate(s) — top one filled in'); } else toast('No candidates found — pick a workspace manually'); }catch(e){} }
 async function saveWorkspace(){ try{ const j=await post('/api/config_workspace',{music_folder:el('setMusic').value, workspace_folder:el('setWs').value}); toast(j.ok!==false?'Workspace saved':(j.error||'save failed')); }catch(e){} }
 async function toggleWorkers(){ try{ const d=await api('/api/defaults'); const cur=(d.configured||{}).workers||0; const next=cur?0:4; await post('/api/config',{...(d.configured||{}), workers:next}); toast('Workers → '+(next?next+' cores':'full send')); renderSetup(); }catch(e){} }
 async function runDoctor(){ el('doctorOut').textContent='running doctor…'; try{ const j=await post('/api/doctor',{}); const raw=j.checks||j.items||[]; const list=Array.isArray(raw)?raw:Object.entries(raw).map(([k,v])=>({name:k,ok:v})); el('doctorOut').innerHTML=list.map(c=>((c.ok!==false)?'✓ ':'✕ ')+esc(c.name||c.detail||'')).join('<br>')||esc(JSON.stringify(j).slice(0,300)); }catch(e){ el('doctorOut').textContent=e.message; } }

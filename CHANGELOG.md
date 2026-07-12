@@ -1,5 +1,29 @@
 # EarCrate — CHANGELOG
 
+## v0.8.20 — restore the buffalo the LATTICE reskin dropped
+- The v0.8.17 reskin was a prettier but THINNER front door — it silently dropped
+  working handles the old console had (the engine kept them; the new UI just
+  stopped exposing them). Restored, wired to the existing endpoints:
+  - **Reorganize ROLLBACK** — the reskin kept Preview+Apply but dropped the undo,
+    leaving a destructive in-place move with no UI reversal. Now a real
+    Preview → Apply (signature-gated) → Rollback (dry-run confirm then undo) flow.
+  - **Loop review // quota approval** — candidate/approved/rejected counts +
+    bounded, role-balanced quota promotion (`/api/loops`, `auto_approve_quota`).
+  - **Playlist builder** — query → m3u8 (`/api/playlist/propose`).
+  - **Plan save / load** in Workbench — save a composed plan, reload it later
+    (`/api/timeline/save|load|list`); plus **Preflight**.
+  - **Judge render** + **Open folder** on Sessions rows, and a **Manifests**
+    panel (reversible operation journals: preview / execute).
+  - **Scout drives** + **Open workspace** in Setup (`/api/workspace_candidates`,
+    `/api/open_folder`).
+- Verified: all seven screens drive live data headless with ZERO console errors;
+  single-file builds + self-test; 23/23 gates green.
+- Still not surfaced (honest): per-loop status toggles and bulk loop status
+  (quota approval is the sanctioned promotion path) and `mashup/propose`
+  (redundant with one_click) — say so rather than pretend. And the reskin's
+  original omission is the lesson: a rebuild that drops working surface is
+  shooting the buffalo and leaving the meat.
+
 ## v0.8.19 — v3 phases 2–5: provider seams, plan/ purification, layer + render gates
 - The v3 rebuild's architecture-of-record lands as SEAMS and INVARIANTS (not a
   monolith rewrite). 23/23 gates green on the built single-file.

@@ -1,5 +1,25 @@
 # EarCrate — CHANGELOG
 
+## v0.8.22 — one stomach: the cheap scan now deposits the identity GPU stems eat
+- Closed a silent LAYER-HANDOFF gap: `files.audio_sha256` (the L0 pcm_sha, the
+  decoded-canonical SOUND identity) was declared in the schema and consumed by the
+  StemProvider seam (its L3 artifact key = `SHA256(pcm_sha ‖ "demucs" ‖ model ‖
+  role)`) — but NOTHING wrote it. Verified: after scan+analyze, `audio_sha256` was
+  `None`. So the cheap laptop pass and the expensive GPU pass were two stomachs,
+  not one.
+- Fix: the analyze pass now computes `pcm_sha256(y)` from the canonical PCM it
+  already decodes (zero extra decode) and deposits it on `files.audio_sha256`,
+  across all paths — parallel worker, serial, and cache-hit (the `.npz` now carries
+  `pcm_sha`; older caches repopulate on re-analyze). NEW `pcm_sha256` helper in
+  core/util. So the same sound in two files gets the SAME id (separate once, dedup
+  duplicates), and L1 now hands off to L3 by construction.
+- Gate `test_pcm_identity_feeds_stems` (red-first: on the old code `audio_sha256`
+  is null and the gate fails "cheap scan feeds the GPU nothing"): analyze deposits
+  a 64-hex id, duplicate sounds share it, and the StemProvider carries/keys on it.
+- 28/28 gates green; single-file builds + self-test.
+- Note: this feeds the KEY the stem pass needs; the stem pass itself still isn't
+  CALLED from render (§5.2 wiring) and Demucs still runs only on a GPU box.
+
 ## v0.8.21 — code the dicta: four conflicts resolved, each pinned by a gate
 - Audited the session's surface for things that step on each other's toes, decided
   who wins, and wrote the ruling into an executable gate. 27/27 gates green.

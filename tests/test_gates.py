@@ -1384,6 +1384,51 @@ def test_no_shadow_sources_of_truth():
             f"{name} must be defined ONCE in {home}, found definitions in {files} (shadow constant -> drift risk)"
 
 
+def test_pcm_identity_feeds_stems():
+    """One stomach, not two: the cheap laptop scan must DEPOSIT the L0 sound
+    identity (pcm_sha256 of the decoded canonical PCM) that the expensive GPU stem
+    pass CONSUMES. After analyze, files.audio_sha256 is populated; the SAME sound
+    in two files yields the SAME id (separate once, dedup duplicates); and the
+    StemProvider seam is content-addressed by exactly that id, so L1 hands off to
+    L3. RED on the old code where audio_sha256 was never written."""
+    import tempfile, os
+    import numpy as np, soundfile as sf
+    from pathlib import Path
+    from earcrate.providers import get
+    from earcrate.providers.stems import DemucsStemProvider
+    tmp = Path(tempfile.mkdtemp()); sh = os.environ.get("HOME"); se = os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        m = tmp / "m"; m.mkdir(); sr = 44100
+        y = (0.3 * np.sin(2 * np.pi * 220 * np.arange(sr * 6) / sr)).astype(np.float32)
+        sf.write(str(m / "a.wav"), y, sr)
+        sf.write(str(m / "dup.wav"), y, sr)  # identical sound, different file
+        core = EarcrateCore()
+        core.configure({"master_root": str(m), "working_root": str(tmp / "w"),
+                        "agent_root": str(tmp / "a"), "workers": 1, "analysis_seconds": 6})
+        core.scan(); core.analyze(force=True)
+        shas = {Path(r["path"]).name: r["audio_sha256"]
+                for r in core.conn().execute("SELECT path, audio_sha256 FROM files").fetchall()}
+        # 1) the cheap scan DEPOSITED the identity (the whole point)
+        assert shas.get("a.wav"), "analyze did not deposit pcm_sha (audio_sha256 null) -- cheap scan feeds the GPU nothing"
+        assert len(shas["a.wav"]) == 64, "pcm_sha is not a sha256 hex digest"
+        # 2) identical sound -> identical id: separate once, dedup duplicate files
+        assert shas["a.wav"] == shas["dup.wav"], "same sound got different pcm_sha -- no dedup across duplicates"
+        # 3) L1 -> L3 handoff: the stem seam is content-addressed by pcm_sha
+        pcm = shas["a.wav"]
+        res = get("stems").separate(pcm, str(m / "a.wav"), ["vocals"])  # default = no-op here
+        assert res.get("available") is False and str(res.get("pcm_sha")) == pcm, \
+            "the no-op StemProvider must carry the pcm_sha through (the L1->L3 key)"
+        dp = DemucsStemProvider()
+        assert dp._artifact_key(pcm, "vocals") == dp._artifact_key(pcm, "vocals"), "stem artifact key must be deterministic"
+        assert dp._artifact_key(pcm, "vocals") != dp._artifact_key(pcm, "drums"), "role must be part of the stem key"
+        assert dp._artifact_key(pcm, "vocals") != dp._artifact_key(shas["dup.wav"][::-1], "vocals"), "a different sound must key to a different stem"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):

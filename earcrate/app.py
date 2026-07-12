@@ -1353,6 +1353,7 @@ class EarcrateCore:
                     r["file_id"], f["bpm"], f["bpm_confidence"], f["key_root"], f["key_mode"], f["key_confidence"],
                     f["loudness_lufs"], f["energy"], np.frombuffer(f["beats"], dtype=np.float32),
                     np.frombuffer(f["downbeats"], dtype=np.float32), f["sections"], f["vocal_likelihood"])
+                self._set_pcm(r["file_id"], r.get("pcm_sha"))
                 done += 1
             else:
                 failed.append({"path": r.get("path"), "error": r.get("error")})
@@ -1363,12 +1364,22 @@ class EarcrateCore:
         self.set_status(f"analysis complete: {done} analyzed, {len(failed)} failed ({mode})", 1, False)
         return {"ok": True, "analyzed": done, "failed": failed[:50], "parallel": used_parallel, "workers": workers, "analysis_seconds": max_sec, "cache_hits": cache_hits, "compute_jobs": len(jobs), "phase_timings": phase_timings}
 
+    def _set_pcm(self, file_id: str, pcm_sha) -> None:
+        """Deposit the L0 sound identity (pcm_sha256 of the decoded canonical PCM)
+        the cheap analyze pass produces. It is the key L3 stems (Demucs) are
+        content-addressed by, so a sound is separated ONCE and dedup'd across
+        duplicate files — the handoff from the laptop scan to the GPU pass."""
+        if pcm_sha:
+            self.conn().execute("UPDATE files SET audio_sha256=? WHERE id=?", (str(pcm_sha), file_id))
+
     def _store_from_cache(self, file_id: str, cache_path: Path) -> None:
         data = np.load(cache_path, allow_pickle=False)
         sections = json.loads(str(data["sections_json"]))
         self.store_features(file_id, float(data["bpm"]), float(data["bpm_confidence"]), int(data["key_root"]),
                             int(data["key_mode"]), float(data["key_confidence"]), float(data["loudness_lufs"]),
                             float(data["energy"]), data["beats"], data["downbeats"], sections, float(data["vocal_likelihood"]))
+        if "pcm_sha" in data.files:  # older caches predate pcm_sha; re-analyze repopulates
+            self._set_pcm(file_id, str(data["pcm_sha"]))
 
     def analyze_one(self, row: sqlite3.Row) -> None:
         c = self.ensure_config()
@@ -1382,6 +1393,8 @@ class EarcrateCore:
             data = np.load(cache_path, allow_pickle=False)
             sections = json.loads(str(data["sections_json"]))
             self.store_features(row["id"], float(data["bpm"]), float(data["bpm_confidence"]), int(data["key_root"]), int(data["key_mode"]), float(data["key_confidence"]), float(data["loudness_lufs"]), float(data["energy"]), data["beats"], data["downbeats"], sections, float(data["vocal_likelihood"]))
+            if "pcm_sha" in data.files:
+                self._set_pcm(row["id"], str(data["pcm_sha"]))
             return
         duration = float(row["duration_s"] or 0)
         max_sec = self.analysis_seconds()
@@ -1389,6 +1402,7 @@ class EarcrateCore:
         y = decode_audio(path, c.sample_rate, duration=decode_dur)
         if y.size > c.sample_rate * max_sec:
             y = y[: c.sample_rate * max_sec]
+        pcm = pcm_sha256(y)
         # avoid pathological silence
         if float(np.max(np.abs(y))) < 1e-5:
             bpm, bpm_conf, beats, downbeats = 120.0, 0.0, np.array([], dtype=np.float32), np.array([], dtype=np.float32)
@@ -1424,9 +1438,10 @@ class EarcrateCore:
             beats = beat_times
         np.savez_compressed(
             cache_path,
-            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like)
+            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like), pcm_sha=pcm
         )
         self.store_features(row["id"], bpm, bpm_conf, key_root, key_mode, key_conf, loudness, energy, beats, downbeats, sections, vocal_like)
+        self._set_pcm(row["id"], pcm)
 
     def estimate_downbeats(self, y: np.ndarray, sr: int, beat_frames: np.ndarray) -> np.ndarray:
         return _estimate_downbeats(y, sr, beat_frames)

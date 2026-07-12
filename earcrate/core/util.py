@@ -141,6 +141,18 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def pcm_sha256(y) -> str:
+    """L0 SOUND identity: SHA256 of the decoded canonical PCM — codec-independent
+    (the sound, not the file bytes). The cheap analyze pass deposits this on
+    files.audio_sha256; L3 stems (Demucs) are content-addressed by it
+    (artifact key = SHA256(pcm_sha ‖ "demucs" ‖ model ‖ role)), so a sound is
+    separated ONCE and reused/dedup'd across duplicate files. Same decoded PCM ->
+    same id, by construction. This is the link the cheap laptop scan hands to the
+    expensive GPU scan (v3 §2 L0)."""
+    arr = np.ascontiguousarray(np.asarray(y, dtype=np.float32))
+    return hashlib.sha256(arr.tobytes()).hexdigest()
+
+
 def segment_id(source_identity: str, analyzer_version: str, start_sample: int,
                end_sample: int, role: str, stem: str = "mix") -> str:
     """Deterministic content identity for a loop/segment — EARCRATE v3 §2 keystone.

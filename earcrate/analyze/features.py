@@ -119,6 +119,7 @@ def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
         y = decode_audio(path, sr, duration=decode_dur)
         if y.size > sr * max_sec:
             y = y[: sr * max_sec]
+        pcm = pcm_sha256(y)  # L0 sound identity, computed from the canonical PCM we already decoded
         feats = compute_pcm_features(y, sr)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
@@ -130,8 +131,9 @@ def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
             downbeats=feats["downbeats"].astype(np.float32),
             sections_json=json.dumps(feats["sections"], ensure_ascii=False),
             vocal_likelihood=np.float32(feats["vocal_likelihood"]),
+            pcm_sha=pcm,
         )
-        return {"file_id": job["file_id"], "sha256": job.get("sha256"), "ok": True, "features": {
+        return {"file_id": job["file_id"], "sha256": job.get("sha256"), "pcm_sha": pcm, "ok": True, "features": {
             "bpm": feats["bpm"], "bpm_confidence": feats["bpm_confidence"], "key_root": feats["key_root"],
             "key_mode": feats["key_mode"], "key_confidence": feats["key_confidence"], "loudness_lufs": feats["loudness_lufs"],
             "energy": feats["energy"], "beats": feats["beats"].astype(np.float32).tobytes(),

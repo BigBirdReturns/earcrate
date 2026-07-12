@@ -1,5 +1,38 @@
 # EarCrate — CHANGELOG
 
+## v0.8.18 — close the §5.1 debt: rows 13–16 gated (and two live footguns fixed)
+- The entire v3 §5.1 debt front is now closed. With v0.8.16's Lesson #7 gate,
+  ledger rows 7, 13, 14, 15, 16 all have executable gates that go RED the instant
+  the failure class returns. 18/18 gates green on the BUILT single-file.
+- ROW 15 CAUGHT TWO LIVE FOOTGUNS (fixed, red-first): (1) `apply_workspace_migration`
+  executed the migration when called with NO signature — the guard was
+  `if approved and approved != sig`, and an empty signature is falsy, so it fell
+  straight through to mkdir + move. Now it refuses (`dry_run:true,
+  requires_signature:true`) without a signature. (2) `rollback_identities`
+  rewrote tags on disk immediately with no `--apply` and no dry-run branch (the
+  CLI `identify-rollback` verb too). Now dry-run-default: it previews
+  (`would_restore`, sample of files) and only writes with `apply:true`; the CLI
+  gains `--apply` to match `reorganize-rollback`.
+- NEW gates (rebuild plan §5.1):
+  - `test_singlefile_cli_smoke` (row 13): builds `dist/earcrate.py` and drives the
+    BUILT artifact as a subprocess through `--self-test` + `configure` + `deepclean`
+    (the assess_track_audio → decode_audio path that once crashed with "earcrate is
+    not a package"), asserting no import/package tracebacks. The builder only strips
+    column-0 package imports, so this pins that no INDENTED in-function
+    `from earcrate.<pkg> import` survives into a shipped path.
+  - `test_fresh_clone_has_no_runtime_state` (row 14): `git ls-files` carries zero
+    runtime pointers/DBs/caches (`*_workspace.json`, `config.json`, `*.sqlite`,
+    `*.npz`, `.deps_installed`, `cache|workspace|agent|dist`), and `.gitignore`
+    covers them.
+  - `test_all_mutations_dry_run_default` (row 15): every mutating op
+    (reorganize/rollback/migrate/apply-identities/ingest/organize/execute-manifest…)
+    returns dry-run or refuses without `apply`, and touches nothing.
+  - `test_done_requires_receipt` (row 16): a completion leaves a receipt artifact on
+    disk the gate reads back to confirm the claimed outcome.
+- Rows 13, 14, 16 were already-green — the gates PIN the invariants. Row 15 needed
+  the two real fixes above. Closed via a 4-way parallel fan-out, each gate proven
+  red-first in isolation, then integrated and re-verified in the main tree.
+
 ## v0.8.17 — LATTICE UI: the new console, wired to the live backend
 - NEW single-file front end (`earcrate/ui/static/index.html`) rebuilt to the
   LATTICE design: a command strip (query + skin switch + crate-fit meter), a

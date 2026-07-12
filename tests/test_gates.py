@@ -388,6 +388,244 @@ def test_force_rebuild_preserves_judgments():
         "the atom the judgment points at must survive with a stable id"
 
 
+def test_singlefile_cli_smoke():
+    """Ledger #13: the SHIPPED artifact (dist/earcrate.py), not the package, is
+    the thing users run — so it must be gated by DRIVING THE BUILT FILE as a
+    subprocess. The single-file builder strips only column-0 `from earcrate. ...`
+    imports; an INDENTED in-function `from earcrate.<pkg> import ...` survives into
+    dist and crashes at runtime with "'earcrate' is not a package" — while the
+    package/self-test gates stay green (self-test never hit that content path).
+    This gate builds the file and pushes it through a real audio path that
+    historically crashed (deepclean -> assess_track_audio -> decode_audio):
+    self-test must print SELF_TEST_OK, and configure+deepclean must exit 0 with
+    NO import/package tracebacks anywhere in stdout/stderr."""
+    import os, subprocess, sys, tempfile, shutil
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+
+    root = Path(__file__).resolve().parent.parent
+    py = sys.executable
+    dist = root / "dist" / "earcrate.py"
+    forbidden = ("is not a package", "ModuleNotFoundError", "ImportError", "Traceback")
+
+    def _clean(*procs):
+        for p in procs:
+            blob = (p.stdout or "") + (p.stderr or "")
+            for bad in forbidden:
+                assert bad not in blob, f"shipped artifact leaked '{bad}':\n{blob[-800:]}"
+
+    # 1) Build the single file from the package.
+    b = subprocess.run([py, str(root / "build" / "make_singlefile.py")],
+                       capture_output=True, text=True, timeout=300)
+    assert b.returncode == 0, f"single-file build failed: {b.stderr[-800:]}"
+    assert dist.exists(), "build did not produce dist/earcrate.py"
+
+    # 2) Self-test on the BUILT artifact must pass.
+    t = subprocess.run([py, str(dist), "--self-test"],
+                       capture_output=True, text=True, timeout=600)
+    _clean(t)
+    assert "SELF_TEST_OK" in (t.stdout + t.stderr), \
+        f"built artifact self-test did not print SELF_TEST_OK:\n{(t.stdout + t.stderr)[-800:]}"
+
+    # 3) Real content path that used to crash on an in-function import.
+    d = Path(tempfile.mkdtemp())
+    try:
+        music = d / "music"; music.mkdir()
+        ws = d / "ws"; home = d / "home"; home.mkdir()
+        sr = 22050
+        for i in range(2):  # tiny real songs so assess_track_audio -> decode_audio runs
+            tt = np.linspace(0, 2, sr * 2, endpoint=False)
+            y = (0.2 * np.sin(2 * np.pi * (220 + 40 * i) * tt)).astype("float32")
+            sf.write(str(music / f"t{i}.wav"), y, sr)
+        env = dict(os.environ)
+        env["EARCRATE_HOME"] = str(home)  # isolate the app-global workspace pointer
+
+        cfg = subprocess.run([py, str(dist), "configure", "--music", str(music),
+                              "--workspace", str(ws), "--analysis-seconds", "8"],
+                             capture_output=True, text=True, timeout=300, env=env)
+        _clean(cfg)
+        assert cfg.returncode == 0, f"configure exited {cfg.returncode}:\n{cfg.stderr[-800:]}"
+
+        dc = subprocess.run([py, str(dist), "deepclean", "--root", str(music)],
+                            capture_output=True, text=True, timeout=600, env=env)
+        _clean(dc)
+        assert dc.returncode == 0, f"deepclean exited {dc.returncode}:\n{dc.stderr[-800:]}"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_fresh_clone_has_no_runtime_state():
+    """Ledger #14: a fresh clone must adopt NOTHING implicitly. No runtime pointer
+    (earcrate_workspace.json / any *_workspace.json), no config.json, no
+    .deps_installed, no *.sqlite / *.db / *.npz, and no file under
+    cache|workspace|agent|dist may be git-tracked. If one were, a fresh
+    EarcrateCore would auto-adopt stale config and conjure a phantom legacy source.
+    .gitignore must also carry the patterns that keep these out. Red the moment any
+    such file is tracked or a required ignore pattern goes missing."""
+    import os, re, subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tracked = subprocess.run(["git", "-C", root, "ls-files"],
+                             capture_output=True, text=True, check=True).stdout.splitlines()
+    assert tracked, "git ls-files returned nothing — not a git checkout?"
+
+    def is_runtime_state(path):
+        base = os.path.basename(path)
+        if base in ("earcrate_workspace.json", "config.json", ".deps_installed"):
+            return True
+        if base.endswith("_workspace.json"):
+            return True
+        if re.search(r"\.(sqlite|db|npz)$", base):
+            return True
+        dirs = path.split("/")[:-1]
+        if any(d in ("cache", "workspace", "agent", "dist") for d in dirs):
+            return True
+        return False
+
+    offenders = [p for p in tracked if is_runtime_state(p)]
+    assert not offenders, \
+        f"runtime-state files are git-tracked (a fresh clone would adopt them): {offenders}"
+
+    # .gitignore must keep these out so they are never re-added by accident.
+    with open(os.path.join(root, ".gitignore"), "r", encoding="utf-8") as fh:
+        gi = fh.read()
+    ignored = {ln.strip() for ln in gi.splitlines()
+               if ln.strip() and not ln.strip().startswith("#")}
+    for pat in ("earcrate_workspace.json", "config.json", "*.sqlite", "*.npz",
+                "dist/", "workspace/", "agent/", ".deps_installed"):
+        assert pat in ignored, f".gitignore is missing required pattern: {pat!r}"
+
+
+def test_all_mutations_dry_run_default():
+    """Ledger #15: EVERY mutating/reversal op is dry-run-default and apply/
+    signature-gated. Calling each WITHOUT apply (and without an approved
+    signature) must either report dry_run or refuse (ok False), and must NOT
+    touch the music library on disk. Guards the footgun class where a reversal
+    (identify-rollback) or an apply (workspace migration) fires writes
+    immediately instead of previewing first."""
+    import tempfile, os, json, hashlib
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        music = tmp / "music"; music.mkdir()
+        def wav(p):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            t = np.arange(44100) / 44100
+            sf.write(str(p), (0.2 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
+        wav(music / "Aphex Twin - Xtal.flac")   # FLAC so tag-rewriting reversals actually bite
+        wav(music / "Boards of Canada - Olson.flac")
+        ext = tmp / "external"; wav(ext / "incoming.flac")  # a source folder to ingest FROM
+        libfile = music / "Aphex Twin - Xtal.flac"
+
+        def snap(d):
+            out = {}
+            for p in sorted(d.rglob("*")):
+                if p.is_file():
+                    b = p.read_bytes()
+                    out[str(p.relative_to(d))] = (len(b), hashlib.sha256(b).hexdigest())
+            return out
+
+        core = EarcrateCore()
+        core.configure({"master_root": str(music), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 8})
+        core.scan()
+        agent = tmp / "agent"
+
+        def refused_or_dry(resp, label):
+            assert isinstance(resp, dict), f"{label}: non-dict response {resp!r}"
+            assert resp.get("dry_run") or resp.get("ok") is False, \
+                (f"{label}: mutating op executed WITHOUT apply/signature "
+                 f"(dry_run={resp.get('dry_run')!r}, ok={resp.get('ok')!r}): {resp}")
+
+        # ingest writes a manifest even on a dry-run -> reuse it to exercise execute_manifest
+        ing = core.ingest_sources({"sources": [str(ext)], "apply": False})
+        refused_or_dry(ing, "ingest_sources")
+        manifest_path = ing.get("manifest")
+
+        # a reorg journal pointing at a real library file, so its rollback has work to preview
+        rj = agent / "fake_reorg.jsonl"; rj.parent.mkdir(parents=True, exist_ok=True)
+        rj.write_text(json.dumps({"from": str(libfile), "restore_to": str(music / "moved_back.flac")}) + "\n", encoding="utf-8")
+        # an identify journal whose replay WOULD overwrite a real library file's tags
+        ij = agent / "fake_identify.jsonl"
+        ij.write_text(json.dumps({"path": str(libfile), "new": {"artist": "OVERWRITTEN"},
+                                  "old": {"artist": "Restored By Rollback"}}) + "\n", encoding="utf-8")
+        proposals = [{"path": str(libfile), "artist": "Somebody", "title": "Something", "score": 0.99}]
+        ws = str(tmp / "ws")
+
+        before = snap(music)
+        calls = [
+            ("reorganize_source",        lambda: core.reorganize_source({"apply": False})),
+            ("rollback_reorganize",      lambda: core.rollback_reorganize({"journal": str(rj), "apply": False})),
+            ("plan_workspace_migration", lambda: core.plan_workspace_migration({"music_folder": str(music), "workspace_folder": ws, "sources": []})),
+            ("apply_workspace_migration",lambda: core.apply_workspace_migration({"music_folder": str(music), "workspace_folder": ws, "sources": []})),
+            ("apply_identities",         lambda: core.apply_identities({"proposals": proposals, "apply": False})),
+            ("rollback_identities",      lambda: core.rollback_identities({"journal": str(ij)})),
+            ("ingest_sources",           lambda: core.ingest_sources({"sources": [str(ext)], "apply": False})),
+            ("organize_and_retag",       lambda: core.organize_and_retag({"apply": False})),
+            ("rollback_outputs",         lambda: core.rollback_outputs()),
+        ]
+        if manifest_path:
+            calls.append(("execute_manifest", lambda: core.execute_manifest(str(manifest_path), apply=False)))
+        for label, fn in calls:
+            refused_or_dry(fn(), label)
+
+        after = snap(music)
+        assert after == before, \
+            f"music library was MUTATED by a dry-run/reversal call: before={before} after={after}"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_done_requires_receipt():
+    """Ledger #16 (honesty invariant): a 'done/seeded' completion claim is only
+    trustworthy if it leaves a RECEIPT artifact on disk that a third party can
+    read back independently to confirm the claimed outcome. We exercise a real,
+    bounded completion path — seed_demo_renders — which reports ok/seeded=N and
+    must persist one *.render_report.json receipt per render recording the
+    quality-gate result. The gate re-opens each receipt and confirms the claim;
+    a done-claim with no matching receipt (regression) fails here."""
+    import tempfile, os, json
+    from pathlib import Path
+    from earcrate.app import EarcrateCore, ENGINE_VERSION
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 8})
+        res = core.seed_demo_renders(count=2, bars=2, bpm=100)
+        # (1) the operation must CLAIM completion.
+        assert res.get("ok") is True, res
+        claimed = int(res.get("seeded") or 0)
+        assert claimed == 2, res
+        renders = Path(res["dir"])
+        # (2) every claimed render must exist AS AUDIO on disk.
+        wavs = sorted(renders.glob("*.wav"))
+        assert len(wavs) == claimed, f"claimed {claimed} but {len(wavs)} wavs on disk"
+        # (3) the honesty check: an INDEPENDENTLY-readable receipt per claimed render,
+        # re-opened here, must corroborate the outcome the operation reported.
+        receipts = sorted(renders.glob("*.render_report.json"))
+        assert len(receipts) == claimed, f"claimed seeded={claimed} but {len(receipts)} receipts on disk"
+        for wav in wavs:
+            rp = wav.with_suffix(".render_report.json")
+            assert rp.exists(), f"no receipt for claimed render {wav.name}"
+            rec = json.loads(rp.read_text(encoding="utf-8"))
+            assert rec.get("engine_version") == ENGINE_VERSION, rec
+            assert rec.get("quality_gate", {}).get("passed") is True, rec
+            assert rec.get("render_timestamp"), rec
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
@@ -596,7 +834,9 @@ def test_apply_identities_retags_and_reverses():
         # low-confidence proposals are skipped
         low = core.apply_identities({"proposals": [{"path": str(f), "file_id": fid, "artist": "X", "score": 0.4}], "apply": False})
         assert low["would_retag"] == 0, "sub-threshold matches must not be applied"
-        rb = core.rollback_identities({"journal": res["journal"]})
+        assert core.rollback_identities({"journal": res["journal"]})["dry_run"], "identify-rollback must preview by default"
+        assert MF(str(f), easy=True).get("artist")[0] == "Motörhead", "dry-run rollback must not restore tags"
+        rb = core.rollback_identities({"journal": res["journal"], "apply": True})
         assert rb["ok"] and rb["restored"] == 1
         assert MF(str(f), easy=True).get("artist")[0] == "BIRP Playlist", "rollback must restore tags"
     finally:

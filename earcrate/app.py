@@ -640,7 +640,11 @@ class EarcrateCore:
         """EXECUTE an approved plan. Journaled and reversible; nothing deleted."""
         plan = self.plan_workspace_migration(data)
         approved = str(data.get("signature") or "")
-        if approved and approved != plan["signature"]:
+        if not approved:
+            return {"ok": False, "dry_run": True, "requires_signature": True,
+                    "error": "refusing to migrate without an approved signature; run the preview (plan_workspace_migration) and pass its signature to apply",
+                    "expected_signature": plan["signature"]}
+        if approved != plan["signature"]:
             return {"ok": False, "error": "the workspace changed since you approved this plan; re-run the preview",
                     "expected_signature": plan["signature"]}
         homes = self._migration_homes(plan["new_workspace"])
@@ -3266,12 +3270,25 @@ class EarcrateCore:
         journal = Path(str(data.get("journal") or ""))
         if not journal.exists():
             return {"ok": False, "error": "identify journal not found"}
-        db = self.conn()
-        restored, errors = 0, []
+        apply = bool(data.get("apply"))
+        recs: List[Dict[str, Any]] = []
         for line in journal.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            rec = json.loads(line)
+            try:
+                recs.append(json.loads(line))
+            except Exception:
+                continue
+        if not apply:
+            # Dry-run default: a reversal is a mutation too. Preview, touch nothing.
+            return {"ok": True, "dry_run": True, "would_restore": len(recs),
+                    "samples": [{"file": Path(r.get("path") or "").name, "restore": r.get("old") or {}}
+                                for r in recs[:15]],
+                    "human": (f"Would restore original tags on {len(recs)} file(s) from this journal. "
+                              f"Nothing written yet -- pass --apply to undo for real.")}
+        db = self.conn()
+        restored, errors = 0, []
+        for rec in recs:
             try:
                 path = Path(rec["path"])
                 if not path.exists():
@@ -3297,7 +3314,7 @@ class EarcrateCore:
             except Exception as exc:
                 errors.append(str(exc)[:120])
         db.commit()
-        return {"ok": not errors, "restored": restored, "errors": errors}
+        return {"ok": not errors, "dry_run": False, "restored": restored, "errors": errors}
 
 
     def list_renders(self) -> Dict[str, Any]:

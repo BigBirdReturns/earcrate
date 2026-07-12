@@ -1429,6 +1429,70 @@ def test_pcm_identity_feeds_stems():
         else: os.environ.pop("EARCRATE_HOME", None)
 
 
+def test_no_unfed_handoffs():
+    """The UNFED-HANDOFF detector (v3 honesty invariant, born from audio_sha256).
+
+    A producer->consumer contract must be WIRED or explicitly DEFERRED with a
+    reason. Two shapes of contract:
+      (a) an identity/link COLUMN a consumer keys on (must be written by a
+          producer), and
+      (b) a registered provider SEAM (must have a live caller).
+    A silent orphan — declared, read/registered, but never fed/called — is the
+    'two stomachs' bug (files.audio_sha256 was one until v0.8.22). This gate fails
+    the instant a NEW orphan appears with no receipt saying why it's deferred, so
+    'built the column/seam' can never masquerade as 'wired the feature'.
+    """
+    import re, os, tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+
+    # Declared-on-purpose, not-yet-wired — each needs a written reason (the receipt).
+    DEFERRED_COLUMNS = {}   # every identity/link column is currently fed
+    DEFERRED_SEAMS = {
+        "stems":        "StemProvider not called from render yet (v3 §5.2 wiring); its pcm_sha key IS fed (v0.8.22). Noop is the live default.",
+        "artifacts":    "ArtifactStore (L3) is consumed by the stems seam; goes live when stems is called from render.",
+        "retriever":    "CandidateRetriever — composer uses its in-process full-catalog path; cascade retrieval is v3 §5.4. FullScan is the registered default.",
+        "embedding":    "EmbeddingProvider — no embeddings computed yet; ANN retrieval is v3 §5.4. Noop (returns None) is the default.",
+        "vector_index": "VectorIndex — linear scan is the live path; ANN index is v3 §5.4. LinearScan is the default.",
+    }
+
+    # Introspect the REAL schema (post-migration) and the seam registry.
+    d = Path(tempfile.mkdtemp()); sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(d); os.environ["EARCRATE_HOME"] = str(d)
+    try:
+        for x in ("m", "w", "a"): (d / x).mkdir()
+        core = EarcrateCore(); core.configure({"master_root": str(d/"m"), "working_root": str(d/"w"), "agent_root": str(d/"a")})
+        db = core.conn()
+        cols = [(t, r[1]) for t in [x[0] for x in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+                for r in db.execute("PRAGMA table_info(%s)" % t).fetchall()]
+        from earcrate.providers import _REGISTRY
+        seams = list(_REGISTRY.keys())
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+    src = "\n".join(p.read_text(encoding="utf-8") for p in (root/"earcrate").rglob("*.py"))
+    live = "\n".join(p.read_text(encoding="utf-8") for p in (root/"earcrate").rglob("*.py") if "providers/" not in str(p))
+    HANDOFF = re.compile(r"(_sha256|_sha|_identity|segment_id|_path|provenance|mbid|_hash)$")
+
+    def fed_col(col):  # producer writes it: upsert, UPDATE ... SET (anywhere in list), or INSERT [OR REPLACE] column-list
+        return bool(re.search(r"\b%s\s*=\s*excluded" % col, src)
+                    or re.search(r"\bSET\b[^;]{0,400}\b%s\s*=" % col, src, re.S)
+                    or re.search(r"INSERT(\s+OR\s+REPLACE)?\s+INTO\s+\w+\([^)]*\b%s\b" % col, src, re.S))
+
+    # Self-check: the detector must be able to SEE an orphan (not a tautology).
+    assert not fed_col("zzz_fake_never_written_sha256"), "fed-heuristic false-positives — it would miss real orphans"
+
+    orphan_cols = [f"{t}.{c}" for t, c in cols
+                   if HANDOFF.search(c) and not fed_col(c) and not DEFERRED_COLUMNS.get(f"{t}.{c}", "").strip()]
+    assert not orphan_cols, f"unfed identity/link column(s) with no producer and no DEFERRED receipt: {orphan_cols}"
+
+    orphan_seams = [k for k in seams
+                    if not re.search(r'get\(\s*["\']%s["\']' % k, live) and not DEFERRED_SEAMS.get(k, "").strip()]
+    assert not orphan_seams, f"registered seam(s) with no live caller and no DEFERRED receipt: {orphan_seams}"
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):

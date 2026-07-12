@@ -1,5 +1,27 @@
 # EarCrate — CHANGELOG
 
+## v0.8.23 — the unfed-handoff detector: silent orphans can't ship anymore
+- Generalized the audio_sha256 bug (v0.8.22) into a DETECTOR for its whole class.
+  The "unfed handoff": a producer→consumer contract where the consumer is declared
+  but the producer never runs — a schema identity/link COLUMN nobody writes, or a
+  registered provider SEAM nobody calls. It's silent (null / no-op, never an
+  error), so "built the column/seam" reads as "wired the feature" when it isn't.
+  Distinct from Lesson #4 (calls a missing endpoint — errors loudly) and #2/#12
+  (two sources of truth — duplication drift); this is a source with ZERO producers.
+- NEW gate `test_no_unfed_handoffs`: introspects the real (post-migration) schema
+  and the seam registry, and requires every identity/link column to be WRITTEN and
+  every registered seam to have a LIVE CALLER — or to sit in a DEFERRED map with a
+  written reason. A new orphan with no receipt fails the gate. Self-checks that the
+  fed-heuristic isn't a tautology; red-proven on both arms (drop a seam from
+  DEFERRED, or add an unfed identity column).
+- What it found (all now accounted for): every identity/link column is fed
+  (audio_sha256 was the last, fixed in v0.8.22); the five registered seams
+  (stems, artifacts, retriever, embedding, vector_index) have no live caller and
+  are now DEFERRED with explicit reasons — so "Stems/ANN are deferred on purpose"
+  is written in code, not a silent gap. This gate would have caught audio_sha256
+  the day the column was added.
+- 29/29 gates green; single-file builds + self-test.
+
 ## v0.8.22 — one stomach: the cheap scan now deposits the identity GPU stems eat
 - Closed a silent LAYER-HANDOFF gap: `files.audio_sha256` (the L0 pcm_sha, the
   decoded-canonical SOUND identity) was declared in the schema and consumed by the

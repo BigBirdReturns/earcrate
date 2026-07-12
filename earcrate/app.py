@@ -3948,6 +3948,8 @@ class EarcrateCore:
                 entry["readiness_pct"] = int(round(100 * sum(ratios) / len(ratios)))
                 entry["ready"] = bool(r.get("ready"))
                 entry["endless"] = r.get("endless")
+                entry["sources"] = int(r.get("source_tracks") or 0)
+                entry["pool_size"] = int(r.get("pool_size") or 0)
                 if int(r.get("pool_size") or 0) == 0:
                     entry["wants"] = ["hasn't auditioned your library yet \u2014 Book a set ear-crates it automatically (first time on a big library takes a while; watch the bottom bar for the count + ETA)"]
                     entry["never_auditioned"] = True

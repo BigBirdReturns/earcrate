@@ -1,5 +1,29 @@
 # EarCrate — CHANGELOG
 
+## v0.8.17 — LATTICE UI: the new console, wired to the live backend
+- NEW single-file front end (`earcrate/ui/static/index.html`) rebuilt to the
+  LATTICE design: a command strip (query + skin switch + crate-fit meter), a
+  live system readout, a seven-mode rail (Play · Library · Crate · Workbench ·
+  Sessions · Activity · Setup), and a transport bar. Four skins
+  (lattice/signal/terminal/paper) as pure CSS-var swaps, persisted to
+  localStorage. System fonts only — no Google Fonts link — so it stays a
+  no-network local app.
+- Every screen is wired to the EXISTING API (no mock data): Play ← `/api/residents`
+  + `/api/rank` rails; Crate ← `/api/rank`, `/api/taste/pairs`, `/api/taste/readiness`
+  with favorite/lock/reject → `/api/ear_atoms/judgment` and pair veto →
+  `/api/taste/pair_judgment`; Workbench ← `/api/timeline/propose` +
+  `/api/taste/graph`; Sessions ← `/api/sessions`; Activity ← `/api/status` +
+  `/api/perf`; Library ← `/api/tracks` + ingest/organize/reorganize/identify/
+  deepclean + the scan→analyze→extract→build pipeline; Setup ← `/api/defaults`,
+  `/api/config`, `/api/config_workspace`, `/api/browse_dir`, `/api/doctor`.
+  Endless radio, demo seeding, station HOTTER/COOLER/CUT, and the render
+  transport are carried over from the previous UI under the new chrome.
+- `residents()` now also reports `sources` (deck-safe source count) and
+  `pool_size` so the Play hero can show real numbers without a second call.
+- Verified end-to-end: all seven screens drive live data in a headless browser
+  (seeded 5-track workspace) with ZERO console errors; single-file builds +
+  SELF_TEST_OK; 14/14 gates pass.
+
 ## v0.8.16 — deterministic segment identity: force-rebuild preserves judgments
 - LESSON #7 CLOSED (the front of the v3 debt queue). `extract_loops(force=True)`
   used to run `DELETE FROM loops WHERE file_id=?` and reinsert with fresh random

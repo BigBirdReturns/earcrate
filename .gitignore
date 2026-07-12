@@ -14,3 +14,6 @@ agent/
 earcrate_workspace.json
 .deps_installed
 config.json
+
+# local agent state / transient workflow worktrees (never commit)
+.claude/

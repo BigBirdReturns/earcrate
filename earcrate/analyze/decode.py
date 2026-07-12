@@ -19,7 +19,7 @@ def decode_audio(path: Path, sr: int = DEFAULT_SAMPLE_RATE, start: Optional[floa
     args = ["ffmpeg", "-nostdin", "-v", "error"]
     if start is not None and start > 0:
         args += ["-ss", f"{start:.6f}"]
-    args += ["-i", str(path)]
+    args += ["-i", str(path), "-map", "0:a:0", "-vn", "-sn", "-dn"]
     if duration is not None and duration > 0:
         args += ["-t", f"{duration:.6f}"]
     args += ["-f", "f32le", "-ac", "1", "-ar", str(sr), "pipe:1"]
@@ -30,6 +30,29 @@ def decode_audio(path: Path, sr: int = DEFAULT_SAMPLE_RATE, start: Optional[floa
     if y.size == 0:
         raise RuntimeError("ffmpeg decoded zero samples")
     return np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def decoded_audio_sha256(path: Path, sr: int = DEFAULT_SAMPLE_RATE,
+                         duration_hint: float = 0.0) -> str:
+    """Hash the complete canonical mono PCM without materializing it in memory.
+
+    Feature analysis may intentionally inspect only a prefix, but full-track stem
+    artifacts must never be keyed by that prefix. FFmpeg's hash muxer decodes the
+    whole source as mono float32 at the engine sample rate and returns one digest.
+    """
+    args = [
+        "ffmpeg", "-nostdin", "-v", "error", "-i", str(path),
+        "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "1", "-ar", str(sr),
+        "-c:a", "pcm_f32le", "-f", "hash", "-hash", "sha256", "pipe:1",
+    ]
+    timeout = max(120, int(float(duration_hint or 0.0) * 3.0))
+    cp = run_cmd(args, timeout=timeout)
+    if cp.returncode != 0:
+        raise RuntimeError(cp.stderr.decode("utf-8", "replace")[:800])
+    match = re.search(r"SHA256=([0-9a-fA-F]{64})", cp.stdout.decode("ascii", "replace"))
+    if not match:
+        raise RuntimeError("ffmpeg did not return a full-PCM SHA256")
+    return match.group(1).lower()
 
 
 def resample_or_fit(y: np.ndarray, target_len: int) -> np.ndarray:

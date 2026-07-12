@@ -41,6 +41,20 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+# EarCrate parallelizes across files at the process level. Letting each worker
+# also start a native BLAS/OpenMP pool oversubscribes the machine and makes
+# fork-based workers unsafe on Linux (the observed Actions exit 139). These are
+# defaults only: an operator may deliberately override them before launch.
+for _thread_var in (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "BLIS_NUM_THREADS",
+):
+    os.environ.setdefault(_thread_var, "1")
+
 import numpy as np
 
 try:
@@ -55,8 +69,8 @@ except Exception as exc:  # pragma: no cover
     raise
 
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wv"}
-ENGINE_VERSION = "earcrate_v0815"
-ENGINE_DISPLAY_VERSION = "v0.8.15"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
+ENGINE_VERSION = "earcrate_v0827"
+ENGINE_DISPLAY_VERSION = "v0.8.27"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
 BUILD_STAMP = "__BUILD_STAMP__"     # sentinel; the single-file builder replaces it with the package content hash
 ANALYZER_VERSION = "gt-v0.6.1-earcrate-feasibility"
 APP_NAME = "JukebreakerGT"

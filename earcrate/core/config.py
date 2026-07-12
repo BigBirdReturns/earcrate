@@ -12,6 +12,11 @@ class Config:
     workers: int = 0
     seed: int = 1337
     analysis_seconds: int = DEFAULT_ANALYSIS_SECONDS
+    # Which registered StemProvider render selects. "noop" (the shipped default)
+    # means "use the registered default provider" (get("stems") with no name), so
+    # a box with no GPU never separates. Set to "demucs" (or an env override
+    # EARCRATE_STEMS=demucs) to opt a real GPU box into stem separation.
+    stem_provider: str = "noop"
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -24,6 +29,7 @@ class Config:
             "workers": self.workers,
             "seed": self.seed,
             "analysis_seconds": self.analysis_seconds,
+            "stem_provider": self.stem_provider,
         }
 
 

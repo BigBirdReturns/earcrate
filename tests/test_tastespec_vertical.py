@@ -1,4 +1,5 @@
-import json, sqlite3, tempfile
+import json, os, sqlite3, tempfile
+from unittest.mock import patch
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -9,8 +10,9 @@ from earcrate.tastespec import load_tastespec, profile_summary
 def configured_core(tmp_path: Path) -> EarcrateCore:
     master = tmp_path / "music"; work = tmp_path / "work"; agent = tmp_path / "agent"
     master.mkdir(); work.mkdir(); agent.mkdir()
-    c = EarcrateCore()
-    c.configure({"master_root": str(master), "working_root": str(work), "agent_root": str(agent), "workers": 2})
+    with patch.dict(os.environ, {"EARCRATE_HOME": str(tmp_path)}):
+        c = EarcrateCore()
+        c.configure({"master_root": str(master), "working_root": str(work), "agent_root": str(agent), "workers": 2})
     return c
 
 
@@ -32,6 +34,8 @@ def test_atom_and_pair_judgments_are_profile_scoped(tmp_path):
     db = core.conn()
     db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)", ("f1", str((tmp_path/'music'/'a.wav').resolve()), "master", 1, 1, "now"))
     db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)", ("f2", str((tmp_path/'music'/'b.wav').resolve()), "master", 1, 1, "now"))
+    core._set_pcm("f1", "pcm_fixture_f1")
+    core._set_pcm("f2", "pcm_fixture_f2")
     db.execute("INSERT INTO tracks(id,file_id,artist,title) VALUES(?,?,?,?)", ("t1", "f1", "A", "One"))
     db.execute("INSERT INTO tracks(id,file_id,artist,title) VALUES(?,?,?,?)", ("t2", "f2", "B", "Two"))
     db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)", ("l1", "f1", 0, 4, 2, "vocal", 0.9, "now"))

@@ -1,4 +1,4 @@
 @echo off
-pip install -r requirements.txt
-python build\make_singlefile.py
-python dist\earcrate.py
+REM One supported first-run path. Launch-EarCrate performs dependency checks,
+REM builds the current single-file artifact, and starts the local UI.
+call "%~dp0Launch-EarCrate.cmd"

@@ -1,4 +1,4 @@
-# earcrate
+# EarCrate
 
 Local-first layered mashup engine. The rule that names it: the composer is
 never allowed to touch raw file slices. Material enters through an audition
@@ -8,6 +8,8 @@ contract, pre-render and post-render quality gates, runtime ledger with
 per-stage receipts. No fallback render is allowed.
 
 ## Run
+
+- Prerequisite: Python 3 plus `ffmpeg` and `ffprobe` on `PATH`.
 - Windows (first time): `START_HERE.cmd` — installs deps, builds, launches.
 - Windows (desktop icon): run `Create-Desktop-Shortcut.cmd` once for an
   "EarCrate" desktop icon (it also removes any stale "Jukebreaker" one). The icon
@@ -16,10 +18,10 @@ per-stage receipts. No fallback render is allowed.
 - Single file: `python build/make_singlefile.py` then `python dist/earcrate.py`
 
 ## Verify
-- `python tests/test_gates.py`
+- `python tests/run_gates.py`
 - `python VERIFY_PACKAGE.py` (builds and selftests the single file too)
 
-CI runs both on every push. If the gates refuse, the merge refuses.
+CI runs both on every push and pull request. Treat a red run as a merge blocker.
 
 ## Lineage
 Descends from the Jukebreaker GT line (v0.5.x deck discipline, v0.6.x

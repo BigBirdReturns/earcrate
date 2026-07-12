@@ -64,6 +64,7 @@ class EarcrateCore:
         self.state_dir = visible_app_dir()
         self.pointer_path = self.state_dir / "earcrate_workspace.json"
         self.legacy_pointer_path = app_state_dir() / "config_pointer.json"
+        self.pointer_resolved_from: Optional[Path] = None
         self.config: Optional[Config] = None
         self.db: Optional[sqlite3.Connection] = None
         self.status_lock = threading.Lock()
@@ -206,13 +207,28 @@ class EarcrateCore:
 
     def load_config_if_present(self) -> None:
         try:
-            if not self.pointer_path.exists() and self.legacy_pointer_path.exists():
+            # READ scans every legitimate pointer location (write target first),
+            # so a driver script importing the package resolves the SAME
+            # workspace as the CLI entry point. The legacy hidden AppData
+            # pointer is adopted only when no visible pointer exists anywhere —
+            # previously it could shadow a visible pointer written by a
+            # different entry point and silently load a stale legacy workspace.
+            pointer = self.pointer_path if self.pointer_path.exists() else None
+            if pointer is None:
+                for d in pointer_search_dirs():
+                    cand = d / self.pointer_path.name
+                    if cand.exists():
+                        pointer = cand
+                        break
+            if pointer is None and self.legacy_pointer_path.exists():
                 with contextlib.suppress(Exception):
                     self.pointer_path.parent.mkdir(parents=True, exist_ok=True)
                     self.pointer_path.write_text(self.legacy_pointer_path.read_text(encoding="utf-8"), encoding="utf-8")
-            if not self.pointer_path.exists():
+                    pointer = self.pointer_path
+            if pointer is None:
                 return
-            data = json.loads(self.pointer_path.read_text(encoding="utf-8"))
+            self.pointer_resolved_from = pointer
+            data = json.loads(pointer.read_text(encoding="utf-8"))
             cfg_path = Path(data["config_json"])
             if not cfg_path.exists():
                 return
@@ -2924,10 +2940,18 @@ class EarcrateCore:
     def seed_demo_renders(self, count: int = 8, bars: int = 8, bpm: int = 100) -> Dict[str, Any]:
         """Warm-up demo: synthesize a few listenable chord+kick loops into renders/
         so a brand-new workspace can PLAY immediately (Endless has material) while
-        the real library compiles. Clearly a demo — no real music, made locally."""
+        the real library compiles. Clearly a demo — no real music, made locally.
+        Self-retiring: once ANY real (non-demo) render exists, seeding refuses,
+        so synthesized warm-up material never masquerades next to real output."""
         c = self.ensure_config()
         renders = c.working_root / "renders"
         renders.mkdir(parents=True, exist_ok=True)
+        for rp in renders.glob("*.render_report.json"):
+            with contextlib.suppress(Exception):
+                if not json.loads(rp.read_text(encoding="utf-8")).get("demo"):
+                    return {"ok": True, "seeded": 0, "dir": str(renders), "skipped": True,
+                            "note": ("real renders exist — demo warm-up retired. Delete demo_*.wav "
+                                     "from renders/ whenever you like; they will not be re-seeded.")}
         sr = 44100
         beat = 60.0 / float(bpm or 100)
         A = 220.0
@@ -3080,9 +3104,15 @@ class EarcrateCore:
 
     def _acoustid_lookup(self, fingerprint: str, duration: float, api_key: str) -> Dict[str, Any]:
         import urllib.request, urllib.parse
+        # meta is "recordings" ALONE, on real-library evidence (2026-07-12
+        # findings): combining it with releasegroups made the API return bare
+        # {id, score} results with no recordings key at all, so identify went
+        # 0/585 despite the fingerprints matching. recordings-only resolves
+        # artist/title reliably; album is left to the tags/folders. Do not
+        # re-add releasegroups without re-verifying against the live API.
         body = urllib.parse.urlencode({
             "client": api_key, "duration": str(int(round(duration))), "fingerprint": fingerprint,
-            "meta": "recordings+releasegroups+compress", "format": "json",
+            "meta": "recordings", "format": "json",
         }).encode("utf-8")
         req = urllib.request.Request("https://api.acoustid.org/v2/lookup", data=body,
                                      headers={"User-Agent": "earcrate/1.0", "Content-Type": "application/x-www-form-urlencoded"})
@@ -3175,7 +3205,16 @@ class EarcrateCore:
                     old[k] = (v[0] if v else "")
             if all(old.get(k, "") == v for k, v in new.items()):
                 continue  # already correct
-            changes.append({"path": str(path), "file_id": p.get("file_id"), "old": old, "new": new,
+            # Resolve a missing file_id by path so the DB tag cache is ALWAYS
+            # backfilled. Proposals from external drivers used to carry
+            # file_id=None, which left the on-disk tags corrected but the DB
+            # stale — a following reorganize then silently planned against
+            # pre-retag identities.
+            fid = p.get("file_id")
+            if not fid:
+                row = db.execute("SELECT id FROM files WHERE path=?", (str(path),)).fetchone()
+                fid = row["id"] if row else None
+            changes.append({"path": str(path), "file_id": fid, "old": old, "new": new,
                             "score": p.get("score")})
         sig = sha256_text(json_dumps([[ch["path"], ch["new"]] for ch in sorted(changes, key=lambda x: x["path"])]))
         if not apply:
@@ -3209,9 +3248,15 @@ class EarcrateCore:
             except Exception as exc:
                 errors.append({"path": ch["path"], "error": str(exc)[:120]})
         db.commit()
+        unresolved = sum(1 for ch in changes if not ch.get("file_id"))
+        note = ("tags rewritten from AcoustID identities; DB updated; reversible via "
+                "identify-rollback. Run reorganize next to file them by the corrected tags.")
+        if unresolved:
+            note += (f" WARNING: {unresolved} retagged file(s) are not in the database "
+                     "(path not found in files table) — run `scan` before reorganize or it "
+                     "will plan against stale identities.")
         return {"ok": not errors, "retagged": retagged, "errors": errors, "journal": str(journal),
-                "note": ("tags rewritten from AcoustID identities; DB updated; reversible via "
-                         "identify-rollback. Run reorganize next to file them by the corrected tags.")}
+                "db_unresolved": unresolved, "note": note}
 
     def rollback_identities(self, data: Dict[str, Any]) -> Dict[str, Any]:
         journal = Path(str(data.get("journal") or ""))

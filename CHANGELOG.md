@@ -328,6 +328,51 @@
 - Verified: 14/14 runner gates pass; single-file builds + SELF_TEST_OK via
   `VERIFY_PACKAGE.py`; migration exercised on a pre-existing ulid-keyed loop
   (id preserved, segment_id backfilled, locked judgment intact).
+## v0.8.26 — parallel real-library fixes (integrated into v0.8.27)
+Built on main/v0.8.15, parallel to the v0.8.16–v0.8.25 seam work on PR #25.
+Every fix here came from the 2026-07-11/12 real-library sessions
+(`docs/SESSION_FINDINGS_2026-07-12.md` on main), not from a fixture.
+
+- FIX **AcoustID identify 0/585**: `_acoustid_lookup` requested
+  `meta=recordings+releasegroups+compress`, which the API answers with bare
+  `{id, score}` results — no `recordings` key even on 0.93+ matches — so every
+  lookup parsed to `match: None`. Now requests `meta=recordings` alone (the
+  value verified live against the API); artist/title resolve reliably, album
+  is left to tags/folders. Gate `test_acoustid_requests_recordings_meta_only`
+  pins the request body so the combined value can't creep back.
+- FIX **stale DB after apply-identities**: proposals without a `file_id`
+  (e.g. from an external driver script) corrected the on-disk tags but left
+  the DB tag cache stale, so a following `reorganize` silently planned
+  against pre-retag identities. `apply_identities` now resolves a missing
+  `file_id` by path and backfills the DB; if any file still can't be resolved
+  the result says so and tells you to `scan` before `reorganize`. Gate:
+  `test_apply_identities_backfills_db_without_file_id`.
+- FIX **workspace-pointer mismatch between entry points**: the pointer was
+  read from exactly one location anchored on `__main__`, so a driver script
+  importing the package looked next to ITSELF, missed, and silently adopted a
+  stale legacy AppData pointer — landing every write in an old JukebreakerGT
+  workspace. Reading now scans the legitimate locations in priority order
+  (EARCRATE_HOME override > next to the running entry point > cwd > the code's
+  own directory > user profile); the legacy hidden pointer is adopted only
+  when NO visible pointer exists anywhere. An explicit EARCRATE_HOME remains
+  the ONLY location searched (sandbox contract). The core records which
+  pointer it resolved (`pointer_resolved_from`).
+- FIX **five gates never ran**: `tests/test_gates.py` had its runner block in
+  the MIDDLE of the file, so every gate defined after it (workspace migration,
+  in-place reorganize, deep clean, identify parsing, apply-identities) was
+  silently skipped by `python tests/test_gates.py` — green CI, dead tests.
+  Runner moved to the end; all 21 gates now execute, and all pass.
+- CHANGE **demo warm-up self-retires**: `seed_demo_renders` refuses once any
+  real (non-demo) render exists in the workspace, so synthesized first-run
+  material can never sit next to real output pretending to be product.
+  Demo-only workspaces still re-seed freely. Gate:
+  `test_pointer_visible_beats_legacy_and_demo_seed_retires`.
+- NEW `docs/HERITAGE_MAP.md`: the v0.5–v0.6 mastered mechanisms (varispeed
+  lattice, role transform budgets, keyless percussion, multideck tail overlay,
+  six-transition DJ grammar, turnover contract…) mapped to where each lives in
+  the rebuild, which gate covers it, and which two were deliberately cut
+  (two-world pairing, floor-safe rescue) — so no reskin can drop a buffalo
+  silently again.
 
 ## v0.8.15 — apply identities: close the identify -> fix loop (reversible)
 - NEW `apply_identities` + `rollback_identities` (CLI `apply-identities`,

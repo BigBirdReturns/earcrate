@@ -71,6 +71,49 @@ def visible_app_dir() -> Path:
         return Path.home()
 
 
+def pointer_search_dirs() -> List[Path]:
+    """Every directory the workspace pointer may legitimately live in, in
+    priority order. Writing still goes to visible_app_dir(); READING must scan
+    all of these, because the pointer's location depends on how the process was
+    started (`python dist/earcrate.py` anchors on the dist file; a driver script
+    that imports the package anchors on the SCRIPT — which is how a standalone
+    script once silently resolved a stale legacy AppData workspace instead of
+    the configured one)."""
+    env = os.environ.get("EARCRATE_HOME")
+    if env:
+        # An explicit EARCRATE_HOME is an override, not a hint: it is the ONLY
+        # place the pointer may live. No fallback scan — falling through to
+        # other locations would let a stray pointer elsewhere hijack a
+        # deliberately sandboxed instance (the gates depend on this contract).
+        return [Path(env).expanduser()]
+    dirs: List[Path] = []
+    main = sys.modules.get("__main__")
+    mf = getattr(main, "__file__", None) if main is not None else None
+    if mf:
+        with contextlib.suppress(Exception):
+            dirs.append(Path(mf).resolve().parent)
+    with contextlib.suppress(Exception):
+        dirs.append(Path.cwd())
+    # The directory of the code itself: repo root in package mode, dist/ in a
+    # single-file build. This is what makes an importing driver script agree
+    # with the CLI entry point run from the same tree.
+    with contextlib.suppress(Exception):
+        here = Path(__file__).resolve()
+        if here.parent.name == "core" and here.parent.parent.name == "earcrate":
+            dirs.append(here.parents[2])
+        else:
+            dirs.append(here.parent)
+    dirs.append(Path.home())
+    out: List[Path] = []
+    seen = set()
+    for d in dirs:
+        key = os.path.normcase(str(d))
+        if key not in seen:
+            seen.add(key)
+            out.append(d)
+    return out
+
+
 def sibling_workspace(music_folder: str) -> str:
     """Derive the default workspace as a VISIBLE SIBLING next to the music folder
     (INV-1 forbids it living inside the music folder). Name is derived from the

@@ -66,6 +66,7 @@ class EarcrateCore:
         self.state_dir = visible_app_dir()
         self.pointer_path = self.state_dir / "earcrate_workspace.json"
         self.legacy_pointer_path = app_state_dir() / "config_pointer.json"
+        self.pointer_resolved_from: Optional[Path] = None
         self.config: Optional[Config] = None
         self.db: Optional[sqlite3.Connection] = None
         self.status_lock = threading.Lock()
@@ -208,13 +209,28 @@ class EarcrateCore:
 
     def load_config_if_present(self) -> None:
         try:
-            if not self.pointer_path.exists() and self.legacy_pointer_path.exists():
+            # READ scans every legitimate pointer location (write target first),
+            # so a driver script importing the package resolves the SAME
+            # workspace as the CLI entry point. The legacy hidden AppData
+            # pointer is adopted only when no visible pointer exists anywhere —
+            # previously it could shadow a visible pointer written by a
+            # different entry point and silently load a stale legacy workspace.
+            pointer = self.pointer_path if self.pointer_path.exists() else None
+            if pointer is None:
+                for d in pointer_search_dirs():
+                    cand = d / self.pointer_path.name
+                    if cand.exists():
+                        pointer = cand
+                        break
+            if pointer is None and self.legacy_pointer_path.exists():
                 with contextlib.suppress(Exception):
                     self.pointer_path.parent.mkdir(parents=True, exist_ok=True)
                     self.pointer_path.write_text(self.legacy_pointer_path.read_text(encoding="utf-8"), encoding="utf-8")
-            if not self.pointer_path.exists():
+                    pointer = self.pointer_path
+            if pointer is None:
                 return
-            data = json.loads(self.pointer_path.read_text(encoding="utf-8"))
+            self.pointer_resolved_from = pointer
+            data = json.loads(pointer.read_text(encoding="utf-8"))
             cfg_path = Path(data["config_json"])
             if not cfg_path.exists():
                 return
@@ -3077,10 +3093,18 @@ class EarcrateCore:
     def seed_demo_renders(self, count: int = 8, bars: int = 8, bpm: int = 100) -> Dict[str, Any]:
         """Warm-up demo: synthesize a few listenable chord+kick loops into renders/
         so a brand-new workspace can PLAY immediately (Endless has material) while
-        the real library compiles. Clearly a demo — no real music, made locally."""
+        the real library compiles. Clearly a demo — no real music, made locally.
+        Self-retiring: once ANY real (non-demo) render exists, seeding refuses,
+        so synthesized warm-up material never masquerades next to real output."""
         c = self.ensure_config()
         renders = c.working_root / "renders"
         renders.mkdir(parents=True, exist_ok=True)
+        for rp in renders.glob("*.render_report.json"):
+            with contextlib.suppress(Exception):
+                if not json.loads(rp.read_text(encoding="utf-8")).get("demo"):
+                    return {"ok": True, "seeded": 0, "dir": str(renders), "skipped": True,
+                            "note": ("real renders exist — demo warm-up retired. Delete demo_*.wav "
+                                     "from renders/ whenever you like; they will not be re-seeded.")}
         sr = 44100
         beat = 60.0 / float(bpm or 100)
         A = 220.0
@@ -3273,13 +3297,11 @@ class EarcrateCore:
         return {"ok": True, "match": {"artist": artist, "title": rec.get("title"), "album": album,
                                       "mbid": rec.get("id"), "score": score}}
 
-    # AcoustID web service. meta tokens MUST be whitespace-separated: in an
-    # x-www-form-urlencoded body a literal "+" encodes to %2B, which the server
-    # reads as one bogus token ("recordings+releasegroups+...") and returns no
-    # recordings -- the cause of ~0 identities across the real run. Passing a
-    # space lets urlencode emit a "+" (= space on the wire) so the tokens split.
+    # Real-library evidence (2026-07-12) showed that combined meta fields return
+    # bare {id, score} results with no recordings, even when separated correctly.
+    # Request the one field verified live; existing tags/folders retain album.
     ACOUSTID_ENDPOINT = "https://api.acoustid.org/v2/lookup"
-    ACOUSTID_META = "recordings releasegroups"
+    ACOUSTID_META = "recordings"
 
     def _acoustid_params(self, fingerprint: str, duration: float, api_key: str) -> Dict[str, str]:
         return {
@@ -3433,9 +3455,15 @@ class EarcrateCore:
             except Exception as exc:
                 errors.append({"path": ch["path"], "error": str(exc)[:120]})
         db.commit()
+        unresolved = sum(1 for ch in changes if not ch.get("file_id"))
+        note = ("tags rewritten from AcoustID identities; DB updated; reversible via "
+                "identify-rollback. Run reorganize next to file them by the corrected tags.")
+        if unresolved:
+            note += (f" WARNING: {unresolved} retagged file(s) are not in the database "
+                     "(path not found in files table) — run `scan` before reorganize or it "
+                     "will plan against stale identities.")
         return {"ok": not errors, "retagged": retagged, "errors": errors, "journal": str(journal),
-                "note": ("tags rewritten from AcoustID identities; DB updated; reversible via "
-                         "identify-rollback. Run reorganize next to file them by the corrected tags.")}
+                "db_unresolved": unresolved, "note": note}
 
     def rollback_identities(self, data: Dict[str, Any]) -> Dict[str, Any]:
         journal = Path(str(data.get("journal") or ""))

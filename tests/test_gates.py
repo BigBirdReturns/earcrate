@@ -2066,15 +2066,13 @@ def test_identify_parses_acoustid_and_guards_key():
     # -- Request building (offline): the lookup body must be well-formed. The
     # bug: meta was "recordings+releasegroups+compress" with literal "+", which
     # urlencode turns into %2B so AcoustID reads ONE bogus token and returns no
-    # recordings. Tokens must be whitespace-separated on the wire.
+    # recordings. Live-library evidence requires the recordings field alone.
     import urllib.parse as _u
     params = core._acoustid_params("AQAB_fake_fp", 213.7, "MYKEY")
     body = _u.urlencode(params)
     decoded = _u.parse_qs(body)
     meta_tokens = decoded["meta"][0].split()
-    assert "recordings" in meta_tokens and "releasegroups" in meta_tokens, "must request recordings+releasegroups"
-    assert all("+" not in tok for tok in meta_tokens), "meta tokens must not be glued by a literal '+'"
-    assert len(meta_tokens) >= 2, "meta must decode to multiple whitespace-separated fields"
+    assert meta_tokens == ["recordings"], "combined AcoustID meta fields broke the real-library lookup"
     assert decoded["client"][0] == "MYKEY" and decoded["format"][0] == "json"
     assert decoded["duration"][0] == "214" and decoded["fingerprint"][0] == "AQAB_fake_fp"
     assert core.ACOUSTID_ENDPOINT.endswith("/v2/lookup")
@@ -2096,16 +2094,6 @@ def test_identify_parses_acoustid_and_guards_key():
         if se is not None: os.environ["EARCRATE_HOME"] = se
         else: os.environ.pop("EARCRATE_HOME", None)
         if sk is not None: os.environ["EARCRATE_ACOUSTID_KEY"] = sk
-
-
-if __name__ == "__main__":
-    fails = 0
-    for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
-        try:
-            fn(); print(f"PASS {name}")
-        except AssertionError as e:
-            fails += 1; print(f"FAIL {name}: {e}")
-    sys.exit(1 if fails else 0)
 
 
 def test_workspace_migration_previews_then_executes():
@@ -2278,3 +2266,138 @@ def test_apply_identities_retags_and_reverses():
         if sh is not None: os.environ["HOME"] = sh
         if se is not None: os.environ["EARCRATE_HOME"] = se
         else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_acoustid_requests_recordings_meta_only():
+    """v0.8.26 gate: the AcoustID lookup must request meta=recordings ALONE.
+    Real-library evidence (2026-07-12): combining releasegroups into meta made
+    the API return bare {id, score} results, so identify went 0/585 despite
+    correct fingerprint matches. This pins the request body."""
+    import urllib.parse
+    from unittest.mock import patch
+    core = EarcrateCore.__new__(EarcrateCore)
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"status": "ok", "results": []}'
+
+    def fake_urlopen(req, timeout=0):
+        captured["body"] = req.data.decode("utf-8")
+        return _Resp()
+
+    with patch("urllib.request.urlopen", fake_urlopen):
+        res = core._acoustid_lookup("FAKEFP", 200.0, "key123")
+    assert res["ok"] and res["match"] is None
+    params = urllib.parse.parse_qs(captured["body"])
+    assert params["meta"] == ["recordings"], f"meta must be recordings alone, got {params.get('meta')}"
+
+
+def test_apply_identities_backfills_db_without_file_id():
+    """v0.8.26 gate: proposals WITHOUT file_id (e.g. from an external driver)
+    must still backfill the DB tag cache by path, so a following reorganize
+    never plans against stale pre-retag identities."""
+    import tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from mutagen import File as MF
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        lib = tmp / "lib"; lib.mkdir()
+        f = lib / "track.flac"
+        t = np.arange(44100 * 3) / 44100
+        sf.write(str(f), (0.3 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
+        mf = MF(str(f), easy=True); mf["artist"] = ["Wrong"]; mf["title"] = ["wrong"]; mf.save()
+        core = EarcrateCore(); core.configure({"master_root": str(lib), "working_root": str(tmp / "w"), "agent_root": str(tmp / "a")})
+        core.scan()
+        fid = core.conn().execute("SELECT id FROM files WHERE root='master' LIMIT 1").fetchone()["id"]
+        props = [{"path": str(f), "artist": "Motörhead", "title": "Ace of Spades", "score": 0.98}]  # no file_id
+        dry = core.apply_identities({"proposals": props, "apply": False})
+        assert dry["would_retag"] == 1
+        res = core.apply_identities({"proposals": props, "apply": True, "signature": dry["signature"]})
+        assert res["ok"] and res["retagged"] == 1 and res["db_unresolved"] == 0
+        row = core.conn().execute("SELECT value FROM tags WHERE file_id=? AND key='artist'", (fid,)).fetchone()
+        assert row and row["value"] == "Motörhead", "DB tag cache must be backfilled by path when file_id is absent"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_pointer_visible_beats_legacy_and_demo_seed_retires():
+    """v0.8.26 gates, two related honesty fixes:
+    (1) pointer resolution: a visible workspace pointer found by searching the
+        legitimate locations must win over the legacy hidden AppData pointer,
+        so a driver script importing the package resolves the SAME workspace
+        as the CLI (the 2026-07-12 stale-legacy-workspace gotcha);
+    (2) demo warm-up self-retires: once a real (non-demo) render exists,
+        seed_demo_renders refuses instead of planting synthetic tracks next to
+        real output."""
+    import tempfile, os, json as _json
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    cwd = os.getcwd()
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp / "homeA")
+    try:
+        (tmp / "homeA").mkdir()
+        lib = tmp / "lib"; lib.mkdir()
+        sf.write(str(lib / "x.wav"), np.zeros((44100, 2), "float32"), 44100)
+        core = EarcrateCore()
+        core.configure({"master_root": str(lib), "working_root": str(tmp / "w"), "agent_root": str(tmp / "a")})
+        real_master = str(core.config.master_root)
+        # a stale legacy pointer to a DIFFERENT workspace, planted in AppData
+        lib2 = tmp / "oldlib"; lib2.mkdir()
+        core2 = EarcrateCore()
+        core2.configure({"master_root": str(lib2), "working_root": str(tmp / "w2"), "agent_root": str(tmp / "a2")})
+        legacy = core.legacy_pointer_path
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(_json.dumps({"config_json": str((tmp / "a2") / "config.json")}), encoding="utf-8")
+        # restore the REAL pointer (core2.configure overwrote the shared EARCRATE_HOME one)
+        (tmp / "homeA" / "earcrate_workspace.json").write_text(
+            _json.dumps({"config_json": str((tmp / "a") / "config.json")}), encoding="utf-8")
+        # simulate a driver script: no EARCRATE_HOME, __main__ anchored in the
+        # script's own (pointer-less) folder, cwd = where the visible pointer lives
+        os.environ.pop("EARCRATE_HOME", None)
+        os.chdir(str(tmp / "homeA"))
+        driver_dir = tmp / "driver"; driver_dir.mkdir()
+        main_mod = sys.modules["__main__"]
+        saved_main_file = getattr(main_mod, "__file__", None)
+        main_mod.__file__ = str(driver_dir / "driver.py")
+        try:
+            driver = EarcrateCore()
+        finally:
+            if saved_main_file is not None: main_mod.__file__ = saved_main_file
+        assert driver.config is not None, "driver must resolve a workspace"
+        assert str(driver.config.master_root) == real_master, \
+            "visible pointer (cwd) must beat the legacy AppData pointer"
+        # (2) demo seeding self-retires next to a real render
+        os.environ["EARCRATE_HOME"] = str(tmp / "homeA")
+        seeded = core.seed_demo_renders(count=1)
+        assert seeded["seeded"] == 1, "fresh workspace must seed the demo"
+        again = core.seed_demo_renders(count=1)
+        assert again["seeded"] == 1, "demo-only renders must not block re-seeding"
+        renders = core.config.working_root / "renders"
+        sf.write(str(renders / "real.wav"), np.zeros((44100, 2), "float32"), 44100)
+        (renders / "real.render_report.json").write_text(_json.dumps({"engine_version": "x", "quality_gate": {"passed": True}}), encoding="utf-8")
+        after = core.seed_demo_renders(count=1)
+        assert after.get("skipped") and after["seeded"] == 0, "real render present -> demo seeding must retire"
+    finally:
+        os.chdir(cwd)
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+if __name__ == "__main__":
+    fails = 0
+    for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
+        try:
+            fn(); print(f"PASS {name}")
+        except AssertionError as e:
+            fails += 1; print(f"FAIL {name}: {e}")
+    sys.exit(1 if fails else 0)

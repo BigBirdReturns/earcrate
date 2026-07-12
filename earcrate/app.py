@@ -5,6 +5,7 @@ from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_like
 from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
+from earcrate.plan.math import readiness_need, sources_needed, target_bars
 
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -2128,14 +2129,7 @@ class EarcrateCore:
         for x in pool:
             by_role[str(x.get("ear_role") or "")] = by_role.get(str(x.get("ear_role") or ""), 0) + 1
             source_keys.add(track_identity(x))
-        scale = max(0.5, min(1.2, float(target_seconds) / 120.0))
-        need = {
-            "foreground": max(4, int(math.ceil(12 * scale))),
-            "floor": max(6, int(math.ceil(16 * scale))),
-            "bass": max(3, int(math.ceil(6 * scale))),
-            "spark": max(5, int(math.ceil(12 * scale))),
-            "sources": max(5, int(math.ceil(float(target_seconds) / float(profile.get("source_seconds") or 11.5))))
-        }
+        need = readiness_need(float(target_seconds), float(profile.get("source_seconds") or 11.5))
         have = {
             "foreground": by_role.get("VOX_HOOK",0)+by_role.get("VOX_VERSE",0)+by_role.get("VOX_SHOUT",0)+by_role.get("RIFF_ID",0),
             "floor": by_role.get("DRUM_BREAK",0)+by_role.get("BED_CHORD",0)+by_role.get("RIFF_ID",0)+by_role.get("TEXTURE",0),
@@ -2276,7 +2270,7 @@ class EarcrateCore:
         user_bpm = float(params.get("bpm") or 0.0) or None
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         target_seconds = float(params.get("target_seconds") or 120.0)
-        needed_sources = max(5, int(math.ceil(target_seconds / float(profile.get("source_seconds") or 11.5))))
+        needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or 11.5))
         keys = sorted({int(x.get("key_root") or 0) % 12 for x in pool}) or [0]
         weighted_keys = []
         for k in keys:
@@ -2360,7 +2354,7 @@ class EarcrateCore:
         pool = list(deck.get("pool") or [])
         profile_data = load_tastespec(str(params.get("taste_profile") or "girl_talk_v1"))
         profile0 = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
-        need_sources0 = max(5, int(math.ceil(target_seconds / float(profile0.get("source_seconds") or 11.5))))
+        need_sources0 = sources_needed(target_seconds, float(profile0.get("source_seconds") or 11.5))
         deck_sources = int(((deck.get("diagnostics") or {}).get("have") or {}).get("sources", 0))
         if deck_sources and deck_sources < need_sources0:
             diag = deck.get("diagnostics") or {}
@@ -2375,8 +2369,7 @@ class EarcrateCore:
         # bars = beats/4; target_seconds*bpm/60 is beats, /4 is bars already. The old
         # code then multiplied by 4 again, quadrupling every render (a 2-min target
         # became ~8 min). Round to the nearest whole 4-bar phrase instead.
-        bars_exact = target_seconds * render_bpm / 60.0 / 4.0
-        total_bars = max(16, int(round(bars_exact / 4.0)) * 4)
+        total_bars = target_bars(target_seconds, render_bpm)
         section_bars = 4
         sections = []
         foreground = [x for x in pool if x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}]
@@ -2413,7 +2406,7 @@ class EarcrateCore:
             pass
         source_use: Dict[str, int] = {}
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
-        need_sources = max(5, int(math.ceil(target_seconds / float(profile.get("source_seconds") or 11.5))))
+        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or 11.5))
         max_events_per_source = max(2, int(math.ceil((total_bars / 4.0) / max(1, need_sources))) + 1)
         def source_of(x: Dict[str, Any]) -> str:
             return track_identity(x)
@@ -2544,7 +2537,7 @@ class EarcrateCore:
         fg_cov = fg_bars / max(1, total_bars)
         source_count = len(source_bars)
         target_seconds = float(params.get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
-        need_sources = max(5, int(math.ceil(target_seconds / float(profile.get("source_seconds") or 11.5))))
+        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or 11.5))
         first_fg_s = None if first_fg_bar is None else first_fg_bar * 4 * 60.0 / bpm
         max_source_run_s = max(source_bars.values()) * 4 * 60.0 / bpm if source_bars else 0.0
         if floor_cov < float(profile.get("floor_coverage") or 0.70):

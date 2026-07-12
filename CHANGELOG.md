@@ -1,5 +1,48 @@
 # EarCrate — CHANGELOG
 
+## v0.8.19 — v3 phases 2–5: provider seams, plan/ purification, layer + render gates
+- The v3 rebuild's architecture-of-record lands as SEAMS and INVARIANTS (not a
+  monolith rewrite). 23/23 gates green on the built single-file.
+- §5.2/§5.3/§5.4 — NEW `earcrate/providers/` package: a pure registry
+  (`register`/`get`, default-per-kind) plus four capability seams, each with a
+  correct registered DEFAULT so core reaches capability THROUGH the seam:
+  - `StemProvider` — `NoopStemProvider` default (reports unavailable, never
+    crashes, no heavy deps). `DemucsStemProvider` guards its torch/demucs import
+    and materializes to L3 with provenance `(pcm_sha, "demucs", model_version)` +
+    a retention tier. **Honest limit: the actual GPU separation is not run in CI
+    (no torch/CUDA here) — the seam, no-op default, guarded-import safety, and L3
+    provenance shape are verified; the real Demucs pass executes on the user's
+    RTX 4060, and is not claimed to run.**
+  - `CandidateRetriever` (`FullScanRetriever` default), `EmbeddingProvider`
+    (`NoopEmbeddingProvider` = returns None, never fabricates vectors),
+    `VectorIndex` (`LinearScanIndex` = brute-force true nearest). Linear-scan and
+    full-scan run and are gated.
+  - `ArtifactStore` (L3) — local tiered dir, `put/get/evict` with retention tiers
+    ephemeral|warm|pinned; eviction sheds ephemeral before warm and NEVER pinned;
+    provenance `(source_identity, provider, version)`.
+  - Gate `test_provider_seams` pins all of the above (red-first on evict-pinned +
+    non-noop-default).
+- §5.3 / Lesson #1 — NEW `earcrate/plan/` package: composition MATH extracted to
+  PURE functions (`sources_needed`, `readiness_need`, `target_bars`), and app.py
+  now DELEGATES to them in 7 spots so there is ONE source of the arithmetic.
+  Behavior byte-identical (all prior gates unchanged). Gate
+  `test_plan_math_pins_composition_arithmetic` (red-first: a wrong constant fails).
+- §5.5 + §5.3 layer invariants — NEW gates: `test_saved_plan_renders_identically`
+  (a saved plan re-derives with an identical `arrangement_sha` — reproduce or it's
+  an invariant failure), `test_measurements_persona_free` (L1 measured once per
+  (file, analyzer_version), shared across personas), and
+  `test_judgments_append_only_deterministic` (L2 keyed by content identity, upsert
+  not duplicate).
+- New modules added to the single-file builder ORDER (before app.py) and verified
+  present in `dist/earcrate.py`; built-artifact self-test + `test_singlefile_cli_smoke`
+  both green. Built via a 3-way parallel fan-out, integrated and re-verified in the
+  main tree.
+- Still open (honestly): core is not yet WIRED to call `StemProvider` inside the
+  render path (the seam exists + is gated; vocal-on-instrumental layering is the
+  next feature step), the on-GPU Demucs run (above), and the destructive teardown
+  of the monolith's shared table space (the L1/L2 invariants are now GATED, i.e.
+  pinned, not yet re-shaped).
+
 ## v0.8.18 — close the §5.1 debt: rows 13–16 gated (and two live footguns fixed)
 - The entire v3 §5.1 debt front is now closed. With v0.8.16's Lesson #7 gate,
   ledger rows 7, 13, 14, 15, 16 all have executable gates that go RED the instant

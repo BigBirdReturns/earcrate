@@ -626,6 +626,436 @@ def test_done_requires_receipt():
         else: os.environ.pop("EARCRATE_HOME", None)
 
 
+def test_plan_math_pins_composition_arithmetic():
+    """§5.3 / Lesson #1: all composition math is ONE pure source in earcrate.plan.
+
+    Pins the exact constants app.py used to inline (sources_needed, the readiness
+    need{} dict, target-length bars) against known values. A wrong constant here
+    fails the gate. Also proves app.py DELEGATES to these pure fns rather than
+    keeping a second copy of the arithmetic, so the two can never drift.
+    """
+    import math
+    from earcrate.plan.math import (readiness_scale, sources_needed,
+                                     readiness_need, bars_exact, target_bars)
+
+    # sources_needed = max(5, ceil(target/source)); the documented example.
+    assert sources_needed(120, 11.5) == 11
+    assert sources_needed(120.0, 11.5) == 11
+    # floor of 5 sources for very short targets.
+    assert sources_needed(10, 11.5) == 5
+    assert sources_needed(240, 11.5) == 21  # ceil(240/11.5)=21
+    assert sources_needed(60, 20.0) == 5    # ceil(3)=3 -> floored to 5
+
+    # readiness scale is clamp(target/120, 0.5, 1.2).
+    assert readiness_scale(120.0) == 1.0
+    assert readiness_scale(30.0) == 0.5     # 0.25 clamped up
+    assert readiness_scale(600.0) == 1.2    # 5.0 clamped down
+
+    # The readiness need{} dict at the 2-min reference matches the documented
+    # targets, in the contract key order the audit iterates.
+    need120 = readiness_need(120.0)
+    assert list(need120.keys()) == ["foreground", "floor", "bass", "spark", "sources"]
+    assert need120 == {"foreground": 12, "floor": 16, "bass": 6, "spark": 12, "sources": 11}
+    # A 4-min target scales the per-role needs up (scale clamped at 1.2).
+    assert readiness_need(240.0) == {"foreground": 15, "floor": 20, "bass": 8, "spark": 15, "sources": 21}
+    # A very short target hits the per-role floors, not zero.
+    assert readiness_need(30.0) == {"foreground": 6, "floor": 8, "bass": 3, "spark": 6, "sources": 5}
+
+    # target length -> bars: bars = target*bpm/60/4, snapped to nearest 4-bar
+    # phrase with a 16-bar floor. A 120s/124bpm target maps to 64 bars.
+    assert bars_exact(120.0, 124.0) == 62.0
+    assert target_bars(120.0, 124.0) == 64
+    assert target_bars(120.0, 126.0) == 64
+    assert target_bars(10.0, 120.0) == 16   # floored to 16 bars
+
+    # DELEGATION: app.py must import these pure fns (single source), not re-inline
+    # the arithmetic. If any call site kept an inline copy, this drift-guard fails.
+    import inspect
+    from earcrate.app import EarcrateCore
+    src = inspect.getsource(EarcrateCore)
+    assert "sources_needed(" in src, "app.py no longer delegates sources_needed"
+    assert "readiness_need(" in src, "app.py no longer delegates readiness_need"
+    assert "target_bars(" in src, "app.py no longer delegates target_bars"
+    # No stale inline copy of the source-count formula remains in the core.
+    assert "math.ceil(target_seconds / float(profile" not in src, \
+        "app.py still inlines the sources_needed arithmetic (drift risk)"
+
+
+def test_provider_seams():
+    """EARCRATE v3 §3 provider seams (§5.2 stems, §5.4 retrieval, §5.3-L3 store).
+
+    Core reaches capability THROUGH a registered seam, never around it:
+      - the DEFAULT StemProvider is a no-op that is core-safe with torch absent
+        (reports unavailable, never crashes, touches no heavy deps);
+      - DemucsStemProvider imports & constructs fine with torch absent and
+        raises a CLEAR actionable RuntimeError (not a bare ImportError) only
+        when actually used;
+      - LinearScanIndex returns the TRUE nearest on a tiny labeled set;
+      - FullScanRetriever returns every candidate; NoopEmbeddingProvider never
+        fabricates a vector;
+      - ArtifactStore.evict drops ephemeral before warm and NEVER pinned, and
+        artifacts carry the provenance shape (source_identity/provider/version).
+    """
+    import tempfile
+    import earcrate.providers as P
+    from earcrate.providers import (
+        ArtifactStore, StemProvider, NoopStemProvider, DemucsStemProvider,
+        FullScanRetriever, NoopEmbeddingProvider, LinearScanIndex,
+    )
+
+    # This gate is meaningful only because torch is genuinely absent here.
+    try:
+        import torch  # noqa: F401
+        _has_torch = True
+    except Exception:
+        _has_torch = False
+    assert not _has_torch, "gate assumes a torch-absent box (the shipped default env)"
+
+    # --- registry hands back the right DEFAULTS ------------------------------
+    assert P.default_name("stems") == "noop"
+    assert P.default_name("retriever") == "fullscan"
+    assert P.default_name("embedding") == "noop"
+    assert P.default_name("vector_index") == "linear"
+    assert P.default_name("artifacts") == "local"
+
+    # --- §5.2 default StemProvider is no-op and core-safe --------------------
+    stem = P.get("stems")
+    assert isinstance(stem, NoopStemProvider) and isinstance(stem, StemProvider)
+    res = stem.separate("pcm_sha_deadbeef", "/nonexistent/audio.wav", ["vocals", "drums"])
+    assert res["available"] is False, "DEFAULT stem provider must report stems UNAVAILABLE"
+    assert res["stems"] == {} and res["provider"] == "noop"
+    assert res.get("reason"), "no-op must explain why stems are unavailable"
+    assert res["pcm_sha"] == "pcm_sha_deadbeef"
+
+    # --- §5.2 DemucsStemProvider: guarded import; clear error only on use -----
+    demucs = P.get("stems", "demucs")   # constructing must NOT need torch
+    assert isinstance(demucs, DemucsStemProvider)
+    raised = None
+    try:
+        demucs.separate("pcm_sha_deadbeef", "/nonexistent/audio.wav", ["vocals"])
+    except ImportError as e:  # a bare ImportError leaking out is a seam failure
+        raised = ("import", e)
+    except RuntimeError as e:
+        raised = ("runtime", e)
+    assert raised is not None and raised[0] == "runtime", \
+        "Demucs use without torch must raise a CLEAR RuntimeError, not a bare ImportError"
+    msg = str(raised[1]).lower()
+    assert "demucs" in msg and "torch" in msg, "the error must actionably name torch+demucs"
+
+    # --- §5.4 LinearScanIndex returns the TRUE nearest -----------------------
+    idx = P.get("vector_index")
+    assert isinstance(idx, LinearScanIndex)
+    idx.add("east", [1.0, 0.0])
+    idx.add("north", [0.0, 1.0])
+    idx.add("near_east", [0.98, 0.05])
+    idx.add("west", [-1.0, 0.0])
+    cos = idx.query([1.0, 0.0], k=2, metric="cosine")
+    assert cos[0][0] == "east" and cos[1][0] == "near_east", "cosine true nearest wrong"
+    assert idx.query([1.0, 0.0], k=1, metric="cosine")[0][0] == "east"
+    l2 = idx.query([0.95, 0.02], k=1, metric="l2")
+    assert l2[0][0] == "near_east", "L2 true nearest wrong"
+
+    # --- §5.4 FullScanRetriever returns all; NoopEmbedder fabricates nothing --
+    retr = P.get("retriever")
+    assert isinstance(retr, FullScanRetriever)
+    catalog = [{"id": i} for i in range(7)]
+    assert retr.retrieve(catalog) == catalog, "full scan must return EVERY candidate"
+    emb = P.get("embedding")
+    assert isinstance(emb, NoopEmbeddingProvider)
+    assert emb.embed({"id": 1}) is None, "no-op embedder must never fabricate a vector"
+
+    # --- §5.3 L3 ArtifactStore: provenance + tiered eviction -----------------
+    store = ArtifactStore(tempfile.mkdtemp())
+    store.put("eph", b"e" * 100, tier="ephemeral",
+              source_identity="pcm_sha_deadbeef", provider="demucs", version="htdemucs_v4")
+    store.put("wrm", b"w" * 100, tier="warm",
+              source_identity="pcm_sha_deadbeef", provider="demucs", version="htdemucs_v4")
+    store.put("pin", b"p" * 100, tier="pinned",
+              source_identity="pcm_sha_deadbeef", provider="demucs", version="htdemucs_v4")
+    assert store.total_bytes() == 300
+
+    got = store.get("pin")
+    assert got is not None and got["data"] == b"p" * 100
+    meta = got["meta"]
+    for field in ("source_identity", "provider", "version", "tier", "key", "bytes"):
+        assert field in meta, "provenance shape missing %r" % (field,)
+    assert meta["source_identity"] == "pcm_sha_deadbeef" and meta["provider"] == "demucs"
+    assert meta["version"] == "htdemucs_v4"
+
+    # Budget 150: ephemeral goes first, then warm; pinned survives.
+    evicted = store.evict(150)
+    assert evicted == ["eph", "wrm"], "must drop ephemeral BEFORE warm, in that order"
+    assert store.get("eph") is None and store.get("wrm") is None
+    assert store.get("pin") is not None, "eviction must NEVER drop a pinned artifact"
+
+    # Even a budget below the pinned bytes leaves pinned intact (inviolable).
+    assert store.evict(1) == [], "pinned is inviolable even under a tighter budget"
+    assert store.get("pin") is not None
+
+
+def _v3_build_render_pool(core, db, tmp, sr=44100, bpm=120.0, n=6):
+    """Shared fixture for the §5.5 render gate: real decodable wavs plus a
+    controlled in-DB pool (uniform bpm/key so the deck is always feasible —
+    the composer's transform-feasibility gate is deterministic but sensitive to
+    synthetic-audio analysis, and this gate is about RENDER identity, not the
+    feasibility heuristic). Returns the composer pool list."""
+    import numpy as np, soundfile as sf
+    from pathlib import Path
+    pool = []
+    roleplan = [("DRUM_BREAK", "drum_anchor"), ("BED_CHORD", "harmony"), ("VOX_HOOK", "vocal"),
+                ("BASS_RIFF", "bass"), ("VOX_VERSE", "vocal"), ("TEXTURE", "texture")]
+    for i in range(n):
+        p = Path(tmp) / "music" / f"s{i}.wav"
+        t = np.arange(int(sr * 8)) / sr
+        sf.write(str(p), (0.3 * np.sin(2 * np.pi * (180 + 40 * i) * t)
+                          + 0.2 * np.sin(2 * np.pi * 2 * (180 + 40 * i) * t)).astype(np.float32), sr)
+        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
+                   (f"f{i}", str(p), "master", 1, 1, "now"))
+        db.execute("INSERT INTO features(file_id,bpm,key_root,analyzer_version,analyzed_at) VALUES(?,?,?,?,?)",
+                   (f"f{i}", bpm, 0, "av", "now"))
+        ear, role = roleplan[i % len(roleplan)]
+        lid, aid = f"l{i}", f"a{i}"
+        db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                   (lid, f"f{i}", 0.0, 4.0, 2, role, 0.7, "now"))
+        db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (aid, lid, f"f{i}", "girl_talk_v1", ear, role, 0.0, 4.0, 2, 0.7, "{}", "now"))
+        pool.append({"id": lid, "atom_id": aid, "ear_role": ear, "role": role, "key_root": 0, "bpm": bpm,
+                     "score": 0.7, "hook_score": 0.6, "title": f"s{i}", "path": str(p),
+                     "low_share": 0.2, "high_share": 0.3})
+    db.commit()
+    return pool
+
+
+def test_saved_plan_renders_identically():
+    """v3 §5.5 (exact render): a saved plan is a DETERMINISTIC contract. Compose ->
+    save_plan -> load_plan must re-derive the IDENTICAL arrangement_sha (a saved
+    plan that cannot reproduce its own hash is an invariant failure), the composer
+    is deterministic under a fixed seed, rendering the loaded plan twice yields
+    byte-identical AUDIO SAMPLES (file bytes differ only by the embedded
+    render_timestamp metadata chunk, so we compare decoded samples), the render
+    receipt is bound to the plan (report arrangement_sha == plan_hash), and a
+    layer that CANNOT render is accounted for as a reasoned drop receipt — never a
+    silent skip: a fully valid plan drops nothing, an un-renderable layer appears
+    in report['drops'] with a reason."""
+    import tempfile, os, json, copy
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from earcrate.app import EarcrateCore, ENGINE_VERSION
+    from earcrate.core.util import arrangement_sha, ulidish, now_utc
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        bpm = 120.0
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 8})
+        db = core.conn()
+        pool = _v3_build_render_pool(core, db, tmp, bpm=bpm)
+        params = {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": bpm, "quality_mode": "stable_deck"}
+
+        # 1) The composer is deterministic under a fixed seed.
+        arr = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
+        arr_again = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
+        assert arr.get("sections"), "composer produced an empty arrangement"
+        assert arrangement_sha(arr) == arrangement_sha(arr_again), "composer is non-deterministic under a fixed seed"
+
+        # 2) save -> load re-derives the IDENTICAL hash (a saved plan reproduces).
+        sv = core.save_plan("v3plan", arr, "girl_talk_v1")
+        ld = core.load_plan(sv["plan_hash"])
+        loaded_plan = ld["plan"]
+        assert arrangement_sha(loaded_plan) == sv["plan_hash"], \
+            "saved plan does not re-derive its own arrangement_sha (INVARIANT FAILURE)"
+
+        # 3) render the loaded plan TWICE -> identical decoded audio samples (exact render).
+        def _render(plan, tag):
+            mid = ulidish()
+            db.execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
+                       (mid, "m", plan.get("seed"), json.dumps(plan.get("params") or {}),
+                        json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
+            db.commit()
+            dst = tmp / "work" / "renders" / f"out_{tag}.wav"
+            res = core.render_mashup(mid, dst)
+            return res, dst
+        r1, d1 = _render(loaded_plan, "a")
+        r2, d2 = _render(loaded_plan, "b")
+        assert r1.get("type") == "render_mashup" and r1.get("presented") is True, r1
+        y1, _sr1 = sf.read(str(r1["path"])); y2, _sr2 = sf.read(str(r2["path"]))
+        assert y1.shape == y2.shape and np.array_equal(y1, y2), \
+            "rendering the same saved plan twice produced different audio (render is non-deterministic)"
+
+        # 4) the render receipt is bound to the plan.
+        assert r1.get("arrangement_sha") == sv["plan_hash"], "render receipt sha is not the plan's sha"
+        rep1 = json.loads(Path(r1["report"]).read_text(encoding="utf-8"))
+        assert rep1.get("arrangement_sha") == sv["plan_hash"]
+
+        # 5) a fully-valid plan drops NOTHING (every selected event rendered).
+        assert r1.get("drop_count") == 0 and not rep1.get("drops"), \
+            f"a valid plan silently dropped selected events: {rep1.get('drops')}"
+
+        # 6) an un-renderable layer is a FAILURE accounted for as a reasoned drop
+        #    receipt, NOT a silent skip: it must surface in report['drops'] with a reason.
+        bad = copy.deepcopy(loaded_plan)
+        injected = None
+        for sec in bad["sections"]:
+            for ly in sec.get("layers", []):
+                ly["loop_id"] = "seg_DOES_NOT_EXIST"
+                injected = "seg_DOES_NOT_EXIST"
+                break
+            if injected:
+                break
+        assert injected, "fixture plan had no layer to corrupt"
+        rb, _db = _render(bad, "bad")
+        repb = json.loads(Path(rb["report"]).read_text(encoding="utf-8"))
+        assert int(repb.get("drop_count") or 0) >= 1, "an un-renderable layer was silently skipped (no drop receipt)"
+        dropped = [d for d in repb.get("drops", []) if d.get("loop_id") == injected]
+        assert dropped and dropped[0].get("reason"), \
+            "the un-renderable layer left no reasoned receipt in report['drops']"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_measurements_persona_free():
+    """v3 §5.3 L1 (persona-free measurements): a file's measurement is stored ONCE
+    per (file, analyzer_version) and SHARED across personas — not re-measured per
+    resident. Building resident B ADOPTS resident A's persona-independent
+    measurement verbatim (adopted == inserted, > 0) instead of re-running DSP, the
+    file-level `features` row count stays one-per-file across a second build (no
+    per-persona measurement rows), and for any loop present under both profiles the
+    two atoms reference the SAME file_id and carry byte-identical persona-free
+    metrics_json backed by exactly one features row."""
+    import tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from earcrate.app import EarcrateCore
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        sr = 44100
+        for i in range(3):
+            t = np.arange(sr * 8) / sr
+            sf.write(str(tmp / "music" / f"s{i}.wav"),
+                     (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
+        core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
+        db = core.conn()
+        n_files = db.execute("SELECT COUNT(*) n FROM files WHERE root='master'").fetchone()["n"]
+        assert n_files == 3, n_files
+        # measured ONCE: exactly one features row per file, one analyzer_version.
+        n_feat = db.execute("SELECT COUNT(*) n FROM features").fetchone()["n"]
+        n_distinct = db.execute("SELECT COUNT(DISTINCT file_id) n FROM features").fetchone()["n"]
+        assert n_feat == n_files == n_distinct, f"measurement not one-per-file: {n_feat} rows for {n_files} files"
+        assert db.execute("SELECT COUNT(DISTINCT analyzer_version) n FROM features").fetchone()["n"] == 1
+
+        r1 = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+        feat_after_a = db.execute("SELECT COUNT(*) n FROM features").fetchone()["n"]
+        # SECOND resident: adopts A's measurement, does not re-measure.
+        r2 = core.build_ear_crate(taste_profile="troubadour_v1")
+        feat_after_b = db.execute("SELECT COUNT(*) n FROM features").fetchone()["n"]
+        assert r1["inserted"] > 0 and r1["adopted"] == 0, r1
+        assert r2["adopted"] == r2["inserted"] and r2["adopted"] > 0, \
+            f"resident B re-measured instead of adopting A's measurement: {r2}"
+        # building a second resident added NO new measurement rows (shared, not per-persona).
+        assert feat_after_b == feat_after_a == n_feat, \
+            f"a second persona created new measurement rows: {n_feat} -> {feat_after_a} -> {feat_after_b}"
+
+        # the two personas reference the SAME underlying measurement for a shared loop.
+        lid = db.execute("SELECT id FROM loops LIMIT 1").fetchone()["id"]
+        ga = db.execute("SELECT file_id, metrics_json FROM ear_atoms WHERE loop_id=? AND taste_profile='girl_talk_v1'", (lid,)).fetchone()
+        tb = db.execute("SELECT file_id, metrics_json FROM ear_atoms WHERE loop_id=? AND taste_profile='troubadour_v1'", (lid,)).fetchone()
+        assert ga is not None and tb is not None, "loop not present under both personas"
+        assert ga["file_id"] == tb["file_id"], "personas point at different measurement rows for the same loop"
+        assert ga["metrics_json"] == tb["metrics_json"], "persona-free metrics were re-measured, not shared verbatim"
+        assert db.execute("SELECT COUNT(*) n FROM features WHERE file_id=?", (ga["file_id"],)).fetchone()["n"] == 1, \
+            "more than one measurement row for a single file"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_judgments_append_only_deterministic():
+    """v3 §5.3 L2 (append-only judgments on deterministic identity): a judgment
+    keys off the CONTENT-DERIVED atom id (atm_ + sha256(segment_id | profile)),
+    which is stable because the loop id IS the deterministic segment_id. A second
+    judgment on the same segment UPSERTs (PK(atom_id,taste_profile)) — one row, the
+    latest verdict wins, never a duplicate — and it survives a full re-derivation
+    without orphaning: after extract_loops(force) + build_ear_crate(force) the
+    judgment still JOINs to a live ear_atom under the same id. Complements
+    test_force_rebuild_preserves_judgments by pinning the KEY (content-derived +
+    stable) and the upsert property."""
+    import tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from earcrate.app import EarcrateCore
+    from earcrate.core.util import sha256_text
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        sr = 44100
+        for i in range(3):
+            t = np.arange(sr * 8) / sr
+            sf.write(str(tmp / "music" / f"s{i}.wav"),
+                     (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
+        core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+        db = core.conn()
+
+        # the atom id is content-derived off the deterministic segment identity.
+        row = db.execute("SELECT id, loop_id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 1").fetchone()
+        atom_id, loop_id = row["id"], row["loop_id"]
+        assert str(loop_id).startswith("seg_"), "loop id is not the deterministic segment id"
+        assert atom_id == "atm_" + sha256_text(f"{loop_id}|girl_talk_v1")[:20], \
+            "atom id is not content-derived from (segment_id | taste_profile) — judgments would orphan on rebuild"
+
+        # a second judgment on the same segment UPSERTs — one row, latest wins.
+        core.set_atom_judgment(atom_id, "girl_talk_v1", "approved", favorite=True, locked=True)
+        core.set_atom_judgment(atom_id, "girl_talk_v1", "rejected", reason="changed my mind")
+        n = db.execute("SELECT COUNT(*) n FROM atom_judgments WHERE atom_id=? AND taste_profile='girl_talk_v1'",
+                       (atom_id,)).fetchone()["n"]
+        assert n == 1, f"second judgment on the same segment duplicated instead of upserting: {n} rows"
+        cur = db.execute("SELECT status, favorite, reason FROM atom_judgments WHERE atom_id=? AND taste_profile='girl_talk_v1'",
+                         (atom_id,)).fetchone()
+        assert cur["status"] == "rejected" and cur["reason"] == "changed my mind", dict(cur)
+
+        # the SAME segment under a DIFFERENT profile is a distinct, independent key.
+        core.build_ear_crate(taste_profile="troubadour_v1")
+        tb_atom = db.execute("SELECT id FROM ear_atoms WHERE loop_id=? AND taste_profile='troubadour_v1'", (loop_id,)).fetchone()["id"]
+        assert tb_atom == "atm_" + sha256_text(f"{loop_id}|troubadour_v1")[:20]
+        assert tb_atom != atom_id, "distinct personas must not collide on one judgment key"
+
+        # survives a full re-derivation without orphaning: still JOINs to a live atom.
+        core.extract_loops(auto_approve=True, force=True)
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+        joined = db.execute(
+            "SELECT j.status FROM atom_judgments j JOIN ear_atoms a ON a.id=j.atom_id "
+            "WHERE j.atom_id=? AND j.taste_profile='girl_talk_v1'", (atom_id,)).fetchone()
+        assert joined is not None, "judgment orphaned after re-derivation (atom id was not stable)"
+        assert joined["status"] == "rejected", "the upserted verdict did not survive re-derivation"
+        # re-derivation did not spawn a duplicate judgment.
+        assert db.execute("SELECT COUNT(*) n FROM atom_judgments WHERE atom_id=? AND taste_profile='girl_talk_v1'",
+                          (atom_id,)).fetchone()["n"] == 1, "re-derivation duplicated the judgment"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):

@@ -1448,7 +1448,16 @@ def test_no_unfed_handoffs():
 
     # Declared-on-purpose, not-yet-wired — each needs a written reason (the receipt).
     DEFERRED_COLUMNS = {}   # every identity/link column is currently fed
+    # NOTE ON "wired": a live caller proves a CALL SITE exists, NOT that the
+    # capability is functional. stems/artifacts have a call site in render but the
+    # runtime (DemucsStemProvider._run_demucs) is an unimplemented stub, no config
+    # selects demucs over the noop default, and provider/renderer would use
+    # different ArtifactStores — so the feature is OFF and UNVERIFIED. It becomes
+    # "functional" only with a real GPU receipt (see MILESTONES.md §1). Kept here
+    # with honest reasons rather than promoted to "wired == working".
     DEFERRED_SEAMS = {
+        "stems":        "StemProvider: call site present in render, but _run_demucs is a stub, no config selects demucs, and provider/renderer use different ArtifactStores — feature OFF/unverified pending a GPU receipt (MILESTONES.md §1).",
+        "artifacts":    "ArtifactStore: consumed by the stems path only; not yet a single workspace-scoped store shared by provider and renderer — see stems.",
         "embedding":    "EmbeddingProvider — no embeddings computed yet; ANN retrieval is v3 §5.4. Noop (returns None) is the default.",
         "vector_index": "VectorIndex — linear scan is the live path; ANN index is v3 §5.4. LinearScan is the default.",
     }

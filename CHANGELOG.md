@@ -1,6 +1,35 @@
 # EarCrate — CHANGELOG
 
-## v0.8.24 — wire the seams: stems reach render, retrieval + per-loop review go live
+## v0.8.25 — correction: the stem "feature" is infrastructure, not a working feature
+- HONEST CORRECTION of v0.8.24's overclaim (caught in external review of PR #25).
+  v0.8.24 said stems "reach render" and implied a 4060 with Demucs would produce
+  vocal-on-instrumental. That is NOT true as committed. Four real blockers:
+  1. `DemucsStemProvider._run_demucs()` is a stub that always raises — the real
+     separation is unimplemented.
+  2. Nothing selects demucs: `get("stems")` returns the registered DEFAULT, which
+     is `NoopStemProvider`. A GPU box still gets the no-op → falls back to mix.
+  3. The provider builds its own `ArtifactStore()` (temp dir) and the renderer
+     resolves via a *different* `get("artifacts")` store — a produced key would
+     never resolve.
+  4. No torch/demucs in requirements, no capability probe, no install path; render
+     silently swallows stem errors.
+  So v0.8.24 proved a CALL GRAPH with a fake provider, not a feature. Relabeled:
+  the stem work is INFRASTRUCTURE that prepares stem integration; the feature is
+  OFF and UNVERIFIED pending a real GPU receipt.
+- The unfed-handoff detector's DEFERRED_SEAMS now says so: `stems`/`artifacts`
+  carry honest "call site present, runtime unimplemented — feature OFF" reasons
+  instead of being silently promoted to "wired". ("Wired" = a call site exists,
+  NOT proven functional.)
+- What v0.8.24 DID legitimately land (unchanged, still true): retrieval routes
+  through `CandidateRetriever` (behavior-preserving), per-loop review is real, and
+  the no-op fallback is genuinely byte-identical (gated).
+- NEW `PRODUCT.md` (the product definition + an honest capability matrix with
+  evidentiary statuses) and `MILESTONES.md` (the order of work: make the vertical
+  path truthful → product contract → editable Workbench → perceptual validation →
+  consumer polish → §5.3 teardown LAST). §5.3 is explicitly NOT next.
+- Gates unchanged (32); single-file builds. No engine behavior changed this bump.
+
+## v0.8.24 — wire the seams: stems reach render, retrieval + per-loop review go live   ⚠ stem claim CORRECTED in v0.8.25 (infrastructure, not a working feature)
 - The CPU-doable feature wiring that was mis-filed as "needs a GPU." Only Demucs
   RUNNING needs a GPU; the plumbing that CALLS it is CPU code, and it's now done —
   behavior-identical on this box (the no-op/default providers), real on a GPU box.

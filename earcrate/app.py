@@ -710,6 +710,7 @@ class EarcrateCore:
         self.db.execute("PRAGMA foreign_keys=ON")
         self.create_schema()
         self.migrate_ear_atoms_per_profile()
+        self.migrate_loops_segment_identity()
 
     def conn(self) -> sqlite3.Connection:
         if self.db is None:
@@ -755,6 +756,42 @@ class EarcrateCore:
             ALTER TABLE ear_atoms_v2 RENAME TO ear_atoms;
             COMMIT;
         """)
+
+    def migrate_loops_segment_identity(self) -> None:
+        """v3 §5.1 / Lesson #7: every loop gets a DETERMINISTIC content identity
+        so force-rebuild UPSERTS in place instead of delete+reinsert, and human
+        judgments (keyed transitively off the loop id) survive by construction.
+
+        Additive and idempotent: adds the `segment_id` column, backfills it from
+        each loop's own recipe fields (never touching audio), and enforces
+        uniqueness. Existing loop ids are LEFT ALONE — the column is what future
+        rebuilds match on, so a re-extract of an old ulid-keyed loop upserts that
+        same row (id preserved) rather than orphaning its atoms/judgments."""
+        db = self.db
+        cols = {r["name"] for r in db.execute("PRAGMA table_info(loops)").fetchall()}
+        if "segment_id" not in cols:
+            db.execute("ALTER TABLE loops ADD COLUMN segment_id TEXT")
+        todo = db.execute(
+            "SELECT id,file_id,start_s,end_s,role,stem FROM loops WHERE segment_id IS NULL OR segment_id=''"
+        ).fetchall()
+        if todo:
+            sr = int(self.ensure_config().sample_rate or DEFAULT_SAMPLE_RATE)
+            taken = {r[0] for r in db.execute(
+                "SELECT segment_id FROM loops WHERE segment_id IS NOT NULL AND segment_id!=''").fetchall()}
+            for r in todo:
+                sid = segment_id(r["file_id"], ANALYZER_VERSION,
+                                 round(float(r["start_s"]) * sr), round(float(r["end_s"]) * sr),
+                                 r["role"], r["stem"] or "mix")
+                if sid in taken:
+                    # a genuine duplicate recipe (should not occur per-file): leave
+                    # segment_id NULL so the UNIQUE index tolerates it rather than
+                    # crashing a real library — never destroy the row.
+                    continue
+                taken.add(sid)
+                db.execute("UPDATE loops SET segment_id=? WHERE id=?", (sid, r["id"]))
+            db.commit()
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_loops_segment ON loops(segment_id)")
+        db.commit()
 
     def create_schema(self) -> None:
         db = self.conn()
@@ -806,7 +843,8 @@ class EarcrateCore:
               score REAL NOT NULL,
               status TEXT CHECK(status IN ('candidate','approved','rejected')) DEFAULT 'candidate',
               stem TEXT CHECK(stem IN ('mix','vocals','drums','bass','other')) DEFAULT 'mix',
-              created_at TEXT NOT NULL
+              created_at TEXT NOT NULL,
+              segment_id TEXT
             );
             CREATE TABLE IF NOT EXISTS duplicates(
               group_id TEXT NOT NULL, file_id TEXT REFERENCES files(id),
@@ -1413,8 +1451,9 @@ class EarcrateCore:
         failed = []
         for idx, row in enumerate(rows):
             try:
-                if force:
-                    db.execute("DELETE FROM loops WHERE file_id=? AND stem='mix'", (row["id"],))
+                # v3 §5.1 / Lesson #7: force is RE-MEASURE IN PLACE, never delete.
+                # extract_loops_one upserts by deterministic segment_id, so loop
+                # ids stay stable and the atoms/judgments keyed off them survive.
                 existing = db.execute("SELECT COUNT(*) FROM loops WHERE file_id=?", (row["id"],)).fetchone()[0]
                 if existing and not force:
                     continue
@@ -1481,10 +1520,20 @@ class EarcrateCore:
                         selected.append(cand)
                     break
         status = "approved" if auto_approve else "candidate"
+        sr = int(c.sample_rate or DEFAULT_SAMPLE_RATE)
         for cand in selected[:12]:
+            # deterministic content id (v3 keystone): a re-extract of the same
+            # segment collides here and UPDATEs in place — never a new row, never
+            # a delete. Human status/judgments on the existing row are preserved:
+            # only the churnable measurements (score, role_confidence) refresh.
+            sid = segment_id(row["id"], ANALYZER_VERSION, round(cand["start"] * sr),
+                             round(cand["end"] * sr), cand["role"], "mix")
             db.execute(
-                "INSERT INTO loops(id,file_id,start_s,end_s,bars,role,role_confidence,score,status,stem,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (ulidish(), row["id"], cand["start"], cand["end"], cand["bars"], cand["role"], cand["role_confidence"], cand["score"], status, "mix", now_utc()),
+                """INSERT INTO loops(id,file_id,start_s,end_s,bars,role,role_confidence,score,status,stem,created_at,segment_id)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(segment_id) DO UPDATE SET
+                     role_confidence=excluded.role_confidence, score=excluded.score, bars=excluded.bars""",
+                (sid, row["id"], cand["start"], cand["end"], cand["bars"], cand["role"], cand["role_confidence"], cand["score"], status, "mix", now_utc(), sid),
             )
         return len(selected[:12])
 

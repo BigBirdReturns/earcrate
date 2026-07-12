@@ -338,6 +338,56 @@ def test_endless_math_is_exact():
     assert "endless" in a and a["endless"]["no_repeat_seconds"] > 0
 
 
+def test_force_rebuild_preserves_judgments():
+    """v3 keystone gate (Lesson #7 — the front of the debt queue): a forced loop
+    rebuild must RE-MEASURE IN PLACE, never delete+reinsert. The old
+    `extract_loops(force=True)` ran `DELETE FROM loops`, which cascaded through
+    `ear_atoms` into `atom_judgments` and silently destroyed human judgment — the
+    locked keeps and favorites that only real listening produces. v3 gives every
+    loop a DETERMINISTIC segment identity, so the id is stable across rebuilds and
+    the atoms/judgments keyed off it survive by construction. This gate is red on
+    the delete+reinsert code and green on the upsert code."""
+    import tempfile, numpy as np, soundfile as sf
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sr = 44100
+    for i in range(3):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"), (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
+    core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
+    core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    db = core.conn()
+    # identity is content-derived, not a random ulid: id == segment_id, prefix 'seg_'
+    loops = db.execute("SELECT id, segment_id FROM loops").fetchall()
+    assert loops, "fixture produced no loops"
+    assert all(r["id"] == r["segment_id"] and str(r["id"]).startswith("seg_") for r in loops), \
+        "every loop must carry a deterministic segment identity"
+    # a human locks a keep, favorites it, relabels the role — the sacred call
+    aid = db.execute("SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 1").fetchone()["id"]
+    core.set_atom_judgment(aid, "girl_talk_v1", "approved", relabel_role="VOX_SHOUT", favorite=True, locked=True)
+    j_before = db.execute("SELECT COUNT(*) n FROM atom_judgments").fetchone()["n"]
+    loops_before = {r["id"] for r in db.execute("SELECT id FROM loops").fetchall()}
+    assert j_before > 0
+    # THE FORCE REBUILD — under delete+reinsert this cascades the judgment to death
+    core.extract_loops(auto_approve=True, force=True)
+    core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    # no loop id was dropped: force is an upsert, so every atom's anchor still exists
+    assert {r["id"] for r in db.execute("SELECT id FROM loops").fetchall()} >= loops_before, \
+        "force rebuild dropped a loop id — it deleted instead of upserting"
+    j_after = db.execute("SELECT COUNT(*) n FROM atom_judgments").fetchone()["n"]
+    assert j_after >= j_before, f"force rebuild destroyed judgments: {j_before} -> {j_after} (Lesson #7)"
+    row = db.execute("SELECT status, favorite, locked, relabel_role FROM atom_judgments WHERE atom_id=? AND taste_profile='girl_talk_v1'", (aid,)).fetchone()
+    assert row is not None, "the locked human judgment was erased by force-rebuild"
+    assert row["locked"] == 1 and row["favorite"] == 1 and row["status"] == "approved" and row["relabel_role"] == "VOX_SHOUT", \
+        "the judgment survived but was mangled by the rebuild"
+    assert db.execute("SELECT 1 FROM ear_atoms WHERE id=?", (aid,)).fetchone() is not None, \
+        "the atom the judgment points at must survive with a stable id"
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):

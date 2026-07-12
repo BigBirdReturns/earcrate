@@ -141,6 +141,25 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def segment_id(source_identity: str, analyzer_version: str, start_sample: int,
+               end_sample: int, role: str, stem: str = "mix") -> str:
+    """Deterministic content identity for a loop/segment — EARCRATE v3 §2 keystone.
+
+    segment_id = SHA256( source_identity ‖ analyzer_version ‖ start_sample
+                         ‖ end_sample ‖ role ‖ stem )
+
+    Same sound + analyzer + window + role always yields the SAME id, so
+    re-extraction is an UPSERT instead of a delete+reinsert. Human judgments
+    keyed (transitively) off this id therefore survive a force rebuild by
+    construction — the Lesson #7 cascade cannot recur. `source_identity` is the
+    file id here: loops are per-file in this layer, and sound-level dedup across
+    duplicate files is L1 work (rebuild plan §5.3), not this keystone."""
+    payload = "‖".join([str(source_identity), str(analyzer_version),
+                             str(int(start_sample)), str(int(end_sample)),
+                             str(role), str(stem)])
+    return "seg_" + sha256_text(payload)
+
+
 def arrangement_sha(arrangement: Dict[str, Any]) -> str:
     return sha256_text(json_dumps(arrangement))
 

@@ -1,5 +1,35 @@
 # EarCrate — CHANGELOG
 
+## v0.8.16 — deterministic segment identity: force-rebuild preserves judgments
+- LESSON #7 CLOSED (the front of the v3 debt queue). `extract_loops(force=True)`
+  used to run `DELETE FROM loops WHERE file_id=?` and reinsert with fresh random
+  ids. That delete cascaded through `ear_atoms` into `atom_judgments` and
+  silently destroyed human judgment — the locked keeps and favorites that only
+  real listening produces. A convenience flag was quietly deleting the most
+  expensive data in the system.
+- NEW `segment_id(source, analyzer, start_sample, end_sample, role, stem)`
+  (v3 §2 keystone): a loop's id is now the SHA256 of its own content/recipe, not
+  a ulid. Same sound + analyzer + window + role always yields the same id, so a
+  re-extract is an UPSERT of the same row — id stable, only the churnable
+  measurements (score, role_confidence) refresh. The atom id already derived
+  deterministically from the loop id, so atoms and their judgments survive by
+  construction. `force` is now RE-MEASURE IN PLACE; it never deletes a loop.
+- Migration `migrate_loops_segment_identity`: additive and idempotent. Adds the
+  `segment_id` column, backfills it for existing loops from their own recipe
+  fields (touching no audio), and enforces uniqueness. Old ulid loop ids are
+  LEFT ALONE — the column is what future rebuilds match on, so re-extracting an
+  old loop upserts that same row rather than orphaning its atoms/judgments.
+  Source identity here is the file id; sound-level dedup across duplicate files
+  is L1 work (rebuild plan §5.3), deliberately not folded into this keystone.
+- Gate `test_force_rebuild_preserves_judgments` (rebuild plan §5.1): shipped RED
+  on the delete+reinsert code (proved `1 -> 0` judgments), GREEN on the upsert
+  code. It locks+favorites+relabels an atom, forces a full loop rebuild, and
+  asserts the judgment and its atom survive with stable ids. Placed before the
+  runner block so it actually executes under `python tests/test_gates.py`.
+- Verified: 14/14 runner gates pass; single-file builds + SELF_TEST_OK via
+  `VERIFY_PACKAGE.py`; migration exercised on a pre-existing ulid-keyed loop
+  (id preserved, segment_id backfilled, locked judgment intact).
+
 ## v0.8.15 — apply identities: close the identify -> fix loop (reversible)
 - NEW `apply_identities` + `rollback_identities` (CLI `apply-identities`,
   `identify-rollback`; routes `/api/identify/apply|rollback`): takes identify's

@@ -16,6 +16,24 @@ if errorlevel 1 (
   exit /b 1
 )
 
+where ffmpeg >nul 2>nul
+if errorlevel 1 (
+  echo.
+  echo [EarCrate] FFmpeg was not found on your PATH.
+  echo Install FFmpeg, make sure ffmpeg.exe and ffprobe.exe are on PATH,
+  echo then run this launcher again.
+  echo.
+  pause
+  exit /b 1
+)
+
+where ffprobe >nul 2>nul
+if errorlevel 1 (
+  echo [EarCrate] ffprobe was not found on PATH. Install the complete FFmpeg package.
+  pause
+  exit /b 1
+)
+
 if not exist ".deps_installed" (
   echo [EarCrate] First run: installing dependencies...
   python -m pip install -r requirements.txt || (echo [EarCrate] pip install failed. & pause & exit /b 1)

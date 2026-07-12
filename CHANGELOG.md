@@ -1,5 +1,42 @@
 # EarCrate — CHANGELOG
 
+## v0.8.27 — release consolidation: truthful gates, fail-hard renders, durable receipts
+- Consolidates the v0.8.16–v0.8.25 architecture and seam work with the parallel
+  v0.8.26 real-library fixes under one package-visible release version.
+- A dedicated gate runner discovers and executes the complete acceptance suite;
+  CI and package verification can no longer report green after a mid-file runner
+  silently skips later gates or the TasteSpec suite.
+- Rendering is fail-hard for every selected layer: feasibility or resolution
+  failures reject the arrangement before a WAV is written, rather than silently
+  discarding material and presenting an incomplete mix. UI/API runs leave one
+  canonical, durable receipt for the outcome.
+- Restores native worker environment limits while preserving analysis
+  multiprocessing, addressing the known BLAS/ProcessPool exit-139 failure without
+  introducing a serial or degraded fallback.
+- Full-track stem identities now hash the complete canonical PCM instead of the
+  bounded feature-analysis prefix; same-prefix/different-tail tracks cannot share
+  the wrong cached stem. Legacy prefix-identity caches are rebuilt automatically.
+  Same-path replacements advance a source generation only after the complete PCM
+  is proven different, invalidate content-bound caches, and preserve old judged
+  loops as inactive history rather than applying their feasibility or judgments
+  to different audio. Metadata-only retags keep the existing generation.
+- Successful scans retain missing files as inactive ledger history, and stat
+  changes invalidate source trust before metadata probing. Analyze, harvest,
+  curation, crate-building, and rendering all exclude inactive/stale identities;
+  render preflight also verifies the exact analyzed file bytes before any WAV can
+  be written.
+- Canonical decode and full-track hashing now both select audio stream `0:a:0`,
+  preventing multi-stream containers from binding features and renders to a
+  different stream than the cached source identity.
+- The opt-in Demucs provider requests the released `htdemucs` model identifier,
+  and workspace-pointer discovery skips malformed/stale candidates until it finds
+  a valid configuration instead of stopping at the first existing file.
+- The Windows first-run path now goes through one guarded launcher and checks for
+  both FFmpeg and ffprobe before building or starting the UI.
+- Still not claimed: the opt-in Demucs/CUDA path remains off by default and needs
+  a real GPU receipt; synthetic gates do not substitute for listening to renders
+  from the live library.
+
 ## v0.8.26 — milestone 1: stem-path CPU completion (still OFF/UNVERIFIED) + 3 real-library defects
 - The stem path's CPU half is now correct end to end, so a 4060 receipt becomes
   PRODUCIBLE — but the feature stays OFF by default and the real Demucs run is

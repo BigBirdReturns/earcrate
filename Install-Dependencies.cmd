@@ -24,5 +24,12 @@ if errorlevel 1 (
 )
 type nul > ".deps_installed"
 echo.
-echo [EarCrate] Dependencies installed. You can now run Launch-EarCrate.cmd (or START_HERE.cmd).
+where ffmpeg >nul 2>nul
+if errorlevel 1 (
+  echo [EarCrate] Python packages installed, but FFmpeg is still required.
+  echo Install FFmpeg and put ffmpeg.exe plus ffprobe.exe on PATH before launch.
+) else (
+  echo [EarCrate] Python and FFmpeg dependencies are ready.
+)
+echo You can now run Launch-EarCrate.cmd (or START_HERE.cmd).
 pause

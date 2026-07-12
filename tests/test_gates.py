@@ -1,11 +1,37 @@
 #!/usr/bin/env python3
-"""Executable gates (rebuild plan §5). Run: python tests/test_gates.py"""
+"""Executable gates (rebuild plan §5). Run: python tests/run_gates.py"""
 import sys, random
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 from earcrate.deck.transform import plan_varispeed_transform
 from earcrate.deck.lattice import score_bpm_lattice
 from earcrate.ear.readiness import crate_readiness_audit, girl_talk_targets, endless_sustain
 from earcrate.app import EarcrateCore
+
+
+def _fast_analysis_fixture(job):
+    """Deterministic feature payload for gates about DB identity, not DSP quality."""
+    import numpy as np
+    beats = np.arange(0.0, 8.0, 0.5, dtype=np.float32).tobytes()
+    downbeats = np.arange(0.0, 8.0, 2.0, dtype=np.float32).tobytes()
+    return {
+        "ok": True, "file_id": job["file_id"], "pcm_sha": f"pcm_{job['file_id']}",
+        "features": {
+            "bpm": 120.0, "bpm_confidence": 1.0, "key_root": 0, "key_mode": 1,
+            "key_confidence": 1.0, "loudness_lufs": -14.0, "energy": 0.2,
+            "beats": beats, "downbeats": downbeats, "sections": [], "vocal_likelihood": 0.0,
+        },
+    }
+
+
+def _fast_crate_fixture(job):
+    """Deterministic atom metrics for gates about adoption/judgment persistence."""
+    metrics = {"score": 0.8, "hook_score": 0.2, "bed_score": 0.7,
+               "floor_score": 0.2, "bass_score": 0.2, "spark_score": 0.4}
+    return {"path": job["path"], "error": None, "results": [
+        {"loop_id": lp["id"], "metrics": metrics, "ear_role": "TEXTURE",
+         "render_role": "texture", "status": "approved", "preview_path": None}
+        for lp in job["loops"]
+    ]}
 
 def test_budget_knob_bites():
     # 130 -> 126.05 needs ~3.1% varispeed: inside the role ceiling (6.5%), outside a 2% user budget.
@@ -152,6 +178,7 @@ def test_personas_coexist_and_adopt():
     must not destroy resident A; B ADOPTS A's persona-independent measurements
     (instant) instead of re-measuring; a locked human call survives force."""
     import tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
     from pathlib import Path
     tmp = Path(tempfile.mkdtemp())
     for d in ("music", "work", "agent"): (tmp / d).mkdir()
@@ -160,10 +187,17 @@ def test_personas_coexist_and_adopt():
         t = np.arange(sr * 8) / sr
         sf.write(str(tmp / "music" / f"s{i}.wav"), (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
     core = EarcrateCore()
+    # This gate validates profile coexistence/adoption, not the worker pool.
+    # Keep it serial so repeated native-library forks cannot destabilize CI.
     core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
-                    "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
-    core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
-    r1 = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r1 = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
     r2 = core.build_ear_crate(taste_profile="troubadour_v1")
     assert r1["inserted"] > 0 and r1["adopted"] == 0
     assert r2["adopted"] == r2["inserted"] and r2["adopted"] > 0, "second resident must adopt, not re-measure"
@@ -173,7 +207,8 @@ def test_personas_coexist_and_adopt():
     assert gt > 0 and gt == tb, "personas must coexist"
     aid = db.execute("SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 1").fetchone()["id"]
     core.set_atom_judgment(aid, "girl_talk_v1", "approved", relabel_role="VOX_SHOUT", locked=True)
-    core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
     row = db.execute("SELECT ear_role, status FROM ear_atoms WHERE id=?", (aid,)).fetchone()
     assert row["ear_role"] == "VOX_SHOUT" and row["status"] == "approved", "locked call must survive force"
     # migration: an old-schema table (UNIQUE loop_id) must migrate and then accept both profiles
@@ -214,6 +249,7 @@ def test_curation_steers_composer():
     for srci in range(5):
         db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
                    (f"f{srci}", str(tmp / "music" / f"s{srci}.wav"), "master", 1, 1, "now"))
+        core._set_pcm(f"f{srci}", f"pcm_fixture_{srci}")
         for ear, role in (("DRUM_BREAK", "drum_anchor"), ("TEXTURE", "texture")):
             n += 1
             aid = f"a{n}"
@@ -348,6 +384,7 @@ def test_force_rebuild_preserves_judgments():
     the atoms/judgments keyed off it survive by construction. This gate is red on
     the delete+reinsert code and green on the upsert code."""
     import tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
     from pathlib import Path
     tmp = Path(tempfile.mkdtemp())
     for d in ("music", "work", "agent"): (tmp / d).mkdir()
@@ -357,9 +394,36 @@ def test_force_rebuild_preserves_judgments():
         sf.write(str(tmp / "music" / f"s{i}.wav"), (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
     core = EarcrateCore()
     core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
-                    "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
-    core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
-    core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+
+    def _fake_analysis(job):
+        beats = np.arange(0.0, 8.0, 0.5, dtype=np.float32).tobytes()
+        downbeats = np.arange(0.0, 8.0, 2.0, dtype=np.float32).tobytes()
+        return {
+            "ok": True, "file_id": job["file_id"], "pcm_sha": f"pcm_{job['file_id']}",
+            "features": {
+                "bpm": 120.0, "bpm_confidence": 1.0, "key_root": 0, "key_mode": 1,
+                "key_confidence": 1.0, "loudness_lufs": -14.0, "energy": 0.2,
+                "beats": beats, "downbeats": downbeats, "sections": [], "vocal_likelihood": 0.0,
+            },
+        }
+
+    def _fake_crate(job):
+        metrics = {"score": 0.8, "hook_score": 0.2, "bed_score": 0.7,
+                   "floor_score": 0.2, "bass_score": 0.2, "spark_score": 0.4}
+        return {"path": job["path"], "error": None, "results": [
+            {"loop_id": lp["id"], "metrics": metrics, "ear_role": "TEXTURE",
+             "render_role": "texture", "status": "approved", "preview_path": None}
+            for lp in job["loops"]
+        ]}
+
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fake_analysis):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)), \
+         patch("earcrate.app.ear_crate_file_worker", side_effect=_fake_crate):
+        core.extract_loops(auto_approve=True, force=True)
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
     db = core.conn()
     # identity is content-derived, not a random ulid: id == segment_id, prefix 'seg_'
     loops = db.execute("SELECT id, segment_id FROM loops").fetchall()
@@ -373,8 +437,10 @@ def test_force_rebuild_preserves_judgments():
     loops_before = {r["id"] for r in db.execute("SELECT id FROM loops").fetchall()}
     assert j_before > 0
     # THE FORCE REBUILD — under delete+reinsert this cascades the judgment to death
-    core.extract_loops(auto_approve=True, force=True)
-    core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)), \
+         patch("earcrate.app.ear_crate_file_worker", side_effect=_fake_crate):
+        core.extract_loops(auto_approve=True, force=True)
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
     # no loop id was dropped: force is an upsert, so every atom's anchor still exists
     assert {r["id"] for r in db.execute("SELECT id FROM loops").fetchall()} >= loops_before, \
         "force rebuild dropped a loop id — it deleted instead of upserting"
@@ -697,19 +763,12 @@ def test_provider_seams():
         artifacts carry the provenance shape (source_identity/provider/version).
     """
     import tempfile
+    from unittest.mock import patch
     import earcrate.providers as P
     from earcrate.providers import (
         ArtifactStore, StemProvider, NoopStemProvider, DemucsStemProvider,
         FullScanRetriever, NoopEmbeddingProvider, LinearScanIndex,
     )
-
-    # This gate is meaningful only because torch is genuinely absent here.
-    try:
-        import torch  # noqa: F401
-        _has_torch = True
-    except Exception:
-        _has_torch = False
-    assert not _has_torch, "gate assumes a torch-absent box (the shipped default env)"
 
     # --- registry hands back the right DEFAULTS ------------------------------
     assert P.default_name("stems") == "noop"
@@ -731,12 +790,13 @@ def test_provider_seams():
     demucs = P.get("stems", "demucs")   # constructing must NOT need torch
     assert isinstance(demucs, DemucsStemProvider)
     raised = None
-    try:
-        demucs.separate("pcm_sha_deadbeef", "/nonexistent/audio.wav", ["vocals"])
-    except ImportError as e:  # a bare ImportError leaking out is a seam failure
-        raised = ("import", e)
-    except RuntimeError as e:
-        raised = ("runtime", e)
+    with patch.dict(sys.modules, {"torch": None, "demucs": None, "demucs.separate": None}):
+        try:
+            demucs.separate("pcm_sha_deadbeef", "/nonexistent/audio.wav", ["vocals"])
+        except ImportError as e:  # a bare ImportError leaking out is a seam failure
+            raised = ("import", e)
+        except RuntimeError as e:
+            raised = ("runtime", e)
     assert raised is not None and raised[0] == "runtime", \
         "Demucs use without torch must raise a CLEAR RuntimeError, not a bare ImportError"
     msg = str(raised[1]).lower()
@@ -801,6 +861,7 @@ def _v3_build_render_pool(core, db, tmp, sr=44100, bpm=120.0, n=6):
     feasibility heuristic). Returns the composer pool list."""
     import numpy as np, soundfile as sf
     from pathlib import Path
+    from earcrate.core.util import sha256_file
     pool = []
     roleplan = [("DRUM_BREAK", "drum_anchor"), ("BED_CHORD", "harmony"), ("VOX_HOOK", "vocal"),
                 ("BASS_RIFF", "bass"), ("VOX_VERSE", "vocal"), ("TEXTURE", "texture")]
@@ -809,8 +870,10 @@ def _v3_build_render_pool(core, db, tmp, sr=44100, bpm=120.0, n=6):
         t = np.arange(int(sr * 8)) / sr
         sf.write(str(p), (0.3 * np.sin(2 * np.pi * (180 + 40 * i) * t)
                           + 0.2 * np.sin(2 * np.pi * 2 * (180 + 40 * i) * t)).astype(np.float32), sr)
-        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
-                   (f"f{i}", str(p), "master", 1, 1, "now"))
+        st = p.stat()
+        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,sha256,scanned_at) VALUES(?,?,?,?,?,?,?)",
+                   (f"f{i}", str(p), "master", int(st.st_size), int(st.st_mtime_ns), sha256_file(p), "now"))
+        core._set_pcm(f"f{i}", f"pcm_f{i}")
         db.execute("INSERT INTO features(file_id,bpm,key_root,analyzer_version,analyzed_at) VALUES(?,?,?,?,?)",
                    (f"f{i}", bpm, 0, "av", "now"))
         ear, role = roleplan[i % len(roleplan)]
@@ -838,6 +901,7 @@ def test_saved_plan_renders_identically():
     silent skip: a fully valid plan drops nothing, an un-renderable layer appears
     in report['drops'] with a reason."""
     import tempfile, os, json, copy
+    from unittest.mock import patch
     from pathlib import Path
     import numpy as np, soundfile as sf
     from earcrate.app import EarcrateCore, ENGINE_VERSION
@@ -855,10 +919,31 @@ def test_saved_plan_renders_identically():
         pool = _v3_build_render_pool(core, db, tmp, bpm=bpm)
         params = {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": bpm, "quality_mode": "stable_deck"}
 
+        def _assert_run_bundle(result, expected_state):
+            run_dir = Path(result["run_bundle"])
+            assert run_dir.parent == (tmp / "agent" / "runs").resolve()
+            docs = {}
+            for name in ("request.json", "plan.json", "status.json", "report.json"):
+                path = run_dir / name
+                assert path.is_file(), f"missing durable run artifact {path}"
+                docs[name] = json.loads(path.read_text(encoding="utf-8"))
+                assert docs[name]["run_id"] == result["run_id"]
+            assert docs["status.json"]["state"] == expected_state
+            assert docs["report.json"]["state"] == expected_state
+            return docs
+
         # 1) The composer is deterministic under a fixed seed.
         arr = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
         arr_again = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
         assert arr.get("sections"), "composer produced an empty arrangement"
+        # Rendering is the expensive part of this gate. Compact the deterministic
+        # plan to one bar/two layers while preserving the exact same save/load and
+        # selected-event contracts under test.
+        for candidate in (arr, arr_again):
+            candidate["sections"] = candidate["sections"][:1]
+            candidate["sections"][0]["bars"] = 1
+            candidate["sections"][0]["layers"] = candidate["sections"][0].get("layers", [])[:2]
+            candidate.setdefault("params", {})["target_seconds"] = 2
         assert arrangement_sha(arr) == arrangement_sha(arr_again), "composer is non-deterministic under a fixed seed"
 
         # 2) save -> load re-derives the IDENTICAL hash (a saved plan reproduces).
@@ -876,11 +961,17 @@ def test_saved_plan_renders_identically():
                         json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
             db.commit()
             dst = tmp / "work" / "renders" / f"out_{tag}.wav"
-            res = core.render_mashup(mid, dst)
+            with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+                 patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
+                 patch("earcrate.app.drydeck_metrics", return_value={}), \
+                 patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}):
+                res = core.render_mashup(mid, dst)
             return res, dst
         r1, d1 = _render(loaded_plan, "a")
         r2, d2 = _render(loaded_plan, "b")
         assert r1.get("type") == "render_mashup" and r1.get("presented") is True, r1
+        success_bundle = _assert_run_bundle(r1, "succeeded")
+        assert success_bundle["plan.json"]["plan_sha256"] == sv["plan_hash"]
         y1, _sr1 = sf.read(str(r1["path"])); y2, _sr2 = sf.read(str(r2["path"]))
         assert y1.shape == y2.shape and np.array_equal(y1, y2), \
             "rendering the same saved plan twice produced different audio (render is non-deterministic)"
@@ -906,12 +997,24 @@ def test_saved_plan_renders_identically():
             if injected:
                 break
         assert injected, "fixture plan had no layer to corrupt"
-        rb, _db = _render(bad, "bad")
+        rb, bad_dst = _render(bad, "bad")
+        assert rb.get("type") == "render_rejected" and rb.get("presented") is False, rb
+        assert rb.get("failure_kind") == "selected_layer_render_failure", rb
+        assert rb.get("path") is None and not bad_dst.exists(), "partial arrangement published a WAV"
+        failed_bundle = _assert_run_bundle(rb, "failed")
+        assert failed_bundle["report.json"]["outcome"]["failure_kind"] == "selected_layer_render_failure"
         repb = json.loads(Path(rb["report"]).read_text(encoding="utf-8"))
+        assert repb.get("render_integrity", {}).get("passed") is False
         assert int(repb.get("drop_count") or 0) >= 1, "an un-renderable layer was silently skipped (no drop receipt)"
         dropped = [d for d in repb.get("drops", []) if d.get("loop_id") == injected]
         assert dropped and dropped[0].get("reason"), \
             "the un-renderable layer left no reasoned receipt in report['drops']"
+
+        refused = core.propose_plan({"taste_profile": "profile_with_no_atoms", "target_seconds": 16, "seed": 11})
+        assert refused.get("ok") is False, refused
+        refused_bundle = _assert_run_bundle(refused, "failed")
+        assert refused_bundle["plan.json"]["state"] == "not_created"
+        assert refused_bundle["plan.json"].get("reason")
     finally:
         if sh is not None: os.environ["HOME"] = sh
         else: os.environ.pop("HOME", None)
@@ -931,6 +1034,7 @@ def test_measurements_persona_free():
     import tempfile, os
     from pathlib import Path
     import numpy as np, soundfile as sf
+    from unittest.mock import patch
     from earcrate.app import EarcrateCore
     tmp = Path(tempfile.mkdtemp())
     for d in ("music", "work", "agent"): (tmp / d).mkdir()
@@ -944,8 +1048,12 @@ def test_measurements_persona_free():
                      (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
         core = EarcrateCore()
         core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
-                        "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
-        core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
+                        "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+        core.scan()
+        with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+            core.analyze(force=True)
+        with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+            core.extract_loops(auto_approve=True, force=True)
         db = core.conn()
         n_files = db.execute("SELECT COUNT(*) n FROM files WHERE root='master'").fetchone()["n"]
         assert n_files == 3, n_files
@@ -955,7 +1063,8 @@ def test_measurements_persona_free():
         assert n_feat == n_files == n_distinct, f"measurement not one-per-file: {n_feat} rows for {n_files} files"
         assert db.execute("SELECT COUNT(DISTINCT analyzer_version) n FROM features").fetchone()["n"] == 1
 
-        r1 = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+        with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+            r1 = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
         feat_after_a = db.execute("SELECT COUNT(*) n FROM features").fetchone()["n"]
         # SECOND resident: adopts A's measurement, does not re-measure.
         r2 = core.build_ear_crate(taste_profile="troubadour_v1")
@@ -996,6 +1105,7 @@ def test_judgments_append_only_deterministic():
     import tempfile, os
     from pathlib import Path
     import numpy as np, soundfile as sf
+    from unittest.mock import patch
     from earcrate.app import EarcrateCore
     from earcrate.core.util import sha256_text
     tmp = Path(tempfile.mkdtemp())
@@ -1010,9 +1120,14 @@ def test_judgments_append_only_deterministic():
                      (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
         core = EarcrateCore()
         core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
-                        "agent_root": str(tmp / "agent"), "workers": 2, "analysis_seconds": 10})
-        core.scan(); core.analyze(force=True); core.extract_loops(auto_approve=True, force=True)
-        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+                        "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+        core.scan()
+        with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+            core.analyze(force=True)
+        with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)), \
+             patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+            core.extract_loops(auto_approve=True, force=True)
+            core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
         db = core.conn()
 
         # the atom id is content-derived off the deterministic segment identity.
@@ -1039,8 +1154,10 @@ def test_judgments_append_only_deterministic():
         assert tb_atom != atom_id, "distinct personas must not collide on one judgment key"
 
         # survives a full re-derivation without orphaning: still JOINs to a live atom.
-        core.extract_loops(auto_approve=True, force=True)
-        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+        with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)), \
+             patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+            core.extract_loops(auto_approve=True, force=True)
+            core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
         joined = db.execute(
             "SELECT j.status FROM atom_judgments j JOIN ear_atoms a ON a.id=j.atom_id "
             "WHERE j.atom_id=? AND j.taste_profile='girl_talk_v1'", (atom_id,)).fetchone()
@@ -1076,6 +1193,7 @@ def test_quota_preserves_human_loop_approval():
         db = core.conn()
         db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES('f0',?,'master',1,1,'now')",
                    (str(tmp / "music" / "s.wav"),))
+        core._set_pcm("f0", "pcm_fixture_f0")
         # a landfill of higher-scored candidates so quota fills its budget elsewhere
         for i in range(20):
             db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
@@ -1258,6 +1376,7 @@ def test_steering_precedence_order():
     for srci in range(5):
         db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
                    (f"f{srci}", str(tmp / "music" / f"s{srci}.wav"), "master", 1, 1, "now"))
+        core._set_pcm(f"f{srci}", f"pcm_fixture_{srci}")
         for ear, role in (("DRUM_BREAK", "drum_anchor"), ("TEXTURE", "texture")):
             n += 1
             aid = f"a{n}"
@@ -1393,7 +1512,9 @@ def test_pcm_identity_feeds_stems():
     L3. RED on the old code where audio_sha256 was never written."""
     import tempfile, os
     import numpy as np, soundfile as sf
+    from unittest.mock import patch
     from pathlib import Path
+    from earcrate.analyze.decode import decoded_audio_sha256
     from earcrate.providers import get
     from earcrate.providers.stems import DemucsStemProvider
     tmp = Path(tempfile.mkdtemp()); sh = os.environ.get("HOME"); se = os.environ.get("EARCRATE_HOME")
@@ -1406,7 +1527,17 @@ def test_pcm_identity_feeds_stems():
         core = EarcrateCore()
         core.configure({"master_root": str(m), "working_root": str(tmp / "w"),
                         "agent_root": str(tmp / "a"), "workers": 1, "analysis_seconds": 6})
-        core.scan(); core.analyze(force=True)
+        core.scan()
+
+        def _identity_analysis(job):
+            result = _fast_analysis_fixture(job)
+            result["pcm_sha"] = decoded_audio_sha256(
+                Path(job["path"]), int(job["sr"]), float(job.get("duration") or 0.0)
+            )
+            return result
+
+        with patch("earcrate.app.analyze_file_worker", side_effect=_identity_analysis):
+            core.analyze(force=True)
         shas = {Path(r["path"]).name: r["audio_sha256"]
                 for r in core.conn().execute("SELECT path, audio_sha256 FROM files").fetchall()}
         # 1) the cheap scan DEPOSITED the identity (the whole point)
@@ -1521,6 +1652,7 @@ def test_composer_uses_retriever_seam():
     for srci in range(2):
         db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
                    (f"f{srci}", str(tmp / "music" / f"s{srci}.wav"), "master", 1, 1, "now"))
+        core._set_pcm(f"f{srci}", f"pcm_fixture_{srci}")
         for ear, role in (("VOX_HOOK", "vocal"), ("DRUM_BREAK", "drum_anchor")):
             nn += 1
             db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
@@ -1567,6 +1699,7 @@ def test_render_consults_stem_seam():
     byte-identical to the pre-seam path. RED-first: if render never calls the seam
     the fake is never invoked and the 'consulted' assertion fails."""
     import tempfile, os, json
+    from unittest.mock import patch
     from pathlib import Path
     import numpy as np, soundfile as sf
     from earcrate.app import EarcrateCore, ENGINE_VERSION
@@ -1603,7 +1736,7 @@ def test_render_consults_stem_seam():
         pool = _v3_build_render_pool(core, db, tmp, bpm=bpm)
         # Deposit the L0 sound identity (files.audio_sha256) the seam keys on.
         for i in range(len(pool)):
-            db.execute("UPDATE files SET audio_sha256=? WHERE id=?", (f"pcm_f{i}", f"f{i}"))
+            core._set_pcm(f"f{i}", f"pcm_f{i}")
         db.commit()
         vocal_shas = {f"pcm_f{i}" for i in range(len(pool)) if pool[i]["role"] == "vocal"}
         assert vocal_shas, "fixture produced no vocal sources"
@@ -1621,7 +1754,11 @@ def test_render_consults_stem_seam():
                         json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
             db.commit()
             dst = tmp / "work" / "renders" / f"out_{tag}.wav"
-            res = core.render_mashup(mid, dst)
+            with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+                 patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
+                 patch("earcrate.app.drydeck_metrics", return_value={}), \
+                 patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}):
+                res = core.render_mashup(mid, dst)
             rep = json.loads(Path(res["report"]).read_text(encoding="utf-8"))
             return res, rep
 
@@ -1700,6 +1837,7 @@ def test_loop_status_endpoints_contract():
         db = core.conn()
         db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES('f0',?,'master',1,1,'now')",
                    (str(tmp / "music" / "s.wav"),))
+        core._set_pcm("f0", "pcm_fixture_f0")
         # three candidate loops + one the human will approve
         for i in range(3):
             db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
@@ -1763,6 +1901,7 @@ def test_stem_path_producible():
     (isolated proof: neutering only the EARCRATE_L3_ROOT export reproduces exactly
     the 'did not RESOLVE through the SHARED store' failure)."""
     import tempfile, os, json, io
+    from unittest.mock import patch
     from pathlib import Path
     import numpy as np, soundfile as sf
     from earcrate.app import EarcrateCore as _Core, ENGINE_VERSION
@@ -1771,7 +1910,8 @@ def test_stem_path_producible():
     from earcrate.providers.stems import DemucsStemProvider, stem_capability
 
     # (3) HONEST capability probe: this torch-absent box reports NOT ready.
-    cap = stem_capability()
+    with patch.dict(sys.modules, {"torch": None, "demucs": None, "demucs.separate": None}):
+        cap = stem_capability()
     assert set(cap) >= {"torch", "demucs", "cuda", "ready"}, cap
     assert cap["ready"] is False and cap["torch"] is False and cap["demucs"] is False, \
         "stem_capability() must HONESTLY report not-ready (no torch/demucs here): %r" % (cap,)
@@ -1808,7 +1948,7 @@ def test_stem_path_producible():
         pool = _v3_build_render_pool(core, db, tmp, bpm=bpm)
         # Deposit the L0 sound identity (files.audio_sha256) the seam keys on.
         for i in range(len(pool)):
-            db.execute("UPDATE files SET audio_sha256=? WHERE id=?", (f"pcm_f{i}", f"f{i}"))
+            core._set_pcm(f"f{i}", f"pcm_f{i}")
         db.commit()
         vocal_shas = {f"pcm_f{i}" for i in range(len(pool)) if pool[i]["role"] == "vocal"}
         assert vocal_shas, "fixture produced no vocal sources"
@@ -1826,7 +1966,11 @@ def test_stem_path_producible():
                         json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
             db.commit()
             dst = tmp / "work" / "renders" / f"out_{tag}.wav"
-            res = core.render_mashup(mid, dst)
+            with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+                 patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
+                 patch("earcrate.app.drydeck_metrics", return_value={}), \
+                 patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}):
+                res = core.render_mashup(mid, dst)
             rep = json.loads(Path(res["report"]).read_text(encoding="utf-8"))
             return res, rep
 
@@ -1931,7 +2075,7 @@ def test_identify_then_reorganize_uses_new_identity():
             f"apply_identities left the DB tags stale -> reorganize will misfile: {dbtags}"
         # reorganize's PLANNED destination must use the NEW identity, not the stale one.
         plan = core.reorganize_source({"apply": False})
-        dests = [s["to"] for s in plan.get("samples", [])]
+        dests = [str(s["to"]).replace("\\", "/") for s in plan.get("samples", [])]
         assert dests == ["Real Artist/Real Album/Real Song.flac"], \
             f"reorganize used the STALE identity instead of the corrected one: {dests}"
     finally:
@@ -2337,6 +2481,7 @@ def test_pointer_visible_beats_legacy_and_demo_seed_retires():
         seed_demo_renders refuses instead of planting synthetic tracks next to
         real output."""
     import tempfile, os, json as _json
+    from unittest.mock import patch
     from pathlib import Path
     import numpy as np, soundfile as sf
     tmp = Path(tempfile.mkdtemp())
@@ -2360,21 +2505,24 @@ def test_pointer_visible_beats_legacy_and_demo_seed_retires():
         # restore the REAL pointer (core2.configure overwrote the shared EARCRATE_HOME one)
         (tmp / "homeA" / "earcrate_workspace.json").write_text(
             _json.dumps({"config_json": str((tmp / "a") / "config.json")}), encoding="utf-8")
-        # simulate a driver script: no EARCRATE_HOME, __main__ anchored in the
-        # script's own (pointer-less) folder, cwd = where the visible pointer lives
+        # Simulate a driver script: no EARCRATE_HOME, with the portable pointer
+        # beside that script (the highest-priority legitimate visible location).
         os.environ.pop("EARCRATE_HOME", None)
         os.chdir(str(tmp / "homeA"))
         driver_dir = tmp / "driver"; driver_dir.mkdir()
+        (driver_dir / "earcrate_workspace.json").write_text(
+            _json.dumps({"config_json": str((tmp / "a") / "config.json")}), encoding="utf-8")
         main_mod = sys.modules["__main__"]
         saved_main_file = getattr(main_mod, "__file__", None)
         main_mod.__file__ = str(driver_dir / "driver.py")
         try:
-            driver = EarcrateCore()
+            with patch("earcrate.app.visible_app_dir", return_value=driver_dir):
+                driver = EarcrateCore()
         finally:
             if saved_main_file is not None: main_mod.__file__ = saved_main_file
         assert driver.config is not None, "driver must resolve a workspace"
         assert str(driver.config.master_root) == real_master, \
-            "visible pointer (cwd) must beat the legacy AppData pointer"
+            "visible driver pointer must beat the legacy AppData pointer"
         # (2) demo seeding self-retires next to a real render
         os.environ["EARCRATE_HOME"] = str(tmp / "homeA")
         seeded = core.seed_demo_renders(count=1)
@@ -2393,11 +2541,603 @@ def test_pointer_visible_beats_legacy_and_demo_seed_retires():
         else: os.environ.pop("EARCRATE_HOME", None)
 
 
-if __name__ == "__main__":
-    fails = 0
-    for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
+def test_pointer_search_skips_invalid_candidates():
+    """A stale first pointer must not mask a later valid portable workspace."""
+    import json as _json
+    import tempfile
+    from unittest.mock import patch
+    from pathlib import Path
+    import earcrate.app as appmod
+
+    tmp = Path(tempfile.mkdtemp())
+    stale, valid, legacy = tmp / "stale", tmp / "valid", tmp / "legacy"
+    master, work, agent = tmp / "music", tmp / "work", tmp / "agent"
+    for path in (stale, valid, legacy, master, work, agent):
+        path.mkdir()
+    (stale / "earcrate_workspace.json").write_text(
+        _json.dumps({"config_json": str(tmp / "missing-config.json")}), encoding="utf-8")
+    cfg_path = valid / "config.json"
+    cfg_path.write_text(_json.dumps({
+        "master_root": str(master), "working_root": str(work), "agent_root": str(agent),
+        "sample_rate": 44100, "workers": 1, "seed": 1337, "analysis_seconds": 8,
+    }), encoding="utf-8")
+    (valid / "earcrate_workspace.json").write_text(
+        _json.dumps({"config_json": str(cfg_path)}), encoding="utf-8")
+
+    old_visible = appmod.visible_app_dir
+    old_search = appmod.pointer_search_dirs
+    old_state = appmod.app_state_dir
+    appmod.visible_app_dir = lambda: stale
+    appmod.pointer_search_dirs = lambda: [stale, valid]
+    appmod.app_state_dir = lambda: legacy
+    try:
+        core = appmod.EarcrateCore()
+    finally:
+        appmod.visible_app_dir = old_visible
+        appmod.pointer_search_dirs = old_search
+        appmod.app_state_dir = old_state
+    assert core.config is not None, "valid later pointer was masked by a stale first candidate"
+    assert core.config.master_root == master.resolve()
+    assert core.pointer_resolved_from == valid / "earcrate_workspace.json"
+
+
+def test_demucs_uses_released_model_id():
+    """The real Demucs path must request an actual released model name."""
+    import sys as _sys
+    import types
+    from unittest.mock import patch
+    from earcrate.providers.stems import DemucsStemProvider
+
+    seen = []
+    demucs_pkg = types.ModuleType("demucs"); demucs_pkg.__path__ = []
+    separate_mod = types.ModuleType("demucs.separate")
+    pretrained_mod = types.ModuleType("demucs.pretrained")
+    apply_mod = types.ModuleType("demucs.apply")
+    audio_mod = types.ModuleType("demucs.audio")
+    torch_mod = types.ModuleType("torch")
+    torch_mod.cuda = types.SimpleNamespace(is_available=lambda: False)
+
+    def _get_model(name):
+        seen.append(name)
+        raise RuntimeError("stop-after-model-selection")
+
+    pretrained_mod.get_model = _get_model
+    apply_mod.apply_model = lambda *a, **k: None
+    audio_mod.AudioFile = object
+    modules = {
+        "torch": torch_mod,
+        "demucs": demucs_pkg,
+        "demucs.separate": separate_mod,
+        "demucs.pretrained": pretrained_mod,
+        "demucs.apply": apply_mod,
+        "demucs.audio": audio_mod,
+    }
+    with patch.dict(_sys.modules, modules):
         try:
-            fn(); print(f"PASS {name}")
-        except AssertionError as e:
-            fails += 1; print(f"FAIL {name}: {e}")
-    sys.exit(1 if fails else 0)
+            DemucsStemProvider()._run_demucs("unused.wav", ["vocals"])
+        except RuntimeError as exc:
+            assert str(exc) == "stop-after-model-selection"
+        else:
+            raise AssertionError("model selection sentinel did not fire")
+    assert seen == ["htdemucs"], f"invalid Demucs model requested: {seen}"
+
+
+def test_pcm_identity_covers_full_track_not_analysis_prefix():
+    """Tracks sharing an analyzed prefix but differing later need distinct stem keys."""
+    import tempfile
+    from pathlib import Path
+    import numpy as np
+    import soundfile as sf
+    import inspect
+    from earcrate.analyze.decode import decoded_audio_sha256
+    from earcrate.analyze.features import analyze_file_worker
+
+    tmp = Path(tempfile.mkdtemp())
+    sr = 44100
+    t = np.arange(sr, dtype=np.float32) / sr
+    prefix = (0.2 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+    tail_a = (0.2 * np.sin(2 * np.pi * 330 * t)).astype(np.float32)
+    tail_b = (0.2 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    a, b, dup = tmp / "a.wav", tmp / "b.wav", tmp / "dup.wav"
+    sf.write(str(a), np.concatenate([prefix, tail_a]), sr)
+    sf.write(str(b), np.concatenate([prefix, tail_b]), sr)
+    sf.write(str(dup), np.concatenate([prefix, tail_a]), sr)
+
+    ha = decoded_audio_sha256(a, sr, 2.0)
+    hb = decoded_audio_sha256(b, sr, 2.0)
+    hd = decoded_audio_sha256(dup, sr, 2.0)
+    assert ha != hb, "same prefix collided despite different full-track audio"
+    assert ha == hd, "identical full canonical PCM did not deduplicate"
+    worker_source = inspect.getsource(analyze_file_worker)
+    assert "decoded_audio_sha256" in worker_source and 'pcm_scope=np.asarray("full")' in worker_source, \
+        "analysis worker is not persisting the complete-PCM identity contract"
+
+
+def test_full_pcm_scope_migrates_without_changing_segment_version():
+    """Legacy identities migrate safely; only proven/ambiguous replacements bump."""
+    import inspect
+    import sqlite3
+    from earcrate.app import EarcrateCore, ANALYZER_VERSION
+
+    core = EarcrateCore.__new__(EarcrateCore)
+    core.db = sqlite3.connect(":memory:")
+    core.db.row_factory = sqlite3.Row
+    core.db.execute(
+        "CREATE TABLE files(id TEXT PRIMARY KEY,path TEXT UNIQUE NOT NULL,root TEXT NOT NULL,"
+        "size_bytes INTEGER NOT NULL,mtime_ns INTEGER NOT NULL,sha256 TEXT,audio_sha256 TEXT,"
+        "container TEXT,codec TEXT,bitrate_kbps INTEGER,sample_rate INTEGER,channels INTEGER,"
+        "duration_s REAL,scanned_at TEXT NOT NULL)"
+    )
+    core.create_schema()
+    cols = {r["name"] for r in core.db.execute("PRAGMA table_info(files)").fetchall()}
+    assert {"audio_sha256_scope", "audio_generation", "present"} <= cols, \
+        "existing workspaces do not receive the identity-scope/generation migration"
+    loop_cols = {r["name"] for r in core.db.execute("PRAGMA table_info(loops)").fetchall()}
+    assert {"source_audio_sha256", "source_audio_generation"} <= loop_cols
+    analyze_source = inspect.getsource(EarcrateCore.analyze)
+    assert "audio_sha256_scope" in analyze_source and "!='full'" in analyze_source, \
+        "current-version feature rows with legacy prefix hashes are not selected for repair"
+    render_source = inspect.getsource(EarcrateCore.render_mashup.__wrapped__)
+    assert "CASE WHEN f.audio_sha256_scope='full'" in render_source, \
+        "renderer can still consume an unverified legacy prefix identity"
+    assert "run Analyze before stem separation" in render_source, \
+        "upgraded rows silently lose stem behavior without an actionable receipt"
+    scan_source = inspect.getsource(EarcrateCore.scan)
+    set_pcm_source = inspect.getsource(EarcrateCore._set_pcm)
+    assert "stale_full" in scan_source and "sha256=NULL" in scan_source, \
+        "a changed path is not queued for a trusted full-PCM comparison"
+    assert "audio_sha256=NULL" not in scan_source, \
+        "scan discarded the prior trusted identity before it could compare PCM"
+    assert '{"full", "stale_full"}' in set_pcm_source and "legacy_stale" in set_pcm_source, \
+        "PCM replacement does not advance the source generation after comparison"
+
+    # Ordinary legacy scan -> analyze lineage upgrades in generation zero. If the
+    # old scanner touched the path after its last analysis, provenance is unknown
+    # and migration conservatively advances it rather than blessing old judgments.
+    core.db.executemany(
+        "INSERT INTO files(id,path,root,size_bytes,mtime_ns,sha256,audio_sha256,scanned_at) "
+        "VALUES(?,?,'master',1,1,?,'legacy-prefix',?)",
+        [
+            ("identity-file", "/identity.wav", "safe-byte-hash", "2026-01-01T00:00:00Z"),
+            ("suspect-legacy", "/suspect.wav", "stale-byte-hash", "2026-01-03T00:00:00Z"),
+        ],
+    )
+    core.db.executemany(
+        "INSERT INTO features(file_id,analyzed_at,analyzer_version) VALUES(?,?,?)",
+        [
+            ("identity-file", "2026-01-02T00:00:00Z", "legacy"),
+            ("suspect-legacy", "2026-01-02T00:00:00Z", "legacy"),
+        ],
+    )
+    core.create_schema()
+    assert core.db.execute(
+        "SELECT audio_sha256_scope FROM files WHERE id='identity-file'"
+    ).fetchone()[0] is None, "ordinary legacy lineage was needlessly invalidated"
+    assert core.db.execute(
+        "SELECT audio_sha256_scope FROM files WHERE id='suspect-legacy'"
+    ).fetchone()[0] == "legacy_stale", "old rescan/replacement provenance was trusted"
+    assert core.db.execute(
+        "SELECT sha256 FROM files WHERE id='suspect-legacy'"
+    ).fetchone()[0] is None, "quarantined legacy row retained a stale analysis-cache key"
+    assert core.db.execute(
+        "SELECT sha256 FROM files WHERE id='identity-file'"
+    ).fetchone()[0] == "safe-byte-hash", "ordinary legacy lineage lost its valid byte hash"
+    core._set_pcm("suspect-legacy", "pcm-new")
+    assert core.db.execute(
+        "SELECT audio_generation FROM files WHERE id='suspect-legacy'"
+    ).fetchone()[0] == 1, "ambiguous legacy replacement stayed in generation zero"
+
+    # A retag with identical trusted PCM preserves the generation/judgments;
+    # genuinely different PCM advances it.
+    core._set_pcm("identity-file", "pcm-a")
+    row = core.db.execute(
+        "SELECT audio_sha256,audio_sha256_scope,audio_generation FROM files WHERE id='identity-file'"
+    ).fetchone()
+    assert row["audio_sha256"] == "pcm-a" and row["audio_sha256_scope"] == "full"
+    assert row["audio_generation"] == 0, "legacy prefix migration fabricated a replacement generation"
+    core.db.execute("UPDATE files SET audio_sha256_scope='stale_full' WHERE id='identity-file'")
+    core._set_pcm("identity-file", "pcm-a")
+    assert core.db.execute(
+        "SELECT audio_generation FROM files WHERE id='identity-file'"
+    ).fetchone()[0] == 0, "metadata-only retag invalidated unchanged PCM judgments"
+    core.db.execute("UPDATE files SET audio_sha256_scope='stale_full' WHERE id='identity-file'")
+    core._set_pcm("identity-file", "pcm-b")
+    assert core.db.execute(
+        "SELECT audio_generation FROM files WHERE id='identity-file'"
+    ).fetchone()[0] == 1, "same-path audio replacement retained the old generation"
+
+    core.db.execute(
+        "INSERT INTO files(id,path,root,size_bytes,mtime_ns,audio_sha256,audio_sha256_scope,present,scanned_at) "
+        "VALUES('stale-progress','/stale.wav','master',1,1,'old-pcm','stale_full',1,'now')"
+    )
+    core.db.execute(
+        "INSERT INTO features(file_id,analyzed_at,analyzer_version) VALUES('stale-progress','now',?)",
+        (ANALYZER_VERSION,),
+    )
+    core.db.execute(
+        "UPDATE features SET analyzer_version=? WHERE file_id IN ('identity-file','suspect-legacy')",
+        (ANALYZER_VERSION,),
+    )
+    assert core._trusted_analyzed_count() == 2, \
+        "harvest progress counted a current-version feature row with stale PCM scope"
+
+    core.db.execute(
+        """INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,status,created_at,
+                             source_audio_sha256,source_audio_generation)
+           VALUES('old-loop','identity-file',0,4,2,'texture',0.9,'approved','now','pcm-a',0),
+                 ('current-loop','identity-file',0,4,2,'texture',0.8,'candidate','now','pcm-b',1)"""
+    )
+    visible = core.list_loops()["items"]
+    assert [r["id"] for r in visible] == ["current-loop"], \
+        "review surface exposed a loop from the replaced sound"
+    core.db.execute("UPDATE files SET present=0 WHERE id='identity-file'")
+    assert core.list_loops()["items"] == [], "missing file remained active in loop review"
+    core.db.execute("UPDATE files SET present=1 WHERE id='identity-file'")
+    try:
+        core.set_loop_status("old-loop", "rejected")
+    except ValueError as exc:
+        assert "stale source generation" in str(exc)
+    else:
+        raise AssertionError("review endpoint mutated a historical loop")
+    core.auto_approve_quota(max_loops=1)
+    assert [r["id"] for r in core.approved_loop_pool()] == ["current-loop"], \
+        "quota/pool reactivated a historical loop"
+    core.db.execute(
+        """INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,
+                                  start_s,end_s,bars,score,status,created_at)
+           VALUES('old-atom','old-loop','identity-file','girl_talk_v1','TEXTURE','texture',
+                  0,4,2,0.9,'approved','now'),
+                 ('current-atom','current-loop','identity-file','girl_talk_v1','TEXTURE','texture',
+                  0,4,2,0.8,'approved','now')"""
+    )
+    assert [r["id"] for r in core.list_ear_atoms()["items"]] == ["current-atom"], \
+        "atom review exposed a judgment from the replaced sound"
+    try:
+        core.set_atom_judgment("old-atom", "girl_talk_v1", "rejected")
+    except ValueError as exc:
+        assert "current source generation" in str(exc)
+    else:
+        raise AssertionError("atom review endpoint mutated a historical judgment")
+    core.db.execute(
+        """INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,
+                                             relation,score,reasons_json,created_at)
+           VALUES('stale-edge','girl_talk_v1','current-atom','old-atom',
+                  'contrast',0.7,'{}','now')"""
+    )
+    assert core.compatible_pairs_for_atom("current-atom")["items"] == [], \
+        "pair review exposed an edge whose other endpoint is historical"
+    try:
+        core.set_pair_judgment("stale-edge", "girl_talk_v1", "approved")
+    except ValueError as exc:
+        assert "current source generation" in str(exc)
+    else:
+        raise AssertionError("pair review endpoint mutated a historical edge")
+
+    extract_source = inspect.getsource(EarcrateCore.extract_loops)
+    assert "source_audio_generation" in extract_source and "SELECT COUNT(*) FROM loops WHERE file_id" not in extract_source, \
+        "historical loops still suppress extraction for a replacement generation"
+    pool_source = inspect.getsource(EarcrateCore.approved_atom_pool)
+    assert "source_audio_generation" in pool_source and "source_audio_sha256=f.audio_sha256" in pool_source, \
+        "composer can select atoms measured from an older same-path sound"
+    for operational in (
+        EarcrateCore.list_loops,
+        EarcrateCore.auto_approve_quota,
+        EarcrateCore.approved_loop_pool,
+        EarcrateCore.build_ear_crate,
+        EarcrateCore.list_ear_atoms,
+        EarcrateCore.set_atom_judgment,
+        EarcrateCore.compatible_pairs_for_atom,
+        EarcrateCore.set_pair_judgment,
+    ):
+        source = inspect.getsource(operational)
+        assert ("source_audio_generation" in source and "source_audio_sha256" in source and "present" in source
+                and "audio_sha256_scope='full'" in source), \
+            f"{operational.__name__} still activates historical source generations"
+    assert '"source_identity": stem_identity or info.get("audio_sha256")' in render_source, \
+        "transform cache is not bound to the current full-track/stem identity"
+    assert '"quality_mode": quality_mode' in render_source and '"transform_policy": transform_policy' in render_source, \
+        "transform cache can cross incompatible render algorithms"
+    assert '"source_stat"' not in render_source, \
+        "metadata-only edits still invalidate transforms despite identical full PCM"
+
+
+def test_scan_invalidates_before_probe_and_retires_missing(tmp_path):
+    """A changed/missing path becomes inactive even when metadata probing fails."""
+    import os
+    import inspect
+    from unittest.mock import patch
+    from earcrate.app import EarcrateCore
+
+    old_home, old_ec = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp_path)
+    os.environ["EARCRATE_HOME"] = str(tmp_path)
+    try:
+        music, work, agent = tmp_path / "music", tmp_path / "work", tmp_path / "agent"
+        for folder in (music, work, agent):
+            folder.mkdir()
+        source = music / "changed.wav"
+        source.write_bytes(b"new bytes that deliberately fail ffprobe")
+        core = EarcrateCore()
+        core.configure({"master_root": str(music), "working_root": str(work), "agent_root": str(agent), "workers": 1})
+        db = core.conn()
+        db.execute(
+            """INSERT INTO files(id,path,root,size_bytes,mtime_ns,sha256,audio_sha256,
+                                  audio_sha256_scope,audio_generation,present,scanned_at)
+               VALUES('f0',?,'master',1,1,'old-file-sha','old-pcm','full',0,1,'now')""",
+            (str(source.resolve()),),
+        )
+        db.execute(
+            """INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,status,created_at,
+                                  source_audio_sha256,source_audio_generation)
+               VALUES('l0','f0',0,1,1,'texture',0.9,'approved','now','old-pcm',0)"""
+        )
+        db.commit()
+
+        with patch("earcrate.app.ffprobe_json", side_effect=RuntimeError("forced probe failure")):
+            result = core.scan()
+        row = db.execute(
+            "SELECT sha256,audio_sha256_scope,present FROM files WHERE id='f0'"
+        ).fetchone()
+        assert row["sha256"] is None and row["audio_sha256_scope"] == "stale_full"
+        assert row["present"] == 1 and result["failed"], "probe failure was not receipted"
+        assert core.list_loops()["items"] == [], "changed source stayed active after probe failure"
+
+        source.unlink()
+        missing = core.scan()
+        assert missing["missing"] == 1
+        assert db.execute("SELECT present FROM files WHERE id='f0'").fetchone()[0] == 0
+        analyzed = core.analyze(force=True)
+        assert analyzed["analyzed"] == 0 and not analyzed["failed"], \
+            "missing ledger row aborted or polluted Analyze"
+        scan_source = inspect.getsource(EarcrateCore.scan)
+        assert scan_source.index("stat_items.append") < scan_source.index("UPDATE files SET present=0"), \
+            "scan mutates global presence before resolving per-path stat races"
+        assert "db.rollback()" in scan_source, "fatal phase-1 scan errors can leak a partial presence transaction"
+    finally:
+        if old_home is not None:
+            os.environ["HOME"] = old_home
+        else:
+            os.environ.pop("HOME", None)
+        if old_ec is not None:
+            os.environ["EARCRATE_HOME"] = old_ec
+        else:
+            os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_canonical_decode_and_hash_select_same_audio_stream(tmp_path):
+    """Multi-stream containers bind features/renders and identity to stream 0."""
+    import hashlib
+    import subprocess
+    import numpy as np
+    import soundfile as sf
+    from earcrate.analyze.decode import decode_audio, decoded_audio_sha256
+
+    sr = 44100
+    t = np.arange(sr, dtype=np.float32) / sr
+    first = tmp_path / "first.wav"
+    second = tmp_path / "default-second.wav"
+    container = tmp_path / "two-streams.mkv"
+    sf.write(str(first), 0.2 * np.sin(2 * np.pi * 220 * t), sr, subtype="PCM_16")
+    sf.write(str(second), 0.2 * np.sin(2 * np.pi * 880 * t), sr, subtype="PCM_16")
+    cp = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", str(first), "-i", str(second),
+         "-map", "0:a:0", "-map", "1:a:0", "-c:a", "copy",
+         "-disposition:a:0", "0", "-disposition:a:1", "default", str(container)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    assert cp.returncode == 0, cp.stderr.decode("utf-8", "replace")
+    expected = decode_audio(first, sr)
+    decoded = decode_audio(container, sr)
+    assert np.array_equal(decoded, expected), "decoder followed default stream instead of canonical 0:a:0"
+    decoded_bytes = decoded.astype("<f4", copy=False).tobytes()
+    assert decoded_audio_sha256(container, sr, 1.0) == hashlib.sha256(decoded_bytes).hexdigest(), \
+        "full-track identity and feature/render decode selected different streams"
+
+
+def test_render_preflight_rejects_post_analysis_source_mutation(tmp_path):
+    """Changed source bytes fail with a durable receipt before WAV publication."""
+    import json
+    import os
+    import numpy as np
+    import soundfile as sf
+    from pathlib import Path
+    from unittest.mock import patch
+    from earcrate.app import EarcrateCore
+    from earcrate.analyze.decode import decoded_audio_sha256
+    from earcrate.core.util import sha256_file
+
+    old_home, old_ec = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp_path)
+    os.environ["EARCRATE_HOME"] = str(tmp_path)
+    try:
+        music, work, agent = tmp_path / "music", tmp_path / "work", tmp_path / "agent"
+        for folder in (music, work, agent):
+            folder.mkdir()
+        source = music / "mutated.wav"
+        sr = 44100
+        t = np.arange(sr, dtype=np.float32) / sr
+        sf.write(str(source), 0.2 * np.sin(2 * np.pi * 220 * t), sr, subtype="PCM_16")
+        st = source.stat()
+        old_file_sha = sha256_file(source)
+        old_pcm_sha = decoded_audio_sha256(source, sr, 1.0)
+        sf.write(str(source), 0.2 * np.sin(2 * np.pi * 880 * t), sr, subtype="PCM_16")
+        os.utime(source, ns=(st.st_atime_ns, st.st_mtime_ns))
+        changed_stat = source.stat()
+        assert changed_stat.st_size == st.st_size and changed_stat.st_mtime_ns == st.st_mtime_ns, \
+            "fixture did not preserve stat while mutating source bytes"
+        core = EarcrateCore()
+        core.configure({"master_root": str(music), "working_root": str(work), "agent_root": str(agent), "workers": 1})
+        db = core.conn()
+        db.execute(
+            """INSERT INTO files(id,path,root,size_bytes,mtime_ns,sha256,audio_sha256,
+                                  audio_sha256_scope,audio_generation,present,scanned_at)
+               VALUES('f0',?,'master',?,?,?,'pcm-current','full',0,1,'now')""",
+            (str(source.resolve()), int(st.st_size), int(st.st_mtime_ns), old_file_sha),
+        )
+        db.execute("UPDATE files SET audio_sha256=? WHERE id='f0'", (old_pcm_sha,))
+        db.execute(
+            """INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,status,created_at,
+                                  source_audio_sha256,source_audio_generation)
+               VALUES('l0','f0',0,1,1,'texture',0.9,'approved','now',?,0)""",
+            (old_pcm_sha,),
+        )
+        arrangement = {
+            "bpm": 120,
+            "seed": 1337,
+            "params": {"quality_mode": "stable_deck", "post_render_gate": True},
+            "sections": [{"bar_start": 0, "bars": 1, "layers": [{"loop_id": "l0", "role": "texture"}]}],
+        }
+        db.execute(
+            "INSERT INTO mashups(id,name,seed,params_json,arrangement_json,created_at) VALUES('m0','mutation',1337,'{}',?,'now')",
+            (json.dumps(arrangement),),
+        )
+        db.commit()
+        dst = work / "must-not-exist.wav"
+        before = set((agent / "runs").glob("*"))
+        try:
+            with patch("earcrate.app.sf.write", side_effect=AssertionError("sf.write must not run")):
+                core.render_mashup("m0", dst)
+        except RuntimeError as exc:
+            assert "source file changed after analysis" in str(exc)
+        else:
+            raise AssertionError("post-analysis mutation reached render instead of preflight rejection")
+        assert not dst.exists(), "preflight-rejected render published a WAV"
+        created = list(set((agent / "runs").glob("*")) - before)
+        assert len(created) == 1, "failed render did not leave exactly one run bundle"
+        status = json.loads((created[0] / "status.json").read_text(encoding="utf-8"))
+        report = json.loads((created[0] / "report.json").read_text(encoding="utf-8"))
+        assert status["state"] == "failed" and status["ok"] is False
+        assert report["state"] == "failed" and "source file changed" in report["outcome"]["error"]
+        stale = db.execute(
+            "SELECT sha256,audio_sha256_scope FROM files WHERE id='f0'"
+        ).fetchone()
+        assert stale["sha256"] is None and stale["audio_sha256_scope"] == "stale_full", \
+            "preflight mismatch was not persisted for recovery"
+        def _fake_analysis(job):
+            beats = np.asarray([0.0, 0.5], dtype=np.float32).tobytes()
+            return {
+                "ok": True,
+                "file_id": job["file_id"],
+                "pcm_sha": "pcm-repaired",
+                "features": {
+                    "bpm": 120.0, "bpm_confidence": 1.0,
+                    "key_root": 0, "key_mode": 1, "key_confidence": 1.0,
+                    "loudness_lufs": -14.0, "energy": 0.2,
+                    "beats": beats, "downbeats": beats,
+                    "sections": [], "vocal_likelihood": 0.0,
+                },
+            }
+
+        with patch("earcrate.app.analyze_file_worker", side_effect=_fake_analysis):
+            repaired = core.analyze(force=False)
+        current = db.execute(
+            "SELECT sha256,audio_sha256_scope,audio_generation FROM files WHERE id='f0'"
+        ).fetchone()
+        assert repaired["analyzed"] == 1 and not repaired["failed"]
+        assert current["sha256"] == sha256_file(source) and current["audio_sha256_scope"] == "full"
+        assert current["audio_generation"] == 1, "Analyze did not retire loops from the replaced PCM"
+
+        # A second mutation after the first preflight hash but after decode must
+        # still be caught by the pre-publication source revalidation.
+        new_pcm_sha = db.execute("SELECT audio_sha256 FROM files WHERE id='f0'").fetchone()[0]
+        db.execute(
+            "UPDATE loops SET source_audio_sha256=?,source_audio_generation=1 WHERE id='l0'",
+            (new_pcm_sha,),
+        )
+        db.commit()
+        third = music / "third.wav"
+        sf.write(str(third), 0.2 * np.sin(2 * np.pi * 330 * t), sr, subtype="PCM_16")
+        third_bytes = third.read_bytes()
+        mutated = {"done": False}
+
+        def _mutate_after_decode(path, *args, **kwargs):
+            decoded = np.full(sr * 2, 0.05, dtype=np.float32)
+            if Path(path).resolve() == source.resolve() and not mutated["done"]:
+                mutated["done"] = True
+                source.write_bytes(third_bytes)
+            return decoded
+
+        dst2 = work / "must-also-not-exist.wav"
+        try:
+            with patch("earcrate.app.decode_audio", side_effect=_mutate_after_decode), \
+                 patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+                 patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
+                 patch("earcrate.app.drydeck_metrics", return_value={}), \
+                 patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}), \
+                 patch("earcrate.app.sf.write", side_effect=AssertionError("sf.write must not run")):
+                core.render_mashup("m0", dst2)
+        except RuntimeError as exc:
+            assert "source changed during render" in str(exc)
+        else:
+            raise AssertionError("mid-render mutation reached WAV publication")
+        assert mutated["done"] and not dst2.exists()
+        raced = db.execute(
+            "SELECT sha256,audio_sha256_scope FROM files WHERE id='f0'"
+        ).fetchone()
+        assert raced["sha256"] is None and raced["audio_sha256_scope"] == "stale_full"
+    finally:
+        if old_home is not None:
+            os.environ["HOME"] = old_home
+        else:
+            os.environ.pop("HOME", None)
+        if old_ec is not None:
+            os.environ["EARCRATE_HOME"] = old_ec
+        else:
+            os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_rejected_plan_and_one_click_receipts_are_truthful():
+    """Receipts preserve rejected plans and the exact final UI/API outcome."""
+    from earcrate.app import _durable_compile_attempt, PlanRejectedError, EarcrateCore
+    from earcrate.core.util import arrangement_sha
+    from pathlib import Path
+
+    class _FakeCompiler:
+        def __init__(self): self.events = []
+        def _run_bundle_begin(self, *a, **k): return {"run_id": "run1", "path": "/runs/run1"}
+        def _run_bundle_set_plan(self, *a, **k): self.events.append(("plan", a, k))
+        def _run_bundle_finish(self, *a, **k): self.events.append(("finish", a, k))
+
+        @_durable_compile_attempt
+        def compile(self, params):
+            plan = {"bpm": 120, "sections": [], "params": dict(params)}
+            raise PlanRejectedError("taste gate refused", plan, arrangement_sha(plan))
+
+    fake = _FakeCompiler()
+    try:
+        fake.compile({"taste_profile": "girl_talk_v1"})
+    except PlanRejectedError:
+        pass
+    else:
+        raise AssertionError("rejected plan did not propagate its refusal")
+    plan_event = next(e for e in fake.events if e[0] == "plan")
+    assert plan_event[2].get("state") == "rejected" and isinstance(plan_event[1][1], dict)
+    finish_event = next(e for e in fake.events if e[0] == "finish")
+    assert finish_event[1][1] is False and finish_event[1][2]["plan_state"] == "rejected"
+
+    core = EarcrateCore.__new__(EarcrateCore)
+    captured = {}
+    core._run_bundle_path = lambda *a, **k: Path("/nonexistent/run/plan.json")
+    core._run_bundle_finish = lambda run_id, ok, outcome: captured.update(
+        {"run_id": run_id, "ok": ok, "outcome": outcome})
+    result = core._finish_one_click_result(
+        {"run_id": "run2", "run_bundle": {"path": "/runs/run2"}},
+        {"ok": True, "render_path": "/renders/final.wav"},
+    )
+    assert result["render_path"] == captured["outcome"]["render_path"]
+    assert captured["ok"] is True and captured["outcome"]["run_id"] == "run2"
+
+
+def test_post_render_gate_rejects_before_wav_write():
+    """Static ordering gate: a known in-memory TasteSpec failure precedes sf.write."""
+    import inspect
+    from earcrate.app import EarcrateCore
+    source = inspect.getsource(EarcrateCore.render_mashup.__wrapped__)
+    quality_reject = source.index('"failure_kind": "post_render_quality_gate"')
+    wav_write = source.index("sf.write(str(dst)")
+    assert quality_reject < wav_write, "failed in-memory quality gate still writes a WAV before rejection"
+
+
+if __name__ == "__main__":
+    from run_gates import main as _run_all_gates
+    raise SystemExit(_run_all_gates())

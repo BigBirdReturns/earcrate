@@ -17,3 +17,4 @@ config.json
 
 # local agent state / transient workflow worktrees (never commit)
 .claude/
+.tmp/

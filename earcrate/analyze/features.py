@@ -119,7 +119,10 @@ def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
         y = decode_audio(path, sr, duration=decode_dur)
         if y.size > sr * max_sec:
             y = y[: sr * max_sec]
-        pcm = pcm_sha256(y)  # L0 sound identity, computed from the canonical PCM we already decoded
+        # Stem artifacts cover the whole track, so their identity must too. The
+        # feature window remains bounded; the hash muxer streams a separate full
+        # canonical decode without retaining the whole track in RAM.
+        pcm = decoded_audio_sha256(path, sr, duration)
         feats = compute_pcm_features(y, sr)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
@@ -132,6 +135,7 @@ def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
             sections_json=json.dumps(feats["sections"], ensure_ascii=False),
             vocal_likelihood=np.float32(feats["vocal_likelihood"]),
             pcm_sha=pcm,
+            pcm_scope=np.asarray("full"),
         )
         return {"file_id": job["file_id"], "sha256": job.get("sha256"), "pcm_sha": pcm, "ok": True, "features": {
             "bpm": feats["bpm"], "bpm_confidence": feats["bpm_confidence"], "key_root": feats["key_root"],

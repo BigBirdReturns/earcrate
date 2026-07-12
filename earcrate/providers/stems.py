@@ -93,7 +93,7 @@ class DemucsStemProvider(StemProvider):
     name = "demucs"
 
     def __init__(self, store: Optional[ArtifactStore] = None,
-                 model_version: str = "htdemucs_v4",
+                 model_version: str = "htdemucs",
                  tier: str = "ephemeral"):
         self.store = store if store is not None else ArtifactStore()
         self.model_version = str(model_version)

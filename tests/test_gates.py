@@ -1056,6 +1056,334 @@ def test_judgments_append_only_deterministic():
         else: os.environ.pop("EARCRATE_HOME", None)
 
 
+def test_quota_preserves_human_loop_approval():
+    """Human judgment beats machine convenience. Loops have no atom_judgments row
+    to carry a human call, so a human-approved loop is LOCKED on the loop itself.
+    auto_approve_quota rebalances the hot pool by resetting approvals to
+    candidate — but it must never demote a human-locked approval. A loop the
+    human explicitly approved (even a low-scored one quota would never re-pick)
+    must survive the re-run still approved and still locked."""
+    import tempfile, os
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    sh = os.environ.get("HOME"); se = os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        for d in ("music", "work", "agent"):
+            (tmp / d).mkdir()
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+        db = core.conn()
+        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES('f0',?,'master',1,1,'now')",
+                   (str(tmp / "music" / "s.wav"),))
+        # a landfill of higher-scored candidates so quota fills its budget elsewhere
+        for i in range(20):
+            db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                       (f"l{i}", "f0", 0, 4, 2, "texture", 0.5 + i * 0.01, "now"))
+        # X: a low-scored loop quota would never re-pick on its own merits
+        db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES('X','f0',0,4,2,'texture',0.001,'now')")
+        db.commit()
+        # human explicitly approves X -> must lock it
+        core.set_loop_status("X", "approved")
+        assert db.execute("SELECT locked FROM loops WHERE id='X'").fetchone()["locked"] == 1, \
+            "an explicit human approval must lock the loop"
+        # machine rebalances the hot pool with a small budget
+        core.auto_approve_quota(max_loops=5)
+        row = db.execute("SELECT status,locked FROM loops WHERE id='X'").fetchone()
+        assert row["status"] == "approved", \
+            "human-locked loop approval was demoted to candidate by the quota reset"
+        assert row["locked"] == 1, "the human lock was cleared by the machine reset"
+        # X is part of the approved hot pool the composer draws from
+        assert any(r["id"] == "X" for r in core.approved_loop_pool()), \
+            "the preserved human approval must be in the approved pool"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_destructive_mutations_require_signature():
+    """Ledger #24: the copy-only vs destructive divide, written down and pinned.
+    ingest_sources and organize_and_retag COPY into the managed tree and never
+    touch the source masters, so they apply on the `apply` flag alone (row-15
+    already pins their dry-run default). Every op that MOVES, DELETES, or
+    REWRITES existing files on disk -- reorganize_source (move), apply_identities
+    (tag rewrite), apply_workspace_migration (move) -- gates its writes behind a
+    plan SIGNATURE, and a MISSING signature is not a bypass: apply without a
+    signature (or with a stale one) must refuse (ok False), report dry_run, and
+    mutate NOTHING; only the exact plan signature lets it proceed. Human approval
+    (the matching signature) beats the convenience of applying unsigned."""
+    import tempfile, os, hashlib, sqlite3
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from mutagen import File as MF
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+
+    def snap(d):
+        out = {}
+        for p in sorted(Path(d).rglob("*")):
+            if p.is_file():
+                b = p.read_bytes()
+                out[str(p.relative_to(d))] = (len(b), hashlib.sha256(b).hexdigest())
+        return out
+
+    try:
+        # ---- reorganize_source: MOVES files in place -------------------------
+        src = tmp / "src"; (src / "dump").mkdir(parents=True)
+        def wav(p):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            sf.write(str(p), np.zeros((2000, 2), dtype="float32"), 44100)
+        wav(src / "dump" / "Aphex Twin - Windowlicker.wav")
+        wav(src / "dump" / "Boards of Canada - Roygbiv.wav")
+        wav(src / "noise.wav")
+        core = EarcrateCore()
+        core.configure({"master_root": str(src), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent")})
+        core.scan()
+        plan = core.reorganize_source({"apply": False})
+        assert plan["dry_run"] and plan["planned"] >= 2
+        before = snap(src)
+        # apply with NO signature -> must refuse and move nothing
+        no_sig = core.reorganize_source({"apply": True})
+        assert no_sig.get("ok") is False and no_sig.get("dry_run"), \
+            f"reorganize_source moved files WITHOUT a signature: {no_sig}"
+        assert snap(src) == before, "reorganize_source mutated the source with no signature"
+        # apply with a STALE signature -> must refuse and move nothing
+        stale = core.reorganize_source({"apply": True, "signature": "stale"})
+        assert stale.get("ok") is False, f"stale signature was accepted: {stale}"
+        assert snap(src) == before, "reorganize_source mutated the source with a stale signature"
+        # apply with the CORRECT signature -> proceeds
+        good = core.reorganize_source({"apply": True, "signature": plan["signature"]})
+        assert good.get("ok") and good.get("moved", 0) >= 2, f"signed reorganize did not proceed: {good}"
+
+        # ---- apply_identities: REWRITES tags on existing files ---------------
+        lib = tmp / "lib"; lib.mkdir()
+        f = lib / "track.flac"
+        t = np.arange(44100 * 3) / 44100
+        sf.write(str(f), (0.3 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
+        mf = MF(str(f), easy=True); mf["artist"] = ["Original Artist"]; mf["title"] = ["orig"]; mf.save()
+        core2 = EarcrateCore()
+        core2.configure({"master_root": str(lib), "working_root": str(tmp / "w2"),
+                         "agent_root": str(tmp / "a2")})
+        core2.scan()
+        fid = core2.conn().execute("SELECT id FROM files WHERE root='master' LIMIT 1").fetchone()["id"]
+        props = [{"path": str(f), "file_id": fid, "artist": "New Artist",
+                  "title": "New Title", "album": "New Album", "score": 0.98}]
+        dry = core2.apply_identities({"proposals": props, "apply": False})
+        assert dry["dry_run"] and dry["would_retag"] == 1
+        before_tags = snap(lib)
+        # apply with NO signature -> must refuse and rewrite nothing
+        no_sig2 = core2.apply_identities({"proposals": props, "apply": True})
+        assert no_sig2.get("ok") is False and no_sig2.get("dry_run"), \
+            f"apply_identities rewrote tags WITHOUT a signature: {no_sig2}"
+        assert MF(str(f), easy=True).get("artist")[0] == "Original Artist", \
+            "apply_identities rewrote tags with no signature"
+        assert snap(lib) == before_tags, "apply_identities mutated a file with no signature"
+        # stale signature -> refuse
+        stale2 = core2.apply_identities({"proposals": props, "apply": True, "signature": "stale"})
+        assert stale2.get("ok") is False, f"stale signature accepted by apply_identities: {stale2}"
+        assert MF(str(f), easy=True).get("artist")[0] == "Original Artist"
+        # correct signature -> proceeds
+        good2 = core2.apply_identities({"proposals": props, "apply": True, "signature": dry["signature"]})
+        assert good2.get("ok") and good2.get("retagged") == 1, f"signed apply_identities did not proceed: {good2}"
+        assert MF(str(f), easy=True).get("artist")[0] == "New Artist"
+
+        # ---- apply_workspace_migration: MOVES workspace data ----------------
+        mus = tmp / "music"; mus.mkdir(); wav(mus / "song.wav")
+        old = tmp / "OldWorkspace"; (old / "agent" / "cache" / "analysis").mkdir(parents=True)
+        db = sqlite3.connect(str(old / "agent" / "jukebreaker.sqlite"))
+        db.execute("CREATE TABLE judged(id TEXT)"); db.execute("INSERT INTO judged VALUES('a')")
+        db.commit(); db.close()
+        (old / "agent" / "cache" / "analysis" / "x-gt-v0.6.1-earcrate-feasibility.npz").write_bytes(b"NPZ")
+        core3 = EarcrateCore()
+        ws = str(tmp / "NewWorkspace")
+        mdata = {"music_folder": str(mus), "workspace_folder": ws, "sources": [str(old)]}
+        mplan = core3.plan_workspace_migration(mdata)
+        before_old = snap(old)
+        # no signature -> refuse, move nothing
+        m_nosig = core3.apply_workspace_migration(mdata)
+        assert m_nosig.get("ok") is False and m_nosig.get("dry_run"), \
+            f"apply_workspace_migration moved data WITHOUT a signature: {m_nosig}"
+        assert snap(old) == before_old, "workspace migration mutated the old workspace with no signature"
+        # stale -> refuse
+        m_stale = core3.apply_workspace_migration({**mdata, "signature": "stale"})
+        assert m_stale.get("ok") is False, f"stale workspace signature accepted: {m_stale}"
+        assert snap(old) == before_old
+        # correct signature -> proceeds
+        m_good = core3.apply_workspace_migration({**mdata, "signature": mplan["signature"]})
+        assert m_good.get("ok"), f"signed workspace migration did not proceed: {m_good}"
+
+        # ---- copy-only exemption: ingest/organize apply on the flag alone ----
+        # They must NOT demand a signature (the source is never mutated). Confirm
+        # ingest copies with apply=True and no signature, leaving the source intact.
+        ext = tmp / "ext"; wav(ext / "incoming.wav")
+        ext_before = snap(ext)
+        (tmp / "mm").mkdir(exist_ok=True)
+        core4 = EarcrateCore()
+        core4.configure({"master_root": str(tmp / "mm"), "working_root": str(tmp / "ww"),
+                         "agent_root": str(tmp / "aa")})
+        core4.scan()
+        ing = core4.ingest_sources({"sources": [str(ext)], "apply": True})
+        assert ing.get("ok"), f"copy-only ingest must apply on the flag alone: {ing}"
+        assert ing.get("dry_run") is False, "ingest with apply=True must not be dry_run"
+        assert snap(ext) == ext_before, "copy-only ingest must never mutate the source"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_steering_precedence_order():
+    """PINS the full steering ladder the composer obeys when human and machine
+    signals collide: pair-veto (rejected edge) > atom reject/lock > atom favorite
+    > rank score > station bias. Concretely: a favorite flips the pick over a
+    slightly better stranger (favorite > rank); but an atom the human later
+    rejected AND locked out is dropped even though it is still flagged favorite
+    and even though station fire feedback nudges the compile toward more vocals -
+    no lower-precedence signal (favorite, rank, or station bias) can resurrect a
+    human-vetoed/locked-out atom."""
+    import tempfile
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "music").mkdir(); (tmp / "work").mkdir(); (tmp / "agent").mkdir()
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+    db = core.conn()
+    pool = []
+    n = 0
+    for srci in range(5):
+        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
+                   (f"f{srci}", str(tmp / "music" / f"s{srci}.wav"), "master", 1, 1, "now"))
+        for ear, role in (("DRUM_BREAK", "drum_anchor"), ("TEXTURE", "texture")):
+            n += 1
+            aid = f"a{n}"
+            db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                       (f"l{n}", f"f{srci}", 0, 4, 2, role, 0.7, "now"))
+            db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (aid, f"l{n}", f"f{srci}", "girl_talk_v1", ear, role, 0, 4, 2, 0.7, "{}", "now"))
+            pool.append({"id": f"l{n}", "atom_id": aid, "ear_role": ear, "role": role, "key_root": 0,
+                         "bpm": 124.0, "score": 0.7, "hook_score": 0.3, "title": f"song_{srci}",
+                         "path": f"/m/song_{srci}.mp3", "low_share": 0.2, "high_share": 0.3})
+    for aid, srci, score in (("v_good", 0, 0.60), ("v_fav", 1, 0.55)):
+        n += 1
+        db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                   (f"l{n}", f"f{srci}", 4, 8, 2, "vocal", score, "now"))
+        db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (aid, f"l{n}", f"f{srci}", "girl_talk_v1", "VOX_HOOK", "vocal", 4, 8, 2, score, "{}", "now"))
+        pool.append({"id": f"l{n}", "atom_id": aid, "ear_role": "VOX_HOOK", "role": "vocal", "key_root": 0,
+                     "bpm": 124.0, "score": score, "hook_score": 0.8, "title": f"song_{srci}",
+                     "path": f"/m/song_{srci}.mp3", "low_share": 0.1, "high_share": 0.4})
+    db.commit()
+    params = {"taste_profile": "girl_talk_v1", "target_seconds": 40, "bpm": 124}
+
+    def first_vocal(arr):
+        for sec in arr["sections"]:
+            for ly in sec["layers"]:
+                if ly.get("role") == "vocal":
+                    return ly.get("atom_id")
+        return None
+
+    def used_vocals(arr):
+        return {ly.get("atom_id") for sec in arr["sections"] for ly in sec["layers"] if ly.get("role") == "vocal"}
+
+    # rank score alone: the higher-scored stranger leads the foreground.
+    base = first_vocal(core.compose_taste_arrangement(list(pool), dict(params), seed=7))
+    assert base == "v_good", f"baseline should lead with the higher-scored vocal, got {base}"
+    # favorite > rank: the human favorite flips the lead over the better stranger.
+    core.set_atom_judgment("v_fav", "girl_talk_v1", "approved", favorite=True)
+    fav = first_vocal(core.compose_taste_arrangement(list(pool), dict(params), seed=7))
+    assert fav == "v_fav", f"favorite must outrank a slightly better stranger, got {fav}"
+    # atom reject/lock > favorite, AND station bias can't resurrect it: the human
+    # rejects+locks v_fav (still flagged favorite), then station fire feedback nudges
+    # the compile toward more vocals. The locked-out atom must stay out; the only
+    # non-vetoed vocal carries the foreground.
+    core.set_atom_judgment("v_fav", "girl_talk_v1", "rejected", favorite=True, locked=True, reason="changed my mind")
+    core.station_feedback("fire"); core.station_feedback("fire")
+    steered = core.compose_taste_arrangement(list(pool), dict(params), seed=7)
+    used = used_vocals(steered)
+    assert "v_fav" not in used, "atom reject/lock is a veto no favorite or station bias may override"
+    assert "v_good" in used, "the non-vetoed vocal should carry the foreground"
+
+
+def test_no_shadow_sources_of_truth():
+    """§5.3 / Lessons #1, #2, #12: every formula and every shared constant has
+    exactly ONE definition — no shadow copy in app.py or in providers/plan that
+    could drift from its source.
+
+    Two drift classes are gated here:
+
+      1. The composition-math FORMULAS live only in earcrate.plan.math. app.py
+         must delegate to the pure fns, never re-inline the arithmetic (the
+         readiness-scale clamp, the target->bars conversion, the source-count
+         ceil). Re-inlining any of them in app.py trips this gate.
+      2. Any constant shared across modules is DEFINED once. The composition
+         constants (DEFAULT_SOURCE_SECONDS = 11.5 fallback, the readiness scale
+         reference) live only in plan.math; the runtime/vocabulary constants
+         (DEFAULT_SAMPLE_RATE, ANALYZER_VERSION, the render/ear role orders) live
+         only in core.deps; the retention-tier and stem-role vocabularies live
+         only in their provider. A second `NAME =` anywhere trips this gate.
+    """
+    import re
+    from pathlib import Path
+    import earcrate.app as _app
+    import earcrate.plan.math as _pmath
+
+    pkg_dir = Path(_app.__file__).resolve().parent
+    app_src = Path(_app.__file__).read_text(encoding="utf-8")
+    math_src = Path(_pmath.__file__).read_text(encoding="utf-8")
+
+    # --- 1. formulas live ONLY in plan.math, not re-inlined in app.py --------
+    # Each fragment is a distinctive piece of one composition formula. It must be
+    # present in plan.math (the source) and ABSENT from app.py (which delegates).
+    formula_fragments = {
+        "readiness-scale clamp": ("max(SCALE_MIN", "min(SCALE_MAX"),
+        "target->bars conversion": ("/ 60.0 / 4.0",),
+    }
+    for label, frags in formula_fragments.items():
+        for frag in frags:
+            assert frag in math_src, f"{label} fragment {frag!r} missing from plan.math (source of truth)"
+            assert frag not in app_src, \
+                f"{label} formula {frag!r} is re-inlined in app.py — a shadow copy that will drift from plan.math"
+    # The 11.5 source-seconds fallback must be the named constant, never a bare
+    # literal re-inlined at the call sites (it lives once as plan.math.DEFAULT_SOURCE_SECONDS).
+    assert "11.5" in math_src, "DEFAULT_SOURCE_SECONDS (11.5) must be defined in plan.math"
+    assert "11.5" not in app_src, \
+        "app.py inlines the bare 11.5 source-seconds fallback — reference plan.math.DEFAULT_SOURCE_SECONDS instead"
+    # app.py still delegates through the pure fns (belt-and-braces with the pins gate).
+    assert "from earcrate.plan.math import" in app_src and "DEFAULT_SOURCE_SECONDS" in app_src, \
+        "app.py must import the composition math (incl. DEFAULT_SOURCE_SECONDS) from plan.math"
+
+    # --- 2. every shared constant is defined exactly once in the package -----
+    def _defn_files(name):
+        rx = re.compile(rf"^{name}\s*=", re.M)
+        return [f.name for f in sorted(pkg_dir.rglob("*.py"))
+                if rx.search(f.read_text(encoding="utf-8"))]
+
+    single_source = {
+        # composition math constants -> only plan/math.py
+        "DEFAULT_SOURCE_SECONDS": "math.py",
+        "REFERENCE_SECONDS": "math.py",
+        # runtime + vocabulary constants -> only core/deps.py
+        "DEFAULT_SAMPLE_RATE": "deps.py",
+        "ANALYZER_VERSION": "deps.py",
+        "ENGINE_VERSION": "deps.py",
+        "ROLE_ORDER": "deps.py",
+        "EAR_ROLE_ORDER": "deps.py",
+        "EAR_TO_RENDER_ROLE": "deps.py",
+        # provider-local vocabularies -> only their own module
+        "TIERS": "artifacts.py",
+        "DEFAULT_ROLES": "stems.py",
+    }
+    for name, home in single_source.items():
+        files = _defn_files(name)
+        assert files == [home], \
+            f"{name} must be defined ONCE in {home}, found definitions in {files} (shadow constant -> drift risk)"
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):

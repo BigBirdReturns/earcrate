@@ -5,7 +5,7 @@ from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_like
 from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
-from earcrate.plan.math import readiness_need, sources_needed, target_bars
+from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -716,6 +716,7 @@ class EarcrateCore:
         self.create_schema()
         self.migrate_ear_atoms_per_profile()
         self.migrate_loops_segment_identity()
+        self.migrate_loops_locked()
 
     def conn(self) -> sqlite3.Connection:
         if self.db is None:
@@ -798,6 +799,21 @@ class EarcrateCore:
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_loops_segment ON loops(segment_id)")
         db.commit()
 
+    def migrate_loops_locked(self) -> None:
+        """Human judgment must survive machine convenience. Atoms carry a human
+        call in atom_judgments.locked; loops had no such dimension, so
+        auto_approve_quota's blanket reset demoted a human-approved loop back to
+        candidate. Give the loop itself a lock.
+
+        Additive and idempotent: adds `locked INTEGER DEFAULT 0` (0 = machine may
+        manage this loop's status; 1 = a human explicitly approved it and no
+        machine reset may demote it)."""
+        db = self.db
+        cols = {r["name"] for r in db.execute("PRAGMA table_info(loops)").fetchall()}
+        if "locked" not in cols:
+            db.execute("ALTER TABLE loops ADD COLUMN locked INTEGER DEFAULT 0")
+            db.commit()
+
     def create_schema(self) -> None:
         db = self.conn()
         db.executescript(
@@ -849,7 +865,8 @@ class EarcrateCore:
               status TEXT CHECK(status IN ('candidate','approved','rejected')) DEFAULT 'candidate',
               stem TEXT CHECK(stem IN ('mix','vocals','drums','bass','other')) DEFAULT 'mix',
               created_at TEXT NOT NULL,
-              segment_id TEXT
+              segment_id TEXT,
+              locked INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS duplicates(
               group_id TEXT NOT NULL, file_id TEXT REFERENCES files(id),
@@ -1651,11 +1668,22 @@ class EarcrateCore:
             counts["total"] += int(r["n"])
         return {"items": [dict(r) for r in rows], "counts": counts}
 
-    def set_loop_status(self, loop_id: str, status: str) -> Dict[str, Any]:
+    def set_loop_status(self, loop_id: str, status: str, locked: bool = True) -> Dict[str, Any]:
+        """A human setting a loop's status is a judgment the machine must obey.
+        A human `approved` LOCKS the loop (locked=1) so auto_approve_quota's
+        reset can never demote it; a human `candidate`/`rejected` releases the
+        lock (locked=0). Pass locked=False for a machine-driven status change
+        that should leave the human lock untouched."""
         if status not in {"candidate", "approved", "rejected"}:
             raise ValueError("invalid loop status")
-        self.conn().execute("UPDATE loops SET status=? WHERE id=?", (status, loop_id))
-        self.conn().commit()
+        db = self.conn()
+        if locked:
+            # explicit human call: approve locks, any other status releases
+            db.execute("UPDATE loops SET status=?, locked=? WHERE id=?",
+                       (status, 1 if status == "approved" else 0, loop_id))
+        else:
+            db.execute("UPDATE loops SET status=? WHERE id=?", (status, loop_id))
+        db.commit()
         return {"ok": True}
 
     def bulk_loop_status(self, status: str, from_status: str = "candidate") -> Dict[str, Any]:
@@ -1783,14 +1811,25 @@ class EarcrateCore:
     def auto_approve_quota(self, max_loops: int = 60) -> Dict[str, Any]:
         """Approve a balanced hot pool instead of bulk-approving the landfill."""
         db = self.conn()
-        db.execute("UPDATE loops SET status='candidate' WHERE status='approved'")
+        # Human judgment wins: only demote machine-approved loops. A human-locked
+        # approval survives the reset untouched.
+        db.execute("UPDATE loops SET status='candidate' WHERE status='approved' AND COALESCE(locked,0)=0")
         rows = [dict(r) for r in db.execute("""SELECT l.*, ft.vocal_likelihood
                                       FROM loops l JOIN files f ON f.id=l.file_id
                                       LEFT JOIN features ft ON ft.file_id=f.id
                                       WHERE l.status='candidate'
                                       ORDER BY l.score DESC""").fetchall()]
-        chosen: Dict[str, Dict[str, Any]] = {}
+        # Locked-approved loops are already part of the hot pool: seed them into
+        # `chosen` so they are preserved AND counted against max_loops.
+        locked_rows = [dict(r) for r in db.execute("""SELECT l.*, ft.vocal_likelihood
+                                      FROM loops l JOIN files f ON f.id=l.file_id
+                                      LEFT JOIN features ft ON ft.file_id=f.id
+                                      WHERE l.status='approved' AND COALESCE(l.locked,0)=1
+                                      ORDER BY l.score DESC""").fetchall()]
+        chosen: Dict[str, Dict[str, Any]] = {r["id"]: r for r in locked_rows}
         by_track: Dict[str, int] = {}
+        for r in locked_rows:
+            by_track[r["file_id"]] = by_track.get(r["file_id"], 0) + 1
         role_min = {"drum_anchor": 4, "bass": 3, "harmony": 4, "full": 4}
         unsat = []
         def eligible(r: Dict[str, Any]) -> bool:
@@ -2129,7 +2168,7 @@ class EarcrateCore:
         for x in pool:
             by_role[str(x.get("ear_role") or "")] = by_role.get(str(x.get("ear_role") or ""), 0) + 1
             source_keys.add(track_identity(x))
-        need = readiness_need(float(target_seconds), float(profile.get("source_seconds") or 11.5))
+        need = readiness_need(float(target_seconds), float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         have = {
             "foreground": by_role.get("VOX_HOOK",0)+by_role.get("VOX_VERSE",0)+by_role.get("VOX_SHOUT",0)+by_role.get("RIFF_ID",0),
             "floor": by_role.get("DRUM_BREAK",0)+by_role.get("BED_CHORD",0)+by_role.get("RIFF_ID",0)+by_role.get("TEXTURE",0),
@@ -2270,7 +2309,7 @@ class EarcrateCore:
         user_bpm = float(params.get("bpm") or 0.0) or None
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         target_seconds = float(params.get("target_seconds") or 120.0)
-        needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or 11.5))
+        needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         keys = sorted({int(x.get("key_root") or 0) % 12 for x in pool}) or [0]
         weighted_keys = []
         for k in keys:
@@ -2354,7 +2393,7 @@ class EarcrateCore:
         pool = list(deck.get("pool") or [])
         profile_data = load_tastespec(str(params.get("taste_profile") or "girl_talk_v1"))
         profile0 = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
-        need_sources0 = sources_needed(target_seconds, float(profile0.get("source_seconds") or 11.5))
+        need_sources0 = sources_needed(target_seconds, float(profile0.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         deck_sources = int(((deck.get("diagnostics") or {}).get("have") or {}).get("sources", 0))
         if deck_sources and deck_sources < need_sources0:
             diag = deck.get("diagnostics") or {}
@@ -2372,6 +2411,21 @@ class EarcrateCore:
         total_bars = target_bars(target_seconds, render_bpm)
         section_bars = 4
         sections = []
+        # Curation veto is a hard gate the composer enforces itself (single source
+        # of truth): an atom a human rejected or locked out of this profile is
+        # dropped from the pool before any rail is built. Precedence is absolute -
+        # atom reject/lock beats atom favorite, rank score, and station-bias intent;
+        # no lower-precedence signal can resurrect a human-vetoed atom.
+        vetoed_atoms: set = set()
+        try:
+            _vdb = self.conn()
+            for _r in _vdb.execute("SELECT atom_id FROM atom_judgments WHERE taste_profile=? AND status='rejected'",
+                                   (str(params.get("taste_profile") or "girl_talk_v1"),)).fetchall():
+                vetoed_atoms.add(str(_r["atom_id"]))
+        except Exception:
+            pass
+        if vetoed_atoms:
+            pool = [x for x in pool if str(x.get("atom_id")) not in vetoed_atoms]
         foreground = [x for x in pool if x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}]
         floors = [x for x in pool if x.get("ear_role") in {"DRUM_BREAK","BED_CHORD","RIFF_ID","TEXTURE"}]
         basses = [x for x in pool if x.get("ear_role") == "BASS_RIFF"]
@@ -2404,9 +2458,12 @@ class EarcrateCore:
                 favorite_atoms.add(str(_r["atom_id"]))
         except Exception:
             pass
+        # A veto outranks a favorite: an atom the human both favorited and later
+        # rejected/locked-out must never receive the favorite boost.
+        favorite_atoms -= vetoed_atoms
         source_use: Dict[str, int] = {}
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
-        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or 11.5))
+        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         max_events_per_source = max(2, int(math.ceil((total_bars / 4.0) / max(1, need_sources))) + 1)
         def source_of(x: Dict[str, Any]) -> str:
             return track_identity(x)
@@ -2537,7 +2594,7 @@ class EarcrateCore:
         fg_cov = fg_bars / max(1, total_bars)
         source_count = len(source_bars)
         target_seconds = float(params.get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
-        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or 11.5))
+        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         first_fg_s = None if first_fg_bar is None else first_fg_bar * 4 * 60.0 / bpm
         max_source_run_s = max(source_bars.values()) * 4 * 60.0 / bpm if source_bars else 0.0
         if floor_cov < float(profile.get("floor_coverage") or 0.70):
@@ -3232,7 +3289,11 @@ class EarcrateCore:
                     "human": (f"Would rewrite tags on {len(changes)} file(s) at score >= {min_score}. "
                               f"Nothing written yet -- reversible via identify-rollback after --apply.")}
         approved = str(data.get("signature") or "")
-        if approved and approved != sig:
+        if not approved:
+            return {"ok": False, "dry_run": True, "requires_signature": True,
+                    "error": "refusing to rewrite tags without an approved signature; run the dry-run (apply:false) and pass its signature to apply",
+                    "expected_signature": sig}
+        if approved != sig:
             return {"ok": False, "error": "library changed since preview; re-run the dry-run",
                     "expected_signature": sig}
         journal = c.agent_root / "identify_journal" / f"retag-{ulidish()}.jsonl"

@@ -1,5 +1,35 @@
 # EarCrate — CHANGELOG
 
+## v0.8.21 — code the dicta: four conflicts resolved, each pinned by a gate
+- Audited the session's surface for things that step on each other's toes, decided
+  who wins, and wrote the ruling into an executable gate. 27/27 gates green.
+- **Two real footguns closed (missing-signature bypass).** `reorganize_source`
+  (moves originals) and `apply_identities` (rewrites tags) used the weak guard
+  `if approved and approved != sig` — an EMPTY signature short-circuits false, so
+  they executed unsigned. Reproduced: `reorganize_source({apply:true})` moved 3
+  real files with no approval. Now both refuse a missing OR stale signature (same
+  strong guard as `apply_workspace_migration`). RULING: any op that moves/deletes/
+  rewrites files on disk must have a valid plan signature to apply; copy-only
+  `ingest`/`organize` keep the flag-only path (source is never touched). Gate
+  `test_destructive_mutations_require_signature`.
+- **Human beats machine on loop curation.** `auto_approve_quota` reset EVERY
+  approved loop to candidate before re-approving its own picks — wiping a human's
+  manual loop approvals. NEW `loops.locked` column (additive migration);
+  `set_loop_status` locks a human call; quota now demotes only machine-approved
+  (`locked=0`) loops and preserves locked ones. Gate
+  `test_quota_preserves_human_loop_approval`.
+- **Steering precedence made law.** pair-veto / atom-lock-out > favorite > rank >
+  station bias: the composer now drops human-rejected/locked-out atoms from the
+  pool before any rail is built, so no favorite or station nudge can resurrect a
+  vetoed choice. Gate `test_steering_precedence_order` (extends
+  `test_curation_steers_composer`).
+- **One source of truth for the math.** Collapsed five inlined `11.5`
+  source-seconds fallbacks to `plan.math.DEFAULT_SOURCE_SECONDS`; the composition
+  formulas live only in `plan/math.py`. Gate `test_no_shadow_sources_of_truth`
+  (grep-style, red if a formula is re-inlined in app.py).
+- Each ruling proven RED-first (the gate fails when the wrong thing wins) and
+  re-verified in the main tree; resolved via a 4-way parallel fan-out.
+
 ## v0.8.20 — restore the buffalo the LATTICE reskin dropped
 - The v0.8.17 reskin was a prettier but THINNER front door — it silently dropped
   working handles the old console had (the engine kept them; the new UI just

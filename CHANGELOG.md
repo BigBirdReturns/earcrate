@@ -1,5 +1,36 @@
 # EarCrate — CHANGELOG
 
+## v0.8.24 — wire the seams: stems reach render, retrieval + per-loop review go live
+- The CPU-doable feature wiring that was mis-filed as "needs a GPU." Only Demucs
+  RUNNING needs a GPU; the plumbing that CALLS it is CPU code, and it's now done —
+  behavior-identical on this box (the no-op/default providers), real on a GPU box.
+- §5.2 STEMS IN RENDER: `render_mashup` now CONSULTS the StemProvider seam for a
+  vocal layer — looks up the file's `pcm_sha` (files.audio_sha256) and calls
+  `get("stems").separate(pcm_sha, path, ["vocals"])` before touching the full mix.
+  If a real vocals stem comes back (a GPU box with Demucs), it's decoded and sliced
+  at the same loop window and layered; otherwise (the no-op default here, or no
+  pcm_sha) it FALLS BACK to the byte-identical full-mix decode. Each layer's report
+  records `stem_source: "vocals" | "mix"`, and the transform cache key includes it
+  so a mix render can never mask a later stem render. Gate
+  `test_render_consults_stem_seam` (red-first): a fake provider proves render
+  consults the seam with the right pcm_sha for vocals ONLY, the returned stem
+  changes the audio, and the no-op fallback is byte-identical.
+- §5.4 RETRIEVAL: the composer's candidate pool now routes through the
+  `CandidateRetriever` seam (default `FullScanRetriever` reproduces today's output
+  exactly). Gate `test_composer_uses_retriever_seam`.
+- UI: the Library "Loop review" card gains real PER-LOOP human review — a candidate
+  list with Approve (locks the loop so quota can't demote it) / Reject / Lock, plus
+  "Reject all candidates" (bulk approve stays disabled by design). Gate
+  `test_loop_status_endpoints_contract`.
+- The unfed-handoff detector now shows `stems`, `artifacts`, `retriever` as WIRED
+  (removed from DEFERRED); only `embedding` and `vector_index` remain deferred (no
+  data to consume yet — ANN is §5.4-later). So the detector reflects the real wiring.
+- 32/32 gates green; single-file builds + self-test; UI drives headless with zero
+  console errors.
+- Still GPU-gated (honestly): the actual Demucs separation run. Still not done:
+  the §5.3 monolith table teardown (deliberately not fanned out — destructive
+  refactor, invariants already gated, wants careful driven work).
+
 ## v0.8.23 — the unfed-handoff detector: silent orphans can't ship anymore
 - Generalized the audio_sha256 bug (v0.8.22) into a DETECTOR for its whole class.
   The "unfed handoff": a producer→consumer contract where the consumer is declared

@@ -6,6 +6,7 @@ from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
+from earcrate.providers import get
 
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -2158,7 +2159,13 @@ class EarcrateCore:
             d["dry_low200_share"] = float(d.get("low_share") or 0.0)
             d["dry_quality_veto"] = False
             out.append(d)
-        return out
+        # §5.4: the candidate atom pool flows THROUGH the CandidateRetriever seam
+        # so every composer path (rank/readiness/graph/compose) gathers candidates
+        # via a live call. The DEFAULT FullScanRetriever returns the full set
+        # unchanged — behavior is byte-identical to `return out`. A smarter
+        # retriever (embedding recall, tempo/key pre-filter) can register alongside
+        # and narrow the pool on a GPU box without touching this call site.
+        return get("retriever").retrieve(out)
 
     def rank_crate(self, taste_profile: str = "girl_talk_v1", limit: int = 0) -> Dict[str, Any]:
         """Rank the approved ear crate by the persona's own selection priorities
@@ -3661,7 +3668,7 @@ class EarcrateCore:
         loop_ids = sorted({layer["loop_id"] for sec in sections for layer in sec.get("layers", [])})
         loops: Dict[str, Dict[str, Any]] = {}
         for lid in loop_ids:
-            r = db.execute("""SELECT l.*, f.path, ft.bpm FROM loops l JOIN files f ON f.id=l.file_id LEFT JOIN features ft ON ft.file_id=f.id WHERE l.id=?""", (lid,)).fetchone()
+            r = db.execute("""SELECT l.*, f.path, f.audio_sha256, ft.bpm FROM loops l JOIN files f ON f.id=l.file_id LEFT JOIN features ft ON ft.file_id=f.id WHERE l.id=?""", (lid,)).fetchone()
             if r:
                 loops[lid] = dict(r)
         total_bars = 0
@@ -3739,11 +3746,14 @@ class EarcrateCore:
                 chosen = alive[:1]
             return chosen[:min(limit, max_tail_decks)]
 
-        def transformed_loop_clip(lid: str, raw_clip: np.ndarray, info: Dict[str, Any], ps: float, target_loop_len: int, stretch_pct: float, rate: float, role_name: str) -> np.ndarray:
+        def transformed_loop_clip(lid: str, raw_clip: np.ndarray, info: Dict[str, Any], ps: float, target_loop_len: int, stretch_pct: float, rate: float, role_name: str, stem_source: str = "mix") -> np.ndarray:
             veto = drydeck_transform_violation(role_name, float(ps), float(stretch_pct))
             if veto:
                 raise RuntimeError(veto)
-            cache_key = sha256_text(json_dumps({"loop_id": lid, "start_s": info.get("start_s"), "end_s": info.get("end_s"), "target_len": target_loop_len, "pitch_shift": round(float(ps), 4), "role": role_name, "sr": sr, "engine": ENGINE_VERSION}))
+            # stem_source is part of the cache identity: the vocals stem and the
+            # full mix are DIFFERENT source audio, so they must not collide on one
+            # cached transform (a mix render must never mask a later stem render).
+            cache_key = sha256_text(json_dumps({"loop_id": lid, "start_s": info.get("start_s"), "end_s": info.get("end_s"), "target_len": target_loop_len, "pitch_shift": round(float(ps), 4), "role": role_name, "stem_source": stem_source, "sr": sr, "engine": ENGINE_VERSION}))
             if cache_key in transform_cache:
                 report["transform_cache"]["hits"] += 1
                 return transform_cache[cache_key].copy()
@@ -3796,6 +3806,42 @@ class EarcrateCore:
             transform_cache[cache_key] = clip2.astype(np.float32)
             return clip2.astype(np.float32, copy=True)
 
+        _VOCAL_EAR_ROLES = ("VOX_HOOK", "VOX_VERSE", "VOX_SHOUT")
+
+        def separated_vocal_source(pcm_sha: str, src_path: str) -> Optional[np.ndarray]:
+            """v3 §5.2 StemProvider seam: consult ``get("stems")`` for a real
+            vocals stem so a GPU box gets vocal-on-instrumental. The DEFAULT no-op
+            reports stems unavailable and returns None here, so the caller FALLS
+            BACK to the full-mix decode — byte-identical to the pre-seam path. A
+            provider may hand back the stem as a filesystem path OR an L3 artifact
+            key (routed through ``get("artifacts")``); both resolve to decoded
+            samples sliced at the SAME loop window as the mix."""
+            try:
+                sep = get("stems").separate(str(pcm_sha), str(src_path), ["vocals"])
+            except Exception:
+                return None
+            if not sep or not sep.get("available"):
+                return None
+            ref = (sep.get("stems") or {}).get("vocals")
+            if not ref:
+                return None
+            # (a) direct filesystem path to a materialized stem
+            try:
+                if isinstance(ref, (str, Path)) and Path(ref).exists():
+                    return decode_audio(Path(ref), sr).astype(np.float32)
+            except Exception:
+                pass
+            # (b) L3 artifact key -> resolve bytes through the ArtifactStore seam
+            try:
+                got = get("artifacts").get(str(ref))
+                if got and got.get("data"):
+                    tmpf = transform_cache_dir / ("stem_" + sha256_text(str(ref)) + ".wav")
+                    tmpf.write_bytes(got["data"])
+                    return decode_audio(tmpf, sr).astype(np.float32)
+            except Exception:
+                pass
+            return None
+
         def render_section_deck(sidx: int, sec: Dict[str, Any], tail_len: int) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
             sec_len = int(round(int(sec["bars"]) * 4 * 60.0 / bpm * sr))
             deck_len = sec_len + max(0, int(tail_len))
@@ -3811,9 +3857,25 @@ class EarcrateCore:
                     report["drops"].append({**drop_base, "reason": "loop metadata missing"}); continue
                 try:
                     path = info["path"]
-                    if path not in audio_cache:
-                        audio_cache[path] = decode_audio(Path(path), sr)
-                    source = audio_cache[path]
+                    # v3 §5.2: a vocal layer prefers a REAL vocals stem when a
+                    # StemProvider can produce one (GPU box). The no-op default
+                    # returns None, so we fall back to the full-mix decode below —
+                    # byte-identical to today. Record which source fed the layer.
+                    stem_source = "mix"
+                    source = None
+                    _ear = str(layer.get("ear_role") or "")
+                    _role = str(layer.get("role") or info.get("role") or "")
+                    if _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
+                        pcm_sha = info.get("audio_sha256")
+                        if pcm_sha:
+                            stem_arr = separated_vocal_source(str(pcm_sha), path)
+                            if stem_arr is not None:
+                                source = stem_arr
+                                stem_source = "vocals"
+                    if source is None:
+                        if path not in audio_cache:
+                            audio_cache[path] = decode_audio(Path(path), sr)
+                        source = audio_cache[path]
                     a = max(0, int(float(info["start_s"]) * sr))
                     b = min(source.size, int(float(info["end_s"]) * sr))
                     clip = source[a:b].astype(np.float32, copy=True)
@@ -3831,7 +3893,7 @@ class EarcrateCore:
                     if veto:
                         report["drops"].append({**drop_base, "reason": veto, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4)}); continue
                     try:
-                        clip = transformed_loop_clip(str(lid), clip, info, ps, target_loop_len, stretch_pct, rate, role_name)
+                        clip = transformed_loop_clip(str(lid), clip, info, ps, target_loop_len, stretch_pct, rate, role_name, stem_source)
                     except Exception as exc:
                         report["drops"].append({**drop_base, "reason": str(exc)}); continue
 
@@ -3880,7 +3942,7 @@ class EarcrateCore:
                                     tail_parts[group] = np.zeros(tail_len, dtype=np.float32)
                                 n_tail = min(tail_len, tail_audio.size)
                                 tail_parts[group][:n_tail] += tail_audio[:n_tail].astype(np.float32)
-                        report["layers"].append({**drop_base, "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
+                        report["layers"].append({**drop_base, "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "stem_source": stem_source, "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
                 except Exception as exc:
                     report["drops"].append({**drop_base, "reason": f"unexpected render error: {exc}"})
                     continue

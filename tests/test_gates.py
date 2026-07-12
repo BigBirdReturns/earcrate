@@ -1449,9 +1449,6 @@ def test_no_unfed_handoffs():
     # Declared-on-purpose, not-yet-wired — each needs a written reason (the receipt).
     DEFERRED_COLUMNS = {}   # every identity/link column is currently fed
     DEFERRED_SEAMS = {
-        "stems":        "StemProvider not called from render yet (v3 §5.2 wiring); its pcm_sha key IS fed (v0.8.22). Noop is the live default.",
-        "artifacts":    "ArtifactStore (L3) is consumed by the stems seam; goes live when stems is called from render.",
-        "retriever":    "CandidateRetriever — composer uses its in-process full-catalog path; cascade retrieval is v3 §5.4. FullScan is the registered default.",
         "embedding":    "EmbeddingProvider — no embeddings computed yet; ANN retrieval is v3 §5.4. Noop (returns None) is the default.",
         "vector_index": "VectorIndex — linear scan is the live path; ANN index is v3 §5.4. LinearScan is the default.",
     }
@@ -1491,6 +1488,250 @@ def test_no_unfed_handoffs():
     orphan_seams = [k for k in seams
                     if not re.search(r'get\(\s*["\']%s["\']' % k, live) and not DEFERRED_SEAMS.get(k, "").strip()]
     assert not orphan_seams, f"registered seam(s) with no live caller and no DEFERRED receipt: {orphan_seams}"
+
+
+def test_composer_uses_retriever_seam():
+    """v3 §5.4: the composer's candidate atom pool must flow THROUGH the
+    CandidateRetriever seam (get('retriever')), so gathering candidates is a
+    LIVE call — not an in-process list built around the seam. The default
+    FullScanRetriever returns the full set unchanged, so output is byte-identical
+    to a direct pool. RED-first: if approved_atom_pool builds and returns its list
+    without consulting get('retriever'), the spy below is never called and this
+    fails."""
+    import tempfile
+    import earcrate.app as appmod
+    from pathlib import Path
+    from earcrate.providers import get as real_get, FullScanRetriever
+    tmp = Path(tempfile.mkdtemp())
+    for sub in ("music", "work", "agent"): (tmp / sub).mkdir()
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+    db = core.conn()
+    # tiny synthesized crate: 4 approved atoms across 2 sources
+    nn = 0
+    for srci in range(2):
+        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
+                   (f"f{srci}", str(tmp / "music" / f"s{srci}.wav"), "master", 1, 1, "now"))
+        for ear, role in (("VOX_HOOK", "vocal"), ("DRUM_BREAK", "drum_anchor")):
+            nn += 1
+            db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                       (f"l{nn}", f"f{srci}", 0, 4, 2, role, 0.7, "now"))
+            db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,status,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (f"a{nn}", f"l{nn}", f"f{srci}", "girl_talk_v1", ear, role, 0, 4, 2, 0.7, "approved", "{}", "now"))
+    db.commit()
+
+    # Spy on the retriever seam: wrap get() in the app module namespace so the
+    # composer's live call is observed, and confirm FullScan passes the pool
+    # through unchanged. Restore the real get() afterward no matter what.
+    calls = {"retriever": 0, "seen": None}
+    def spy_get(kind, name=None):
+        prov = real_get(kind, name)
+        if kind == "retriever":
+            calls["retriever"] += 1
+            assert isinstance(prov, FullScanRetriever), "default retriever must be FullScan"
+            inner = prov.retrieve
+            def wrapped(catalog, *a, **k):
+                seen = list(catalog)
+                calls["seen"] = seen
+                return inner(seen, *a, **k)
+            prov.retrieve = wrapped
+        return prov
+    appmod.get = spy_get
+    try:
+        pool = core.approved_atom_pool("girl_talk_v1")
+    finally:
+        appmod.get = real_get
+
+    assert calls["retriever"] > 0, "approved_atom_pool must gather candidates via get('retriever') — seam not consulted"
+    assert len(pool) == 4, f"expected 4 approved atoms, got {len(pool)}"
+    # FullScan is a pure pass-through: the returned pool is exactly what the
+    # retriever was handed — output unchanged vs the direct in-process pool.
+    assert [x["atom_id"] for x in pool] == [x["atom_id"] for x in calls["seen"]], "FullScanRetriever must return the full candidate set unchanged"
+
+
+def test_render_consults_stem_seam():
+    """v3 §5.2 render wiring: a VOCAL layer must CONSULT the StemProvider seam
+    (get("stems").separate(pcm_sha, path, ["vocals"])) BEFORE using the full mix.
+    When a provider yields a real vocals stem (available=True) render uses it and
+    records layer['stem_source']=='vocals'; the DEFAULT no-op reports stems
+    unavailable, so render FALLS BACK to the full-mix decode (stem_source=='mix'),
+    byte-identical to the pre-seam path. RED-first: if render never calls the seam
+    the fake is never invoked and the 'consulted' assertion fails."""
+    import tempfile, os, json
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from earcrate.app import EarcrateCore, ENGINE_VERSION
+    from earcrate.core.util import arrangement_sha, ulidish, now_utc
+    import earcrate.providers as P
+
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+
+    # A fake StemProvider that records every consultation and returns a REAL,
+    # distinct vocals stem (a 660 Hz tone) so a successful consult visibly
+    # changes the rendered audio (proving the stem is actually fed through).
+    fake_vox = tmp / "music" / "fake_vocals.wav"
+    _t = np.arange(int(44100 * 8)) / 44100.0
+    sf.write(str(fake_vox), (0.5 * np.sin(2 * np.pi * 660.0 * _t)).astype(np.float32), 44100)
+
+    class _FakeStems:
+        name = "fake"
+        calls = []
+        def separate(self, pcm_sha, audio_path, roles=None):
+            _FakeStems.calls.append({"pcm_sha": str(pcm_sha), "path": str(audio_path),
+                                     "roles": tuple(roles or [])})
+            return {"available": True, "provider": "fake", "pcm_sha": str(pcm_sha),
+                    "stems": {"vocals": str(fake_vox)}}
+
+    try:
+        bpm = 120.0
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 8})
+        db = core.conn()
+        pool = _v3_build_render_pool(core, db, tmp, bpm=bpm)
+        # Deposit the L0 sound identity (files.audio_sha256) the seam keys on.
+        for i in range(len(pool)):
+            db.execute("UPDATE files SET audio_sha256=? WHERE id=?", (f"pcm_f{i}", f"f{i}"))
+        db.commit()
+        vocal_shas = {f"pcm_f{i}" for i in range(len(pool)) if pool[i]["role"] == "vocal"}
+        assert vocal_shas, "fixture produced no vocal sources"
+
+        params = {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": bpm, "quality_mode": "stable_deck"}
+        arr = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
+        assert arr.get("sections"), "composer produced an empty arrangement"
+        sv = core.save_plan("stemplan", arr, "girl_talk_v1")
+        plan = core.load_plan(sv["plan_hash"])["plan"]
+
+        def _render(tag):
+            mid = ulidish()
+            db.execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
+                       (mid, "m", plan.get("seed"), json.dumps(plan.get("params") or {}),
+                        json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
+            db.commit()
+            dst = tmp / "work" / "renders" / f"out_{tag}.wav"
+            res = core.render_mashup(mid, dst)
+            rep = json.loads(Path(res["report"]).read_text(encoding="utf-8"))
+            return res, rep
+
+        # (A) DEFAULT no-op: render succeeds and every vocal layer FELL BACK to mix.
+        assert P.default_name("stems") == "noop"
+        res_mix, rep_mix = _render("noop")
+        assert res_mix.get("type") == "render_mashup" and res_mix.get("presented") is True, res_mix
+        vocal_layers_mix = [ly for ly in rep_mix["layers"] if ly.get("role") == "vocal"]
+        assert vocal_layers_mix, "no vocal layer rendered — the gate would be vacuous"
+        assert all(ly.get("stem_source") == "mix" for ly in vocal_layers_mix), \
+            "no-op default must fall back to the full mix (stem_source != 'mix')"
+        y_mix, _ = sf.read(str(res_mix["path"]))
+
+        # (B) FAKE provider registered as default: the seam is CONSULTED and used.
+        _FakeStems.calls = []
+        P.register("stems", "fake", _FakeStems, default=True)
+        assert P.default_name("stems") == "fake"
+        res_vox, rep_vox = _render("fake")
+
+        # (b1) the seam was consulted with the RIGHT pcm_sha, ONLY for vocals.
+        assert _FakeStems.calls, "render never CONSULTED the StemProvider seam for a vocal layer (RED)"
+        assert all(c["roles"] == ("vocals",) for c in _FakeStems.calls), \
+            "render must request the 'vocals' stem from the seam"
+        assert all(c["pcm_sha"] in vocal_shas for c in _FakeStems.calls), \
+            "seam consulted with a non-vocal pcm_sha (should only run for vocal layers)"
+
+        # (b2) the returned stem actually FED the render (recorded + audible).
+        vocal_layers_vox = [ly for ly in rep_vox["layers"] if ly.get("role") == "vocal"]
+        assert vocal_layers_vox and all(ly.get("stem_source") == "vocals" for ly in vocal_layers_vox), \
+            "a consulted, available vocals stem was not recorded as the layer source"
+        y_vox, _ = sf.read(str(res_vox["path"]))
+        assert not (y_mix.shape == y_vox.shape and np.array_equal(y_mix, y_vox)), \
+            "the vocals stem was consulted but never changed the audio (seam not fed through)"
+
+        # (C) restore the no-op default and confirm the fallback is byte-identical
+        #     to (A): the seam consult is a pure no-op on this box.
+        P._DEFAULTS["stems"] = "noop"
+        P._REGISTRY.get("stems", {}).pop("fake", None)
+        res_mix2, rep_mix2 = _render("noop2")
+        y_mix2, _ = sf.read(str(res_mix2["path"]))
+        assert y_mix.shape == y_mix2.shape and np.array_equal(y_mix, y_mix2), \
+            "re-render under the restored no-op default is not byte-identical (fallback drifted)"
+    finally:
+        P._DEFAULTS["stems"] = "noop"
+        P._REGISTRY.get("stems", {}).pop("fake", None)
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+    assert P.default_name("stems") == "noop"
+
+
+def test_loop_status_endpoints_contract():
+    """The LATTICE 'Loop review // quota approval' card grew per-loop human review
+    handles (Approve / Reject / Lock rows + a 'Reject all candidates' bulk button).
+    Those buttons are dumb POSTs; the contract they lean on lives here, at the
+    Python level (a browser can't be unit-gated). Three invariants the UI depends on:
+      1. set_loop_status(loop,'approved') APPROVES *and* LOCKS (locked=1) — a human
+         approve must survive the quota reset, so the Approve/Lock chips lock.
+      2. bulk_loop_status('rejected','candidate') rejects candidates but NEVER an
+         approved loop — the 'Reject all candidates' button must honor from_status.
+      3. list_loops(...) returns global {counts} the card renders after each action.
+    RED-first: if from_status were ignored (bulk update touching ALL rows), the
+    human-approved loop would be rejected — assertion (2) catches exactly that.
+    """
+    import tempfile, os
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        for d in ("music", "work", "agent"):
+            (tmp / d).mkdir()
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+        db = core.conn()
+        db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES('f0',?,'master',1,1,'now')",
+                   (str(tmp / "music" / "s.wav"),))
+        # three candidate loops + one the human will approve
+        for i in range(3):
+            db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                       (f"c{i}", "f0", 0, 4, 2, "texture", 0.5 + i * 0.01, "now"))
+        db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES('A','f0',0,4,2,'vocal',0.9,'now')")
+        db.commit()
+
+        # (1) human approve LOCKS
+        core.set_loop_status("A", "approved")
+        row = db.execute("SELECT status,locked FROM loops WHERE id='A'").fetchone()
+        assert row["status"] == "approved", "Approve chip did not approve the loop"
+        assert row["locked"] == 1, "a human approve must lock the loop (locked=1) so it survives quota"
+
+        # counts the card renders
+        before = core.list_loops()["counts"]
+        assert before["candidate"] == 3 and before["approved"] == 1, f"counts wrong pre-bulk: {before}"
+        # status filter is what the UI fetches for the candidate list
+        cand = core.list_loops("candidate")["items"]
+        assert {r["id"] for r in cand} == {"c0", "c1", "c2"}, "candidate filter returned the wrong rows"
+        assert all(r["status"] == "candidate" for r in cand)
+
+        # (2) 'Reject all candidates' -> candidates rejected, approved untouched
+        res = core.bulk_loop_status("rejected", "candidate")
+        assert res["updated"] == 3, f"bulk reject should have hit exactly the 3 candidates: {res}"
+        assert db.execute("SELECT status FROM loops WHERE id='A'").fetchone()["status"] == "approved", \
+            "bulk reject demoted an APPROVED loop — from_status was ignored (the RED case)"
+        after = core.list_loops()["counts"]
+        assert after["approved"] == 1 and after["rejected"] == 3 and after["candidate"] == 0, \
+            f"counts wrong post-bulk: {after}"
+
+        # server-by-design: bulk APPROVE is refused (only quota approves the hot pool)
+        try:
+            core.bulk_loop_status("approved", "candidate")
+            assert False, "bulk approve must be disabled (quota is the sanctioned approval path)"
+        except ValueError:
+            pass
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
 
 
 if __name__ == "__main__":

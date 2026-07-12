@@ -5,6 +5,8 @@ from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_like
 from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
+from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
+from earcrate.providers import get, stem_capability
 
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -227,8 +229,10 @@ class EarcrateCore:
                 workers=int(cfg.get("workers", 0)),
                 seed=int(cfg.get("seed", 1337)),
                 analysis_seconds=int(cfg.get("analysis_seconds", DEFAULT_ANALYSIS_SECONDS)),
+                stem_provider=str(cfg.get("stem_provider", "noop") or "noop"),
             )
             self.ensure_layout()
+            self._export_l3_root()
             self.connect_db()
         except Exception:
             self.config = None
@@ -252,8 +256,9 @@ class EarcrateCore:
                 continue
             if common == aa or common == bb:
                 raise ValueError(f"{label} must not contain each other")
-        self.config = Config(master, working, stems, playlists, agent, int(data.get("sample_rate", DEFAULT_SAMPLE_RATE)), int(data.get("workers", 0)), int(data.get("seed", 1337)), int(data.get("analysis_seconds", DEFAULT_ANALYSIS_SECONDS)))
+        self.config = Config(master, working, stems, playlists, agent, int(data.get("sample_rate", DEFAULT_SAMPLE_RATE)), int(data.get("workers", 0)), int(data.get("seed", 1337)), int(data.get("analysis_seconds", DEFAULT_ANALYSIS_SECONDS)), str(data.get("stem_provider", "noop") or "noop"))
         self.ensure_layout()
+        self._export_l3_root()
         cfg_path = self.config.agent_root / "config.json"
         cfg_path.write_text(json.dumps(self.config.as_dict(), indent=2), encoding="utf-8")
         self.write_toml_config()
@@ -640,7 +645,11 @@ class EarcrateCore:
         """EXECUTE an approved plan. Journaled and reversible; nothing deleted."""
         plan = self.plan_workspace_migration(data)
         approved = str(data.get("signature") or "")
-        if approved and approved != plan["signature"]:
+        if not approved:
+            return {"ok": False, "dry_run": True, "requires_signature": True,
+                    "error": "refusing to migrate without an approved signature; run the preview (plan_workspace_migration) and pass its signature to apply",
+                    "expected_signature": plan["signature"]}
+        if approved != plan["signature"]:
             return {"ok": False, "error": "the workspace changed since you approved this plan; re-run the preview",
                     "expected_signature": plan["signature"]}
         homes = self._migration_homes(plan["new_workspace"])
@@ -692,8 +701,24 @@ class EarcrateCore:
 
     def ensure_layout(self) -> None:
         c = self.ensure_config()
-        for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "logs"]:
+        for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "cache" / "L3", c.agent_root / "logs"]:
             p.mkdir(parents=True, exist_ok=True)
+
+    def _export_l3_root(self) -> None:
+        """Point the L3 ArtifactStore default at a STABLE workspace path so the
+        StemProvider's store and the renderer's get("artifacts") resolve to the
+        SAME on-disk root (a produced stem key actually resolves). Without this a
+        default ArtifactStore() lands in a private mkdtemp and the two halves of
+        the stem path never meet."""
+        c = self.config
+        if not c:
+            return
+        l3 = c.agent_root / "cache" / "L3"
+        try:
+            l3.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        os.environ["EARCRATE_L3_ROOT"] = str(l3)
 
     def connect_db(self) -> None:
         c = self.ensure_config()
@@ -710,6 +735,8 @@ class EarcrateCore:
         self.db.execute("PRAGMA foreign_keys=ON")
         self.create_schema()
         self.migrate_ear_atoms_per_profile()
+        self.migrate_loops_segment_identity()
+        self.migrate_loops_locked()
 
     def conn(self) -> sqlite3.Connection:
         if self.db is None:
@@ -755,6 +782,57 @@ class EarcrateCore:
             ALTER TABLE ear_atoms_v2 RENAME TO ear_atoms;
             COMMIT;
         """)
+
+    def migrate_loops_segment_identity(self) -> None:
+        """v3 §5.1 / Lesson #7: every loop gets a DETERMINISTIC content identity
+        so force-rebuild UPSERTS in place instead of delete+reinsert, and human
+        judgments (keyed transitively off the loop id) survive by construction.
+
+        Additive and idempotent: adds the `segment_id` column, backfills it from
+        each loop's own recipe fields (never touching audio), and enforces
+        uniqueness. Existing loop ids are LEFT ALONE — the column is what future
+        rebuilds match on, so a re-extract of an old ulid-keyed loop upserts that
+        same row (id preserved) rather than orphaning its atoms/judgments."""
+        db = self.db
+        cols = {r["name"] for r in db.execute("PRAGMA table_info(loops)").fetchall()}
+        if "segment_id" not in cols:
+            db.execute("ALTER TABLE loops ADD COLUMN segment_id TEXT")
+        todo = db.execute(
+            "SELECT id,file_id,start_s,end_s,role,stem FROM loops WHERE segment_id IS NULL OR segment_id=''"
+        ).fetchall()
+        if todo:
+            sr = int(self.ensure_config().sample_rate or DEFAULT_SAMPLE_RATE)
+            taken = {r[0] for r in db.execute(
+                "SELECT segment_id FROM loops WHERE segment_id IS NOT NULL AND segment_id!=''").fetchall()}
+            for r in todo:
+                sid = segment_id(r["file_id"], ANALYZER_VERSION,
+                                 round(float(r["start_s"]) * sr), round(float(r["end_s"]) * sr),
+                                 r["role"], r["stem"] or "mix")
+                if sid in taken:
+                    # a genuine duplicate recipe (should not occur per-file): leave
+                    # segment_id NULL so the UNIQUE index tolerates it rather than
+                    # crashing a real library — never destroy the row.
+                    continue
+                taken.add(sid)
+                db.execute("UPDATE loops SET segment_id=? WHERE id=?", (sid, r["id"]))
+            db.commit()
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_loops_segment ON loops(segment_id)")
+        db.commit()
+
+    def migrate_loops_locked(self) -> None:
+        """Human judgment must survive machine convenience. Atoms carry a human
+        call in atom_judgments.locked; loops had no such dimension, so
+        auto_approve_quota's blanket reset demoted a human-approved loop back to
+        candidate. Give the loop itself a lock.
+
+        Additive and idempotent: adds `locked INTEGER DEFAULT 0` (0 = machine may
+        manage this loop's status; 1 = a human explicitly approved it and no
+        machine reset may demote it)."""
+        db = self.db
+        cols = {r["name"] for r in db.execute("PRAGMA table_info(loops)").fetchall()}
+        if "locked" not in cols:
+            db.execute("ALTER TABLE loops ADD COLUMN locked INTEGER DEFAULT 0")
+            db.commit()
 
     def create_schema(self) -> None:
         db = self.conn()
@@ -806,7 +884,9 @@ class EarcrateCore:
               score REAL NOT NULL,
               status TEXT CHECK(status IN ('candidate','approved','rejected')) DEFAULT 'candidate',
               stem TEXT CHECK(stem IN ('mix','vocals','drums','bass','other')) DEFAULT 'mix',
-              created_at TEXT NOT NULL
+              created_at TEXT NOT NULL,
+              segment_id TEXT,
+              locked INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS duplicates(
               group_id TEXT NOT NULL, file_id TEXT REFERENCES files(id),
@@ -975,7 +1055,16 @@ class EarcrateCore:
                 checks.append({"name": "janitor", "ok": True, "detail": json.loads(jl.read_text(encoding="utf-8")).get("summary", "ran")})
             except Exception:
                 pass
-        return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict()}
+        # Surface the stem capability HONESTLY (informational, not a pass/fail
+        # check): a box with no torch/demucs is perfectly healthy, it just cannot
+        # separate stems. Setup/doctor readers see exactly why the feature is off.
+        cap = stem_capability()
+        cap = dict(cap)
+        cap["provider"] = c.stem_provider
+        cap["note"] = ("stem separation ready" if cap.get("ready")
+                       else "stem separation OFF — needs torch+demucs on a CUDA box; "
+                            "default NoopStemProvider in use")
+        return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict(), "stem_capability": cap}
 
     def startup_janitor(self) -> Dict[str, Any]:
         """Launch-time cleanup of everything old versions are known to leave behind.
@@ -1293,6 +1382,7 @@ class EarcrateCore:
                     r["file_id"], f["bpm"], f["bpm_confidence"], f["key_root"], f["key_mode"], f["key_confidence"],
                     f["loudness_lufs"], f["energy"], np.frombuffer(f["beats"], dtype=np.float32),
                     np.frombuffer(f["downbeats"], dtype=np.float32), f["sections"], f["vocal_likelihood"])
+                self._set_pcm(r["file_id"], r.get("pcm_sha"))
                 done += 1
             else:
                 failed.append({"path": r.get("path"), "error": r.get("error")})
@@ -1303,12 +1393,22 @@ class EarcrateCore:
         self.set_status(f"analysis complete: {done} analyzed, {len(failed)} failed ({mode})", 1, False)
         return {"ok": True, "analyzed": done, "failed": failed[:50], "parallel": used_parallel, "workers": workers, "analysis_seconds": max_sec, "cache_hits": cache_hits, "compute_jobs": len(jobs), "phase_timings": phase_timings}
 
+    def _set_pcm(self, file_id: str, pcm_sha) -> None:
+        """Deposit the L0 sound identity (pcm_sha256 of the decoded canonical PCM)
+        the cheap analyze pass produces. It is the key L3 stems (Demucs) are
+        content-addressed by, so a sound is separated ONCE and dedup'd across
+        duplicate files — the handoff from the laptop scan to the GPU pass."""
+        if pcm_sha:
+            self.conn().execute("UPDATE files SET audio_sha256=? WHERE id=?", (str(pcm_sha), file_id))
+
     def _store_from_cache(self, file_id: str, cache_path: Path) -> None:
         data = np.load(cache_path, allow_pickle=False)
         sections = json.loads(str(data["sections_json"]))
         self.store_features(file_id, float(data["bpm"]), float(data["bpm_confidence"]), int(data["key_root"]),
                             int(data["key_mode"]), float(data["key_confidence"]), float(data["loudness_lufs"]),
                             float(data["energy"]), data["beats"], data["downbeats"], sections, float(data["vocal_likelihood"]))
+        if "pcm_sha" in data.files:  # older caches predate pcm_sha; re-analyze repopulates
+            self._set_pcm(file_id, str(data["pcm_sha"]))
 
     def analyze_one(self, row: sqlite3.Row) -> None:
         c = self.ensure_config()
@@ -1322,6 +1422,8 @@ class EarcrateCore:
             data = np.load(cache_path, allow_pickle=False)
             sections = json.loads(str(data["sections_json"]))
             self.store_features(row["id"], float(data["bpm"]), float(data["bpm_confidence"]), int(data["key_root"]), int(data["key_mode"]), float(data["key_confidence"]), float(data["loudness_lufs"]), float(data["energy"]), data["beats"], data["downbeats"], sections, float(data["vocal_likelihood"]))
+            if "pcm_sha" in data.files:
+                self._set_pcm(row["id"], str(data["pcm_sha"]))
             return
         duration = float(row["duration_s"] or 0)
         max_sec = self.analysis_seconds()
@@ -1329,6 +1431,7 @@ class EarcrateCore:
         y = decode_audio(path, c.sample_rate, duration=decode_dur)
         if y.size > c.sample_rate * max_sec:
             y = y[: c.sample_rate * max_sec]
+        pcm = pcm_sha256(y)
         # avoid pathological silence
         if float(np.max(np.abs(y))) < 1e-5:
             bpm, bpm_conf, beats, downbeats = 120.0, 0.0, np.array([], dtype=np.float32), np.array([], dtype=np.float32)
@@ -1364,9 +1467,10 @@ class EarcrateCore:
             beats = beat_times
         np.savez_compressed(
             cache_path,
-            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like)
+            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like), pcm_sha=pcm
         )
         self.store_features(row["id"], bpm, bpm_conf, key_root, key_mode, key_conf, loudness, energy, beats, downbeats, sections, vocal_like)
+        self._set_pcm(row["id"], pcm)
 
     def estimate_downbeats(self, y: np.ndarray, sr: int, beat_frames: np.ndarray) -> np.ndarray:
         return _estimate_downbeats(y, sr, beat_frames)
@@ -1413,8 +1517,9 @@ class EarcrateCore:
         failed = []
         for idx, row in enumerate(rows):
             try:
-                if force:
-                    db.execute("DELETE FROM loops WHERE file_id=? AND stem='mix'", (row["id"],))
+                # v3 §5.1 / Lesson #7: force is RE-MEASURE IN PLACE, never delete.
+                # extract_loops_one upserts by deterministic segment_id, so loop
+                # ids stay stable and the atoms/judgments keyed off them survive.
                 existing = db.execute("SELECT COUNT(*) FROM loops WHERE file_id=?", (row["id"],)).fetchone()[0]
                 if existing and not force:
                     continue
@@ -1481,10 +1586,20 @@ class EarcrateCore:
                         selected.append(cand)
                     break
         status = "approved" if auto_approve else "candidate"
+        sr = int(c.sample_rate or DEFAULT_SAMPLE_RATE)
         for cand in selected[:12]:
+            # deterministic content id (v3 keystone): a re-extract of the same
+            # segment collides here and UPDATEs in place — never a new row, never
+            # a delete. Human status/judgments on the existing row are preserved:
+            # only the churnable measurements (score, role_confidence) refresh.
+            sid = segment_id(row["id"], ANALYZER_VERSION, round(cand["start"] * sr),
+                             round(cand["end"] * sr), cand["role"], "mix")
             db.execute(
-                "INSERT INTO loops(id,file_id,start_s,end_s,bars,role,role_confidence,score,status,stem,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (ulidish(), row["id"], cand["start"], cand["end"], cand["bars"], cand["role"], cand["role_confidence"], cand["score"], status, "mix", now_utc()),
+                """INSERT INTO loops(id,file_id,start_s,end_s,bars,role,role_confidence,score,status,stem,created_at,segment_id)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(segment_id) DO UPDATE SET
+                     role_confidence=excluded.role_confidence, score=excluded.score, bars=excluded.bars""",
+                (sid, row["id"], cand["start"], cand["end"], cand["bars"], cand["role"], cand["role_confidence"], cand["score"], status, "mix", now_utc(), sid),
             )
         return len(selected[:12])
 
@@ -1597,11 +1712,22 @@ class EarcrateCore:
             counts["total"] += int(r["n"])
         return {"items": [dict(r) for r in rows], "counts": counts}
 
-    def set_loop_status(self, loop_id: str, status: str) -> Dict[str, Any]:
+    def set_loop_status(self, loop_id: str, status: str, locked: bool = True) -> Dict[str, Any]:
+        """A human setting a loop's status is a judgment the machine must obey.
+        A human `approved` LOCKS the loop (locked=1) so auto_approve_quota's
+        reset can never demote it; a human `candidate`/`rejected` releases the
+        lock (locked=0). Pass locked=False for a machine-driven status change
+        that should leave the human lock untouched."""
         if status not in {"candidate", "approved", "rejected"}:
             raise ValueError("invalid loop status")
-        self.conn().execute("UPDATE loops SET status=? WHERE id=?", (status, loop_id))
-        self.conn().commit()
+        db = self.conn()
+        if locked:
+            # explicit human call: approve locks, any other status releases
+            db.execute("UPDATE loops SET status=?, locked=? WHERE id=?",
+                       (status, 1 if status == "approved" else 0, loop_id))
+        else:
+            db.execute("UPDATE loops SET status=? WHERE id=?", (status, loop_id))
+        db.commit()
         return {"ok": True}
 
     def bulk_loop_status(self, status: str, from_status: str = "candidate") -> Dict[str, Any]:
@@ -1729,14 +1855,25 @@ class EarcrateCore:
     def auto_approve_quota(self, max_loops: int = 60) -> Dict[str, Any]:
         """Approve a balanced hot pool instead of bulk-approving the landfill."""
         db = self.conn()
-        db.execute("UPDATE loops SET status='candidate' WHERE status='approved'")
+        # Human judgment wins: only demote machine-approved loops. A human-locked
+        # approval survives the reset untouched.
+        db.execute("UPDATE loops SET status='candidate' WHERE status='approved' AND COALESCE(locked,0)=0")
         rows = [dict(r) for r in db.execute("""SELECT l.*, ft.vocal_likelihood
                                       FROM loops l JOIN files f ON f.id=l.file_id
                                       LEFT JOIN features ft ON ft.file_id=f.id
                                       WHERE l.status='candidate'
                                       ORDER BY l.score DESC""").fetchall()]
-        chosen: Dict[str, Dict[str, Any]] = {}
+        # Locked-approved loops are already part of the hot pool: seed them into
+        # `chosen` so they are preserved AND counted against max_loops.
+        locked_rows = [dict(r) for r in db.execute("""SELECT l.*, ft.vocal_likelihood
+                                      FROM loops l JOIN files f ON f.id=l.file_id
+                                      LEFT JOIN features ft ON ft.file_id=f.id
+                                      WHERE l.status='approved' AND COALESCE(l.locked,0)=1
+                                      ORDER BY l.score DESC""").fetchall()]
+        chosen: Dict[str, Dict[str, Any]] = {r["id"]: r for r in locked_rows}
         by_track: Dict[str, int] = {}
+        for r in locked_rows:
+            by_track[r["file_id"]] = by_track.get(r["file_id"], 0) + 1
         role_min = {"drum_anchor": 4, "bass": 3, "harmony": 4, "full": 4}
         unsat = []
         def eligible(r: Dict[str, Any]) -> bool:
@@ -2050,7 +2187,13 @@ class EarcrateCore:
             d["dry_low200_share"] = float(d.get("low_share") or 0.0)
             d["dry_quality_veto"] = False
             out.append(d)
-        return out
+        # §5.4: the candidate atom pool flows THROUGH the CandidateRetriever seam
+        # so every composer path (rank/readiness/graph/compose) gathers candidates
+        # via a live call. The DEFAULT FullScanRetriever returns the full set
+        # unchanged — behavior is byte-identical to `return out`. A smarter
+        # retriever (embedding recall, tempo/key pre-filter) can register alongside
+        # and narrow the pool on a GPU box without touching this call site.
+        return get("retriever").retrieve(out)
 
     def rank_crate(self, taste_profile: str = "girl_talk_v1", limit: int = 0) -> Dict[str, Any]:
         """Rank the approved ear crate by the persona's own selection priorities
@@ -2075,14 +2218,7 @@ class EarcrateCore:
         for x in pool:
             by_role[str(x.get("ear_role") or "")] = by_role.get(str(x.get("ear_role") or ""), 0) + 1
             source_keys.add(track_identity(x))
-        scale = max(0.5, min(1.2, float(target_seconds) / 120.0))
-        need = {
-            "foreground": max(4, int(math.ceil(12 * scale))),
-            "floor": max(6, int(math.ceil(16 * scale))),
-            "bass": max(3, int(math.ceil(6 * scale))),
-            "spark": max(5, int(math.ceil(12 * scale))),
-            "sources": max(5, int(math.ceil(float(target_seconds) / float(profile.get("source_seconds") or 11.5))))
-        }
+        need = readiness_need(float(target_seconds), float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         have = {
             "foreground": by_role.get("VOX_HOOK",0)+by_role.get("VOX_VERSE",0)+by_role.get("VOX_SHOUT",0)+by_role.get("RIFF_ID",0),
             "floor": by_role.get("DRUM_BREAK",0)+by_role.get("BED_CHORD",0)+by_role.get("RIFF_ID",0)+by_role.get("TEXTURE",0),
@@ -2223,7 +2359,7 @@ class EarcrateCore:
         user_bpm = float(params.get("bpm") or 0.0) or None
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         target_seconds = float(params.get("target_seconds") or 120.0)
-        needed_sources = max(5, int(math.ceil(target_seconds / float(profile.get("source_seconds") or 11.5))))
+        needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         keys = sorted({int(x.get("key_root") or 0) % 12 for x in pool}) or [0]
         weighted_keys = []
         for k in keys:
@@ -2307,7 +2443,7 @@ class EarcrateCore:
         pool = list(deck.get("pool") or [])
         profile_data = load_tastespec(str(params.get("taste_profile") or "girl_talk_v1"))
         profile0 = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
-        need_sources0 = max(5, int(math.ceil(target_seconds / float(profile0.get("source_seconds") or 11.5))))
+        need_sources0 = sources_needed(target_seconds, float(profile0.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         deck_sources = int(((deck.get("diagnostics") or {}).get("have") or {}).get("sources", 0))
         if deck_sources and deck_sources < need_sources0:
             diag = deck.get("diagnostics") or {}
@@ -2322,10 +2458,24 @@ class EarcrateCore:
         # bars = beats/4; target_seconds*bpm/60 is beats, /4 is bars already. The old
         # code then multiplied by 4 again, quadrupling every render (a 2-min target
         # became ~8 min). Round to the nearest whole 4-bar phrase instead.
-        bars_exact = target_seconds * render_bpm / 60.0 / 4.0
-        total_bars = max(16, int(round(bars_exact / 4.0)) * 4)
+        total_bars = target_bars(target_seconds, render_bpm)
         section_bars = 4
         sections = []
+        # Curation veto is a hard gate the composer enforces itself (single source
+        # of truth): an atom a human rejected or locked out of this profile is
+        # dropped from the pool before any rail is built. Precedence is absolute -
+        # atom reject/lock beats atom favorite, rank score, and station-bias intent;
+        # no lower-precedence signal can resurrect a human-vetoed atom.
+        vetoed_atoms: set = set()
+        try:
+            _vdb = self.conn()
+            for _r in _vdb.execute("SELECT atom_id FROM atom_judgments WHERE taste_profile=? AND status='rejected'",
+                                   (str(params.get("taste_profile") or "girl_talk_v1"),)).fetchall():
+                vetoed_atoms.add(str(_r["atom_id"]))
+        except Exception:
+            pass
+        if vetoed_atoms:
+            pool = [x for x in pool if str(x.get("atom_id")) not in vetoed_atoms]
         foreground = [x for x in pool if x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}]
         floors = [x for x in pool if x.get("ear_role") in {"DRUM_BREAK","BED_CHORD","RIFF_ID","TEXTURE"}]
         basses = [x for x in pool if x.get("ear_role") == "BASS_RIFF"]
@@ -2358,9 +2508,12 @@ class EarcrateCore:
                 favorite_atoms.add(str(_r["atom_id"]))
         except Exception:
             pass
+        # A veto outranks a favorite: an atom the human both favorited and later
+        # rejected/locked-out must never receive the favorite boost.
+        favorite_atoms -= vetoed_atoms
         source_use: Dict[str, int] = {}
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
-        need_sources = max(5, int(math.ceil(target_seconds / float(profile.get("source_seconds") or 11.5))))
+        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         max_events_per_source = max(2, int(math.ceil((total_bars / 4.0) / max(1, need_sources))) + 1)
         def source_of(x: Dict[str, Any]) -> str:
             return track_identity(x)
@@ -2491,7 +2644,7 @@ class EarcrateCore:
         fg_cov = fg_bars / max(1, total_bars)
         source_count = len(source_bars)
         target_seconds = float(params.get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
-        need_sources = max(5, int(math.ceil(target_seconds / float(profile.get("source_seconds") or 11.5))))
+        need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         first_fg_s = None if first_fg_bar is None else first_fg_bar * 4 * 60.0 / bpm
         max_source_run_s = max(source_bars.values()) * 4 * 60.0 / bpm if source_bars else 0.0
         if floor_cov < float(profile.get("floor_coverage") or 0.70):
@@ -3061,6 +3214,39 @@ class EarcrateCore:
             return {"error": "fpcalc gave no JSON"}
         return {"duration": float(d.get("duration") or 0.0), "fingerprint": str(d.get("fingerprint") or "")}
 
+    @staticmethod
+    def _join_artist_credit(artists: List[Dict[str, Any]]) -> Optional[str]:
+        # AcoustID/MusicBrainz return an ordered artist credit; each entry may
+        # carry a `joinphrase` (" feat. ", " & ", ...) that belongs BETWEEN it
+        # and the next name. Honour it so collaborations read correctly; only
+        # fall back to "; " when the response has no join phrases at all.
+        named = [a for a in artists if a.get("name")]
+        if not named:
+            return None
+        if any(a.get("joinphrase") for a in named):
+            out = ""
+            for i, a in enumerate(named):
+                out += a["name"]
+                if i < len(named) - 1:
+                    out += a.get("joinphrase") or "; "
+            return out.strip() or None
+        return "; ".join(a["name"] for a in named) or None
+
+    @staticmethod
+    def _pick_release_group(rgs: List[Dict[str, Any]]) -> Optional[str]:
+        # Don't blindly take releasegroups[0]: MusicBrainz often lists
+        # compilations/soundtracks before the studio album. Prefer a primary
+        # "Album" with no compilation-ish secondary type.
+        titled = [rg for rg in rgs if rg.get("title")]
+        if not titled:
+            return None
+        def _rank(rg: Dict[str, Any]):
+            sec = [str(s).lower() for s in (rg.get("secondarytypes") or [])]
+            noncomp = 0 if ("compilation" in sec or "soundtrack" in sec) else 1
+            is_album = 1 if str(rg.get("type") or "").lower() == "album" else 0
+            return (noncomp, is_album)
+        return max(titled, key=_rank).get("title")
+
     def _parse_acoustid(self, data: Dict[str, Any]) -> Dict[str, Any]:
         if data.get("status") != "ok":
             return {"ok": False, "error": (data.get("error") or {}).get("message", "lookup failed")}
@@ -3068,23 +3254,46 @@ class EarcrateCore:
         if not results:
             return {"ok": True, "match": None}
         best = max(results, key=lambda r: r.get("score", 0.0))
-        rec = (best.get("recordings") or [None])[0]
-        if not rec:
-            return {"ok": True, "match": None, "score": round(float(best.get("score", 0.0)), 3)}
-        artists = rec.get("artists") or []
-        artist = "; ".join(a.get("name", "") for a in artists if a.get("name")) or None
-        rgs = rec.get("releasegroups") or []
-        album = rgs[0].get("title") if rgs and rgs[0].get("title") else None
+        score = round(float(best.get("score", 0.0)), 3)
+        # A single AcoustID result maps to several MusicBrainz recordings and the
+        # first is frequently a bare stub ({"id": ...} with no title/artists).
+        # Blindly taking recordings[0] silently discarded real matches, so rank
+        # recordings by how much usable metadata they actually carry.
+        recs = best.get("recordings") or []
+        def _rec_rank(r: Dict[str, Any]):
+            has_artist = 1 if any(a.get("name") for a in (r.get("artists") or [])) else 0
+            has_title = 1 if r.get("title") else 0
+            has_rg = 1 if r.get("releasegroups") else 0
+            return (has_artist, has_title, has_rg)
+        rec = max(recs, key=_rec_rank) if recs else None
+        if not rec or not (rec.get("title") or rec.get("artists")):
+            return {"ok": True, "match": None, "score": score}
+        artist = self._join_artist_credit(rec.get("artists") or [])
+        album = self._pick_release_group(rec.get("releasegroups") or [])
         return {"ok": True, "match": {"artist": artist, "title": rec.get("title"), "album": album,
-                                      "mbid": rec.get("id"), "score": round(float(best.get("score", 0.0)), 3)}}
+                                      "mbid": rec.get("id"), "score": score}}
+
+    # AcoustID web service. meta tokens MUST be whitespace-separated: in an
+    # x-www-form-urlencoded body a literal "+" encodes to %2B, which the server
+    # reads as one bogus token ("recordings+releasegroups+...") and returns no
+    # recordings -- the cause of ~0 identities across the real run. Passing a
+    # space lets urlencode emit a "+" (= space on the wire) so the tokens split.
+    ACOUSTID_ENDPOINT = "https://api.acoustid.org/v2/lookup"
+    ACOUSTID_META = "recordings releasegroups"
+
+    def _acoustid_params(self, fingerprint: str, duration: float, api_key: str) -> Dict[str, str]:
+        return {
+            "client": api_key,
+            "duration": str(int(round(duration))),
+            "fingerprint": fingerprint,
+            "meta": self.ACOUSTID_META,
+            "format": "json",
+        }
 
     def _acoustid_lookup(self, fingerprint: str, duration: float, api_key: str) -> Dict[str, Any]:
         import urllib.request, urllib.parse
-        body = urllib.parse.urlencode({
-            "client": api_key, "duration": str(int(round(duration))), "fingerprint": fingerprint,
-            "meta": "recordings+releasegroups+compress", "format": "json",
-        }).encode("utf-8")
-        req = urllib.request.Request("https://api.acoustid.org/v2/lookup", data=body,
+        body = urllib.parse.urlencode(self._acoustid_params(fingerprint, duration, api_key)).encode("utf-8")
+        req = urllib.request.Request(self.ACOUSTID_ENDPOINT, data=body,
                                      headers={"User-Agent": "earcrate/1.0", "Content-Type": "application/x-www-form-urlencoded"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             return self._parse_acoustid(json.loads(resp.read().decode("utf-8")))
@@ -3175,7 +3384,18 @@ class EarcrateCore:
                     old[k] = (v[0] if v else "")
             if all(old.get(k, "") == v for k, v in new.items()):
                 continue  # already correct
-            changes.append({"path": str(path), "file_id": p.get("file_id"), "old": old, "new": new,
+            # Resolve the library file_id even when the proposal omits it (path-only
+            # proposals are a supported input). Without this the DB `tags` rows stay
+            # STALE after the on-disk retag, and a following reorganize files by the
+            # OLD identity (wrong Artist/Album, or _unsorted) -- the identity never
+            # reaches reorganize's target computation.
+            fid = p.get("file_id")
+            if not fid:
+                r = db.execute("SELECT id FROM files WHERE path=?", (str(path),)).fetchone()
+                if r is None:
+                    r = db.execute("SELECT id FROM files WHERE path=?", (str(path.resolve()),)).fetchone()
+                fid = r["id"] if r else None
+            changes.append({"path": str(path), "file_id": fid, "old": old, "new": new,
                             "score": p.get("score")})
         sig = sha256_text(json_dumps([[ch["path"], ch["new"]] for ch in sorted(changes, key=lambda x: x["path"])]))
         if not apply:
@@ -3186,7 +3406,11 @@ class EarcrateCore:
                     "human": (f"Would rewrite tags on {len(changes)} file(s) at score >= {min_score}. "
                               f"Nothing written yet -- reversible via identify-rollback after --apply.")}
         approved = str(data.get("signature") or "")
-        if approved and approved != sig:
+        if not approved:
+            return {"ok": False, "dry_run": True, "requires_signature": True,
+                    "error": "refusing to rewrite tags without an approved signature; run the dry-run (apply:false) and pass its signature to apply",
+                    "expected_signature": sig}
+        if approved != sig:
             return {"ok": False, "error": "library changed since preview; re-run the dry-run",
                     "expected_signature": sig}
         journal = c.agent_root / "identify_journal" / f"retag-{ulidish()}.jsonl"
@@ -3217,12 +3441,25 @@ class EarcrateCore:
         journal = Path(str(data.get("journal") or ""))
         if not journal.exists():
             return {"ok": False, "error": "identify journal not found"}
-        db = self.conn()
-        restored, errors = 0, []
+        apply = bool(data.get("apply"))
+        recs: List[Dict[str, Any]] = []
         for line in journal.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            rec = json.loads(line)
+            try:
+                recs.append(json.loads(line))
+            except Exception:
+                continue
+        if not apply:
+            # Dry-run default: a reversal is a mutation too. Preview, touch nothing.
+            return {"ok": True, "dry_run": True, "would_restore": len(recs),
+                    "samples": [{"file": Path(r.get("path") or "").name, "restore": r.get("old") or {}}
+                                for r in recs[:15]],
+                    "human": (f"Would restore original tags on {len(recs)} file(s) from this journal. "
+                              f"Nothing written yet -- pass --apply to undo for real.")}
+        db = self.conn()
+        restored, errors = 0, []
+        for rec in recs:
             try:
                 path = Path(rec["path"])
                 if not path.exists():
@@ -3248,7 +3485,7 @@ class EarcrateCore:
             except Exception as exc:
                 errors.append(str(exc)[:120])
         db.commit()
-        return {"ok": not errors, "restored": restored, "errors": errors}
+        return {"ok": not errors, "dry_run": False, "restored": restored, "errors": errors}
 
 
     def list_renders(self) -> Dict[str, Any]:
@@ -3526,7 +3763,7 @@ class EarcrateCore:
         loop_ids = sorted({layer["loop_id"] for sec in sections for layer in sec.get("layers", [])})
         loops: Dict[str, Dict[str, Any]] = {}
         for lid in loop_ids:
-            r = db.execute("""SELECT l.*, f.path, ft.bpm FROM loops l JOIN files f ON f.id=l.file_id LEFT JOIN features ft ON ft.file_id=f.id WHERE l.id=?""", (lid,)).fetchone()
+            r = db.execute("""SELECT l.*, f.path, f.audio_sha256, ft.bpm FROM loops l JOIN files f ON f.id=l.file_id LEFT JOIN features ft ON ft.file_id=f.id WHERE l.id=?""", (lid,)).fetchone()
             if r:
                 loops[lid] = dict(r)
         total_bars = 0
@@ -3604,11 +3841,14 @@ class EarcrateCore:
                 chosen = alive[:1]
             return chosen[:min(limit, max_tail_decks)]
 
-        def transformed_loop_clip(lid: str, raw_clip: np.ndarray, info: Dict[str, Any], ps: float, target_loop_len: int, stretch_pct: float, rate: float, role_name: str) -> np.ndarray:
+        def transformed_loop_clip(lid: str, raw_clip: np.ndarray, info: Dict[str, Any], ps: float, target_loop_len: int, stretch_pct: float, rate: float, role_name: str, stem_source: str = "mix") -> np.ndarray:
             veto = drydeck_transform_violation(role_name, float(ps), float(stretch_pct))
             if veto:
                 raise RuntimeError(veto)
-            cache_key = sha256_text(json_dumps({"loop_id": lid, "start_s": info.get("start_s"), "end_s": info.get("end_s"), "target_len": target_loop_len, "pitch_shift": round(float(ps), 4), "role": role_name, "sr": sr, "engine": ENGINE_VERSION}))
+            # stem_source is part of the cache identity: the vocals stem and the
+            # full mix are DIFFERENT source audio, so they must not collide on one
+            # cached transform (a mix render must never mask a later stem render).
+            cache_key = sha256_text(json_dumps({"loop_id": lid, "start_s": info.get("start_s"), "end_s": info.get("end_s"), "target_len": target_loop_len, "pitch_shift": round(float(ps), 4), "role": role_name, "stem_source": stem_source, "sr": sr, "engine": ENGINE_VERSION}))
             if cache_key in transform_cache:
                 report["transform_cache"]["hits"] += 1
                 return transform_cache[cache_key].copy()
@@ -3661,6 +3901,49 @@ class EarcrateCore:
             transform_cache[cache_key] = clip2.astype(np.float32)
             return clip2.astype(np.float32, copy=True)
 
+        _VOCAL_EAR_ROLES = ("VOX_HOOK", "VOX_VERSE", "VOX_SHOUT")
+
+        def separated_vocal_source(pcm_sha: str, src_path: str) -> Tuple[Optional[np.ndarray], Optional[str]]:
+            """v3 §5.2 StemProvider seam: consult the SELECTED provider for a real
+            vocals stem so a GPU box gets vocal-on-instrumental. Selection is
+            ``EARCRATE_STEMS`` (env) > ``config.stem_provider`` > the registered
+            default; the shipped "noop" value maps to ``get("stems")`` (the
+            registered default), which reports stems unavailable and yields None
+            here so the caller FALLS BACK to the full-mix decode — byte-identical
+            to the pre-seam path. A provider may hand back the stem as a filesystem
+            path OR an L3 artifact key (routed through the SHARED ``get("artifacts")``
+            store, same EARCRATE_L3_ROOT the provider wrote to); both resolve to
+            decoded samples sliced at the SAME loop window as the mix. Returns
+            ``(samples_or_None, reason_or_None)`` so the caller can SURFACE why a
+            fallback happened instead of swallowing it silently."""
+            selected = os.environ.get("EARCRATE_STEMS") or getattr(c, "stem_provider", None) or "noop"
+            try:
+                prov = get("stems") if selected == "noop" else get("stems", selected)
+                sep = prov.separate(str(pcm_sha), str(src_path), ["vocals"])
+            except Exception as exc:
+                return None, "stem provider %r error: %s" % (selected, exc)
+            if not sep or not sep.get("available"):
+                return None, str((sep or {}).get("reason") or "stems unavailable")
+            ref = (sep.get("stems") or {}).get("vocals")
+            if not ref:
+                return None, "provider %r reported available but produced no vocals stem" % (selected,)
+            # (a) direct filesystem path to a materialized stem
+            try:
+                if isinstance(ref, (str, Path)) and Path(ref).exists():
+                    return decode_audio(Path(ref), sr).astype(np.float32), None
+            except Exception as exc:
+                return None, "vocals stem path decode failed: %s" % (exc,)
+            # (b) L3 artifact key -> resolve bytes through the SHARED ArtifactStore
+            try:
+                got = get("artifacts").get(str(ref))
+                if got and got.get("data"):
+                    tmpf = transform_cache_dir / ("stem_" + sha256_text(str(ref)) + ".wav")
+                    tmpf.write_bytes(got["data"])
+                    return decode_audio(tmpf, sr).astype(np.float32), None
+            except Exception as exc:
+                return None, "vocals stem artifact resolve failed: %s" % (exc,)
+            return None, "vocals stem ref did not resolve through the shared L3 store"
+
         def render_section_deck(sidx: int, sec: Dict[str, Any], tail_len: int) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
             sec_len = int(round(int(sec["bars"]) * 4 * 60.0 / bpm * sr))
             deck_len = sec_len + max(0, int(tail_len))
@@ -3676,9 +3959,31 @@ class EarcrateCore:
                     report["drops"].append({**drop_base, "reason": "loop metadata missing"}); continue
                 try:
                     path = info["path"]
-                    if path not in audio_cache:
-                        audio_cache[path] = decode_audio(Path(path), sr)
-                    source = audio_cache[path]
+                    # v3 §5.2: a vocal layer prefers a REAL vocals stem when a
+                    # StemProvider can produce one (GPU box). The no-op default
+                    # returns None, so we fall back to the full-mix decode below —
+                    # byte-identical to today. Record which source fed the layer.
+                    stem_source = "mix"
+                    stem_reason = None
+                    source = None
+                    _ear = str(layer.get("ear_role") or "")
+                    _role = str(layer.get("role") or info.get("role") or "")
+                    if _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
+                        pcm_sha = info.get("audio_sha256")
+                        if pcm_sha:
+                            stem_arr, stem_reason = separated_vocal_source(str(pcm_sha), path)
+                            if stem_arr is not None:
+                                source = stem_arr
+                                stem_source = "vocals"
+                                stem_reason = None
+                            else:
+                                # visible fallback: record WHY this vocal layer fell
+                                # back to the full mix instead of a real stem.
+                                report["stem_reason"] = stem_reason
+                    if source is None:
+                        if path not in audio_cache:
+                            audio_cache[path] = decode_audio(Path(path), sr)
+                        source = audio_cache[path]
                     a = max(0, int(float(info["start_s"]) * sr))
                     b = min(source.size, int(float(info["end_s"]) * sr))
                     clip = source[a:b].astype(np.float32, copy=True)
@@ -3696,7 +4001,7 @@ class EarcrateCore:
                     if veto:
                         report["drops"].append({**drop_base, "reason": veto, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4)}); continue
                     try:
-                        clip = transformed_loop_clip(str(lid), clip, info, ps, target_loop_len, stretch_pct, rate, role_name)
+                        clip = transformed_loop_clip(str(lid), clip, info, ps, target_loop_len, stretch_pct, rate, role_name, stem_source)
                     except Exception as exc:
                         report["drops"].append({**drop_base, "reason": str(exc)}); continue
 
@@ -3745,7 +4050,7 @@ class EarcrateCore:
                                     tail_parts[group] = np.zeros(tail_len, dtype=np.float32)
                                 n_tail = min(tail_len, tail_audio.size)
                                 tail_parts[group][:n_tail] += tail_audio[:n_tail].astype(np.float32)
-                        report["layers"].append({**drop_base, "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
+                        report["layers"].append({**drop_base, "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "stem_source": stem_source, "stem_reason": stem_reason, "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
                 except Exception as exc:
                     report["drops"].append({**drop_base, "reason": f"unexpected render error: {exc}"})
                     continue
@@ -3899,6 +4204,8 @@ class EarcrateCore:
                 entry["readiness_pct"] = int(round(100 * sum(ratios) / len(ratios)))
                 entry["ready"] = bool(r.get("ready"))
                 entry["endless"] = r.get("endless")
+                entry["sources"] = int(r.get("source_tracks") or 0)
+                entry["pool_size"] = int(r.get("pool_size") or 0)
                 if int(r.get("pool_size") or 0) == 0:
                     entry["wants"] = ["hasn't auditioned your library yet \u2014 Book a set ear-crates it automatically (first time on a big library takes a while; watch the bottom bar for the count + ETA)"]
                     entry["never_auditioned"] = True

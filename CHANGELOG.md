@@ -1,5 +1,334 @@
 # EarCrate — CHANGELOG
 
+## v0.8.26 — milestone 1: stem-path CPU completion (still OFF/UNVERIFIED) + 3 real-library defects
+- The stem path's CPU half is now correct end to end, so a 4060 receipt becomes
+  PRODUCIBLE — but the feature stays OFF by default and the real Demucs run is
+  UNVERIFIED. No "works on a GPU" claim until the receipt exists.
+  - ONE workspace-scoped shared L3 `ArtifactStore` (`EARCRATE_L3_ROOT`, set by
+    configure to `<agent_root>/cache/L3`): the provider materializes and the
+    renderer resolves through the SAME store — the two-temp-dirs bug is gone.
+  - Provider SELECTION: config `stem_provider` (default `noop`) + env
+    `EARCRATE_STEMS`; render selects it. Default stays no-op.
+  - Honest capability PROBE `stem_capability()` → {torch,demucs,cuda,ready},
+    surfaced in `doctor()` — reports not-ready here.
+  - CACHE-before-separate: a known stem is reused without re-running the producer.
+  - SURFACED fallback: render records `stem_reason` instead of a silent swallow.
+  - Real (guarded) `_run_demucs` implemented — but UNEXECUTED here.
+  - `requirements.txt` documents the OPTIONAL torch/demucs install; torch is NOT a
+    shipped dependency.
+  - Gate `test_stem_path_producible` proves select→materialize→resolve→cache with a
+    FAKE demucs writing to the shared store (byte-identical under the no-op default).
+    Its own docstring states it does NOT run Demucs. The detector keeps `stems`
+    honestly deferred: "call path complete + gated with a fake; real Demucs run
+    UNVERIFIED pending a 4060 receipt."
+- Real-library defects (from `main`; fixed at the code level, gated on synthetic
+  fixtures — the live 585-file run is still the true test):
+  - **AcoustID identify**: the request `meta` was malformed (a literal `+` in
+    `recordings+releasegroups+compress` collapsed under URL-encoding), so lookups
+    came back thin — plausibly the 0/585. Fixed the encoding; hardened the parse
+    gate with realistic multi-result shapes.
+  - **identify → reorganize stale DB**: `apply_identities` now resolves the library
+    `file_id` by path and writes the corrected identity where `reorganize` reads
+    it, so a re-tag flows into the destination. Gate
+    `test_identify_then_reorganize_uses_new_identity`.
+  - **workspace-pointer package-vs-CLI mismatch**: `visible_app_dir()` anchored to
+    `__main__.__file__` (different under `-m` vs the console script) and fell back
+    to cwd — so the two entry points wrote different pointers. Now anchored to the
+    `earcrate` package location, deterministic across entry points (and the
+    single-file build). Gate `test_workspace_pointer_stable_across_entrypoints`.
+- The AcoustID gate was moved BEFORE the `__main__` runner so it actually executes
+  in CI (it previously sat in the never-run tail).
+- 36/36 gates green; single-file builds + self-test.
+- Honest remainders (from each agent's `honest_unverified`): the real Demucs/GPU
+  separation (needs a 4060 receipt), the live keyed AcoustID run on the real
+  library, and Windows-specific pointer paths — none exercised here.
+
+## v0.8.25 — correction: the stem "feature" is infrastructure, not a working feature
+- HONEST CORRECTION of v0.8.24's overclaim (caught in external review of PR #25).
+  v0.8.24 said stems "reach render" and implied a 4060 with Demucs would produce
+  vocal-on-instrumental. That is NOT true as committed. Four real blockers:
+  1. `DemucsStemProvider._run_demucs()` is a stub that always raises — the real
+     separation is unimplemented.
+  2. Nothing selects demucs: `get("stems")` returns the registered DEFAULT, which
+     is `NoopStemProvider`. A GPU box still gets the no-op → falls back to mix.
+  3. The provider builds its own `ArtifactStore()` (temp dir) and the renderer
+     resolves via a *different* `get("artifacts")` store — a produced key would
+     never resolve.
+  4. No torch/demucs in requirements, no capability probe, no install path; render
+     silently swallows stem errors.
+  So v0.8.24 proved a CALL GRAPH with a fake provider, not a feature. Relabeled:
+  the stem work is INFRASTRUCTURE that prepares stem integration; the feature is
+  OFF and UNVERIFIED pending a real GPU receipt.
+- The unfed-handoff detector's DEFERRED_SEAMS now says so: `stems`/`artifacts`
+  carry honest "call site present, runtime unimplemented — feature OFF" reasons
+  instead of being silently promoted to "wired". ("Wired" = a call site exists,
+  NOT proven functional.)
+- What v0.8.24 DID legitimately land (unchanged, still true): retrieval routes
+  through `CandidateRetriever` (behavior-preserving), per-loop review is real, and
+  the no-op fallback is genuinely byte-identical (gated).
+- NEW `PRODUCT.md` (the product definition + an honest capability matrix with
+  evidentiary statuses) and `MILESTONES.md` (the order of work: make the vertical
+  path truthful → product contract → editable Workbench → perceptual validation →
+  consumer polish → §5.3 teardown LAST). §5.3 is explicitly NOT next.
+- Gates unchanged (32); single-file builds. No engine behavior changed this bump.
+
+## v0.8.24 — wire the seams: stems reach render, retrieval + per-loop review go live   ⚠ stem claim CORRECTED in v0.8.25 (infrastructure, not a working feature)
+- The CPU-doable feature wiring that was mis-filed as "needs a GPU." Only Demucs
+  RUNNING needs a GPU; the plumbing that CALLS it is CPU code, and it's now done —
+  behavior-identical on this box (the no-op/default providers), real on a GPU box.
+- §5.2 STEMS IN RENDER: `render_mashup` now CONSULTS the StemProvider seam for a
+  vocal layer — looks up the file's `pcm_sha` (files.audio_sha256) and calls
+  `get("stems").separate(pcm_sha, path, ["vocals"])` before touching the full mix.
+  If a real vocals stem comes back (a GPU box with Demucs), it's decoded and sliced
+  at the same loop window and layered; otherwise (the no-op default here, or no
+  pcm_sha) it FALLS BACK to the byte-identical full-mix decode. Each layer's report
+  records `stem_source: "vocals" | "mix"`, and the transform cache key includes it
+  so a mix render can never mask a later stem render. Gate
+  `test_render_consults_stem_seam` (red-first): a fake provider proves render
+  consults the seam with the right pcm_sha for vocals ONLY, the returned stem
+  changes the audio, and the no-op fallback is byte-identical.
+- §5.4 RETRIEVAL: the composer's candidate pool now routes through the
+  `CandidateRetriever` seam (default `FullScanRetriever` reproduces today's output
+  exactly). Gate `test_composer_uses_retriever_seam`.
+- UI: the Library "Loop review" card gains real PER-LOOP human review — a candidate
+  list with Approve (locks the loop so quota can't demote it) / Reject / Lock, plus
+  "Reject all candidates" (bulk approve stays disabled by design). Gate
+  `test_loop_status_endpoints_contract`.
+- The unfed-handoff detector now shows `stems`, `artifacts`, `retriever` as WIRED
+  (removed from DEFERRED); only `embedding` and `vector_index` remain deferred (no
+  data to consume yet — ANN is §5.4-later). So the detector reflects the real wiring.
+- 32/32 gates green; single-file builds + self-test; UI drives headless with zero
+  console errors.
+- Still GPU-gated (honestly): the actual Demucs separation run. Still not done:
+  the §5.3 monolith table teardown (deliberately not fanned out — destructive
+  refactor, invariants already gated, wants careful driven work).
+
+## v0.8.23 — the unfed-handoff detector: silent orphans can't ship anymore
+- Generalized the audio_sha256 bug (v0.8.22) into a DETECTOR for its whole class.
+  The "unfed handoff": a producer→consumer contract where the consumer is declared
+  but the producer never runs — a schema identity/link COLUMN nobody writes, or a
+  registered provider SEAM nobody calls. It's silent (null / no-op, never an
+  error), so "built the column/seam" reads as "wired the feature" when it isn't.
+  Distinct from Lesson #4 (calls a missing endpoint — errors loudly) and #2/#12
+  (two sources of truth — duplication drift); this is a source with ZERO producers.
+- NEW gate `test_no_unfed_handoffs`: introspects the real (post-migration) schema
+  and the seam registry, and requires every identity/link column to be WRITTEN and
+  every registered seam to have a LIVE CALLER — or to sit in a DEFERRED map with a
+  written reason. A new orphan with no receipt fails the gate. Self-checks that the
+  fed-heuristic isn't a tautology; red-proven on both arms (drop a seam from
+  DEFERRED, or add an unfed identity column).
+- What it found (all now accounted for): every identity/link column is fed
+  (audio_sha256 was the last, fixed in v0.8.22); the five registered seams
+  (stems, artifacts, retriever, embedding, vector_index) have no live caller and
+  are now DEFERRED with explicit reasons — so "Stems/ANN are deferred on purpose"
+  is written in code, not a silent gap. This gate would have caught audio_sha256
+  the day the column was added.
+- 29/29 gates green; single-file builds + self-test.
+
+## v0.8.22 — one stomach: the cheap scan now deposits the identity GPU stems eat
+- Closed a silent LAYER-HANDOFF gap: `files.audio_sha256` (the L0 pcm_sha, the
+  decoded-canonical SOUND identity) was declared in the schema and consumed by the
+  StemProvider seam (its L3 artifact key = `SHA256(pcm_sha ‖ "demucs" ‖ model ‖
+  role)`) — but NOTHING wrote it. Verified: after scan+analyze, `audio_sha256` was
+  `None`. So the cheap laptop pass and the expensive GPU pass were two stomachs,
+  not one.
+- Fix: the analyze pass now computes `pcm_sha256(y)` from the canonical PCM it
+  already decodes (zero extra decode) and deposits it on `files.audio_sha256`,
+  across all paths — parallel worker, serial, and cache-hit (the `.npz` now carries
+  `pcm_sha`; older caches repopulate on re-analyze). NEW `pcm_sha256` helper in
+  core/util. So the same sound in two files gets the SAME id (separate once, dedup
+  duplicates), and L1 now hands off to L3 by construction.
+- Gate `test_pcm_identity_feeds_stems` (red-first: on the old code `audio_sha256`
+  is null and the gate fails "cheap scan feeds the GPU nothing"): analyze deposits
+  a 64-hex id, duplicate sounds share it, and the StemProvider carries/keys on it.
+- 28/28 gates green; single-file builds + self-test.
+- Note: this feeds the KEY the stem pass needs; the stem pass itself still isn't
+  CALLED from render (§5.2 wiring) and Demucs still runs only on a GPU box.
+
+## v0.8.21 — code the dicta: four conflicts resolved, each pinned by a gate
+- Audited the session's surface for things that step on each other's toes, decided
+  who wins, and wrote the ruling into an executable gate. 27/27 gates green.
+- **Two real footguns closed (missing-signature bypass).** `reorganize_source`
+  (moves originals) and `apply_identities` (rewrites tags) used the weak guard
+  `if approved and approved != sig` — an EMPTY signature short-circuits false, so
+  they executed unsigned. Reproduced: `reorganize_source({apply:true})` moved 3
+  real files with no approval. Now both refuse a missing OR stale signature (same
+  strong guard as `apply_workspace_migration`). RULING: any op that moves/deletes/
+  rewrites files on disk must have a valid plan signature to apply; copy-only
+  `ingest`/`organize` keep the flag-only path (source is never touched). Gate
+  `test_destructive_mutations_require_signature`.
+- **Human beats machine on loop curation.** `auto_approve_quota` reset EVERY
+  approved loop to candidate before re-approving its own picks — wiping a human's
+  manual loop approvals. NEW `loops.locked` column (additive migration);
+  `set_loop_status` locks a human call; quota now demotes only machine-approved
+  (`locked=0`) loops and preserves locked ones. Gate
+  `test_quota_preserves_human_loop_approval`.
+- **Steering precedence made law.** pair-veto / atom-lock-out > favorite > rank >
+  station bias: the composer now drops human-rejected/locked-out atoms from the
+  pool before any rail is built, so no favorite or station nudge can resurrect a
+  vetoed choice. Gate `test_steering_precedence_order` (extends
+  `test_curation_steers_composer`).
+- **One source of truth for the math.** Collapsed five inlined `11.5`
+  source-seconds fallbacks to `plan.math.DEFAULT_SOURCE_SECONDS`; the composition
+  formulas live only in `plan/math.py`. Gate `test_no_shadow_sources_of_truth`
+  (grep-style, red if a formula is re-inlined in app.py).
+- Each ruling proven RED-first (the gate fails when the wrong thing wins) and
+  re-verified in the main tree; resolved via a 4-way parallel fan-out.
+
+## v0.8.20 — restore the buffalo the LATTICE reskin dropped
+- The v0.8.17 reskin was a prettier but THINNER front door — it silently dropped
+  working handles the old console had (the engine kept them; the new UI just
+  stopped exposing them). Restored, wired to the existing endpoints:
+  - **Reorganize ROLLBACK** — the reskin kept Preview+Apply but dropped the undo,
+    leaving a destructive in-place move with no UI reversal. Now a real
+    Preview → Apply (signature-gated) → Rollback (dry-run confirm then undo) flow.
+  - **Loop review // quota approval** — candidate/approved/rejected counts +
+    bounded, role-balanced quota promotion (`/api/loops`, `auto_approve_quota`).
+  - **Playlist builder** — query → m3u8 (`/api/playlist/propose`).
+  - **Plan save / load** in Workbench — save a composed plan, reload it later
+    (`/api/timeline/save|load|list`); plus **Preflight**.
+  - **Judge render** + **Open folder** on Sessions rows, and a **Manifests**
+    panel (reversible operation journals: preview / execute).
+  - **Scout drives** + **Open workspace** in Setup (`/api/workspace_candidates`,
+    `/api/open_folder`).
+- Verified: all seven screens drive live data headless with ZERO console errors;
+  single-file builds + self-test; 23/23 gates green.
+- Still not surfaced (honest): per-loop status toggles and bulk loop status
+  (quota approval is the sanctioned promotion path) and `mashup/propose`
+  (redundant with one_click) — say so rather than pretend. And the reskin's
+  original omission is the lesson: a rebuild that drops working surface is
+  shooting the buffalo and leaving the meat.
+
+## v0.8.19 — v3 phases 2–5: provider seams, plan/ purification, layer + render gates
+- The v3 rebuild's architecture-of-record lands as SEAMS and INVARIANTS (not a
+  monolith rewrite). 23/23 gates green on the built single-file.
+- §5.2/§5.3/§5.4 — NEW `earcrate/providers/` package: a pure registry
+  (`register`/`get`, default-per-kind) plus four capability seams, each with a
+  correct registered DEFAULT so core reaches capability THROUGH the seam:
+  - `StemProvider` — `NoopStemProvider` default (reports unavailable, never
+    crashes, no heavy deps). `DemucsStemProvider` guards its torch/demucs import
+    and materializes to L3 with provenance `(pcm_sha, "demucs", model_version)` +
+    a retention tier. **Honest limit: the actual GPU separation is not run in CI
+    (no torch/CUDA here) — the seam, no-op default, guarded-import safety, and L3
+    provenance shape are verified; the real Demucs pass executes on the user's
+    RTX 4060, and is not claimed to run.**
+  - `CandidateRetriever` (`FullScanRetriever` default), `EmbeddingProvider`
+    (`NoopEmbeddingProvider` = returns None, never fabricates vectors),
+    `VectorIndex` (`LinearScanIndex` = brute-force true nearest). Linear-scan and
+    full-scan run and are gated.
+  - `ArtifactStore` (L3) — local tiered dir, `put/get/evict` with retention tiers
+    ephemeral|warm|pinned; eviction sheds ephemeral before warm and NEVER pinned;
+    provenance `(source_identity, provider, version)`.
+  - Gate `test_provider_seams` pins all of the above (red-first on evict-pinned +
+    non-noop-default).
+- §5.3 / Lesson #1 — NEW `earcrate/plan/` package: composition MATH extracted to
+  PURE functions (`sources_needed`, `readiness_need`, `target_bars`), and app.py
+  now DELEGATES to them in 7 spots so there is ONE source of the arithmetic.
+  Behavior byte-identical (all prior gates unchanged). Gate
+  `test_plan_math_pins_composition_arithmetic` (red-first: a wrong constant fails).
+- §5.5 + §5.3 layer invariants — NEW gates: `test_saved_plan_renders_identically`
+  (a saved plan re-derives with an identical `arrangement_sha` — reproduce or it's
+  an invariant failure), `test_measurements_persona_free` (L1 measured once per
+  (file, analyzer_version), shared across personas), and
+  `test_judgments_append_only_deterministic` (L2 keyed by content identity, upsert
+  not duplicate).
+- New modules added to the single-file builder ORDER (before app.py) and verified
+  present in `dist/earcrate.py`; built-artifact self-test + `test_singlefile_cli_smoke`
+  both green. Built via a 3-way parallel fan-out, integrated and re-verified in the
+  main tree.
+- Still open (honestly): core is not yet WIRED to call `StemProvider` inside the
+  render path (the seam exists + is gated; vocal-on-instrumental layering is the
+  next feature step), the on-GPU Demucs run (above), and the destructive teardown
+  of the monolith's shared table space (the L1/L2 invariants are now GATED, i.e.
+  pinned, not yet re-shaped).
+
+## v0.8.18 — close the §5.1 debt: rows 13–16 gated (and two live footguns fixed)
+- The entire v3 §5.1 debt front is now closed. With v0.8.16's Lesson #7 gate,
+  ledger rows 7, 13, 14, 15, 16 all have executable gates that go RED the instant
+  the failure class returns. 18/18 gates green on the BUILT single-file.
+- ROW 15 CAUGHT TWO LIVE FOOTGUNS (fixed, red-first): (1) `apply_workspace_migration`
+  executed the migration when called with NO signature — the guard was
+  `if approved and approved != sig`, and an empty signature is falsy, so it fell
+  straight through to mkdir + move. Now it refuses (`dry_run:true,
+  requires_signature:true`) without a signature. (2) `rollback_identities`
+  rewrote tags on disk immediately with no `--apply` and no dry-run branch (the
+  CLI `identify-rollback` verb too). Now dry-run-default: it previews
+  (`would_restore`, sample of files) and only writes with `apply:true`; the CLI
+  gains `--apply` to match `reorganize-rollback`.
+- NEW gates (rebuild plan §5.1):
+  - `test_singlefile_cli_smoke` (row 13): builds `dist/earcrate.py` and drives the
+    BUILT artifact as a subprocess through `--self-test` + `configure` + `deepclean`
+    (the assess_track_audio → decode_audio path that once crashed with "earcrate is
+    not a package"), asserting no import/package tracebacks. The builder only strips
+    column-0 package imports, so this pins that no INDENTED in-function
+    `from earcrate.<pkg> import` survives into a shipped path.
+  - `test_fresh_clone_has_no_runtime_state` (row 14): `git ls-files` carries zero
+    runtime pointers/DBs/caches (`*_workspace.json`, `config.json`, `*.sqlite`,
+    `*.npz`, `.deps_installed`, `cache|workspace|agent|dist`), and `.gitignore`
+    covers them.
+  - `test_all_mutations_dry_run_default` (row 15): every mutating op
+    (reorganize/rollback/migrate/apply-identities/ingest/organize/execute-manifest…)
+    returns dry-run or refuses without `apply`, and touches nothing.
+  - `test_done_requires_receipt` (row 16): a completion leaves a receipt artifact on
+    disk the gate reads back to confirm the claimed outcome.
+- Rows 13, 14, 16 were already-green — the gates PIN the invariants. Row 15 needed
+  the two real fixes above. Closed via a 4-way parallel fan-out, each gate proven
+  red-first in isolation, then integrated and re-verified in the main tree.
+
+## v0.8.17 — LATTICE UI: the new console, wired to the live backend
+- NEW single-file front end (`earcrate/ui/static/index.html`) rebuilt to the
+  LATTICE design: a command strip (query + skin switch + crate-fit meter), a
+  live system readout, a seven-mode rail (Play · Library · Crate · Workbench ·
+  Sessions · Activity · Setup), and a transport bar. Four skins
+  (lattice/signal/terminal/paper) as pure CSS-var swaps, persisted to
+  localStorage. System fonts only — no Google Fonts link — so it stays a
+  no-network local app.
+- Every screen is wired to the EXISTING API (no mock data): Play ← `/api/residents`
+  + `/api/rank` rails; Crate ← `/api/rank`, `/api/taste/pairs`, `/api/taste/readiness`
+  with favorite/lock/reject → `/api/ear_atoms/judgment` and pair veto →
+  `/api/taste/pair_judgment`; Workbench ← `/api/timeline/propose` +
+  `/api/taste/graph`; Sessions ← `/api/sessions`; Activity ← `/api/status` +
+  `/api/perf`; Library ← `/api/tracks` + ingest/organize/reorganize/identify/
+  deepclean + the scan→analyze→extract→build pipeline; Setup ← `/api/defaults`,
+  `/api/config`, `/api/config_workspace`, `/api/browse_dir`, `/api/doctor`.
+  Endless radio, demo seeding, station HOTTER/COOLER/CUT, and the render
+  transport are carried over from the previous UI under the new chrome.
+- `residents()` now also reports `sources` (deck-safe source count) and
+  `pool_size` so the Play hero can show real numbers without a second call.
+- Verified end-to-end: all seven screens drive live data in a headless browser
+  (seeded 5-track workspace) with ZERO console errors; single-file builds +
+  SELF_TEST_OK; 14/14 gates pass.
+
+## v0.8.16 — deterministic segment identity: force-rebuild preserves judgments
+- LESSON #7 CLOSED (the front of the v3 debt queue). `extract_loops(force=True)`
+  used to run `DELETE FROM loops WHERE file_id=?` and reinsert with fresh random
+  ids. That delete cascaded through `ear_atoms` into `atom_judgments` and
+  silently destroyed human judgment — the locked keeps and favorites that only
+  real listening produces. A convenience flag was quietly deleting the most
+  expensive data in the system.
+- NEW `segment_id(source, analyzer, start_sample, end_sample, role, stem)`
+  (v3 §2 keystone): a loop's id is now the SHA256 of its own content/recipe, not
+  a ulid. Same sound + analyzer + window + role always yields the same id, so a
+  re-extract is an UPSERT of the same row — id stable, only the churnable
+  measurements (score, role_confidence) refresh. The atom id already derived
+  deterministically from the loop id, so atoms and their judgments survive by
+  construction. `force` is now RE-MEASURE IN PLACE; it never deletes a loop.
+- Migration `migrate_loops_segment_identity`: additive and idempotent. Adds the
+  `segment_id` column, backfills it for existing loops from their own recipe
+  fields (touching no audio), and enforces uniqueness. Old ulid loop ids are
+  LEFT ALONE — the column is what future rebuilds match on, so re-extracting an
+  old loop upserts that same row rather than orphaning its atoms/judgments.
+  Source identity here is the file id; sound-level dedup across duplicate files
+  is L1 work (rebuild plan §5.3), deliberately not folded into this keystone.
+- Gate `test_force_rebuild_preserves_judgments` (rebuild plan §5.1): shipped RED
+  on the delete+reinsert code (proved `1 -> 0` judgments), GREEN on the upsert
+  code. It locks+favorites+relabels an atom, forces a full loop rebuild, and
+  asserts the judgment and its atom survive with stable ids. Placed before the
+  runner block so it actually executes under `python tests/test_gates.py`.
+- Verified: 14/14 runner gates pass; single-file builds + SELF_TEST_OK via
+  `VERIFY_PACKAGE.py`; migration exercised on a pre-existing ulid-keyed loop
+  (id preserved, segment_id backfilled, locked judgment intact).
+
 ## v0.8.15 — apply identities: close the identify -> fix loop (reversible)
 - NEW `apply_identities` + `rollback_identities` (CLI `apply-identities`,
   `identify-rollback`; routes `/api/identify/apply|rollback`): takes identify's

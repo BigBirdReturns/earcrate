@@ -5,44 +5,75 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EarCrate — one-click setup</title>
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; margin: 0; }
-  body {
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: #101014; color: #e8e6e3;
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    padding: 24px;
+  :root{ color-scheme: dark;
+    --bg:#07090A;--panel:#0D1113;--panel2:#141A1D;--edge:#1E272B;--edge2:#2C3A40;
+    --ink:#DCE6E8;--dim:#7C8A90;--faint:#4A565B;--acc:#FFB020;--accink:#07090A;
+    --accGlow:rgba(255,176,32,.4);--grid:rgba(44,58,64,.14);
+    --disp:'Saira Condensed','Oswald','Bebas Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'JetBrains Mono','SF Mono','Cascadia Code',Consolas,monospace;
   }
-  main { max-width: 560px; width: 100%; }
-  h1 { font-size: 2rem; letter-spacing: -0.02em; }
-  h1 span { color: #f5a623; }
-  p.tag { color: #9a97a0; margin: 8px 0 28px; line-height: 1.5; }
-  a.button {
-    display: block; text-align: center; text-decoration: none;
-    background: #f5a623; color: #17130a; font-size: 1.35rem; font-weight: 700;
-    padding: 20px; border-radius: 14px; margin-bottom: 28px;
+  *{ box-sizing:border-box; margin:0 }
+  a{ color:inherit }
+  body{
+    font-family:var(--mono); background:var(--bg); color:var(--ink);
+    min-height:100vh; padding:28px 22px; line-height:1.5;
+    background-image:repeating-linear-gradient(0deg,transparent 0 47px,var(--grid) 47px 48px),repeating-linear-gradient(90deg,transparent 0 47px,var(--grid) 47px 48px);
+    display:flex; align-items:flex-start; justify-content:center;
   }
-  a.button:hover { background: #ffbc42; }
-  a.button small { display: block; font-size: 0.8rem; font-weight: 500; margin-top: 4px; opacity: 0.75; }
-  ol { padding-left: 22px; line-height: 1.7; }
-  ol li { margin-bottom: 10px; }
-  ol b { color: #fff; }
-  .note { background: #1a1a21; border: 1px solid #2a2a33; border-radius: 10px;
-          padding: 14px 16px; margin-top: 24px; font-size: 0.9rem; color: #b5b2bb; line-height: 1.6; }
-  .note b { color: #e8e6e3; }
-  footer { margin-top: 28px; font-size: 0.85rem; color: #706d78; line-height: 1.6; }
-  footer a { color: #9a97a0; }
+  main{ max-width:620px; width:100% }
+  @keyframes glowPulse{0%,100%{box-shadow:0 0 22px var(--accGlow)}50%{box-shadow:0 0 52px var(--accGlow)}}
+  /* command strip */
+  .strip{ display:flex; align-items:baseline; gap:9px; padding:12px 15px;
+    background:var(--panel); border:1px solid var(--edge); margin-bottom:26px }
+  .strip .mk{ font-family:var(--disp); font-weight:700; font-size:20px; letter-spacing:.06em; text-transform:uppercase }
+  .strip .lat{ font:600 10px/1 var(--mono); letter-spacing:.18em; color:var(--acc) }
+  .strip .ver{ font:400 9px/1 var(--mono); letter-spacing:.1em; color:var(--faint); margin-left:auto }
+  h1{ font-family:var(--disp); font-weight:700; font-size:3.4rem; line-height:.9;
+      letter-spacing:.01em; text-transform:uppercase }
+  h1 span{ color:var(--acc) }
+  p.tag{ color:var(--dim); margin:12px 0 26px; max-width:46ch; font-size:.95rem }
+  a.button{
+    display:block; text-align:center; text-decoration:none;
+    background:var(--acc); color:var(--accink);
+    font-family:var(--mono); font-weight:700; font-size:1.15rem; letter-spacing:.12em; text-transform:uppercase;
+    padding:20px; border:none; margin-bottom:28px; cursor:pointer;
+    animation:glowPulse 3.4s ease-in-out infinite;
+  }
+  a.button small{ display:block; font-size:.7rem; font-weight:600; letter-spacing:.14em;
+    margin-top:6px; opacity:.8 }
+  .lbl{ font:600 9px/1 var(--mono); letter-spacing:.24em; text-transform:uppercase; color:var(--faint); margin-bottom:11px }
+  ol{ list-style:none; padding:0; counter-reset:step }
+  ol li{ position:relative; padding:0 0 14px 40px; counter-increment:step; color:var(--dim); font-size:.92rem }
+  ol li::before{ content:counter(step,decimal-leading-zero); position:absolute; left:0; top:1px;
+    width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+    font:700 9px/1 var(--mono); color:var(--accink); background:var(--acc) }
+  ol b{ color:var(--ink) }
+  code{ font-family:var(--mono); color:var(--acc); background:var(--panel2); padding:1px 5px; border:1px solid var(--edge) }
+  .note{ background:var(--panel); border:1px solid var(--edge); border-left:3px solid var(--acc);
+    padding:15px 17px; margin-top:26px; font-size:.88rem; color:var(--dim) }
+  .note b{ color:var(--ink) }
+  footer{ margin-top:26px; padding-top:16px; border-top:1px solid var(--edge);
+    font:500 .8rem/1.6 var(--mono); letter-spacing:.03em; color:var(--faint) }
+  footer a{ color:var(--dim) }
+  footer a:hover{ color:var(--acc) }
 </style>
 </head>
 <body>
 <main>
+  <div class="strip">
+    <span class="mk">EARCRATE</span>
+    <span class="lat">//LATTICE</span>
+    <span class="ver">SYSTEM ONLINE · __PAGE_BUILD__</span>
+  </div>
+
   <h1>ear<span>crate</span></h1>
   <p class="tag">Local-first mashup engine. Your music never leaves your machine —
   this button just fetches a tiny setup file that does everything for you.</p>
 
   <a class="button" href="get-earcrate.cmd" download>⬇ Download EarCrate Setup
-    <small>Windows · one double-click · currently ships __PAGE_BUILD__</small></a>
+    <small>WINDOWS · ONE DOUBLE-CLICK · SHIPS __PAGE_BUILD__</small></a>
 
+  <div class="lbl">[ Install // three steps ]</div>
   <ol>
     <li><b>Click the button</b> — it saves <code>get-earcrate.cmd</code> to your Downloads.</li>
     <li><b>Double-click the file.</b> If Windows shows a blue "protected your PC"
@@ -50,17 +81,20 @@
         own repo).</li>
     <li><b>That's it.</b> It installs Python + ffmpeg if you don't have them,
         downloads the latest EarCrate, builds it, puts an <b>EarCrate</b> icon on
-        your Desktop, and opens the app. If it says it installed missing pieces,
-        double-click the file one more time.</li>
+        your Desktop, and opens the console. If it says it installed missing
+        pieces, double-click the file one more time.</li>
   </ol>
 
   <div class="note">
-    <b>After it opens:</b> pick a workspace folder, then use the <b>Library</b> tab —
-    Ingest (point it at your external drive), Organize (builds your clean
-    Artist/Album archive), Ear Crate (builds your mashup reference from your own
-    music). Dry-run is always the default; your source files are never touched.
+    <b>After it opens:</b> in <b>Setup</b> pick your music folder + workspace.
+    Then <b>Library</b> feeds and cleans it — Ingest (point it at a drive),
+    Organize (builds your clean Artist/Album archive), Build ear crate (auditions
+    your own music into mashup atoms). Then <b>Play</b> — pick a resident and
+    Book a set. Dry-run is always the default; your source files are never touched.
     <br><br>
-    <b>To update later:</b> just run the same setup file again — it always installs whatever this button says it ships. Proof you're current: the app's header shows the same version + build stamp as the button above.
+    <b>To update later:</b> run the same setup file again — it always installs
+    whatever this button says it ships. Proof you're current: the console's
+    command strip shows the same version + build stamp as the button above.
   </div>
 
   <footer>

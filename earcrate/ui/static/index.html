@@ -1,659 +1,624 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>earcrate</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<html><head><meta charset="utf-8"><title>earcrate</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">
 <style>
-/* earcrate — "mixing console at night". Amber = tempo readout (Technics pitch LED),
-   cyan = cue/active, coral = warning. System fonts only: this is a no-network local app. */
-:root{
-  --bg:#0e0f13; --chassis:#15171d; --panel:#191c24; --panel-2:#1f232d; --edge:#2a2f3b; --edge-hi:#39404f;
-  --ink:#e8ebf2; --ink-dim:#98a1b3; --ink-faint:#6b7488;
-  --amber:#ffb02e; --amber-dim:#a8741f; --cyan:#3fd6e6; --cyan-dim:#2a8b96; --coral:#ff5a52; --green:#54d08a;
-  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Consolas,"Liberation Mono",monospace;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --lbl:.14em;
-}
+/* earcrate // LATTICE — the design built in the DC mock, wired to the live backend.
+   No-network local app: system fonts only (no Google Fonts link), so it works offline. */
+html,body{margin:0;padding:0;height:100%}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;
-  background-image:radial-gradient(1200px 500px at 80% -10%,rgba(255,176,46,.05),transparent),radial-gradient(900px 500px at 0% 0%,rgba(63,214,230,.045),transparent)}
-/* console header */
-header{position:sticky;top:0;z-index:40;display:flex;gap:20px;align-items:center;padding:12px 22px;
-  background:linear-gradient(180deg,#1a1d25,#131519);border-bottom:1px solid var(--edge);box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 6px 22px rgba(0,0,0,.4)}
-.brand{display:flex;flex-direction:column;line-height:1.05}
-.brand .mk{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.04em}
-.brand .mk b{color:var(--amber)}
-.brand .ver{font-family:var(--mono);font-size:10.5px;letter-spacing:var(--lbl);text-transform:uppercase;color:var(--ink-faint);margin-top:2px}
-nav{display:flex;gap:4px;flex-wrap:wrap}
-nav button{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);
-  background:transparent;border:1px solid transparent;border-radius:7px;padding:7px 11px;cursor:pointer;transition:.12s}
-nav button:hover{color:var(--ink);background:var(--panel-2)}
-nav button.active{color:var(--bg);background:var(--amber);border-color:var(--amber);font-weight:700;box-shadow:0 0 16px rgba(255,176,46,.35)}
-/* live tempo readout in header */
-.readout{margin-left:auto;display:flex;align-items:center;gap:12px}
-.led{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
-  display:flex;align-items:center;gap:7px}
-.led .dot{width:8px;height:8px;border-radius:50%;background:var(--edge-hi);box-shadow:0 0 0 rgba(0,0,0,0)}
-.led.busy .dot{background:var(--amber);box-shadow:0 0 10px var(--amber);animation:pulse 1s infinite}
-.led .val{color:var(--ink);text-transform:none}
-@keyframes pulse{50%{opacity:.35}}
-main{padding:20px;max-width:1200px;margin:0 auto}
-section{display:none;animation:fade .18s ease}
-section.active{display:block}
-@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-h1{font-size:18px;margin:0}
-h2{font-family:var(--mono);font-size:13px;letter-spacing:var(--lbl);text-transform:uppercase;color:var(--ink);margin:0 0 4px;font-weight:700}
-h2 .accent{color:var(--amber)}
-/* panels look like console modules with a silkscreen top rule */
-.card{background:linear-gradient(180deg,var(--panel),#16191f);border:1px solid var(--edge);border-radius:12px;padding:16px;margin-bottom:14px;position:relative}
-.card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);border-radius:12px 12px 0 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
-.muted{color:var(--ink-dim)}.small{font-size:12px}.mono{font-family:var(--mono)}
-label{display:block;margin:12px 0 5px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
-label .muted{text-transform:none;letter-spacing:0;font-size:11px}
-input,select,textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--edge);border-radius:8px;padding:9px 11px;font-family:var(--sans);font-size:13.5px;transition:.12s}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(63,214,230,.14)}
-input.mononum{font-family:var(--mono);letter-spacing:.02em}
-button.action{font-family:var(--mono);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;
-  background:var(--panel-2);color:var(--ink);border:1px solid var(--edge-hi);border-radius:8px;padding:10px 14px;margin:8px 8px 0 0;cursor:pointer;transition:.12s}
-button.action:hover{border-color:var(--cyan);color:#fff;background:#232834}
-button.action.primary{background:linear-gradient(180deg,#2ca6b4,#1f8593);border-color:#3fd6e6;color:#05171a;text-shadow:0 1px 0 rgba(255,255,255,.2)}
-button.action.primary:hover{filter:brightness(1.08)}
-button.danger{border-color:#6e2f34;color:#ffb4af;background:#241416}button.danger:hover{border-color:var(--coral);color:#fff}
-.bigJam{font-size:14px;padding:16px 24px;letter-spacing:.09em;border-radius:11px;
-  background:linear-gradient(180deg,#ffc255,#f59a15)!important;border-color:#ffb02e!important;color:#1a1200!important;font-weight:800!important;box-shadow:0 8px 26px rgba(255,155,20,.28)}
-.bigJam:hover{filter:brightness(1.05)}
-.bar{height:6px;background:#0a0b0f;border-radius:6px;overflow:hidden;border:1px solid var(--edge)}
-.bar span{display:block;height:100%;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));width:0;transition:width .3s}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:8px;border-bottom:1px solid var(--edge)}
-td{border-bottom:1px solid #20242e;padding:8px;vertical-align:top}
-tr:hover td{background:rgba(255,255,255,.015)}
-code,.k{font-family:var(--mono)}
-.pill{display:inline-block;padding:2px 9px;border:1px solid var(--edge-hi);border-radius:20px;font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
-.pill.ok{border-color:var(--green);color:var(--green)}.pill.warn{border-color:var(--amber);color:var(--amber)}.pill.bad{border-color:var(--coral);color:var(--coral)}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
-.pathLine{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.pathLine input{min-width:min(680px,64vw);flex:1;width:auto}
-pre{white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:#0a0b0f;color:#c8cfdd;padding:13px;border-radius:9px;max-height:340px;overflow:auto;border:1px solid var(--edge)}
-.toast{position:fixed;right:18px;bottom:18px;max-width:520px;background:linear-gradient(180deg,#1c2530,#141a22);border:1px solid var(--cyan-dim);box-shadow:0 16px 40px rgba(0,0,0,.55);border-radius:12px;padding:14px 16px;display:none;z-index:60}
-.toast b{display:block;margin-bottom:6px;font-family:var(--mono);letter-spacing:.03em}.toast a{color:var(--cyan)}
-.toast button{float:right;background:var(--panel-2);color:var(--ink);border:1px solid var(--edge-hi);border-radius:7px;padding:3px 9px;cursor:pointer;font-family:var(--mono)}
-.playerBox{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.playerBox audio{width:min(720px,100%);filter:sepia(.15) hue-rotate(160deg) saturate(1.1)}
-.renderList{margin-top:10px}.renderList a{color:var(--cyan)}.renderList>div{padding:6px 0;border-top:1px solid #20242e}.renderList button{margin-left:6px}
-.hero{background:linear-gradient(150deg,#1c2029,#141821 60%,#181320);border-color:var(--edge-hi)}
-.controlGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
-.outcomeHint{min-height:38px;color:var(--ink);font-size:13.5px}
-.advanced{border-top:1px solid var(--edge);margin-top:14px;padding-top:6px}
-.advanced summary{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);cursor:pointer;padding:6px 0}
-.advanced summary:hover{color:var(--cyan)}
-/* ===== SIGNATURE: the pitch-fader lattice ===== */
-.readiness{display:grid;grid-template-columns:1fr;gap:16px}
-@media(min-width:820px){.readiness{grid-template-columns:1.3fr 1fr}}
-.latticeWrap{background:#0a0b0f;border:1px solid var(--edge);border-radius:10px;padding:16px 16px 10px}
-.latticeHead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
-.latticeHead .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
-.latticeHead .rec{font-family:var(--mono);font-size:12px;color:var(--amber)}
-.ladder{display:flex;align-items:flex-end;gap:10px;height:150px;overflow-x:auto;padding-bottom:4px}
-.rung{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:56px;height:100%}
-.rung .col{width:38px;background:linear-gradient(180deg,var(--cyan-dim),#1a3b40);border:1px solid var(--cyan-dim);border-radius:4px 4px 2px 2px;transition:.2s;position:relative}
-.rung.best .col{background:linear-gradient(180deg,var(--amber),var(--amber-dim));border-color:var(--amber);box-shadow:0 0 18px rgba(255,176,46,.4)}
-.rung.target .col{outline:2px dashed var(--ink-dim);outline-offset:2px}
-.rung .n{font-family:var(--mono);font-size:11px;color:var(--ink);margin-top:7px}
-.rung .u{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);margin-top:1px}
-.rung.best .n{color:var(--amber);font-weight:700}
-.rung .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:4px;height:11px}
-.rung.best .tag{color:var(--amber)}.rung.target .tag{color:var(--ink-dim)}
-.roleGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin-top:4px}
-.roleCell{background:var(--panel-2);border:1px solid var(--edge);border-radius:8px;padding:9px 10px;text-align:center}
-.roleCell .num{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1}
-.roleCell .lab{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-top:5px}
-.roleCell.short .num{color:var(--coral)}.roleCell.ok .num{color:var(--green)}
-.warnList{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
-.warnList li{display:flex;gap:9px;align-items:flex-start;font-size:13px;background:#231613;border:1px solid #4a2b23;border-radius:8px;padding:9px 11px;color:#ffcabf}
-.warnList li::before{content:"\25B2";color:var(--coral);font-size:9px;margin-top:3px}
-.verdict{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:8px 13px;border-radius:8px;border:1px solid}
-.verdict.go{color:var(--green);border-color:var(--green);background:rgba(84,208,138,.08)}
-.verdict.hold{color:var(--coral);border-color:var(--coral);background:rgba(255,90,82,.08)}
-.tierbar{display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid var(--edge);margin-top:6px}
-.tierbar span{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;color:#06121a;min-width:0;overflow:hidden}
-.tier-native{background:var(--green)}.tier-vari{background:var(--cyan)}.tier-varires{background:var(--amber)}.tier-reject{background:#59323a;color:#ffb4af}
-@media(max-width:640px){.pathLine input{min-width:100%}main{padding:14px}}
+a{color:inherit;text-decoration:none}
+::selection{background:rgba(255,176,32,.28)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#2C3A40;border:2px solid transparent;background-clip:padding-box}
+@keyframes eqPulse{0%,100%{transform:scaleY(.28)}50%{transform:scaleY(1)}}
+@keyframes glowPulse{0%,100%{box-shadow:0 0 22px var(--accGlow)}50%{box-shadow:0 0 52px var(--accGlow)}}
+@keyframes flick{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes indet{0%{left:-34%}100%{left:104%}}
+body{background:#07090A;-webkit-font-smoothing:antialiased}
+button{font-family:inherit}
+.hidden{display:none!important}
+.clk{cursor:pointer}
+.scrn{padding:22px 26px 40px;display:flex;flex-direction:column;gap:18px}
+.lbl{font:600 9px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--faint)}
+.h1{font-family:var(--disp);font-weight:700;font-size:34px;line-height:.9;letter-spacing:.02em;color:var(--ink);text-transform:uppercase}
+.card{background:var(--panel);border:1px solid var(--edge);padding:13px 14px}
+.btn{font:600 9px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--panel2);border:1px solid var(--edge2);padding:9px 12px;cursor:pointer}
+.btn:hover{border-color:var(--acc);color:var(--ink)}
+.btn.primary{color:var(--accink);background:var(--acc);border-color:var(--acc)}
+.btn.fault{color:var(--fault);border-color:var(--fault)}
 </style>
-<style>
-/* ---- shell (mock-derived), k-prefixed to never collide with workbench CSS ---- */
-#kapp{--kbg:#f2efe8;--ksur:#fbf9f4;--ksur2:#eae6dc;--kedge:#dcd6c8;--kink:#211e18;--kdim:#6f695c;--kfaint:#a39b8a;--kacc:#e09c2f;--kaccink:#2a1c04;--kgo:#3fa06c;--kwarn:#d8543f;--kcool:#4d7fc4;
-display:flex;flex-direction:column;min-height:100vh;background:var(--kbg);color:var(--kink);font:14px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif}
-#kapp.dark{--kbg:#131210;--ksur:#1c1a17;--ksur2:#26231e;--kedge:#33302a;--kink:#ece7db;--kdim:#a49c8c;--kfaint:#6e675a;--kacc:#eaa93e;--kaccink:#241703;--kgo:#5cc08a;--kwarn:#e8705c;--kcool:#7ba3dd}
-.kbody{flex:1;display:flex;min-height:0}
-.kside{overflow:auto}
-.kside{width:206px;flex:none;background:var(--ksur);border-right:1px solid var(--kedge);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
-@media(max-width:860px){.kside{width:56px}.kside .kw{display:none}}
-.klogo{font-weight:700;font-size:17px;padding:2px 10px 4px;color:var(--kink)}.klogo em{font-style:normal;color:var(--kacc)}
-.kver{font-size:10.5px;color:var(--kfaint);padding:0 10px 12px}
-.knav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:var(--kdim);cursor:pointer;font-weight:500}
-.knav:hover{background:var(--ksur2);color:var(--kink)}.knav.active{background:var(--ksur2);color:var(--kink);font-weight:700}
-.kssec{font-weight:700;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--kfaint);padding:14px 10px 6px}
-.kmainwrap{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
-.ktopbar{display:flex;align-items:center;gap:14px;padding:12px 22px;background:var(--kbg);border-bottom:1px solid var(--kedge)}
-.ksearch{flex:1;max-width:400px;background:var(--ksur);border:1px solid var(--kedge);border-radius:20px;padding:8px 15px;color:var(--kink);font:13px system-ui}
-.ksearch:focus{outline:2px solid var(--kacc)}
-.krwidget{margin-left:auto;display:flex;flex-direction:column;gap:3px;width:180px;cursor:pointer}
-.krlab{display:flex;justify-content:space-between;font-weight:700;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--kfaint)}.krlab b{color:var(--kink)}
-.kgauge{position:relative;height:7px;border-radius:5px;background:var(--ksur2)}.kgauge i{position:absolute;top:0;bottom:0;left:0;border-radius:5px;background:linear-gradient(90deg,var(--kgo),var(--kacc))}
-.kiconbtn{width:32px;height:32px;border-radius:50%;border:1px solid var(--kedge);background:var(--ksur);color:var(--kink);cursor:pointer;font-size:14px}
-#kapp main{flex:1;overflow:auto;padding:16px 22px 26px;max-width:none}
-.kh1{font-weight:700;font-size:24px;letter-spacing:-.02em;margin:4px 0 4px;color:var(--kink)}
-.ksub{color:var(--kdim);margin:0 0 16px;max-width:620px}
-.kcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:14px}
-.kcard{background:var(--ksur);border:1px solid var(--kedge);border-radius:16px;padding:16px;color:var(--kink)}
-.kcard.dashed{border-style:dashed;background:transparent;color:var(--kdim)}
-.kpname{font-weight:700;font-size:16px}.kptag{font-size:12px;color:var(--kdim)}
-.kpnote{font-size:12.5px;color:var(--kdim);margin-top:9px;line-height:1.45}.kpnote b{color:var(--kink)}
-.kbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--kedge);border-radius:20px;background:var(--ksur);color:var(--kink);padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer}
-.kbtn:hover{border-color:var(--kacc)}.kbtn.p{background:var(--kacc);border-color:var(--kacc);color:var(--kaccink)}
-.krolebar{display:flex;height:14px;border-radius:8px;overflow:hidden;border:1px solid var(--kedge)}
-.klegend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--kdim);margin:8px 0 4px}.klegend b{font-weight:700;color:var(--kink)}
-.krail{display:grid;grid-template-columns:2.2fr 1fr;gap:14px;margin-top:12px}@media(max-width:980px){.krail{grid-template-columns:1fr}}
-.kcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.kcolh{font-weight:700;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--kfaint);margin-bottom:8px;display:flex;justify-content:space-between}
-.kcell{background:var(--ksur);border:1px solid var(--kedge);border-radius:11px;padding:8px 11px;margin-bottom:8px;cursor:pointer;font-size:13px;color:var(--kink)}
-.kcell:hover{border-color:var(--kacc)}.kcell .m{display:block;font-size:11.5px;color:var(--kfaint)}
-.kcell.alert{border-color:var(--kwarn);border-style:dashed;color:var(--kwarn)}
-.kfix{background:var(--ksur);border:1px dashed var(--kedge);border-radius:14px;padding:12px 14px;margin-bottom:10px;font-size:13px;color:var(--kdim)}.kfix b{color:var(--kink)}
-.ksess{display:flex;align-items:center;gap:14px;background:var(--ksur);border:1px solid var(--kedge);border-radius:14px;padding:12px 15px;margin-bottom:10px;color:var(--kink)}
-.ksess .m{font-size:12.5px;color:var(--kdim);margin-top:2px}
-.kpill{font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border-radius:12px;padding:3px 10px}
-.kpill.pass{background:rgba(63,160,108,.16);color:var(--kgo)}.kpill.ref{background:rgba(216,84,63,.15);color:var(--kwarn)}
-.kbar{flex:none;display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--ksur);border-top:1px solid var(--kedge);color:var(--kink)}
-.kbar audio{height:30px;max-width:230px}
-.knp{min-width:0;flex:1}.knp .t{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.knp .m{font-size:11px;color:var(--kfaint);white-space:nowrap}
-.ktoast{font-size:12px;color:var(--kgo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
-.kact2{display:flex;align-items:center;gap:8px;background:var(--ksur2);border:1px solid var(--kedge);border-radius:12px;padding:5px 11px;font-size:11.5px;color:var(--kdim);cursor:pointer;min-width:0}.kact2:hover{border-color:var(--kacc);color:var(--kink)}
-.kact2 .spin{width:8px;height:8px;border-radius:50%;background:var(--kacc);animation:kpulse 1.2s infinite;flex:none}
-@keyframes kpulse{50%{opacity:.25;transform:scale(.7)}}
-.kactbar{width:64px;height:5px;border-radius:4px;background:var(--kedge);overflow:hidden;flex:none}.kactbar i{display:block;height:100%;background:var(--kacc);width:0}
-@media(max-width:1020px){.khidep{display:none}}
-.f1k{flex:1;min-width:0}
-</style><style>
-/* ================= AXM property flavor: EarCrate =================
-   Family: Dark Ecosystem (default) / Cream Editorial (light toggle).
-   Signature accent: Technics pitch-LED amber (the varispeed light).
-   Ember #C24B2C is RESERVED: refusals, gate failures, thin rails only.
-   Type law: Barlow Condensed (display) + IBM Plex Mono (evidence) +
-   IBM Plex Sans (running text) — named in stacks, NO webfont load
-   (local-first; the acceptance-page precedent). Registry:
-   axm-tools/identity/axm/PROPERTY-FLAVORS.md                       */
-#kapp{
- height:100vh; overflow:hidden;
- --bg:#0d0c09; --chassis:#131109; --panel:#161410; --panel-2:#1d1a13; --edge:#2e2a20; --edge-hi:#443d2c;
- --ink:#ece7d8; --ink-dim:#a49a86; --ink-faint:#6e675a;
- --amber:#e6a23c; --amber-dim:#9a6a17; --cyan:#7fa3c4; --cyan-dim:#54718c; --coral:#c24b2c; --green:#4e9a6f;
- --mono:'IBM Plex Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
- --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
- --disp:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
- --kbg:#0d0c09; --ksur:#161410; --ksur2:#1d1a13; --kedge:#2e2a20; --kink:#ece7d8; --kdim:#a49a86; --kfaint:#6e675a;
- --kacc:#e6a23c; --kaccink:#241703; --kgo:#4e9a6f; --kwarn:#c24b2c; --kcool:#7fa3c4;
- background:var(--kbg); color:var(--kink); font-family:var(--sans);
-}
-#kapp.light{
- --bg:#f0ebe0; --chassis:#e8e2d5; --panel:#f7f4ec; --panel-2:#e8e2d5; --edge:#b8afa0; --edge-hi:#9a9088;
- --ink:#0e0d0c; --ink-dim:#5e5850; --ink-faint:#948c80;
- --amber:#9a6a17; --amber-dim:#7a5512; --cyan:#1e3a6b; --cyan-dim:#4d648a; --coral:#c24b2c; --green:#2d5a3d;
- --kbg:#f0ebe0; --ksur:#f7f4ec; --ksur2:#e8e2d5; --kedge:#b8afa0; --kink:#0e0d0c; --kdim:#5e5850; --kfaint:#948f80;
- --kacc:#9a6a17; --kaccink:#fff6e0; --kgo:#2d5a3d; --kwarn:#c24b2c; --kcool:#1e3a6b;
-}
-/* display face across both systems */
-#kapp .kh1,#kapp .klogo,#kapp .kpname,#kapp h1,#kapp h2,#kapp .kcolh,#kapp .kssec,#kapp .kpill,#kapp .brand .mk{font-family:var(--disp);letter-spacing:.01em}
-#kapp .kh1{font-size:27px}
-/* evidence face: numbers, paths, receipts */
-#kapp pre,#kapp code,#kapp .mono,#kapp .mononum,#kapp .kcell .m,#kapp .knp .m,#kapp .kver,#kapp .kact2{font-family:var(--mono)}
-/* legacy workbench surfaces: kill hardcoded gradients, follow the family */
-#kapp .card{background:var(--panel);border-color:var(--edge)}
-#kapp .card.hero{background:var(--panel-2);border-color:var(--edge-hi)}
-#kapp input,#kapp select,#kapp textarea{background:var(--chassis);color:var(--ink);border-color:var(--edge)}
-#kapp pre{background:var(--chassis);color:var(--ink-dim);border-color:var(--edge)}
-#kapp table th{color:var(--ink-faint)} #kapp table td{border-color:var(--edge)}
-#kapp .ksearch{background:var(--ksur);color:var(--kink);border-color:var(--kedge);width:auto}
-/* ember discipline: reserved meanings only (refusals, gate failures, thin rails) */
-#kapp .kpill.ref,#kapp .kcell.alert,#kapp .pill.bad,#kapp button.danger{color:var(--coral);border-color:var(--coral)}
-#kapp .kpill.pass,#kapp .pill.ok{color:var(--kgo)}
-#kapp .toast{background:var(--ksur);color:var(--kink);border:1px solid var(--kacc);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);font-family:var(--sans)}
-#kapp .toast b{color:var(--kacc);font-family:var(--disp)}
-#kapp .toast a{color:var(--kcool)}
-</style></head><body><header style="display:none">
-<div class="brand" title="earcrate __ENGINE_VERSION__" aria-label="earcrate __ENGINE_VERSION__"><span class="mk">EAR<b>CRATE</b></span><span class="ver">__ENGINE_VERSION__ · Runtime ledger</span></div>
-<nav id="nav"></nav>
-<div class="readout"><span id="statusLed" class="led"><span class="dot"></span><span id="status" class="val">idle</span></span></div>
-</header>
-<div id="kapp" class=""><div class="kbody"><aside class="kside">
-<div class="klogo kw">ear<em>crate</em></div><div class="kver kw" id="ksideVer"></div>
-<div class="knav" id="nav_residents" onclick="tab('residents')"><span>&#9673;</span><span class="kw">Residents</span></div>
-<div class="knav" id="nav_crate" onclick="tab('crate')"><span>&#9638;</span><span class="kw">Crate</span></div>
-<div class="knav" id="nav_sessions" onclick="tab('sessions')"><span>&#8803;</span><span class="kw">Sessions</span></div>
-<div class="knav" id="nav_activity" onclick="tab('activity')"><span id="kactdot">&#9679;</span><span class="kw">Activity</span></div>
-<div class="kssec kw">workbench</div>
-<div class="knav" id="nav_jam" onclick="tab('jam')"><span>&#9654;</span><span class="kw">Jam</span></div>
-<div style="margin:12px 10px 2px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--kfaint)">Setup &amp; workbench</div><div class="knav" id="nav_setup" onclick="tab('setup')"><span>&#9881;</span><span class="kw">Setup</span></div>
-<div class="knav" id="nav_library" onclick="tab('library')"><span>&#9636;</span><span class="kw">Library</span></div>
-<div class="knav" id="nav_analyze" onclick="tab('analyze')"><span>&#8767;</span><span class="kw">Analyze</span></div>
-<div class="knav" id="nav_loops" onclick="tab('loops')"><span>&#9676;</span><span class="kw">Loops</span></div>
-<div class="knav" id="nav_compose" onclick="tab('compose')"><span>&#9986;</span><span class="kw">Compose</span></div>
-<div class="knav" id="nav_manifests" onclick="tab('manifests')"><span>&#8801;</span><span class="kw">Manifests</span></div>
-</aside><div class="kmainwrap"><div class="ktopbar">
-<input class="ksearch" id="ksearch" placeholder="Search the crate &mdash; try bpm:104-118 role:vocal" oninput="searchCrate(this.value)">
-<div class="krwidget" onclick="tab('crate')" title="CRATE FIT is a measurement, not a progress bar: how much of this resident's contract your crate can satisfy right now. Live task progress lives in the bottom bar."><div class="krlab"><span id="krwName">crate fit</span><b id="krwPct">&ndash;</b></div><div class="kgauge"><i id="krwBar" style="width:0%"></i></div></div>
-<button class="kiconbtn" id="kthemeBtn" onclick="ktheme()" title="Light / dark">&#9789;</button>
-</div>
-<main>
-<div style="display:none"><div class="card"><b>Engine status:</b> <span id="status_big" class="muted">idle</span><div class="bar"><span id="prog_global"></span></div><p id="last_error" class="muted"></p></div>
-<div class="card"><b>Runtime ledger:</b> <span id="perf_summary" class="muted">none yet</span><pre id="perfOut" style="max-height:160px">No timed run yet.</pre></div>
+</head>
+<body>
+<div id="app" style="height:100vh;display:flex;flex-direction:column;overflow:hidden">
+
+  <!-- ===== COMMAND STRIP ===== -->
+  <div style="display:flex;align-items:center;gap:20px;padding:11px 18px;background:var(--panel);border-bottom:1px solid var(--edge);flex:0 0 auto">
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span style="font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:.06em;color:var(--ink);text-transform:uppercase">EARCRATE</span>
+      <span style="font:600 9.5px/1 var(--mono);letter-spacing:.18em;color:var(--acc)">//LATTICE</span>
+      <span style="font:400 8.5px/1 var(--mono);letter-spacing:.1em;color:var(--faint)">__ENGINE_VERSION__</span>
+    </div>
+    <div style="flex:1;max-width:400px;display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--edge);padding:8px 12px">
+      <svg width="12" height="12" viewBox="0 0 12 12" style="flex:0 0 auto"><circle cx="5" cy="5" r="3.3" fill="none" stroke="var(--faint)" stroke-width="1.3"></circle><line x1="7.6" y1="7.6" x2="11" y2="11" stroke="var(--faint)" stroke-width="1.3"></line></svg>
+      <span style="font:600 8.5px/1 var(--mono);letter-spacing:.2em;color:var(--faint)">QUERY</span>
+      <input id="query" placeholder="bpm:104-118 role:vox" oninput="onQuery()" style="flex:1;background:transparent;border:none;outline:none;font:400 11px/1 var(--mono);color:var(--dim)">
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font:600 8px/1 var(--mono);letter-spacing:.2em;color:var(--faint)">SKIN</span>
+        <span id="skinStrip" style="display:flex;gap:5px"></span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;width:120px">
+        <div style="display:flex;justify-content:space-between;font:600 8.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)"><span>crate·fit</span><b id="fitPct" style="color:var(--ink)">–</b></div>
+        <div style="height:4px;background:var(--panel2);overflow:hidden"><i id="fitBar" style="display:block;height:100%;width:0%;background:var(--ink)"></i></div>
+      </div>
+      <span style="width:26px;height:26px;background:var(--panel2);border:1px solid var(--edge2);display:flex;align-items:center;justify-content:center;font:600 8.5px/1 var(--mono);color:var(--dim)">OP</span>
+    </div>
+  </div>
+
+  <!-- ===== LIVE SYSTEM READOUT ===== -->
+  <div style="display:flex;align-items:center;padding:8px 18px;background:var(--panel2);border-bottom:1px solid var(--edge);font:500 10px/1 var(--mono);letter-spacing:.07em;flex:0 0 auto">
+    <span style="display:inline-flex;align-items:center;gap:7px;color:var(--faint)"><span id="onlineDot" style="width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 9px var(--accGlow)"></span><span id="onlineTxt">SYSTEM ONLINE</span></span>
+    <span style="color:var(--edge2);margin:0 13px">│</span>
+    <span style="color:var(--faint)">NOW ▸ <span id="nowTxt" style="color:var(--acc)">—</span></span>
+    <span style="color:var(--edge2);margin:0 13px">│</span>
+    <span style="color:var(--faint)">ENGINE ▸ <span id="engineTxt" style="color:var(--ink)">idle</span></span>
+    <span style="margin-left:auto;color:var(--faint)" id="seedTxt">—</span>
+  </div>
+
+  <!-- ===== BODY: MODE RAIL + SCREEN ===== -->
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:184px;flex:0 0 auto;background:var(--panel);border-right:1px solid var(--edge);padding:13px 0;overflow:auto">
+      <div style="font:600 8.5px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--faint);padding:0 15px 11px">Modes</div>
+      <div id="navRail"></div>
+      <div style="margin:15px 15px 0;padding-top:12px;border-top:1px solid var(--edge);font:500 8px/1.7 var(--mono);letter-spacing:.06em;color:var(--faint)">SHARED CHROME<br>▸ command strip<br>▸ transport<br>▸ system readout</div>
+    </div>
+
+    <div style="flex:1;min-width:0;overflow:auto;position:relative;background-image:repeating-linear-gradient(0deg,transparent 0 47px,var(--grid) 47px 48px),repeating-linear-gradient(90deg,transparent 0 47px,var(--grid) 47px 48px)">
+      <div id="scr_play" class="scrn"></div>
+      <div id="scr_crate" class="scrn hidden"></div>
+      <div id="scr_workbench" class="scrn hidden"></div>
+      <div id="scr_sessions" class="scrn hidden"></div>
+      <div id="scr_activity" class="scrn hidden"></div>
+      <div id="scr_library" class="scrn hidden"></div>
+      <div id="scr_setup" class="scrn hidden"></div>
+    </div>
+  </div>
+
+  <!-- ===== TRANSPORT ===== -->
+  <div style="display:flex;align-items:center;gap:20px;padding:11px 18px;background:var(--panel);border-top:1px solid var(--edge);flex:0 0 auto">
+    <div style="display:flex;align-items:center;gap:12px;width:270px;flex:0 0 auto">
+      <span style="font:600 7.5px/1 var(--mono);letter-spacing:.2em;color:var(--edge2);writing-mode:vertical-rl;transform:rotate(180deg)">XPORT</span>
+      <div style="min-width:0"><div id="xportName" style="font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.03em;color:var(--ink);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">none loaded</div><div id="xportSub" style="font:500 8.5px/1 var(--mono);letter-spacing:.05em;color:var(--faint);margin-top:3px">book a set or play a demo</div></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:540px;margin:0 auto">
+      <div style="display:flex;align-items:center;gap:22px">
+        <span class="clk" onclick="playDemo()" title="Synthesize a warm-up demo set" style="font:600 9px/1 var(--mono);color:var(--dim)">DEMO</span>
+        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="13" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M1 1 L10 6 L1 11 Z" fill="var(--dim)"></path></svg>
+        <span onclick="togglePlay()" class="clk" style="width:40px;height:40px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px var(--accGlow)">
+          <span id="playGlyph"><svg width="12" height="13" viewBox="0 0 12 13"><path d="M1 1 L11 6.5 L1 12 Z" fill="var(--accink)"></path></svg></span>
+        </span>
+        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="1" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M15 1 L6 6 L15 11 Z" fill="var(--dim)"></path></svg>
+        <span id="endlessBtn" class="clk" onclick="toggleEndless()" title="Endless radio" style="font:600 15px/1 var(--mono);color:var(--acc)">∞</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;width:100%">
+        <span id="tElapsed" style="font:500 9px/1 var(--mono);color:var(--acc)">0:00</span>
+        <div style="flex:1;height:4px;background:var(--panel2);overflow:hidden"><i id="tBar" style="display:block;height:100%;width:0%;background:var(--acc)"></i></div>
+        <span id="tDur" style="font:500 9px/1 var(--mono);color:var(--faint)">0:00</span>
+      </div>
+    </div>
+    <div style="width:340px;flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;gap:11px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font:600 7.5px/1 var(--mono);letter-spacing:.2em;color:var(--edge2)">STATION</span>
+        <span class="clk" onclick="station('fire')" style="font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:var(--ink);border:1px solid var(--edge2);padding:6px 9px">HOTTER +</span>
+        <span class="clk" onclick="station('ice')" style="font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:var(--dim);border:1px solid var(--edge);padding:6px 9px">COOLER −</span>
+        <span class="clk" onclick="station('skip')" style="font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:var(--dim);border:1px solid var(--edge);padding:6px 9px">CUT</span>
+      </div>
+      <span style="font:500 10px/1 var(--mono);color:var(--faint);margin-left:4px">VOL</span>
+      <div class="clk" onclick="setVol(event)" style="width:56px;height:4px;background:var(--panel2)"><i id="volBar" style="display:block;height:100%;width:85%;background:var(--dim)"></i></div>
+    </div>
+  </div>
 </div>
 
-<section id="jam"><div class="card hero"><h2>Jam Now</h2><p class="muted">TasteSpec surface: first build an ear-crated bank of phrase atoms, then compile a deterministic floor rail, foreground rail, and spark rail. No raw loop is allowed to masquerade as a song.</p><div class="controlGrid"><div><label>Mode / mix outcome</label><select id="o_preset" onchange="updateOutcomePreview()"><option value="party_cutup" selected>Party cut-up: fast hooks and genre jumps</option><option value="hook_ride">Hook ride: vocals up front, groove survives</option><option value="clean_blend">Clean blend: safer key and smoother edits</option><option value="max_chaos">Max chaos: dumb fun, fewer guardrails</option></select><label>Target length</label><select id="o_seconds" onchange="updateOutcomePreview()"><option value="60">1 minute sketch</option><option value="120" selected>2 minute sketch</option><option value="180">3 minute sketch</option><option value="300">5 minute sketch</option></select></div><div><label>Track budget this pass</label><input id="o_budget" value="0"><p class="muted small">TasteSpec needs source turnover. Default is all scanned tracks; use 80 only for a fast diagnostic.</p><label><input id="o_force_loops" type="checkbox" style="min-width:auto"> rebuild loop pool first</label></div><div><label>Edit speed</label><select id="o_edit_speed" onchange="updateOutcomePreview()"><option value="steady">Steady: longer blends</option><option value="active" selected>Active: frequent swaps</option><option value="hypercut">Hypercut: 2 to 4 bar edits</option></select><label>Vocal hooks</label><select id="o_hooks" onchange="updateOutcomePreview()"><option value="sparse">Sparse: mostly instrumental</option><option value="balanced">Balanced: hooks when useful</option><option value="hooky" selected>Hooky: recognizable vocals high</option></select></div><div><label>Genre jump</label><select id="o_genre_jump" onchange="updateOutcomePreview()"><option value="smooth">Smooth: adjacent material</option><option value="mixed">Mixed: contrast with restraint</option><option value="whiplash" selected>Whiplash: sharp genre pivots</option></select><label>Beat/key safety</label><select id="o_safety" onchange="updateOutcomePreview()"><option value="tight">Tight: safer, fewer clashes</option><option value="loose" selected>Loose: harmonic DJ stretch</option><option value="wild">Wild: permit uglier collisions</option></select></div><div><label>Groove backbone</label><select id="o_backbone" onchange="updateOutcomePreview()"><option value="locked">Locked: one beat rides longer</option><option value="survive">Survive: beds persist through ticks</option><option value="restless" selected>Restless: beat can flip, grid stays locked</option></select><label>Render BPM</label><input id="o_bpm" value="" placeholder="blank = strongest tempo island"></div></div><div class="card" style="margin-top:14px"><h2>Deck readiness <span class="accent">// lattice</span></h2><p class="muted small">Before spending a full render, score the approved pool against candidate deck speeds. The ladder shows how many loops stay clean at each BPM &mdash; taller and amber is the speed the varispeed lattice recommends. No audio is rendered here; this runs in seconds.</p><button class="action" onclick="runPreflight()">CHECK READINESS</button><span id="readyVerdict"></span><div id="readinessPanel" style="display:none;margin-top:14px" class="readiness"><div class="latticeWrap"><div class="latticeHead"><span class="t">Pitch-fader lattice &mdash; usable loops per candidate BPM</span><span id="latticeRec" class="rec"></span></div><div id="ladder" class="ladder"></div></div><div><div class="latticeHead"><span class="t">Usable loops per role at chosen speed</span></div><div id="roleGrid" class="roleGrid"></div><div class="latticeHead" style="margin-top:14px"><span class="t">Transform tiers &mdash; clean vs. synthetic</span></div><div id="tierBar" class="tierbar"></div><ul id="warnList" class="warnList"></ul></div></div></div>
-<button class="action primary" onclick="compileContinuum()">COMPILE CONTINUUM PLAN</button><button class="action bigJam" onclick="oneClickJam()">MAKE A MIX NOW</button><button class="action" onclick="proposeOutcomeOnly()">Propose only</button><button class="action" onclick="tab('compose')">Open advanced controls</button><div class="grid"><div class="card"><b>Outcome translation</b><div id="outcomeHint" class="outcomeHint"></div><pre id="outcomePreview"></pre></div><div class="card"><b>One-click log</b><pre id="jamOut">Ready.</pre></div></div></div></section>
-<section id="setup"><div class="card"><h2>Setup</h2><p class="muted">Pick your <b>Music folder</b> and one <b>EarCrate workspace</b>. EarCrate will create its database, cache, manifests, renders, playlists, and stems inside the workspace. Your Music folder is treated as read-only source material.</p><div class="controlGrid"><div><label>Music folder <span class="muted small">read-only source</span></label><div class="pathLine"><input id="music_folder" placeholder="Choose the folder that contains your music"><button class="action" onclick="browseInto('music_folder')">Browse...</button></div></div><div><label>EarCrate workspace <span class="muted small">all app output lives here</span></label><div class="pathLine"><input id="workspace_folder" placeholder="Example: C:\Users\you\Music\EarCrate" oninput="deriveWorkspaceFields()"><button class="action" onclick="browseInto('workspace_folder')">Browse...</button><button class="action" onclick="suggestWorkspace()">Suggest</button></div><div id="wsCandidates" class="muted small" style="margin-top:8px"></div></div></div><button class="action bigJam" onclick="saveWorkspaceConfig()">Save setup</button><button class="action" onclick="doctor()">Doctor</button><details class="advanced"><summary>Show derived folders</summary><p class="muted small">These are derived from the workspace. You normally should not edit them.</p><label>Library root used internally</label><input id="master_root" placeholder="derived from Music folder"><label>Work folder</label><input id="working_root" placeholder="workspace\work"><label>Agent state folder</label><input id="agent_root" placeholder="workspace\agent"><label>Playlists folder</label><input id="playlists_root" placeholder="workspace\playlists"><label>Stems folder</label><input id="stems_root" placeholder="workspace\stems"></details><details class="advanced"><summary>Performance</summary><div class="controlGrid"><div><label>Analysis depth per track <span class="muted small">seconds of audio to characterize</span></label><input id="analysis_seconds" class="mononum" type="number" min="30" max="720" placeholder="180"><p class="muted small">Lower is faster. 180s is plenty for BPM/key. Raise only if you have long DJ sets or mixes where the useful part starts late.</p></div><div><label>Analysis workers <span class="muted small">0 = auto (cores &minus; 2)</span></label><input id="workers" class="mononum" type="number" min="0" max="64" placeholder="0"><p class="muted small">Parallel decode + analysis across CPU cores. Auto uses all but two.</p></div></div></details><pre id="doctorOut"></pre></div></section>
-<section id="library">
-<div class="card"><h2>Add music <span class="accent">// multi-folder ingest</span></h2>
-<p class="muted small">Copy music from anywhere (external SSD, downloads, old drives) into the managed library. Sources are never modified; copies land under <code>master/ingested/&lt;batch&gt;/</code>, content-hash deduped, manifest-journaled, rollback-able. Then <b>Organize + Retag</b> builds the clean <code>Artist/Album/NN Title</code> tree with amended tags under <code>working/organized/</code> — your originals stay verbatim.</p>
-<div id="ingestPaths"><div class="pathLine"><input placeholder="E:\Music or /Volumes/SSD/music" class="ingestSrc"><button class="action" onclick="pickIngestDir(this)">Browse&hellip;</button></div></div>
-<button class="action" onclick="addIngestRow()">+ another folder</button>
-<div style="margin-top:8px"><button class="action" onclick="runIngest(false)">DRY-RUN PLAN</button><button class="action primary" onclick="runIngest(true)">INGEST NOW</button>
-<button class="action" onclick="runOrganize(false)">ORGANIZE DRY-RUN</button><button class="action" onclick="runOrganize(true)">ORGANIZE + RETAG</button></div>
-<div style="margin:6px 0"><button class="action" onclick="openFolder(window.__lastArchiveRoot)">OPEN ARCHIVE FOLDER</button></div><pre id="ingestOut"></pre></div>
-<div class="card"><h2>Reorganize the source <span class="accent">// in place</span></h2>
-<p class="muted small"><b>Moves your ORIGINAL files</b> inside the music folder into <code>Artist/Album/NN Title</code>. Unlike Organize+Retag (which copies to a new tree), this rewrites the source layout itself. It is <b>reversible</b> (every move is journaled) and never deletes: anything it can't identify goes to <code>_unsorted/</code>. Always <b>Preview</b> first — nothing moves until you Apply.</p>
-<div style="margin-top:8px"><button class="action" onclick="reorgPreview()">PREVIEW REORGANIZE</button><button class="action primary" id="reorgApplyBtn" onclick="reorgApply()" disabled>APPLY (move in place)</button><button class="action" id="reorgRollbackBtn" onclick="reorgRollback()" style="display:none">ROLLBACK LAST</button></div>
-<pre id="reorgOut">Preview to see exactly what will move.</pre></div>
-<div class="card"><h2>Library</h2><button class="action" onclick="post('/api/scan_bg',{})">Scan</button><button class="action" onclick="refreshTracks()">Refresh tracks</button><div class="bar"><span id="prog"></span></div><p id="statustext" class="muted"></p></div><div class="card"><table id="tracks"></table></div></section>
-<section id="analyze"><div class="grid"><div class="card"><h2>Analyze</h2><label>Limit, 0 means all</label><input id="analysis_limit" value="0"><button class="action" onclick="post('/api/analyze_bg',{limit:+val('analysis_limit')||0})">Analyze audio</button><p class="muted">Computes BPM, downbeats, key, LUFS, energy, sections, and vocal likelihood.</p></div><div class="card"><h2>Extract loops</h2><label>Limit, 0 means all</label><input id="loop_limit" value="0"><label><input id="auto_approve" type="checkbox" style="min-width:auto"> auto-approve extracted loops directly, not recommended</label><button class="action" onclick="post('/api/extract_loops_bg',{limit:+val('loop_limit')||0,auto_approve:document.getElementById('auto_approve').checked,force:false})">Extract loop candidates</button><button class="action" onclick="post('/api/extract_loops_bg',{limit:+val('loop_limit')||0,auto_approve:document.getElementById('auto_approve').checked,force:true})">Re-extract loops (force rebuild)</button><p class="muted">Downbeat-only candidates, ≤12 per track, role-gated drum anchors. Leave auto-approve off, then use quota approval in Loop Review to build a bounded hot pool.</p></div></div></section>
-<section id="loops"><div class="card"><h2>Loop Review</h2><button class="action" onclick="refreshLoops('')">All</button><button class="action" onclick="refreshLoops('candidate')">Candidates</button><button class="action" onclick="refreshLoops('approved')">Approved</button><button class="action" onclick="refreshLoops('rejected')">Rejected</button><button class="action" onclick="autoApproveQuota()">Approve hot pool by quota</button><button class="action" onclick="bulkLoopStatus('rejected','candidate')">Reject all candidates</button><button class="action" onclick="bulkLoopStatus('candidate','')">Reset all to candidate</button><p id="loopCounts" class="muted">Loop counts pending.</p><p class="muted">Mashups use approved loops only. Quota approval keeps the pool bounded, role-balanced, and reviewable. Use individual approve/reject for manual curation.</p><pre id="loopOut"></pre></div><div class="card"><table id="loopsTable"></table></div></section>
-<section id="compose"><div class="card"><h2>Compose <span class="accent">// crate &rarr; pairs &rarr; timeline</span></h2><p class="muted">Curate what the persona ranked, judge pairings, then propose a plan you can SEE before anything renders. Judgments are durable: a rejected pairing is a veto the composer obeys forever; favorites get pulled forward.</p><audio id="cratePlayer" controls preload="none" style="width:100%;margin:6px 0"></audio></div>
-<div class="grid"><div class="card"><b>1 &middot; THE CRATE, RANKED</b> <button class="action" onclick="composeRank()">RANK CRATE</button><p class="muted small">The persona's reach-order: recognizability &gt; role clarity &gt; danceability &gt; deck feasibility &gt; contrast. Click a row for its pairings; &#9654; audition, &#9733; favorite, &#10007; reject.</p><div id="crateList" class="small">Rank the crate to see it.</div></div>
-<div class="card"><b>2 &middot; PAIRINGS</b> <button class="action" onclick="buildGraph()">BUILD PAIR GRAPH</button><p class="muted small">Why two sources are allowed to collide, with receipts. &#10003; keep / &#10007; never &mdash; vetoes survive regraphs.</p><div id="pairList" class="small">Select an atom on the left.</div></div></div>
-<div class="card"><b>3 &middot; TIMELINE</b> <label class="small muted">length s</label> <input id="tl_seconds" value="120" class="mononum" style="max-width:80px"> <button class="action primary" onclick="proposeTimeline()">PROPOSE PLAN</button> <input id="tl_name" placeholder="plan name" style="max-width:200px"> <button class="action" onclick="saveTimeline()">SAVE PLAN</button> <button class="action" onclick="listTimeline()">SAVED PLANS</button> <button class="action bigJam" onclick="oneClickJam()">RENDER NOW (honors your judgments)</button><div id="planList" class="small" style="margin-top:6px"></div><div id="timeline" style="margin-top:10px"></div><pre id="tlOut"></pre></div>
-<details class="advanced"><summary>Advanced arranger controls (legacy Mashup surface)</summary><div class="card"><h2>Outcome Controls</h2><p class="muted">This is the inspectable control surface for the continuum compiler. Jam Now mirrors these values; the JSON preview shows exactly what will be sent to the arranger.</p><label>Name</label><input id="m_name" value="EarCrate Sketch"><div class="controlGrid"><div><label>Mode / mix outcome</label><select id="m_preset" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="party_cutup" selected>Party cut-up: fast hooks and genre jumps</option><option value="hook_ride">Hook ride: vocals up front, groove survives</option><option value="clean_blend">Clean blend: safer key and smoother edits</option><option value="max_chaos">Max chaos: dumb fun, fewer guardrails</option></select><label>Target length</label><select id="m_seconds" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="60">1 minute sketch</option><option value="120" selected>2 minute sketch</option><option value="180">3 minute sketch</option><option value="300">5 minute sketch</option></select></div><div><label>Edit speed</label><select id="m_edit_speed" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="steady">Steady: longer blends</option><option value="active" selected>Active: frequent swaps</option><option value="hypercut">Hypercut: 2 to 4 bar edits</option></select><label>Vocal hooks</label><select id="m_hooks" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="sparse">Sparse: mostly instrumental</option><option value="balanced">Balanced: hooks when useful</option><option value="hooky" selected>Hooky: recognizable vocals high</option></select></div><div><label>Genre jump</label><select id="m_genre_jump" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="smooth">Smooth: adjacent material</option><option value="mixed">Mixed: contrast with restraint</option><option value="whiplash" selected>Whiplash: sharp genre pivots</option></select><label>Beat/key safety</label><select id="m_safety" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="tight">Tight: safer, fewer clashes</option><option value="loose" selected>Loose: harmonic DJ stretch</option><option value="wild">Wild: permit uglier collisions</option></select></div><div><label>Groove backbone</label><select id="m_backbone" onchange="mirrorMashupToJam();updateOutcomePreview()"><option value="locked">Locked: one beat rides longer</option><option value="survive">Survive: beds persist through ticks</option><option value="restless" selected>Restless: beat can flip, grid stays locked</option></select><label>Render BPM</label><input id="m_bpm" value="" placeholder="blank = strongest tempo island" oninput="mirrorMashupToJam();updateOutcomePreview()"></div></div><button class="action" onclick="compileContinuum()">COMPILE CONTINUUM PLAN</button><button class="action" onclick="proposeMashup()">Propose arrangement manifest</button><button class="action bigJam" onclick="oneClickJam()">MAKE AND RENDER NOW</button><details class="advanced"><summary>Show low-level arranger numbers</summary><pre id="mashupMath"></pre></details><pre id="mashupOut"></pre></div></details></section>
-<section id="manifests"><div class="card"><h2>Manifests</h2><button class="action" onclick="refreshManifests()">Refresh</button><p class="muted">Execution is explicit. This is the manifest gate. Use EXECUTE NOW if you want the browser to wait and print the final render result. Use EXECUTE BG if you want it to run while the status bar updates.</p><pre id="manifestOut"></pre></div><div class="card"><table id="manifestTable"></table></div></section>
+<audio id="renderPlayer" preload="none"></audio>
+<div id="toast" style="display:none;position:fixed;right:16px;bottom:78px;max-width:420px;z-index:99;background:var(--panel);border:1px solid var(--acc);padding:11px 13px;font:500 11px/1.4 var(--mono);color:var(--ink);box-shadow:0 8px 30px rgba(0,0,0,.5)"></div>
 
-
-<section id="activity"><div class="kh1">Activity</div>
-<p class="ksub">What the engine is doing right now, with the honest arithmetic: measured throughput &rarr; time remaining. Long stages are one-time costs &mdash; results are cached per file and per resident.</p>
-<div class="kcard" style="max-width:760px">
-<div class="kcolh"><span>current task</span><span id="actBusyPill"></span></div>
-<div id="actMsg" style="font-family:var(--disp);font-size:21px;margin:2px 0 10px">idle</div>
-<div class="kgauge" style="height:10px"><i id="actBar" style="width:0%"></i></div>
-<div style="display:flex;gap:26px;margin-top:12px;font-family:var(--mono);font-size:13px">
-<div><div class="kcolh"><span>progress</span></div><div id="actPct" style="font-size:20px">&ndash;</div></div>
-<div><div class="kcolh"><span>time left</span></div><div id="actEta" style="font-size:20px">&ndash;</div></div>
-<div><div class="kcolh"><span>elapsed</span></div><div id="actElapsed" style="font-size:20px">&ndash;</div></div>
-</div>
-<div id="actErr" style="margin-top:10px;color:var(--coral);font-family:var(--mono);font-size:12.5px"></div>
-</div>
-<div class="kssec" style="padding-left:0">Stages this run</div>
-<div class="kcard" style="max-width:760px"><pre id="actStages" style="margin:0;border:none;background:transparent">No timed run yet.</pre></div>
-</section>
-<section id="residents"><div class="kh1">Residents</div>
-<p class="ksub">Each resident is a taste contract, not a preset. It knows what it can honestly play from your crate tonight &mdash; and exactly what it's missing.</p>
-<div class="kcards" id="residentCards">Loading residents&hellip;</div>
-<div class="kssec" style="padding-left:0">Latest sessions</div><div id="residentSessions" class="small"></div></section>
-<section id="crate"><div class="kh1">The crate</div>
-<p class="ksub">Every cell is an ear-crated atom &mdash; auditioned material only. Columns are the rails the compiler builds from; a thin column is the readiness story telling itself.</p>
-<div class="krolebar" id="crateRolebar"></div><div class="klegend" id="crateLegend"></div>
-<div class="krail"><div><div class="kcols" id="crateCols">Loading crate&hellip;</div></div>
-<div><div class="kssec" style="padding-left:0">To make this crate stronger</div><div id="crateFix"></div></div></div></section>
-<section id="sessions"><div class="kh1">Sessions</div>
-<p class="ksub">Every render and every refusal, with its receipts. A refusal is a session too &mdash; it tells you what to feed the crate.</p>
-<div id="sessionList">Loading sessions&hellip;</div>
-<div class="card"><b>Latest render:</b> <span class="muted">latest render dock</span><div class="playerBox"><a id="renderLink" href="#" target="_blank" rel="noopener">open audio link</a><button onclick="copyRenderPath()">copy file path</button><button onclick="openRenderFolder()">open folder</button><button onclick="refreshRenders(false)">refresh renders</button></div><p id="playerPath" class="small muted"></p><div id="renderList" class="renderList small muted"></div></div></section>
-</main></div></div>
-<div id="toast" class="toast"></div>
-<div class="kbar"><button class="kbtn p" id="kPlayBtn" onclick="togglePlay()" title="Play / pause the loaded render">&#9654;</button>
-<audio id="renderPlayer" controls preload="metadata"></audio>
-<div class="knp"><div class="t" id="playerName">none yet</div><div class="m" id="kNpMeta">book a set, or pick a finished render to play</div></div>
-<button class="kbtn khidep" id="kCastBtn" onclick="castToTv()" title="Cast to a TV (Chrome/Edge)" style="display:none">Cast</button>
-<span class="kact2" id="kCastState" style="display:none"></span>
-<button class="kbtn p" id="kEndlessBtn" onclick="toggleEndless()" title="Play the crate continuously (auto-advances, reshuffles: endless)">Endless</button>
-<button class="kbtn" id="kDemoBtn" onclick="playDemo()" title="Play a synthesized warm-up set instantly — no library needed">Play demo</button>
-<button class="kbtn" onclick="oneClickJam()" title="Book a set: compiles a new sketch with the selected resident">Book a set</button>
-<button class="kbtn khidep" onclick="station('skip')" title="Next collision">&#9197;</button>
-<button class="kbtn" onclick="station('fire')" title="More like this">&#128293;</button>
-<button class="kbtn" onclick="station('ice')" title="Cool it down">&#129482;</button>
-<span class="ktoast khidep" id="ktoastline"></span>
-<div class="kact2" onclick="kmode()" title="Engine activity + performance. Click to switch: GENTLE uses a few cores (keep using your PC), FULL SEND uses all cores (fastest, laptop becomes a jet engine)."><span class="spin"></span><span class="nowrap" id="kact_text">idle</span><span class="kactbar"><i id="kact_bar"></i></span><span class="nowrap" id="kact_mode"></span></div>
-</div></div>
 <script>
 const TOKEN = new URL(location.href).searchParams.get('token') || '';
-const tabs = ['residents','crate','sessions','activity','jam','setup','library','analyze','loops','compose','manifests'];
-/* nav lives in the k-sidebar now */
-function tab(t){for(const x of tabs){document.getElementById(x).classList.toggle('active',x===t);document.getElementById('nav_'+x).classList.toggle('active',x===t)} if(t==='library')refreshTracks(); if(t==='loops')refreshLoops(''); if(t==='manifests')refreshManifests(); if(t==='residents')loadResidents(); if(t==='crate')loadCrateView(); if(t==='sessions')loadSessions();}
-function val(id){const e=document.getElementById(id); return e?e.value:''}
-window.__ranked=[];window.__pairs=[];window.__plans=[];window.__composePlan=null;
+const SKINS = {
+  lattice:  { name:"LATTICE",  swatch:"#FFB020", vars:"--bg:#07090A;--panel:#0D1113;--panel2:#141A1D;--edge:#1E272B;--edge2:#2C3A40;--ink:#DCE6E8;--dim:#7C8A90;--faint:#4A565B;--acc:#FFB020;--accink:#07090A;--accGlow:rgba(255,176,32,.4);--fault:#FF4D2E;--grid:rgba(44,58,64,.13)" },
+  signal:   { name:"SIGNAL",   swatch:"#33E1D0", vars:"--bg:#05090B;--panel:#0A1114;--panel2:#10191D;--edge:#173038;--edge2:#224750;--ink:#DCEAEC;--dim:#769097;--faint:#456069;--acc:#33E1D0;--accink:#04100F;--accGlow:rgba(51,225,208,.38);--fault:#FF5B4A;--grid:rgba(34,71,80,.14)" },
+  terminal: { name:"TERMINAL", swatch:"#5BE58A", vars:"--bg:#060B07;--panel:#0A130D;--panel2:#101C14;--edge:#183220;--edge2:#234A30;--ink:#D6ECDB;--dim:#77997F;--faint:#45604D;--acc:#5BE58A;--accink:#031007;--accGlow:rgba(91,229,138,.36);--fault:#FF6B4A;--grid:rgba(35,74,48,.14)" },
+  paper:    { name:"PAPER",    swatch:"#B4791A", vars:"--bg:#ECE6D8;--panel:#F6F2E7;--panel2:#E6DFCE;--edge:#D2C9B4;--edge2:#B4A98F;--ink:#1B1712;--dim:#6A6152;--faint:#98907E;--acc:#B4791A;--accink:#FDF7E8;--accGlow:rgba(180,121,26,.32);--fault:#B4402A;--grid:rgba(120,110,90,.13)" },
+};
+const FONTS = "--disp:'Saira Condensed','Oswald','Bebas Neue',system-ui,sans-serif;--mono:ui-monospace,'JetBrains Mono','SF Mono','Cascadia Code',Consolas,monospace";
+const NAV = [
+  { id:"play", name:"Play", i:"00", glyph:"▶" },
+  { id:"library", name:"Library", i:"01", glyph:"▤" },
+  { id:"crate", name:"Crate", i:"02", glyph:"▦" },
+  { id:"workbench", name:"Workbench", i:"03", glyph:"◇" },
+  { id:"sessions", name:"Sessions", i:"04", glyph:"≣" },
+  { id:"activity", name:"Activity", i:"05", glyph:"∿" },
+  { id:"setup", name:"Setup", i:"06", glyph:"⬡" },
+];
+const ROLE_BUCKET = { floor:["DRUM_BREAK","BED_CHORD","TEXTURE"], fgnd:["VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"], spark:["DROP_HIT","PICKUP_FILL","TRANSITION_TAIL","BASS_RIFF"] };
+const KEYS = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
-window.__eta={secs:null,at:0,msg:''};
-function kfmt(t){t=Math.max(0,Math.round(t));const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=t%60;return (h?h+'h ':'')+(m||h?m+'m ':'')+String(x).padStart(2,'0')+'s'}
-function renderActivity(j){if(!j)return;const busy=!!j.busy;
- const pill=document.getElementById('actBusyPill'); if(pill)pill.innerHTML=busy?'<span class="kpill pass">RUNNING</span>':'<span class="kpill" style="color:var(--kfaint)">IDLE</span>';
- const msg=document.getElementById('actMsg'); if(msg)msg.textContent=j.message||'idle';
- const pr=(j.progress||0)*100; const bar=document.getElementById('actBar'); if(bar)bar.style.width=pr+'%';
- const pct=document.getElementById('actPct'); if(pct)pct.textContent=busy?pr.toFixed(1)+'%':'–';
- // ETA: parse '~XmYYs left' from the status message; tick locally between polls
- const m=String(j.message||'').match(/~(?:(\d+)h)?(\d+)m(\d+)s left/);
- if(m&&j.message!==window.__eta.msg){window.__eta={secs:(+(m[1]||0))*3600+(+m[2])*60+(+m[3]),at:performance.now(),msg:j.message}}
- const el=document.getElementById('actEta');
- if(el){if(!busy){el.textContent='–';window.__eta.secs=null}
-  else if(window.__eta.secs!=null){el.textContent=kfmt(window.__eta.secs-(performance.now()-window.__eta.at)/1000)}
-  else el.textContent='measuring…'}
- const perf=j.perf_summary;
- const elp=document.getElementById('actElapsed'); if(elp)elp.textContent=perf&&perf.elapsed_seconds!=null?kfmt(perf.elapsed_seconds):'–';
- const err=document.getElementById('actErr'); if(err)err.textContent=j.last_error?('last error: '+j.last_error):'';
- const st=document.getElementById('actStages');
- if(st&&perf&&perf.top_stages&&perf.top_stages.length){st.textContent=perf.top_stages.map((x,i)=>String(i+1).padStart(2)+'. '+x.name+': '+kfmt(x.seconds)+(x.ok===false?'  ✖ FAILED':'')).join('\n')}
- const dot=document.getElementById('kactdot'); if(dot)dot.style.color=busy?'var(--kacc)':'var(--kfaint)';
-}
-setInterval(()=>{const a=document.getElementById('activity');if(a&&a.classList.contains('active')&&window.__lastStatus)renderActivity(window.__lastStatus)},1000);
-window.__stationProfile=localStorage.getItem('ec_profile')||'girl_talk_v1';window.__residents=[];window.__crateRanked=[];
-function ktheme(){const a=document.getElementById('kapp');a.classList.toggle('light');localStorage.setItem('ec_theme',a.classList.contains('light')?'light':'dark')}
-function kthemeInit(){if(localStorage.getItem('ec_theme')==='light')document.getElementById('kapp').classList.add('light')}
-function kmmss(sec){sec=Math.max(0,Math.round(sec||0));return Math.floor(sec/60)+' min '+String(sec%60).padStart(2,'0')+' s'}
-function kupdateWidget(){const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);if(!r)return;document.getElementById('krwName').textContent='crate fit · '+r.id;document.getElementById('krwPct').textContent=(r.readiness_pct!=null?r.readiness_pct+'%':'–');document.getElementById('krwBar').style.width=(r.readiness_pct||0)+'%'}
-async function loadResidents(){const el=document.getElementById('residentCards');try{const j=await api('/api/residents');window.__residents=j.items||[];
- el.innerHTML=window.__residents.map(function(r,i){const pct=r.readiness_pct||0;const e=r.endless||{};const endl=e.no_repeat_seconds?('Crate depth: <b>~'+kmmss(e.no_repeat_seconds)+'</b> of non-repeating material before a source must recur. (A continuous player is coming; for now, Book a set to compile a sketch.)'):'';
-  const wants=(r.wants&&r.wants.length)?('Wants: <b>'+esc(r.wants[0])+'</b>'):(r.ready?'<b>Ready to play tonight.</b>':(r.error?esc(r.error):'Crate is empty — feed it on the Library tab.'));
-  return '<div class="kcard"><div style="display:flex;gap:12px;align-items:center"><div><div class="kpname">'+esc(r.name)+'</div><div class="kptag">'+esc(r.contract||'')+'</div></div></div>'
-   +'<div class="kgauge" style="margin-top:14px"><i style="width:'+pct+'%"></i></div>'
-   +'<div class="kpnote">'+endl+(endl?'<br>':'')+wants+'</div>'
-   +'<div style="display:flex;gap:8px;margin-top:14px"><button class="kbtn p" onclick="bookSet(\''+r.id+'\')">&#9654; Book a set</button><button class="kbtn" onclick="window.__stationProfile=\''+r.id+'\';localStorage.setItem(\'ec_profile\',\''+r.id+'\');kupdateWidget();tab(\'crate\')">What it needs</button></div></div>'
- }).join('')+'<div class="kcard dashed"><div class="kpname">+ New resident</div><div class="kpnote">A resident is a JSON taste contract in profiles/ — versioned, hashed, drift-gated. Next up: <b>My Twin</b>, a resident that learns YOUR taste from station receipts. Not built yet — no theater.</div></div>';
- kupdateWidget();
- try{const sj=await api('/api/sessions');document.getElementById('residentSessions').innerHTML=(sj.items||[]).slice(0,2).map(ksessRow).join('')}catch(e){}
-}catch(e){el.textContent=String(e)}}
-function bookSet(pid){window.__stationProfile=pid;localStorage.setItem('ec_profile',pid);kupdateWidget();toast('Booking '+pid);oneClickJam()}
-const KRAILS=[['Floor · drums/bass',['DRUM_BREAK','BASS_RIFF'],'var(--kacc)'],['Beds · harmony',['BED_CHORD','TEXTURE','RIFF_ID'],'var(--kgo)'],['Foreground · vocals',['VOX_HOOK','VOX_VERSE','VOX_SHOUT'],'var(--kwarn)'],['Sparks · hits/fills',['PICKUP_FILL','DROP_HIT','TRANSITION_TAIL'],'var(--kcool)']];
-async function loadCrateView(){const el=document.getElementById('crateCols');el.textContent='Ranking the crate…';try{const j=await post('/api/rank',{limit:400,taste_profile:window.__stationProfile});window.__crateRanked=j.ranked||[];renderCrate(window.__crateRanked);
- const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);const fx=document.getElementById('crateFix');
- fx.innerHTML=((r&&r.wants)||[]).map(w=>'<div class="kfix"><b>'+esc(w)+'</b><div style="margin-top:6px">Stems recover scarce vocals and drum beds — the highest-leverage unlock (not built yet).</div></div>').join('')
-  +'<div class="kfix"><b>Grow the crate</b><div style="margin-top:6px">Ingest more folders, then Analyze → Extract → Ear Crate.</div><button class="kbtn" style="margin-top:8px" onclick="tab(\'library\')">Open Library</button></div>';
-}catch(e){el.textContent=String(e)}}
-function renderCrate(list){const cols=KRAILS.map(function(rail){const items=list.filter(x=>rail[1].indexOf(x.ear_role)>=0);return {name:rail[0],color:rail[2],items:items}});
- const total=list.length||1;document.getElementById('crateRolebar').innerHTML=cols.map(c=>'<span style="width:'+(100*c.items.length/total)+'%;background:'+c.color+'"></span>').join('');
- const r=(window.__residents||[]).find(x=>x.id===window.__stationProfile);const e=(r&&r.endless)||{};
- document.getElementById('crateLegend').innerHTML=cols.map(c=>'<span style="color:'+c.color+'"><b>'+c.name.split(' ·')[0].toLowerCase()+'</b> '+c.items.length+'</span>').join('')+'<span class="f1k" style="text-align:right">'+(e.no_repeat_seconds?('crate depth <b>'+kmmss(e.no_repeat_seconds)+'</b> · bottleneck: '+esc(e.bottleneck||'?')):'')+'</span>';
- document.getElementById('crateCols').innerHTML=cols.map(function(c){const cells=c.items.slice(0,6).map(function(x){const gi=window.__crateRanked.indexOf(x);
-   return '<div class="kcell" onclick="playRanked('+gi+')" title="click to audition">'+esc((x.artist?x.artist+' – ':'')+x.source)+'<span class="m">'+esc(x.ear_role)+' · '+(x.bpm?Math.round(x.bpm)+' bpm':'')+' · rank '+(x.rank_score||0).toFixed(2)+'</span></div>'}).join('');
-  const alert=c.items.length<6?('<div class="kcell alert">Only '+c.items.length+' cells — thin rail'+(c.name.indexOf('vocals')>0?' · stems would grow this':'')+'</div>'):(c.items.length>6?('<div class="kcell" style="border-style:dashed;text-align:center;color:var(--kfaint)" onclick="tab(\'compose\')">+ '+(c.items.length-6)+' more → Compose</div>'):'');
-  return '<div><div class="kcolh"><span>'+c.name+'</span><span>'+c.items.length+'</span></div>'+cells+alert+'</div>'}).join('')}
-function searchCrate(q){q=(q||'').toLowerCase();let list=window.__crateRanked;if(q){const roleM=q.match(/role:(\w+)/);const bpmM=q.match(/bpm:(\d+)-(\d+)/);const rest=q.replace(/role:\w+|bpm:\d+-\d+/g,'').trim();
- list=list.filter(function(x){if(roleM&&String(x.ear_role||'').toLowerCase().indexOf(roleM[1])<0&&String(x.ear_role||'')!==roleM[1].toUpperCase())return false;
-  if(bpmM){const b=x.bpm||0;if(b<+bpmM[1]||b>+bpmM[2])return false}
-  if(rest&&String((x.artist||'')+' '+(x.source||'')).toLowerCase().indexOf(rest)<0)return false;return true})}
- if(document.getElementById('crate').classList.contains('active'))renderCrate(list)}
-function ksessRow(x){return '<div class="ksess"><div class="f1k"><span style="font-weight:700">'+esc(x.name||'')+'</span> <span class="kpill '+(x.passed?'pass':'ref')+'">'+(x.passed?'passed gates':'refused')+'</span><div class="m">'+esc(x.meta||'')+' · '+esc(x.mtime||'')+'</div><div class="m">'+esc(x.receipts||'')+'</div></div>'+(x.kind==='render'?('<button class="kbtn" onclick=\'setPlayer('+JSON.stringify(x.path)+')\'>&#9654; Play</button>'):('<button class="kbtn" onclick="tab(\'crate\')">Why</button>'))+'</div>'}
-async function loadSessions(){const el=document.getElementById('sessionList');try{const j=await api('/api/sessions');el.innerHTML=(j.items||[]).map(ksessRow).join('')||'No sessions yet — book a set from Residents.'}catch(e){el.textContent=String(e)}}
-async function station(sig){try{const j=await post('/api/station/feedback',{signal:sig});const line=document.getElementById('ktoastline');
- if(j.ok){line.textContent=(sig==='fire'?'🔥 hotter':sig==='ice'?'🧊 cooler':'⏭ logged')+' — taste receipt #'+j.receipt+(sig!=='skip'?' · steers the next compile':'');}
- else line.textContent=j.error||'feedback failed'}catch(e){}}
-async function kmode(){try{const cfg=window.__cfg;if(!cfg){toast('Configure a workspace first');return}
- const cores=navigator.hardwareConcurrency||8;const gentle=Math.max(1,Math.floor(cores/3));
- const cur=parseInt(cfg.workers||0);const next=cur===0?gentle:0;cfg.workers=next;
- const j=await post('/api/config',cfg);if(j.ok){window.__cfg=j.config;document.getElementById('kact_mode').textContent=(next===0?'\u26a1 full send':'\ud83c\udf31 gentle: '+next+' cores')+' \u21c4';toast('Workers → '+(next===0?'auto (all cores − 2)':next))}}catch(e){toast('mode switch failed: '+e.message)}}
+let S = { mode:"play", skin:(localStorage.getItem('ec_skin')||"lattice"), resident:(localStorage.getItem('ec_profile')||null), atom:0 };
+let DATA = { residents:[], ranked:[], pairs:[], readiness:null };
+let ENDLESS = { on:false, queue:[], i:-1 };
 
-function roleColor(r){return ({VOX_HOOK:'#f5a623',VOX_VERSE:'#f5c56b',VOX_SHOUT:'#ff8c42',DRUM_BREAK:'#4fc3f7',BASS_RIFF:'#9575cd',BED_CHORD:'#81c784',RIFF_ID:'#e57373',TEXTURE:'#90a4ae',PICKUP_FILL:'#ce93d8',DROP_HIT:'#ef5350',TRANSITION_TAIL:'#a1887f'})[r]||'#666'}
-function playClip(path,preview,start,end){const a=document.getElementById('cratePlayer');if(!path&&!preview){toast('No audio for this atom');return}let src=audioUrl(preview||path);if(!preview&&start!=null){src+='#t='+Number(start).toFixed(2)+(end!=null?','+Number(end).toFixed(2):'')}a.src=src;a.play().catch(()=>{})}
-function playRanked(i){const r=window.__ranked[i];playClip(r.path,r.preview_path,r.start_s,r.end_s)}
-async function judgeAtomIdx(i,status,fav){const r=window.__ranked[i];try{const j=await post('/api/ear_atoms/judgment',{atom_id:r.atom_id,status:status,favorite:fav});if(j.ok)toast((fav?'\u2605 favorited: ':status+': ')+(r.source||r.atom_id))}catch(e){}}
-async function composeRank(){const el=document.getElementById('crateList');el.textContent='Ranking\u2026';try{const j=await post('/api/rank',{limit:200});window.__ranked=j.ranked||[];el.innerHTML=window.__ranked.map(function(r,i){const w=r.why||{};const bars=Object.keys(w).map(function(k){const v=w[k];return '<span title="'+k+': '+v+'" style="display:inline-block;width:24px;height:6px;margin-right:2px;background:linear-gradient(90deg,#f5a623 '+(v*100)+'%,#333 '+(v*100)+'%)"></span>'}).join('');return '<div style="padding:5px 4px;border-bottom:1px solid #23232c;cursor:pointer" onclick="loadPairs(window.__ranked['+i+'].atom_id)"><b style="color:'+roleColor(r.ear_role)+'">'+esc(r.ear_role||'?')+'</b> '+(r.rank_score||0).toFixed(2)+' \u00b7 '+esc((r.artist?r.artist+' \u2013 ':'')+(r.source||''))+' <span class="muted small">'+bars+'</span><span style="float:right"><button onclick="event.stopPropagation();playRanked('+i+')">\u25b6</button> <button onclick="event.stopPropagation();judgeAtomIdx('+i+',\'approved\',true)">\u2605</button> <button onclick="event.stopPropagation();judgeAtomIdx('+i+',\'rejected\',false)">\u2717</button></span></div>'}).join('')||'Crate is empty \u2014 run Ear Crate on the Analyze tab first.'}catch(e){el.textContent=String(e)}}
-async function buildGraph(){toast('Building pair graph\u2026');try{const j=await post('/api/taste/graph',{});toast(j.ok?('Graph: '+j.edges+' edges at '+j.render_bpm+' BPM, key '+j.target_key):(j.error||'graph failed'))}catch(e){}}
-async function loadPairs(atomId){const el=document.getElementById('pairList');el.textContent='Loading pairs\u2026';try{const j=await api('/api/taste/pairs?atom_id='+encodeURIComponent(atomId));window.__pairs=j.items||[];el.innerHTML=window.__pairs.map(function(p,i){const rs=p.reasons||{};const why=Object.keys(rs).slice(0,4).map(function(k){const v=rs[k];return k+':'+(typeof v==='number'?v.toFixed(2):v)}).join(' \u00b7 ');return '<div style="padding:5px 4px;border-bottom:1px solid #23232c"><b>'+(p.score||0).toFixed(2)+'</b> '+esc(p.relation||'')+' \u2192 '+esc((p.right_artist||'')+' '+(p.right_title||p.right_role||''))+' <span class="muted small">'+esc(why)+'</span> '+(p.judgment_status?('<b>['+esc(p.judgment_status)+']</b>'):'')+'<span style="float:right"><button onclick="judgePair('+i+',\'approved\')">\u2713</button> <button onclick="judgePair('+i+',\'rejected\')">\u2717</button></span></div>'}).join('')||'No edges for this atom yet \u2014 BUILD PAIR GRAPH first.'}catch(e){el.textContent=String(e)}}
-async function judgePair(i,status){const p=window.__pairs[i];try{const j=await post('/api/taste/pair_judgment',{edge_id:p.id,status:status});if(j.ok)toast('pair '+status+' \u2014 the composer will obey')}catch(e){}}
-function renderTimeline(arr){const el=document.getElementById('timeline');if(!arr||!arr.sections){el.innerHTML='';return}const total=arr.sections.reduce(function(a,s){return a+(s.bars||0)},0)||1;el.innerHTML='<div class="muted small">'+arr.bpm+' BPM \u00b7 '+total+' bars \u00b7 '+(total*4/arr.bpm).toFixed(1)+' min \u00b7 tastespec '+(((arr.tastespec||{}).hash)||'').slice(0,8)+'</div><div style="display:flex;width:100%;height:88px;border:1px solid #2a2a33">'+arr.sections.map(function(s){const w=(s.bars/total*100).toFixed(2);const chips=(s.layers||[]).map(function(l){return '<div title="'+esc((l.ear_role||l.role||'')+' \u00b7 '+(l.source_track_key||'')+' \u00b7 varispeed '+(l.varispeed_pct!=null?l.varispeed_pct:'?')+'%')+'" style="flex:1;background:'+roleColor(l.ear_role)+';margin:1px;border-radius:2px"></div>'}).join('');return '<div title="'+s.type+' \u00b7 '+s.bars+' bars" style="width:'+w+'%;display:flex;flex-direction:column;border-right:1px solid #111">'+(chips||'<div style="flex:1;background:#1c1c22"></div>')+'</div>'}).join('')+'</div>'}
-async function proposeTimeline(){const out=document.getElementById('tlOut');out.textContent='Composing plan\u2026';try{const j=await post('/api/timeline/propose',{target_seconds:parseFloat(val('tl_seconds'))||120});if(!j.ok){out.textContent=j.error||JSON.stringify(j);return}window.__composePlan=j.arrangement;const fails=((j.taste_gate||{}).failures)||[];out.textContent='plan seed '+j.seed+' \u00b7 '+j.arrangement.sections.length+' sections \u00b7 score '+((j.score||{}).total)+' \u00b7 gate '+(fails.length?('REFUSED: '+fails.join('; ')):'PASSES');renderTimeline(j.arrangement)}catch(e){out.textContent=String(e)}}
-async function saveTimeline(){if(!window.__composePlan){toast('Propose a plan first');return}try{const j=await post('/api/timeline/save',{name:val('tl_name')||'plan',plan:window.__composePlan});if(j.ok)toast('Saved plan '+j.plan_hash.slice(0,8),j.path)}catch(e){}}
-async function listTimeline(){try{const j=await api('/api/timeline/list');window.__plans=j.items||[];document.getElementById('planList').innerHTML=window.__plans.map(function(p,i){return '<button class="action" onclick="loadTimeline('+i+')">'+esc(p.name)+' \u00b7 '+p.plan_hash.slice(0,8)+'</button>'}).join(' ')||'No saved plans yet.'}catch(e){}}
-async function loadTimeline(i){const p=window.__plans[i];try{const j=await post('/api/timeline/load',{plan_hash:p.plan_hash});if(j.ok){window.__composePlan=j.plan;renderTimeline(j.plan);document.getElementById('tlOut').textContent='Loaded \u201c'+j.name+'\u201d'}}catch(e){}}
+/* ---------- helpers ---------- */
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+async function api(path, body){
+  let r = await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-JB-Token':TOKEN},body:body===undefined?undefined:JSON.stringify(body)});
+  let txt = await r.text(); let j; try{j=JSON.parse(txt)}catch(e){j={raw:txt}}
+  if(!r.ok) throw new Error(j.error||txt); return j;
+}
+async function post(p,b){ try{ return await api(p,b||{}); }catch(e){ toast('✕ '+e.message); throw e; } }
+function audioUrl(path){ return '/api/audio?path='+encodeURIComponent(path)+'&token='+encodeURIComponent(TOKEN); }
+function toast(msg){ const t=document.getElementById('toast'); t.innerHTML='<b>'+esc(msg)+'</b>'; t.style.display='block'; clearTimeout(window.__tt); window.__tt=setTimeout(()=>t.style.display='none',6000); }
+function keyName(root,mode){ if(root==null||root==='') return '—'; return KEYS[((root%12)+12)%12]+(mode===0?'m':''); }
+function hms(sec){ sec=Math.max(0,Math.round(sec||0)); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60; return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); }
+function mmss(sec){ sec=Math.max(0,Math.round(sec||0)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+function el(id){ return document.getElementById(id); }
 
-async function openFolder(path){if(!path){toast('No folder yet');return} const j=await post('/api/open_folder',{path}); if(!j.ok){toast('Open folder: '+(j.error||'failed'))}}
-async function openRenderFolder(){if(!window.__latestRenderPath){toast('No render yet');return} openFolder(window.__latestRenderPath)}
+/* ---------- skin + chrome ---------- */
+function applySkin(){
+  const sk = SKINS[S.skin] || SKINS.lattice;
+  el('app').setAttribute('style', sk.vars+";"+FONTS+";height:100vh;display:flex;flex-direction:column;overflow:hidden;font-family:var(--mono);background:var(--bg);color:var(--ink)");
+  el('skinStrip').innerHTML = Object.keys(SKINS).map(k=>{
+    const on=k===S.skin;
+    return '<button onclick="setSkin(\''+k+'\')" style="font:600 8.5px/1 var(--mono);letter-spacing:.08em;color:'+(on?'var(--accink)':'var(--dim)')+';background:'+(on?'var(--acc)':'transparent')+';border:1px solid '+(on?'var(--acc)':'var(--edge2)')+';padding:6px 9px;cursor:pointer">'+SKINS[k].name+'</button>';
+  }).join('');
+}
+function setSkin(k){ S.skin=k; localStorage.setItem('ec_skin',k); applySkin(); if(S.mode==='setup')renderSetup(); }
+function renderNav(){
+  el('navRail').innerHTML = NAV.map(n=>{
+    const on=S.mode===n.id;
+    return '<div onclick="go(\''+n.id+'\')" class="clk" style="display:flex;align-items:center;gap:11px;padding:11px 15px;background:'+(on?'color-mix(in srgb, var(--acc) 8%, transparent)':'transparent')+';border-left:3px solid '+(on?'var(--acc)':'transparent')+'">'
+      +'<span style="font-family:var(--mono);font-size:13px;width:15px;text-align:center;color:'+(on?'var(--ink)':'var(--dim)')+'">'+n.glyph+'</span>'
+      +'<span style="font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.06em;color:'+(on?'var(--ink)':'var(--dim)')+';text-transform:uppercase">'+n.name+'</span>'
+      +'<span style="margin-left:auto;font:600 8px/1 var(--mono);color:'+(on?'var(--acc)':'var(--faint)')+'">'+n.i+'</span></div>';
+  }).join('');
+}
+function go(mode){
+  S.mode=mode; renderNav();
+  for(const n of NAV) el('scr_'+n.id).classList.toggle('hidden', n.id!==mode);
+  ({play:renderPlay, crate:renderCrate, workbench:renderWorkbench, sessions:renderSessions, activity:renderActivity, library:renderLibrary, setup:renderSetup}[mode])();
+}
 
-async function api(path, body){let r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-JB-Token':TOKEN},body:body===undefined?undefined:JSON.stringify(body)}); let txt=await r.text(); let j; try{j=JSON.parse(txt)}catch(e){j={raw:txt}} if(!r.ok){throw new Error(j.error||txt)} return j}
-async function post(p,b){try{let j=await api(p,b); console.log(j); return j}catch(e){alert(e.message); throw e}}
-function audioUrl(path){return '/api/audio?path='+encodeURIComponent(path)+'&token='+encodeURIComponent(TOKEN)}
-function toast(msg,path){const t=document.getElementById('toast'); let body='<button onclick="document.getElementById(\'toast\').style.display=\'none\'">x</button><b>'+esc(msg)+'</b>'; if(path){body+='<a href="'+audioUrl(path)+'" target="_blank" rel="noopener">play/open render</a><br><span class="small muted">'+esc(path)+'</span>'} t.innerHTML=body; t.style.display='block'; clearTimeout(window.__jbToastTimer); window.__jbToastTimer=setTimeout(()=>{t.style.display='none'},15000)}
-function togglePlay(){var a=document.getElementById('renderPlayer'); if(!a) return; if(!a.currentSrc && !a.getAttribute('src')){ toast('No render loaded yet \u2014 Book a set, or pick one from Renders/Sessions'); return; } if(a.paused){ a.play().catch(function(){}); } else { a.pause(); } }
-function syncPlayBtn(){var a=document.getElementById('renderPlayer'), b=document.getElementById('kPlayBtn'); if(a&&b){ b.innerHTML = a.paused ? '&#9654;' : '&#10073;&#10073;'; } }
-function castToTv(){var a=document.getElementById('renderPlayer'); if(!a || !a.remote || typeof a.remote.prompt!=='function'){ toast('Casting needs Chrome or Edge (Remote Playback API); your browser does not expose it.'); return; } if(!a.currentSrc && !a.getAttribute('src')){ toast('Load a render first, then cast it to your TV.'); return; } a.remote.prompt().catch(function(){}); }
-window.__endless={on:false,queue:[],i:-1};
-function ecShuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
-async function endlessQueue(){var j=await api('/api/renders');return (j.items||[]).filter(function(r){return r.current_engine && r.quality_gate_passed!==false;}).map(function(r){return r.path;});}
-async function playDemo(){var b=document.getElementById('kDemoBtn'); if(b){b.textContent='Seeding\u2026';} try{ toast('Synthesizing a warm-up demo set\u2026 (no library needed)'); await post('/api/demo/seed',{count:8}); await refreshRenders(false); await startEndless(); toast('Demo set playing endlessly. Book a set to compile YOUR library.'); }catch(e){ toast('Demo seed failed: '+(e&&e.message||e)); } if(b){b.textContent='Play demo';} }
-async function startEndless(){var items=await endlessQueue(); if(!items.length){toast('No renders yet \u2014 press "Play demo" to hear a warm-up set now, or Book a set to compile your library.');return;} window.__endless.on=true; window.__endless.queue=ecShuffle(items.slice()); window.__endless.i=-1; var b=document.getElementById('kEndlessBtn'); if(b){b.textContent='Endless \u25a0';} endlessNext();}
-function stopEndless(){window.__endless.on=false; var a=document.getElementById('renderPlayer'); if(a)a.pause(); var b=document.getElementById('kEndlessBtn'); if(b){b.textContent='Endless';}}
-function toggleEndless(){window.__endless.on?stopEndless():startEndless();}
-function endlessNext(){var E=window.__endless; if(!E.on)return; E.i++;
-  if(E.i>=E.queue.length){var last=E.queue[E.queue.length-1]; var q=ecShuffle(E.queue.slice()); if(q.length>1 && q[0]===last){q.push(q.shift());} E.queue=q; E.i=0;}
-  var path=E.queue[E.i]; if(!path){stopEndless();return;} setPlayer(path); var a=document.getElementById('renderPlayer'); if(a){a.play().catch(function(){});}
-  var m=document.getElementById('kNpMeta'); if(m){m.textContent='Endless \u00b7 '+(E.i+1)+'/'+E.queue.length+' \u00b7 plays continuously';}
-  window.__endlessAdvances=(window.__endlessAdvances||0)+1;
+/* ---------- resident helpers ---------- */
+function activeResident(){ return DATA.residents.find(r=>r.id===S.resident) || DATA.residents[0] || null; }
+function verdictOf(r){
+  if(!r) return {txt:"NO RESIDENTS", ink:"var(--faint)"};
+  if(r.never_auditioned) return {txt:"NEVER AUDITIONED", ink:"var(--dim)"};
+  if(r.ready) return {txt:"CLEARED TO PLAY", ink:"var(--acc)"};
+  return {txt:"WANTS MATERIAL", ink:"var(--fault)"};
 }
-function setupPlayerTransport(){var a=document.getElementById('renderPlayer'); if(!a || a.__wired) return; a.__wired=true;
-  a.addEventListener('play', syncPlayBtn); a.addEventListener('pause', syncPlayBtn); a.addEventListener('emptied', syncPlayBtn); a.addEventListener('ended', function(){ if(window.__endless && window.__endless.on) endlessNext(); }); syncPlayBtn();
-  var btn=document.getElementById('kCastBtn'), st=document.getElementById('kCastState');
-  if(a.remote && typeof a.remote.watchAvailability==='function'){
-    try{ a.remote.watchAvailability(function(available){ if(btn) btn.style.display = available ? 'inline-flex' : 'none'; }).catch(function(){ if(btn) btn.style.display='none'; }); }
-    catch(e){ if(btn) btn.style.display='none'; }
-    a.remote.addEventListener('connecting', function(){ if(st){ st.textContent='Connecting to TV\u2026'; st.style.display='inline-flex'; } });
-    a.remote.addEventListener('connect', function(){ if(st){ st.textContent='\u25b6 Playing on your TV'; st.style.display='inline-flex'; } if(btn) btn.textContent='Casting'; });
-    a.remote.addEventListener('disconnect', function(){ if(st) st.style.display='none'; if(btn) btn.textContent='Cast'; });
-  } else if(btn){ btn.style.display='none'; }
+function updateChrome(){
+  const r = activeResident();
+  el('fitPct').textContent = r && r.readiness_pct!=null ? r.readiness_pct+'%' : '–';
+  el('fitBar').style.width = (r && r.readiness_pct!=null ? r.readiness_pct : 0)+'%';
+  el('nowTxt').textContent = r ? (String(r.name||r.id).toUpperCase()) : '—';
+  el('seedTxt').textContent = r ? ((r.version?('v'+r.version):'') + (r.hash?(' · #'+String(r.hash).slice(0,4)):'')) : '—';
 }
-function setPlayer(path){const a=document.getElementById('renderPlayer'); if(!path){window.__latestRenderPath=null; if(a){a.removeAttribute('src'); a.load();} document.getElementById('renderLink').href='#'; document.getElementById('playerName').textContent='none yet'; document.getElementById('playerPath').textContent='No passing current-engine render loaded.'; return;} window.__latestRenderPath=path; a.src=audioUrl(path); setTimeout(syncPlayBtn,0); document.getElementById('renderLink').href=audioUrl(path); document.getElementById('playerName').textContent=path.split(/[\/]/).pop(); document.getElementById('playerPath').textContent=path; a.load();}
-async function copyRenderPath(){if(!window.__latestRenderPath){toast('No render path yet');return} try{await navigator.clipboard.writeText(window.__latestRenderPath); toast('Copied render path',window.__latestRenderPath)}catch(e){prompt('Copy this path', window.__latestRenderPath)}}
-function renderPathFromResult(j){const done=(j&&j.done)||[]; for(const x of done){if(x&&x.type==='render_mashup'&&x.path)return x.path} if(j&&j.type==='render_mashup'&&j.path)return j.path; return null}
-function handleRenderResult(j){const p=renderPathFromResult(j); if(p){setPlayer(p); toast('Render complete',p); refreshRenders(false)} return p}
-async function refreshRenders(pop){let j=await api('/api/renders'); let all=j.items||[]; let items=all.filter(r=>r.current_engine&&r.quality_gate_passed!==false); let h=''; for(const r of items.slice(0,8)){const p=JSON.stringify(r.path).replace(/"/g,'&quot;'); const tag=r.current_engine?'current':'old'; h+=`<div><a href="${audioUrl(r.path)}" target="_blank" rel="noopener">${esc(r.name)}</a> <button onclick="setPlayer(${p})">play here</button> <button onclick="judgeRender(${p})">judge</button> <span>${(r.size_bytes/1048576).toFixed(1)} MB</span> <span>${tag}</span><br><span>${esc(r.path)}</span></div>`} document.getElementById('renderList').innerHTML=h||'No passing current-engine renders found. Old renders are hidden so a rejected run cannot look successful.'; if(items[0]&&!window.__latestRenderPath){setPlayer(items[0].path)} if(pop&&items[0]){setPlayer(items[0].path); toast('Latest passing render found',items[0].path)} if(pop&&!items[0]){setPlayer(null); toast('No passing current-engine render yet','Rejected artifacts stayed quarantined.')} return j}
-async function judgeRender(path){const ref=prompt('Optional reference path. Leave blank for gate metrics only.',''); let j=await post('/api/judge',{path,ref}); document.getElementById('jamOut').textContent='Judge result:\\n'+JSON.stringify(j,null,2); toast('Judge complete',JSON.stringify(j.v1_1_gates||{}));}
 
-function setVal(id,v){const el=document.getElementById(id); if(el&&v!==undefined&&v!==null)el.value=v}
-function pathJoin(base,leaf){base=(base||'').trim().replace(/[\\/]+$/,''); return base?base+'\\'+leaf:''}
-function deriveWorkspaceFields(){
-  const music=val('music_folder').trim(); const ws=val('workspace_folder').trim();
-  setVal('master_root',music); setVal('working_root',pathJoin(ws,'work')); setVal('agent_root',pathJoin(ws,'agent')); setVal('playlists_root',pathJoin(ws,'playlists')); setVal('stems_root',pathJoin(ws,'stems'));
-}
-async function browseInto(id){let j=await post('/api/browse_dir',{current:val(id)}); if(j.path){setVal(id,j.path); deriveWorkspaceFields();} else if(j.error){toast('Folder picker: '+j.error); const d=document.getElementById('doctorOut'); if(d){d.textContent=JSON.stringify(j,null,2)}}}
-async function suggestWorkspace(){const box=document.getElementById('wsCandidates');box.textContent='scouting drives...';const j=await post('/api/workspace_candidates',{music_folder:val('music_folder')});if(!j.ok){box.textContent=(j.error||'scout failed');return}
-box.innerHTML='';(j.candidates||[]).forEach(c=>{const d=document.createElement('div');d.style.cssText='padding:6px 8px;margin:4px 0;border:1px solid rgba(255,255,255,.14);cursor:'+(c.rejected?'not-allowed':'pointer')+';opacity:'+(c.rejected?'.45':'1');d.innerHTML='<b>'+esc(c.path)+'</b> <span class="accent">score '+c.score+'</span><br>'+ (c.reasons||[]).map(esc).join(' &middot; ');if(!c.rejected){d.onclick=()=>{setVal('workspace_folder',c.path);deriveWorkspaceFields();box.querySelectorAll('div').forEach(x=>x.style.background='');d.style.background='rgba(255,255,255,.08)'}}box.appendChild(d)});if(j.recommended){setVal('workspace_folder',j.recommended);deriveWorkspaceFields()}}
-async function loadDefaults(){try{let j=await api('/api/defaults'); if(j.configured){window.__cfgd=true; window.__cfg=j.configured; setConfigFields(j.configured);const w=parseInt(j.configured.workers||0); const km=document.getElementById('kact_mode'); if(km)km.textContent=(w===0?'\u26a1 full send':'\ud83c\udf31 gentle: '+w+' cores')+' \u21c4';} else {setVal('music_folder',j.music_folder); setVal('workspace_folder',j.workspace_folder); deriveWorkspaceFields();}}catch(e){}}
-function setConfigFields(c){for(const k of ['master_root','working_root','agent_root','playlists_root','stems_root'])if(c[k])setVal(k,c[k]); if(c.master_root)setVal('music_folder',c.master_root); if(c.agent_root){let a=String(c.agent_root); let m=a.match(/^(.*)[\\/]agent$/i); if(m)setVal('workspace_folder',m[1]);} if(c.analysis_seconds)setVal('analysis_seconds',c.analysis_seconds); if(c.workers!=null)setVal('workers',c.workers); deriveWorkspaceFields();}
-async function saveWorkspaceConfig(){deriveWorkspaceFields(); const body={music_folder:val('music_folder'),workspace_folder:val('workspace_folder')}; const as=val('analysis_seconds'); if(as)body.analysis_seconds=+as; const w=val('workers'); if(w!=='')body.workers=+w; let j=await post('/api/config_workspace',body); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
-async function saveConfig(){deriveWorkspaceFields(); let j=await post('/api/config',{master_root:val('master_root'),working_root:val('working_root'),agent_root:val('agent_root'),playlists_root:val('playlists_root'),stems_root:val('stems_root')}); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
-async function doctor(){let j=await post('/api/doctor',{}); document.getElementById('doctorOut').textContent=JSON.stringify(j,null,2); if(j.config)setConfigFields(j.config)}
-async function refreshTracks(){let j=await api('/api/tracks'); let h='<tr><th>Title</th><th>Artist</th><th>BPM</th><th>Key</th><th>Vocal</th><th>Loops</th><th>Path</th></tr>'; for(const r of j.items){h+=`<tr><td>${esc(r.title||'')}</td><td>${esc(r.artist||'')}</td><td>${fmt(r.bpm)}</td><td>${r.key_root??''}</td><td>${fmt(r.vocal_likelihood)}</td><td>${r.loop_count||0}</td><td class="small">${esc(r.path)}</td></tr>`} document.getElementById('tracks').innerHTML=h}
-async function refreshLoops(status){let j=await api('/api/loops?status='+encodeURIComponent(status||'')); let c=j.counts||{}; document.getElementById('loopCounts').textContent=`Total ${c.total||0} | approved ${c.approved||0} | candidate ${c.candidate||0} | rejected ${c.rejected||0}`; let h='<tr><th>Status</th><th>Role</th><th>Score</th><th>Bars</th><th>Start</th><th>End</th><th>Track</th><th>Actions</th></tr>'; for(const r of j.items){h+=`<tr><td><span class="pill">${r.status}</span></td><td>${r.role}</td><td>${fmt(r.score)}</td><td>${r.bars}</td><td>${fmt(r.start_s)}</td><td>${fmt(r.end_s)}</td><td>${esc((r.artist||'')+' - '+(r.title||''))}<br><span class="small muted">${esc(r.path)}</span></td><td><button onclick="loopStatus('${r.id}','approved')">approve</button> <button onclick="loopStatus('${r.id}','candidate')">candidate</button> <button onclick="loopStatus('${r.id}','rejected')">reject</button></td></tr>`} document.getElementById('loopsTable').innerHTML=h}
-async function loopStatus(id,status){let j=await post('/api/loop_status',{loop_id:id,status}); document.getElementById('loopOut').textContent=JSON.stringify(j,null,2); refreshLoops('')}
-async function bulkLoopStatus(status,from_status){if(!confirm(`Set all ${from_status||'loops'} loops to ${status}?`))return; let j=await post('/api/loops/bulk_status',{status,from_status}); document.getElementById('loopOut').textContent=JSON.stringify(j,null,2); if(j.error){alert(j.error)}else{alert(`Updated ${j.updated} loops.`)} refreshLoops('')}
-async function autoApproveQuota(){let j=await post('/api/loops/auto_approve_quota',{max_loops:60}); document.getElementById('loopOut').textContent=JSON.stringify(j,null,2); toast('Quota approval complete',j.message||''); refreshLoops('approved')}
-function outcomeParams(prefix){
-  const preset=val(prefix+'_preset');
-  const presets={
-    clean_blend:{chaos:38,key_strictness:82,pitch_shift_budget:1,stretch_budget:7,genre_whiplash:25,vocal_density:45,anchor_stability:88,recognizability_bias:55},
-    hook_ride:{chaos:58,key_strictness:72,pitch_shift_budget:2,stretch_budget:10,genre_whiplash:48,vocal_density:88,anchor_stability:78,recognizability_bias:86},
-    party_cutup:{chaos:72,key_strictness:64,pitch_shift_budget:2,stretch_budget:8,genre_whiplash:74,vocal_density:78,anchor_stability:72,recognizability_bias:84},
-    max_chaos:{chaos:86,key_strictness:54,pitch_shift_budget:2,stretch_budget:9,genre_whiplash:90,vocal_density:80,anchor_stability:44,recognizability_bias:92}
-  };
-  let p=Object.assign({},presets[preset]||presets.party_cutup);
-  const edit=val(prefix+'_edit_speed');
-  if(edit==='steady')p.chaos=Math.min(p.chaos,45); else if(edit==='active')p.chaos=Math.max(52,Math.min(p.chaos,68)); else if(edit==='hypercut')p.chaos=Math.max(p.chaos,84);
-  const hooks=val(prefix+'_hooks');
-  if(hooks==='sparse'){p.vocal_density=35;p.recognizability_bias=Math.max(50,p.recognizability_bias-15)} else if(hooks==='balanced'){p.vocal_density=Math.max(58,Math.min(p.vocal_density,72))} else {p.vocal_density=Math.max(p.vocal_density,84);p.recognizability_bias=Math.max(p.recognizability_bias,82)}
-  const jump=val(prefix+'_genre_jump');
-  if(jump==='smooth'){p.genre_whiplash=22;p.key_strictness=Math.max(p.key_strictness,78)} else if(jump==='mixed'){p.genre_whiplash=Math.max(45,Math.min(p.genre_whiplash,62))} else {p.genre_whiplash=Math.max(p.genre_whiplash,82)}
-  const safety=val(prefix+'_safety');
-  if(safety==='tight'){p.key_strictness=Math.max(p.key_strictness,82);p.pitch_shift_budget=Math.min(p.pitch_shift_budget,1);p.stretch_budget=Math.min(p.stretch_budget,7)}
-  else if(safety==='loose'){p.key_strictness=Math.max(58,Math.min(p.key_strictness,72));p.pitch_shift_budget=Math.min(Math.max(p.pitch_shift_budget,2),2);p.stretch_budget=Math.min(Math.max(p.stretch_budget,7),8.5)}
-  else {p.key_strictness=Math.min(p.key_strictness,54);p.pitch_shift_budget=2;p.stretch_budget=9}
-  const backbone=val(prefix+'_backbone');
-  if(backbone==='locked')p.anchor_stability=92; else if(backbone==='survive')p.anchor_stability=Math.max(72,Math.min(p.anchor_stability,84)); else p.anchor_stability=Math.min(p.anchor_stability,48);
-  p.target_seconds=+(val(prefix+'_seconds')||120); p.bpm=val(prefix+'_bpm')?+val(prefix+'_bpm'):0;
-  p.name=(prefix==='m'?val('m_name'):'EarCrate Sketch');
-  p.preset=preset;
-  p.voice_world_query=val(prefix+'_voice_world')||'';
-  p.bed_world_query=val(prefix+'_bed_world')||'';
-  p.candidate_count=+(val(prefix+'_candidates')||64);
-  p.max_aux_decks=+(val(prefix+'_max_aux_decks')||3);
-  p.quality_mode='stable_deck'; p.strict_world_roles=true; p.post_render_gate=true; p.auto_retry_quality=true;
-  p.lookahead_seconds=+(val(prefix+'_lookahead')||90);
-  p.transition_priority=val(prefix+'_transition_priority')||'hook_blend_over_bed, beatmatch_blend, bass_swap, acapella_bridge, impact_drop';
-  return p;
-}
-function describeOutcome(p){
-  let edit=p.chaos>=84?'hypercut edits every 2 to 4 bars':(p.chaos>=60?'active swaps with short sections':'longer blends');
-  let hooks=p.vocal_density>=82?'vocal hooks pushed forward':(p.vocal_density>=55?'balanced vocals':'mostly instrumental');
-  let jump=p.genre_whiplash>=80?'hard genre pivots':(p.genre_whiplash>=45?'some contrast':'smooth adjacency');
-  let safe=p.key_strictness>=80?'tight beat/key safety':(p.key_strictness>=50?'harmonic DJ looseness':'wild collisions allowed');
-  let bed=p.anchor_stability>=80?'groove survives through ticks':(p.anchor_stability>=60?'backbone survives most edits':'beat can flip often while grid stays locked');
-  let world=p.mix_mode&&p.mix_mode!=='single_crate'?` voice world "${p.voice_world_query||'auto'}" over bed world "${p.bed_world_query||'auto'}"`: 'single-crate mode';
-  return `${edit}; ${hooks}; ${jump}; ${safe}; ${bed}; ${world}; ${p.candidate_count||0} candidate plans.`;
-}
-function updateOutcomePreview(){
-  let p=outcomeParams('o');
-  const hint=document.getElementById('outcomeHint'); if(hint)hint.textContent=describeOutcome(p);
-  const prev=document.getElementById('outcomePreview'); if(prev)prev.textContent=JSON.stringify(p,null,2);
-  const math=document.getElementById('mashupMath'); if(math)math.textContent=JSON.stringify(outcomeParams('m'),null,2)+'\n\nTranslation: '+describeOutcome(outcomeParams('m'));
-}
-function mirrorMashupToJam(){
-  const pairs=['preset','seconds','edit_speed','hooks','genre_jump','safety','backbone','bpm','mix_mode','voice_world','bed_world','candidates','lookahead','max_aux_decks','transition_priority'];
-  for(const k of pairs){let m=document.getElementById('m_'+k), o=document.getElementById('o_'+k); if(m&&o)o.value=m.value}
-}
-function mirrorJamToMashup(){
-  const pairs=['preset','seconds','edit_speed','hooks','genre_jump','safety','backbone','bpm','mix_mode','voice_world','bed_world','candidates','lookahead','max_aux_decks','transition_priority'];
-  for(const k of pairs){let o=document.getElementById('o_'+k), m=document.getElementById('m_'+k); if(m&&o)m.value=o.value}
-}
-async function compileContinuum(){
-  mirrorJamToMashup(); updateOutcomePreview();
-  let p=outcomeParams('m');
-  document.getElementById('mashupOut').textContent='Compiling continuum lookahead plan...\n'+JSON.stringify(p,null,2);
-  document.getElementById('jamOut').textContent='Compiling continuum lookahead plan...\n'+JSON.stringify(p,null,2);
-  let j=await post('/api/continuum/compile',p);
-  const txt=JSON.stringify(j,null,2)+'\n\nNext: render transition auditions or full WAV after the plan has receipts.';
-  document.getElementById('mashupOut').textContent=txt; document.getElementById('jamOut').textContent=txt;
-  toast('Continuum plan compiled',j.plan_path||j.arrangement_sha||''); refreshManifests();
-}
-const ROLE_ORDER=['drum_anchor','bass','vocal','harmony','texture','fx','full'];
-const ROLE_MIN={drum_anchor:2,bass:1,vocal:1};
-function renderLattice(audit){
-  const panel=document.getElementById('readinessPanel'); panel.style.display='grid';
-  const lat=audit.bpm_lattice||[]; const rec=audit.recommended_bpm;
-  const maxU=Math.max(1,...lat.map(c=>c.usable_loops||0));
-  const ladder=document.getElementById('ladder'); ladder.innerHTML='';
-  for(const c of lat){
-    const h=Math.max(6,Math.round((c.usable_loops/maxU)*120));
-    const best=Math.abs(c.bpm-rec)<0.05; const isTarget=c.is_user_target;
-    const div=document.createElement('div'); div.className='rung'+(best?' best':'')+(isTarget?' target':'');
-    div.innerHTML=`<div class="col" style="height:${h}px"></div><div class="n">${c.bpm.toFixed(2)}</div><div class="u">${c.usable_loops} clean</div><div class="tag">${best?'pick':(isTarget?'yours':'')}</div>`;
-    ladder.appendChild(div);
-  }
-  document.getElementById('latticeRec').textContent=rec?('recommended '+(+rec).toFixed(2)+' BPM'):'';
-}
-function renderRoles(audit){
-  const roles=audit.usable_by_role||{}; const g=document.getElementById('roleGrid'); g.innerHTML='';
-  for(const r of ROLE_ORDER){
-    const n=roles[r]||0; const min=ROLE_MIN[r]||0; const cls=min?(n<min?'short':'ok'):'';
-    const cell=document.createElement('div'); cell.className='roleCell '+cls;
-    cell.innerHTML=`<div class="num">${n}</div><div class="lab">${r.replace('_',' ')}</div>`;
-    g.appendChild(cell);
-  }
-  const t=audit.transform_tiers||{}; const total=Math.max(1,(t.native||0)+(t.varispeed||0)+(t.varispeed_residual_pitch||0)+(t.reject||0));
-  const tb=document.getElementById('tierBar'); tb.innerHTML='';
-  const segs=[['native',t.native||0,'tier-native'],['varispeed',t.varispeed||0,'tier-vari'],['residual',t.varispeed_residual_pitch||0,'tier-varires'],['reject',t.reject||0,'tier-reject']];
-  for(const [lab,n,cls] of segs){ if(!n)continue; const s=document.createElement('span'); s.className=cls; s.style.flex=n; s.title=lab+': '+n; s.textContent=(n/total>0.09)?(lab+' '+n):n; tb.appendChild(s);}
-  const wl=document.getElementById('warnList'); wl.innerHTML=''; for(const w of (audit.warnings||[])){const li=document.createElement('li');li.textContent=w;wl.appendChild(li);}
-}
-async function runPreflight(){
-  mirrorJamToMashup(); const p=outcomeParams('o');
-  const v=document.getElementById('readyVerdict'); v.innerHTML='<span class="verdict hold" style="margin-left:12px">scoring lattice&hellip;</span>';
+/* ---------- PLAY ---------- */
+async function renderPlay(){
+  const scr = el('scr_play'); scr.innerHTML = '<div class="lbl">loading residents…</div>';
   try{
-    const j=await api('/api/preflight',p);
-    if(!j.ok){v.innerHTML='<span class="verdict hold" style="margin-left:12px">'+esc((j.warnings&&j.warnings[0])||'no approved loops')+'</span>';document.getElementById('readinessPanel').style.display='none';return j}
-    renderLattice(j); renderRoles(j); renderDensity(j);
-    const go=j.ready;
-    const cap=j.capacity||{}, tgt=j.girl_talk_targets||{};
-    v.innerHTML='<span class="verdict '+(go?'go':'hold')+'" style="margin-left:12px">'+(go?'\u25B6 deck-ready \u00b7 '+j.chosen_bpm.toFixed(2)+' BPM':'\u25A0 pool thin \u00b7 '+(cap.sample_events||0)+'/'+(tgt.sample_events||0)+' events')+'</span>';
-    return j;
-  }catch(e){v.innerHTML='<span class="verdict hold" style="margin-left:12px">'+esc(e.message)+'</span>'}
+    const j = await api('/api/residents'); DATA.residents = j.items||[];
+    if(!S.resident && DATA.residents[0]) S.resident = DATA.residents[0].id;
+  }catch(e){ scr.innerHTML='<div class="lbl" style="color:var(--fault)">residents unavailable: '+esc(e.message)+'</div>'; return; }
+  updateChrome();
+  const r = activeResident();
+  const roster = DATA.residents.map((x,i)=>{
+    const on=x.id===S.resident, v=verdictOf(x);
+    return '<div onclick="pickResident(\''+esc(x.id)+'\')" class="clk" style="flex:1;min-width:220px;background:'+(on?'color-mix(in srgb, var(--acc) 7%, transparent)':'var(--panel)')+';border:1px solid '+(on?'var(--acc)':'var(--edge)')+';border-left:3px solid '+(on?'var(--acc)':'var(--edge2)')+';padding:12px 14px;display:flex;align-items:center;gap:13px">'
+      +'<span style="font-family:var(--mono);font-weight:600;font-size:9px;color:'+(on?'var(--acc)':'var(--edge2)')+'">'+String(i+1).padStart(2,'0')+'</span>'
+      +'<div style="min-width:0;flex:1"><div style="font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:.03em;color:var(--ink);text-transform:uppercase">'+esc(x.name||x.id)+'</div>'
+      +'<div style="font:500 9px/1.3 var(--mono);letter-spacing:.05em;color:var(--dim);margin-top:2px">'+esc(x.id)+' · fit '+(x.readiness_pct!=null?x.readiness_pct+'%':'–')+'</div></div>'
+      +'<span style="font:600 8px/1 var(--mono);letter-spacing:.13em;color:'+v.ink+'">'+v.txt+'</span></div>';
+  }).join('');
+  const v = verdictOf(r);
+  const end = (r&&r.endless)||{};
+  const noRepeat = end.no_repeat_seconds!=null ? hms(end.no_repeat_seconds) : '—';
+  const sources = (r&&r.sources!=null) ? r.sources : '—';
+  const toEnd = end.sources_needed_for_endless!=null ? ('+'+Math.max(0, end.sources_needed_for_endless - (Number(sources)||0))) : '—';
+  const dens = (r&&r.density)||{};
+  const wave = Array.from({length:46},(_,i)=>{ const h=(14+Math.abs(Math.sin(i*0.7)*0.62+Math.sin(i*2.3+1)*0.38)*86).toFixed(0); return '<span style="flex:1;height:'+h+'%;background:var(--acc);opacity:.5;transform-origin:bottom;animation:eqPulse '+(1.05+(i%5)*0.12).toFixed(2)+'s ease-in-out '+(i*0.05).toFixed(2)+'s infinite"></span>'; }).join('');
+  scr.innerHTML =
+    '<div><div class="lbl" style="margin-bottom:11px">[ Residents // '+String(DATA.residents.length).padStart(2,'0')+' ]</div><div style="display:flex;gap:12px;flex-wrap:wrap">'+roster+'</div></div>'
+    +'<div style="display:flex;flex-direction:column;gap:14px">'
+    +'<div style="display:flex;align-items:flex-end;gap:16px"><div style="width:5px;height:56px;background:var(--acc);flex:0 0 auto;box-shadow:0 0 12px var(--accGlow)"></div>'
+    +'<div style="font-family:var(--disp);font-weight:700;font-size:66px;line-height:.82;color:var(--ink);text-transform:uppercase">'+esc(r?(r.name||r.id):'—')+'</div>'
+    +'<span style="display:inline-flex;align-items:center;gap:7px;font:600 10px/1 var(--mono);letter-spacing:.13em;color:'+v.ink+';padding-bottom:7px"><span style="width:7px;height:7px;border-radius:50%;background:'+v.ink+'"></span>'+v.txt+'</span></div>'
+    +'<div style="font:400 11.5px/1.5 var(--mono);color:var(--dim);max-width:640px">'+esc(r?(r.contract||''):'')+'</div>'
+    +'<div style="background:var(--panel);border:1px solid var(--edge);padding:13px 15px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><span style="font:600 8.5px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--faint)">Signal // crate depth</span><span style="font:500 9px/1 var(--mono);color:var(--dim)">'+(end.endless_ready?'<span style="color:var(--acc)">loops endlessly</span>':'finite set')+'</span></div>'
+    +'<div style="display:flex;align-items:flex-end;gap:3px;height:74px">'+wave+'</div></div>'
+    +'<div style="display:flex;align-items:stretch;gap:0">'
+    +statCell(noRepeat,'no-repeat runtime','var(--acc)')+statDiv()
+    +statCell(String(sources),'deck-safe sources','var(--ink)')+statDiv()
+    +statCell(toEnd,'to endless','var(--ink)')+statDiv()
+    +'<div style="flex:1;padding-left:20px;display:flex;flex-direction:column;justify-content:center;gap:4px">'
+      +densLine((dens.sources_per_minute!=null?dens.sources_per_minute+' SRC/MIN':''))
+      +densLine((dens.min_layers!=null?dens.min_layers+'–'+dens.max_layers+' LAYERS':''))
+      +densLine(end.bottleneck?('BOTTLENECK · '+String(end.bottleneck).toUpperCase()):'')
+    +'</div></div>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-top:6px">'
+    +'<button onclick="bookSet()" style="display:inline-flex;align-items:center;gap:11px;font:700 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accink);background:var(--acc);border:none;padding:15px 26px;cursor:pointer;animation:glowPulse 3.2s ease-in-out infinite"><svg width="11" height="12" viewBox="0 0 11 12"><path d="M1 1 L10 6 L1 11 Z" fill="var(--accink)"></path></svg>Book a set</button>'
+    +'<button class="btn" onclick="go(\'crate\')">[ Audition crate ]</button></div>'
+    +(r&&r.wants&&r.wants.length?('<div style="font:400 10px/1.5 var(--mono);color:var(--fault);max-width:660px">wants: '+r.wants.map(esc).join(' · ')+'</div>'):'')
+    +'</div>'
+    +'<div id="playRails"></div>';
+  loadPlayRails();
 }
-function renderDensity(j){
-  const cap=j.capacity||{}, tgt=j.girl_talk_targets||{};
-  let el=document.getElementById('densityRow');
-  if(!el){el=document.createElement('div');el.id='densityRow';el.style.cssText='grid-column:1/-1;margin-top:6px';
-    document.getElementById('readinessPanel').appendChild(el);}
-  const rows=[['sample-events',cap.sample_events||0,tgt.sample_events||0],
-              ['distinct sources',cap.distinct_sources||0,tgt.distinct_sources||0],
-              ['bed riders',cap.beds||0,1],['vocal/harmony foreground',cap.foreground||0,1]];
-  let h='<div class="latticeHead"><span class="t">Girl Talk density &mdash; have vs. need for '+(j.track_seconds||120)+'s</span><span class="rec" style="color:var(--ink-faint)">~1 new element / '+11+'s</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">';
-  for(const [lab,have,need] of rows){const ok=have>=need;
-    h+='<div class="roleCell '+(ok?'ok':'short')+'"><div class="num">'+have+'<span style="font-size:12px;color:var(--ink-faint)"> / '+need+'</span></div><div class="lab">'+lab+'</div></div>';}
-  h+='</div>';
-  el.innerHTML=h;
+function statCell(big,label,ink){ return '<div style="flex:1;padding:0 20px"><div style="font-family:var(--disp);font-weight:700;font-size:33px;line-height:1;color:'+ink+'">'+esc(big)+'</div><div style="font:600 8px/1.3 var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--faint);margin-top:5px">'+esc(label)+'</div></div>'; }
+function statDiv(){ return '<div style="width:1px;background:var(--edge)"></div>'; }
+function densLine(t){ return t?'<span style="font:500 8.5px/1.5 var(--mono);letter-spacing:.05em;color:var(--dim)">'+esc(t)+'</span>':''; }
+async function loadPlayRails(){
+  const host = el('playRails'); if(!host) return;
+  try{
+    const j = await post('/api/rank',{limit:400, taste_profile:S.resident});
+    const ranked = j.ranked||[];
+    const rails = [["Floor","floor"],["Fgnd","fgnd"],["Spark","spark"]].map(([nm,bk],idx)=>{
+      const items = ranked.filter(x=>ROLE_BUCKET[bk].indexOf(x.ear_role)>=0).slice(0,3);
+      const cov = items.length? 'COV '+(items[0].rank_score||0).toFixed(2) : 'THIN';
+      const covInk = items.length? 'var(--acc)':'var(--fault)';
+      const atoms = items.map((a,ai)=>{
+        const live = idx<2 && ai===0;
+        return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:9px;background:'+(live?'color-mix(in srgb, var(--acc) 8%, transparent)':'var(--panel2)')+';border:1px solid '+(live?'var(--acc)':'var(--edge)')+';padding:7px 10px">'
+          +(live?'<span style="display:inline-flex;align-items:center;gap:4px;font:600 7px/1 var(--mono);letter-spacing:.1em;color:var(--acc)"><span style="width:5px;height:5px;border-radius:50%;background:var(--acc)"></span>LIVE</span>':'')
+          +'<div style="min-width:0;flex:1"><div style="font:600 10.5px/1.15 var(--mono);color:'+(live?'var(--ink)':'var(--dim)')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc((a.artist?a.artist+' — ':'')+(a.source||a.ear_role))+'</div><div style="font:500 8px/1 var(--mono);color:var(--faint);margin-top:2px">'+esc(a.ear_role)+' · '+(a.bpm?Math.round(a.bpm):'?')+'</div></div></div>';
+      }).join('') || '<div style="font:500 9px/1 var(--mono);color:var(--faint);padding:7px 0">no atoms in this rail yet</div>';
+      return '<div style="display:flex;align-items:center;gap:14px;padding:9px 0;border-top:1px solid var(--edge)"><div style="width:150px;flex:0 0 auto"><div style="font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:.05em;color:var(--dim);text-transform:uppercase">'+nm+' <span style="color:var(--edge2)">·0'+(idx+1)+'</span></div><div style="font:600 8px/1 var(--mono);letter-spacing:.06em;color:'+covInk+';margin-top:4px">'+cov+'</div></div><div style="flex:1;display:flex;gap:8px;min-width:0">'+atoms+'</div></div>';
+    }).join('');
+    host.innerHTML = '<div style="background:var(--panel);border:1px solid var(--edge);padding:14px 15px"><div class="lbl" style="margin-bottom:11px">[ Crate // Rails ] <span style="color:var(--edge2);letter-spacing:.1em"> — ● = top of rail</span></div>'+rails+'</div>';
+  }catch(e){ host.innerHTML='<div class="lbl" style="color:var(--faint)">rank the crate first (book a set / build ear crate)</div>'; }
 }
-async function proposeMashup(){mirrorJamToMashup();document.getElementById('mashupOut').textContent='Proposing arrangement from approved loops...'; let p=outcomeParams('m'); let j=await post('/api/mashup/propose',p); document.getElementById('mashupOut').textContent=JSON.stringify(j,null,2)+'\n\nNext: open Manifests and execute the new render manifest, or use MAKE AND RENDER NOW.'; refreshManifests()}
-async function proposeOutcomeOnly(){mirrorJamToMashup(); tab('mashup'); await proposeMashup()}
-async function oneClickJam(){
-  mirrorJamToMashup(); updateOutcomePreview();
-  const p=outcomeParams('o'); p.track_budget=+(val('o_budget')||240); p.force_loops=document.getElementById('o_force_loops').checked; p.taste_profile='girl_talk_v1'; p.tastespec=true;
-  // Preflight first so a thin pool fails in seconds with a reason, not after a long render.
-  let pre=null; try{pre=await runPreflight();}catch(e){}
-  let readyLine='';
-  if(pre&&pre.ok){readyLine=pre.ready?`\nReadiness: deck-ready at ${pre.chosen_bpm.toFixed(2)} BPM.`:`\nReadiness: pool is THIN. ${(pre.warnings||[])[0]||''} The lattice suggests ${(+pre.recommended_bpm).toFixed(2)} BPM. You can proceed anyway.`;}
-  else if(pre&&!pre.ok){if(!confirm('No deck-ready pool yet: '+((pre.warnings||[])[0]||'approve loops first')+'\n\nRun anyway?'))return;}
-  if(!confirm(`Run TasteSpec compile?\n\nTrack budget: ${p.track_budget||'all'}\nOutcome: ${describeOutcome(p)}\nVoice world: ${p.voice_world_query||'auto'}\nBed world: ${p.bed_world_query||'auto'}\nTaste profile: girl_talk_v1${readyLine}\n\nThis writes only under working_root, but it may take several minutes.`))return;
-  document.getElementById('jamOut').textContent='Started TasteSpec compile. Watch Engine status. The player loads only an accepted render.\n'+JSON.stringify(p,null,2);
-  p.taste_profile=window.__stationProfile||'girl_talk_v1'; let j=await post('/api/one_click_bg',p); document.getElementById('jamOut').textContent+='\n'+JSON.stringify(j,null,2); window.__oneClickPending=true; toast('TasteSpec feasibility compile started');
+function pickResident(id){ S.resident=id; localStorage.setItem('ec_profile',id); renderPlay(); }
+async function bookSet(){
+  const r=activeResident(); if(!r){toast('No resident');return;}
+  toast('Booking '+(r.name||r.id)+' — compiling…');
+  try{ await post('/api/one_click_bg',{taste_profile:r.id}); go('activity'); }catch(e){}
 }
-let MANIFESTS=[];
-async function refreshManifests(){let j=await api('/api/manifests'); MANIFESTS=j.items||[]; let h='<tr><th>Created</th><th>Summary</th><th>Ops</th><th>Path</th><th>Execute</th></tr>'; MANIFESTS.forEach((r,i)=>{h+=`<tr><td>${esc(r.created_at||'')}</td><td>${esc(r.summary||'')}</td><td>${r.operations}</td><td class="small">${esc(r.path)}</td><td><button onclick="execManifestDry(${i})">DRY RUN</button> <button class="danger" onclick="execManifestApplyNow(${i})">APPLY NOW</button> <button onclick="execManifestApplyBg(${i})">APPLY BG</button></td></tr>`}); document.getElementById('manifestTable').innerHTML=h}
-async function execManifestDry(i){const path=(MANIFESTS[i]||{}).path; if(!path){alert('No manifest path');return} document.getElementById('manifestOut').textContent='Dry-running...\n'+path; let j=await post('/api/manifest/execute',{path}); document.getElementById('manifestOut').textContent=JSON.stringify(j,null,2); refreshManifests()}
-async function execManifestApplyNow(i){const path=(MANIFESTS[i]||{}).path; if(!path){alert('No manifest path');return} if(!confirm('APPLY this manifest and write output under working roots? The browser will wait until render finishes.'))return; document.getElementById('manifestOut').textContent='Applying now...\n'+path; let j=await post('/api/manifest/execute',{path,apply:true}); document.getElementById('manifestOut').textContent=JSON.stringify(j,null,2); handleRenderResult(j); refreshManifests()}
-async function execManifestApplyBg(i){const path=(MANIFESTS[i]||{}).path; if(!path){alert('No manifest path');return} if(!confirm('APPLY this manifest in background and write output under working roots?'))return; document.getElementById('manifestOut').textContent='Started background apply...\n'+path+'\nWatch Engine status above. The player will refresh when the job reports done.'; let j=await post('/api/manifest/execute_bg',{path,apply:true}); document.getElementById('manifestOut').textContent+='\n'+JSON.stringify(j,null,2); toast('Render started'); window.__renderBgPending=true; refreshManifests()}
-function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
-function escAttr(s){return String(s??'').replace(/['\\]/g,'')}
-function fmt(x){return x===null||x===undefined?'':(+x).toFixed(2)}
-setInterval(async()=>{try{let j=await api('/api/status'); const msg=(j.busy?'BUSY ':'')+j.message; window.__lastStatus=j; renderActivity(j); document.getElementById('status').textContent=msg; document.getElementById('status_big').textContent=msg; const kt=document.getElementById('kact_text'); if(kt)kt.textContent=msg; const kb2=document.getElementById('kact_bar'); if(kb2)kb2.style.width=((j.progress||0)*100)+'%'; const led=document.getElementById('statusLed'); if(led)led.classList.toggle('busy',!!j.busy); const err=j.last_error?'Last error: '+j.last_error:''; document.getElementById('last_error').textContent=err; const perf=j.perf_summary; if(perf){const top=perf.top_stages||[]; document.getElementById('perf_summary').textContent=`${perf.in_progress?'running':'last run'} · ${fmt(perf.elapsed_seconds)}s · ${perf.stage_count||0} stages`; document.getElementById('perfOut').textContent=top.map((x,i)=>`${i+1}. ${x.name}: ${fmt(x.seconds)}s ${x.ok===false?'FAILED':''}`).join('\n')+(j.perf_ledger_path?'\n\nLedger: '+j.perf_ledger_path:'');} const st=document.getElementById('statustext'); if(st) st.textContent=j.message+(j.last_error?' | '+j.last_error:''); const w=((j.progress||0)*100)+'%'; const pg=document.getElementById('prog'); if(pg) pg.style.width=w; document.getElementById('prog_global').style.width=w; if(j.last_render_path && j.last_render_path!==window.__latestRenderPath){setPlayer(j.last_render_path); toast('Render ready',j.last_render_path); refreshRenders(false)} if((window.__renderBgPending||window.__oneClickPending) && !j.busy && (String(j.message||'').includes('manifest executed')||String(j.message||'').includes('one-click complete')||String(j.message||'').includes('rejected all quality attempts')||String(j.message||'').includes('floor-safe rescue')||String(j.message||'').includes('TasteSpec one-click complete'))){window.__renderBgPending=false; window.__oneClickPending=false; if(!j.last_render_path && String(j.message||'').includes('rejected')) setPlayer(null); refreshRenders(true)}}catch(e){}},1000);
-loadDefaults().finally(()=>{updateOutcomePreview(); tab(window.__cfgd?'residents':'setup'); doctor().catch(()=>{}); refreshRenders(false).catch(()=>{}); setupPlayerTransport(); if(new URLSearchParams(location.search).get('endless')==='1'){setTimeout(function(){startEndless();},900);} kthemeInit(); const v=document.querySelector('.ver'); const kv=document.getElementById('ksideVer'); if(v&&kv)kv.textContent=v.textContent;});
 
+/* ---------- CRATE ---------- */
+async function renderCrate(){
+  const scr=el('scr_crate'); scr.innerHTML='<div class="lbl">ranking the crate…</div>';
+  let ranked=[]; try{ const j=await post('/api/rank',{limit:200, taste_profile:S.resident}); ranked=j.ranked||[]; }catch(e){}
+  DATA.ranked=ranked; if(S.atom>=ranked.length) S.atom=0;
+  let rd=null; try{ rd=await post('/api/taste/readiness',{taste_profile:S.resident}); }catch(e){} DATA.readiness=rd;
+  scr.innerHTML =
+    '<div class="h1">Crate <span style="color:var(--acc)">// audition &amp; judge</span></div>'
+    +'<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:420px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><span class="lbl">[ Ranked pool // '+ranked.length+' ]</span><span style="font:500 9px/1 var(--mono);color:var(--faint)">recog · role · dance · deck · contrast</span></div><div id="crateList"></div></div>'
+    +'<div style="width:400px;flex:0 0 auto;display:flex;flex-direction:column;gap:14px"><div id="crateInspect"></div><div id="cratePairs"></div></div>'
+    +'<div style="width:320px;flex:0 0 auto" id="crateReady"></div>'
+    +'</div>';
+  renderCrateList(); renderInspector(); renderReadiness();
+}
+function renderCrateList(){
+  const host=el('crateList'); if(!host) return;
+  let list=DATA.ranked; const q=(el('query').value||'').toLowerCase().trim();
+  if(q){ const roleM=q.match(/role:(\w+)/); const bpmM=q.match(/bpm:(\d+)-(\d+)/); const rest=q.replace(/role:\w+|bpm:\d+-\d+/g,'').trim();
+    list=list.filter(x=>{ if(roleM && String(x.ear_role||'').toLowerCase().indexOf(roleM[1])<0) return false;
+      if(bpmM){ const b=x.bpm||0; if(b<+bpmM[1]||b>+bpmM[2]) return false; }
+      if(rest && String((x.artist||'')+' '+(x.source||'')+' '+(x.ear_role||'')).toLowerCase().indexOf(rest)<0) return false; return true; }); }
+  host.innerHTML = list.map((a)=>{
+    const gi=DATA.ranked.indexOf(a); const on=gi===S.atom; const w=a.why||{};
+    const bars=['recognizability','role_clarity','danceability','deck_feasibility','contrast'].map(k=>{const val=(w[k]||0); return '<span style="width:5px;height:20px;background:var(--panel2);display:flex;align-items:flex-end"><i style="display:block;width:100%;height:'+Math.round(val*100)+'%;background:var(--dim)"></i></span>';}).join('');
+    return '<div onclick="pickAtom('+gi+')" class="clk" style="display:flex;align-items:center;gap:12px;background:'+(on?'color-mix(in srgb, var(--acc) 7%, transparent)':'var(--panel)')+';border:1px solid '+(on?'var(--acc)':'var(--edge)')+';border-left:3px solid var(--dim);padding:9px 12px;margin-bottom:6px">'
+      +'<span style="font:600 10px/1 var(--mono);color:var(--faint);width:34px">'+(a.rank_score!=null?a.rank_score.toFixed(2):'–')+'</span>'
+      +'<div style="min-width:0;flex:1"><div style="font:600 12px/1.15 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc((a.artist?a.artist+' — ':'')+(a.source||a.atom_id))+'</div><div style="font:500 8.5px/1 var(--mono);color:var(--faint);margin-top:2px">'+esc(a.ear_role)+' · '+(a.bpm?Math.round(a.bpm):'?')+' bpm</div></div>'
+      +'<div style="display:flex;gap:5px;align-items:center">'+bars+'</div>'
+      +'<span onclick="event.stopPropagation();playAtom('+gi+')" class="clk" style="font:600 11px/1 var(--mono);color:var(--acc);width:20px;text-align:center">▶</span></div>';
+  }).join('') || '<div class="lbl" style="color:var(--faint)">crate empty — build the ear crate in Library first</div>';
+}
+function pickAtom(i){ S.atom=i; renderInspector(); }
+function playAtom(i){ const a=DATA.ranked[i]; if(!a){return;} playClip(a.preview_path||a.path, a.start_s, a.end_s, (a.artist?a.artist+' — ':'')+(a.source||a.atom_id)); }
+function renderInspector(){
+  const host=el('crateInspect'); if(!host) return; const a=DATA.ranked[S.atom];
+  if(!a){ host.innerHTML='<div class="card lbl" style="color:var(--faint)">no atom selected</div>'; if(el('cratePairs'))el('cratePairs').innerHTML=''; return; }
+  host.innerHTML = '<div class="card"><div class="lbl" style="margin-bottom:9px">[ Atom // '+esc(a.ear_role)+' ]</div>'
+    +'<div style="font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:.02em;color:var(--ink);text-transform:uppercase">'+esc((a.artist?a.artist+' — ':'')+(a.source||a.atom_id))+'</div>'
+    +'<div style="font:500 9px/1.4 var(--mono);color:var(--faint);margin-top:4px">'+(a.bpm?Math.round(a.bpm):'?')+' bpm · score '+(a.rank_score!=null?a.rank_score.toFixed(2):'–')+' · '+esc(a.stem||'mix')+'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button onclick="judgeAtom(\'approved\',true)" class="btn" style="flex:1;border-color:var(--acc);color:var(--acc)">★ Favorite</button>'
+    +'<button onclick="judgeAtom(\'approved\',false,true)" class="btn" style="flex:1">⛒ Lock</button>'
+    +'<button onclick="judgeAtom(\'rejected\',false)" class="btn fault" style="flex:1">✕ Reject</button>'
+    +'</div></div>';
+  renderCratePairs();
+}
+async function renderCratePairs(){
+  const host=el('cratePairs'); if(!host) return; const a=DATA.ranked[S.atom]; if(!a){host.innerHTML='';return;}
+  host.innerHTML='<div class="card"><div class="lbl">[ Pairs // why allowed ]</div><div style="font:500 9px/1 var(--mono);color:var(--faint);margin-top:8px">loading…</div></div>';
+  let items=[]; try{ const j=await api('/api/taste/pairs?atom_id='+encodeURIComponent(a.atom_id)+'&taste_profile='+encodeURIComponent(S.resident||'girl_talk_v1')); items=j.items||[]; }catch(e){}
+  DATA.pairs=items;
+  const rows = items.slice(0,6).map((p,i)=>{
+    const rej=p.judgment_status==='rejected'; const rs=p.reasons||{};
+    const why=Object.keys(rs).slice(0,4).map(k=>k+':'+(typeof rs[k]==='number'?rs[k].toFixed(2):rs[k])).join(' · ');
+    return '<div style="border:1px solid '+(rej?'color-mix(in srgb, var(--fault) 40%, transparent)':'var(--edge2)')+';background:'+(rej?'color-mix(in srgb, var(--fault) 6%, transparent)':'var(--panel2)')+';padding:8px 10px;margin-bottom:7px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font:600 8px/1 var(--mono);letter-spacing:.06em;color:'+(rej?'var(--fault)':'var(--dim)')+'">'+esc(p.relation||'')+(p.judgment_status?(' ['+esc(p.judgment_status)+']'):'')+'</span><span style="font:600 10px/1 var(--mono);color:'+(rej?'var(--fault)':'var(--acc)')+'">'+(p.score!=null?p.score.toFixed(2):'')+'</span></div>'
+      +'<div style="font:500 10.5px/1.2 var(--mono);color:var(--ink);margin:4px 0 3px">'+esc((p.right_artist||'')+' '+(p.right_title||p.right_role||''))+'</div>'
+      +'<div style="font:400 8.5px/1.3 var(--mono);color:var(--faint)">'+esc(why||'—')+'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:6px"><span onclick="judgePair('+i+',\'approved\')" class="clk" style="font:600 8px/1 var(--mono);color:var(--acc)">✓ keep</span><span onclick="judgePair('+i+',\'rejected\')" class="clk" style="font:600 8px/1 var(--mono);color:var(--fault)">✕ veto</span></div></div>';
+  }).join('') || '<div style="font:400 9px/1.4 var(--mono);color:var(--faint)">no edges for this atom yet — build the graph in Workbench</div>';
+  host.innerHTML='<div class="card"><div class="lbl" style="margin-bottom:10px">[ Pairs // why allowed ]</div>'+rows+'<div style="font:400 8.5px/1.4 var(--mono);color:var(--faint);margin-top:2px">judgments append-only · keyed (edge: profile,L,R,relation)</div></div>';
+}
+async function judgeAtom(status,fav,lock){
+  const a=DATA.ranked[S.atom]; if(!a){return;}
+  try{ await post('/api/ear_atoms/judgment',{atom_id:a.atom_id, taste_profile:S.resident||'girl_talk_v1', status:status, favorite:!!fav, locked:!!lock});
+    toast((lock?'⛒ locked: ':fav?'★ favorited: ':status+': ')+(a.source||a.atom_id)); }catch(e){}
+}
+async function judgePair(i,status){ const p=DATA.pairs[i]; if(!p){return;} try{ await post('/api/taste/pair_judgment',{edge_id:p.id, taste_profile:S.resident||'girl_talk_v1', status:status}); toast('pair '+status+' — the composer will obey'); renderCratePairs(); }catch(e){} }
+function renderReadiness(){
+  const host=el('crateReady'); if(!host) return; const rd=DATA.readiness;
+  if(!rd){ host.innerHTML='<div class="card lbl" style="color:var(--faint)">readiness unavailable</div>'; return; }
+  const have=rd.have||{}, need=rd.need||{};
+  const rows=['foreground','floor','bass','spark','sources'].map(k=>{
+    const h=have[k]||0, n=need[k]||1, pct=Math.min(100,Math.round(h/n*100)), ok=h>=n;
+    const ink= ok?'var(--acc)':(pct<50?'var(--fault)':'var(--dim)');
+    return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font:500 9px/1 var(--mono);color:var(--dim);margin-bottom:4px"><span>'+k+'</span><span style="color:'+ink+'">'+h+' / '+n+(ok?' ✓':'')+'</span></div><div style="height:4px;background:var(--panel2);overflow:hidden"><i style="display:block;height:100%;width:'+pct+'%;background:'+ink+'"></i></div></div>';
+  }).join('');
+  const end=rd.endless||{};
+  host.innerHTML='<div class="card"><div class="lbl" style="margin-bottom:11px">[ Readiness // '+esc(S.resident||'')+' ]</div>'+rows
+    +'<div style="margin-top:13px;padding-top:12px;border-top:1px solid var(--edge)"><div style="font-family:var(--disp);font-weight:700;font-size:26px;line-height:1;color:var(--acc)">'+(end.no_repeat_seconds!=null?hms(end.no_repeat_seconds):'—')+'</div><div style="font:500 8.5px/1.4 var(--mono);color:var(--faint);margin-top:4px">no-repeat runtime · bottleneck: <span style="color:var(--dim)">'+esc(end.bottleneck||'?')+'</span></div></div></div>';
+}
 
-function fmtReceipt(j,apply,kind){if(!j||j.ok===false)return JSON.stringify(j,null,2);if(j.output_root)window.__lastArchiveRoot=j.output_root;let L=[];
- if(kind==='ingest'){L.push((apply?'DONE: ':'PLAN ONLY (nothing written yet \u2014 hit APPLY to do it): ')+(j.planned||0)+' file(s) '+(apply?'copied in':'would be copied')+(j.skipped_duplicates?(' \u00b7 '+j.skipped_duplicates+' duplicate(s) skipped'):'')+(j.hashed_for_dedupe!==undefined?(' \u00b7 only '+j.hashed_for_dedupe+' needed hashing'):''));
-  if(j.output_root)L.push('WHERE: '+j.output_root); if(j.message)L.push(j.message);
-  L.push('Next: ORGANIZE builds the clean Artist/Album archive from these.');}
- else{L.push((apply?'DONE: ':'PLAN ONLY (nothing written yet \u2014 hit APPLY to do it): ')+(j.planned||0)+' track(s) \u2192 '+(j.artists||0)+' artist(s) / '+(j.albums||0)+' album(s)'+(j.already_organized?(' \u00b7 '+j.already_organized+' already organized, skipped'):''));if(j.message)L.push(j.message);
-  if(j.output_root)L.push('YOUR ARCHIVE (open this in Explorer): '+j.output_root);
-  if((j.samples||[]).length){L.push('','What it did, first few:');(j.samples||[]).forEach(s2=>L.push('  '+s2.from+'\n      \u2192 '+s2.to));}}
- return L.join('\n')+'\n\n--- full receipt ---\n'+JSON.stringify(j,null,2)}
+/* ---------- WORKBENCH ---------- */
+async function renderWorkbench(){
+  const scr=el('scr_workbench');
+  scr.innerHTML =
+    '<div class="h1">Workbench <span style="color:var(--acc)">// compose</span></div>'
+    +'<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">'
+    +'<div style="width:250px;flex:0 0 auto" class="card"><div class="lbl" style="margin-bottom:10px">[ Pipeline // order is law ]</div><div id="wbPipe"></div></div>'
+    +'<div style="flex:1;min-width:420px" class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><span class="lbl">[ Three-rail plan ]</span><span id="wbPlanMeta" style="font:500 9px/1 var(--mono);color:var(--faint)">propose a plan</span></div><div id="wbPlan"><div class="lbl" style="color:var(--faint)">no plan yet</div></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--edge)"><button class="btn" onclick="proposePlan()">Propose plan</button><button class="btn" onclick="buildGraph()">Build pair graph</button><button class="btn" onclick="preflight()">Preflight</button><button class="btn" onclick="savePlan()">Save plan</button><button class="btn primary" onclick="renderMix()">Render ▸</button><span style="margin-left:auto;font:600 8px/1.2 var(--mono);color:var(--fault);border:1px solid var(--fault);padding:5px 8px">event that can\'t render ⇒ FAIL</span></div>'
+    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--edge)"><div class="lbl" style="margin-bottom:7px">[ Saved plans // load one back ]</div><div id="wbPlans" style="display:flex;gap:6px;flex-wrap:wrap"></div></div></div>'
+    +'<div style="width:280px;flex:0 0 auto" class="card"><div class="lbl" style="margin-bottom:9px">[ Gates ]</div>'
+    +'<div style="font:600 8px/1 var(--mono);color:var(--dim);margin-bottom:6px">PRE-RENDER · must pass to write</div><div id="wbPre" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px"></div>'
+    +'<div style="font:600 8px/1 var(--mono);color:var(--dim);margin-bottom:6px">POST-RENDER · audible truth</div><div style="display:flex;flex-wrap:wrap;gap:5px">'
+    +['rms_std ≥4.5','silence ≥1%','low200 ≥.48','≥4 pitch ctr','audible cov'].map(g=>'<span style="font:500 8.5px/1 var(--mono);color:var(--faint);border:1px dashed var(--edge2);padding:4px 7px">'+g+'</span>').join('')
+    +'</div><div style="font:400 8.5px/1.4 var(--mono);color:var(--faint);margin-top:9px">no WAV on gate failure · no fallback · fail ⇒ quarantine</div></div>'
+    +'</div>';
+  renderPipe(null); renderPre([]); loadPlans();
+}
+async function savePlan(){ if(!window.__plan){toast('Propose a plan first');return;} const name=prompt('Save plan as:','set '+new Date().toISOString().slice(0,10)); if(!name)return; try{ const j=await post('/api/timeline/save',{name, plan:window.__plan, taste_profile:S.resident}); toast(j.ok!==false?('Saved "'+name+'" · '+String(j.plan_hash||'').slice(0,8)):(j.error||'save failed')); loadPlans(); }catch(e){} }
+async function loadPlans(){ const host=el('wbPlans'); if(!host)return; try{ const j=await api('/api/timeline/list'); window.__plans=j.items||[]; host.innerHTML=window.__plans.length? window.__plans.map((p,i)=>'<span class="btn clk" onclick="loadPlan('+i+')">'+esc(p.name||'plan')+' ·'+String(p.plan_hash||'').slice(0,6)+'</span>').join('') : '<span style="font:500 9px/1 var(--mono);color:var(--faint)">no saved plans yet</span>'; }catch(e){ host.innerHTML='<span style="font:500 9px/1 var(--mono);color:var(--faint)">plans unavailable</span>'; } }
+async function loadPlan(i){ const p=(window.__plans||[])[i]; if(!p)return; try{ const j=await post('/api/timeline/load',{plan_hash:p.plan_hash}); if(j.ok!==false){ window.__plan=j.plan||j.arrangement; renderPlanRails(window.__plan); el('wbPlanMeta').textContent='loaded "'+esc(j.name||p.name||'')+'"'; toast('Loaded plan "'+(j.name||p.name||'')+'"'); } else toast(j.error||'load failed'); }catch(e){} }
+async function preflight(){ toast('Preflight…'); try{ const j=await post('/api/preflight',{taste_profile:S.resident, target_seconds:120}); const ok=j.ok!==false && !(j.failures&&j.failures.length); toast('Preflight: '+(ok?'READY to render':('NOT READY — '+((j.failures||[])[0]||j.error||'see crate')))); }catch(e){} }
+function renderPipe(active){
+  const steps=[['Scan','sources'],['Analyze','bpm · key · downbeats'],['Extract','loops ≤12/track'],['Ear crate','auditioned atoms'],['Graph','typed edges'],['Choose deck','feasible sources'],['Compose rails','floor · fgnd · spark'],['Pre-gates','must pass'],['Render','write wav'],['Post-gate','audible truth']];
+  el('wbPipe').innerHTML=steps.map((s,i)=>{
+    const on = active!=null && i===active;
+    return '<div style="display:flex;gap:9px;align-items:flex-start;padding:6px 6px;background:'+(on?'color-mix(in srgb, var(--acc) 9%, transparent)':'transparent')+'"><span style="flex:0 0 auto;width:14px;height:14px;border:1.5px solid '+(on?'var(--acc)':'var(--edge2)')+';background:'+(on?'var(--acc)':'transparent')+';display:flex;align-items:center;justify-content:center;font:700 7px/1 var(--mono);color:var(--accink);margin-top:1px">'+(i+1)+'</span><div style="min-width:0"><div style="font:600 10.5px/1.1 var(--mono);color:'+(on?'var(--ink)':'var(--dim)')+'">'+s[0]+'</div><div style="font:500 8px/1.2 var(--mono);color:var(--faint);margin-top:1px">'+s[1]+'</div></div></div>';
+  }).join('');
+}
+function renderPre(fails){
+  const names=['feasibility','floor','fgnd','first-fg','turnover','gap'];
+  el('wbPre').innerHTML=names.map(g=>{ const bad=fails.some(f=>String(f).toLowerCase().indexOf(g.split(' ')[0])>=0);
+    return '<span style="font:500 8.5px/1 var(--mono);color:'+(bad?'var(--fault)':'var(--acc)')+';background:color-mix(in srgb, '+(bad?'var(--fault)':'var(--acc)')+' 10%, transparent);border:1px solid color-mix(in srgb, '+(bad?'var(--fault)':'var(--acc)')+' 40%, transparent);padding:4px 7px">'+g+' '+(bad?'✕':'✓')+'</span>';
+  }).join('');
+}
+async function proposePlan(){
+  el('wbPlanMeta').textContent='composing…';
+  try{ const j=await post('/api/timeline/propose',{target_seconds:120, taste_profile:S.resident});
+    if(!j.ok){ el('wbPlanMeta').textContent=j.error||'refused'; el('wbPlan').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(j.error||'refused')+'</div>'; return; }
+    window.__plan=j.arrangement; const fails=((j.taste_gate||{}).failures)||[];
+    el('wbPlanMeta').textContent=(j.seed!=null?'seed '+j.seed:'')+' · '+(j.arrangement.bpm||0).toFixed(1)+' BPM · '+(fails.length?'REFUSED':'PASSES');
+    renderPlanRails(j.arrangement); renderPre(fails); renderPipe(6);
+  }catch(e){ el('wbPlanMeta').textContent='error'; }
+}
+function renderPlanRails(arr){
+  if(!arr||!arr.sections){ el('wbPlan').innerHTML='<div class="lbl" style="color:var(--faint)">no plan</div>'; return; }
+  const total=arr.sections.reduce((a,s)=>a+(s.bars||0),0)||1;
+  const rails={floor:[],fgnd:[],spark:[]};
+  arr.sections.forEach(s=>{ const w=(s.bars/total*100);
+    const pick=(bk)=> (s.layers||[]).find(x=>ROLE_BUCKET[bk].indexOf(x.ear_role||x.role)>=0);
+    ['floor','fgnd','spark'].forEach(bk=>{ const l=pick(bk); rails[bk].push({w, role:l?(l.ear_role||l.role):'', src:l?(l.source_track_key||''):''}); });
+  });
+  const railRow=(nm,bk)=> '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px"><div style="width:70px;flex:0 0 auto;display:flex;flex-direction:column;justify-content:center"><span style="font-family:var(--disp);font-weight:700;font-size:13px;color:var(--dim);text-transform:uppercase">'+nm+'</span></div><div style="flex:1;display:flex;gap:3px;height:44px">'
+    +rails[bk].map(c=>{ const live=!!c.role; return '<div style="flex:'+c.w.toFixed(2)+';background:'+(live?'color-mix(in srgb, var(--acc) 9%, transparent)':'var(--panel2)')+';border:1px solid '+(live?'var(--acc)':'var(--edge)')+';padding:5px 7px;overflow:hidden;min-width:0"><div style="font:600 7px/1 var(--mono);color:'+(live?'var(--acc)':'var(--dim)')+'">'+esc(c.role||'—')+'</div><div style="font:500 8.5px/1.1 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">'+esc(c.src||'')+'</div></div>'; }).join('')
+    +'</div></div>';
+  const secs=Math.round(total*4/(arr.bpm||120)*60);
+  el('wbPlan').innerHTML='<div style="display:flex;gap:8px;margin-bottom:10px"><div style="width:70px;flex:0 0 auto"></div><div style="flex:1;display:flex;justify-content:space-between;font:500 8.5px/1 var(--mono);color:var(--faint);border-bottom:1px solid var(--edge);padding-bottom:4px"><span>0:00</span><span>'+mmss(secs/2)+'</span><span>'+mmss(secs)+'</span></div></div>'
+    +railRow('Floor','floor')+railRow('Fgnd','fgnd')+railRow('Spark','spark');
+}
+async function buildGraph(){ toast('Building pair graph…'); try{ const j=await post('/api/taste/graph',{taste_profile:S.resident}); toast(j.ok?('Graph: '+j.edges+' edges'):(j.error||'graph failed')); }catch(e){} }
+async function renderMix(){ toast('Rendering — watch Activity…'); try{ await post('/api/one_click_bg',{taste_profile:S.resident}); go('activity'); }catch(e){} }
 
-function addIngestRow(){const d=document.createElement('div');d.className='pathLine';d.innerHTML='<input placeholder="another source folder" class="ingestSrc"><button class="action" onclick="pickIngestDir(this)">Browse&hellip;</button>';document.getElementById('ingestPaths').appendChild(d)}
-async function pickIngestDir(btn){const inp=btn.parentElement.querySelector('input');try{const j=await post('/api/browse_dir',{current:inp.value});if(j&&j.path){inp.value=j.path}else if(j&&j.error){toast('Folder picker: '+j.error)}}catch(e){toast('Folder picker failed: '+e.message)}}
-function ingestSrcList(){return Array.from(document.querySelectorAll('.ingestSrc')).map(i=>i.value.trim()).filter(Boolean)}
-async function runIngest(apply){const s=ingestSrcList();const o=document.getElementById('ingestOut');if(!s.length){o.textContent='Add at least one source folder.';return}
- if(apply&&!confirm('Copy audio from '+s.length+' folder(s) into the managed library?\nSources are read-only; copies are journaled and rollback-able.'))return;
- o.textContent=(apply?'Ingesting':'Planning')+'\u2026';try{const j=await post('/api/ingest',{sources:s,apply:apply});o.textContent=fmtReceipt(j,apply,'ingest');if(apply&&j.ok)toast('Ingest complete: '+(j.planned||0)+' copied, '+(j.skipped_duplicates||0)+' dupes skipped')}catch(e){o.textContent=String(e)}}
-window.__reorg={sig:null,journal:null};
-async function reorgPreview(){var o=document.getElementById('reorgOut');o.textContent='Planning\u2026';try{var j=await post('/api/reorganize/plan',{});
-  if(j.ok===false){o.textContent=JSON.stringify(j,null,2);var b0=document.getElementById('reorgApplyBtn');if(b0)b0.disabled=true;return;}
-  window.__reorg.sig=j.signature||null; var b=document.getElementById('reorgApplyBtn'); if(b)b.disabled=!(j.planned>0);
-  var L=['PLAN ONLY \u2014 nothing moved yet.', j.human||'', ''];
-  L.push('Move '+(j.planned||0)+' file(s) \u00b7 '+(j.quarantined||0)+' \u2192 _unsorted/ \u00b7 '+(j.already_conforming||0)+' already tidy.');
-  if(j.tree_preview){L.push('','Top folders: '+Object.keys(j.tree_preview).map(function(k){return k+' ('+j.tree_preview[k]+')';}).join(', '));}
-  if((j.samples||[]).length){L.push('','First few:');(j.samples||[]).forEach(function(x){L.push('  '+x.from+'\n      \u2192 '+x.to);});}
-  o.textContent=L.join('\n')+'\n\n--- full receipt ---\n'+JSON.stringify(j,null,2);
- }catch(e){o.textContent=String(e);}}
-async function reorgApply(){if(!window.__reorg.sig){toast('Preview first.');return;}
-  if(!confirm('Move your ORIGINAL files in place into Artist/Album/NN-Title?\nReversible (journaled), nothing deleted. What you previewed is exactly what runs.'))return;
-  var o=document.getElementById('reorgOut');o.textContent='Moving files\u2026';
-  try{var j=await post('/api/reorganize/apply',{signature:window.__reorg.sig});
-    if(j.journal){window.__reorg.journal=j.journal;var rb=document.getElementById('reorgRollbackBtn');if(rb)rb.style.display='inline-flex';}
-    o.textContent=(j.ok?('Moved '+(j.moved||0)+' file(s) in place. Reversible via ROLLBACK LAST.'):'Completed with errors:')+'\n\n'+JSON.stringify(j,null,2);
-    toast(j.ok?('Reorganized '+(j.moved||0)+' file(s) in place'):'Reorganize had errors'); refreshTracks();
-  }catch(e){o.textContent=String(e);}}
-async function reorgRollback(){if(!window.__reorg.journal){toast('No journal to roll back.');return;}
-  if(!confirm('Undo the last reorganize and restore the original layout?'))return;
-  try{var j=await post('/api/reorganize/rollback',{journal:window.__reorg.journal,apply:true});toast('Rollback: restored '+(j.restored||0)+' file(s)');document.getElementById('reorgOut').textContent=JSON.stringify(j,null,2);refreshTracks();}catch(e){toast(String(e));}}
-async function runOrganize(apply){const o=document.getElementById('ingestOut');
- if(apply&&!confirm('Copy the library into Artist/Album/NN Title under working/organized with amended tags?\nOriginals are untouched.'))return;
- o.textContent=(apply?'Organizing':'Planning organize')+'\u2026';try{const j=await post('/api/organize',{apply:apply});o.textContent=fmtReceipt(j,apply,'organize');if(apply&&j.ok)toast('Organized '+(j.planned||0)+' tracks \u2192 '+(j.output_root||'workspace\\work\\organized'))}catch(e){o.textContent=String(e)}}
+/* ---------- SESSIONS ---------- */
+async function renderSessions(){
+  const scr=el('scr_sessions'); scr.innerHTML='<div class="h1">Sessions</div><div class="lbl">loading…</div>';
+  let items=[]; try{ const j=await api('/api/sessions'); items=j.items||[]; }catch(e){}
+  const rows = items.length ? items.map(s=>{
+      const pass=s.passed!==false; const ink=pass?'var(--dim)':'var(--fault)'; const accent=pass?'var(--edge2)':'var(--fault)';
+      const playable=s.kind==='render'&&pass;
+      return '<div style="display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--edge);border-left:3px solid '+accent+';padding:12px 15px">'
+        +'<span style="flex:0 0 auto;width:34px;height:34px;background:var(--panel2);border:1px solid var(--edge2);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--mono);color:var(--dim)">'+(pass?'♪':'⊘')+'</span>'
+        +'<div style="min-width:0;flex:1"><div style="font-family:var(--disp);font-weight:600;font-size:16px;letter-spacing:.03em;color:var(--ink);text-transform:uppercase">'+esc(s.name||'')+'</div><div style="font:500 9.5px/1.3 var(--mono);color:var(--faint);margin-top:2px">'+esc((s.meta||'')+' · '+(s.mtime||''))+'</div><div style="font:500 9px/1.3 var(--mono);color:'+ink+'">'+esc(s.receipts||'')+'</div></div>'
+        +'<span style="font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:'+ink+'">'+(pass?'PASS':'REFUSED')+'</span>'
+        +(playable?('<span onclick=\'setPlayer('+JSON.stringify(s.path)+')\' class="btn clk">PLAY ▸</span><span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span><span onclick=\'openFolder('+JSON.stringify(s.path)+')\' class="btn clk">OPEN</span>'):('<span onclick="go(\'crate\')" class="btn clk">WHY ▸</span>'))
+        +'</div>';
+    }).join('') : '<div class="lbl" style="color:var(--faint)">no sessions yet — book a set from Play</div>';
+  scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Sessions</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">every render AND every refusal · a refusal is a session too</span></div>'
+    + rows
+    + '<div class="card" style="margin-top:8px"><div class="lbl" style="margin-bottom:9px">[ Manifests // reversible operation journals ]</div><div id="sessManifests"><div class="lbl" style="color:var(--faint)">loading…</div></div></div>';
+  loadManifests();
+}
+async function judgeRender(path){ if(!path){return;} toast('Judging render against the gates…'); try{ const j=await post('/api/judge',{path, ref:''}); const g=j.v1_1_gates||j.quality_gate||j.gates||{}; const failed=Object.entries(g).filter(([k,v])=>v===false).map(([k])=>k); toast('Judge: '+(failed.length?('FAIL — '+failed.slice(0,3).join(', ')):'all gates pass')); }catch(e){} }
+async function loadManifests(){ const host=el('sessManifests'); if(!host)return; try{ const j=await api('/api/manifests'); const items=j.items||[]; host.innerHTML=items.length? items.slice(0,20).map(m=>{ const p=m.path||m.manifest_path||''; return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--edge)"><div style="min-width:0;flex:1"><div style="font:600 10px/1.2 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(m.label||m.type||m.name||p.split(/[\\/]/).pop()||'manifest')+'</div><div style="font:500 8px/1 var(--mono);color:var(--faint);margin-top:2px">'+esc((m.ops!=null?m.ops+' ops · ':'')+(m.created_at||m.mtime||''))+'</div></div><span onclick=\'execManifest('+JSON.stringify(p)+',false)\' class="btn clk">preview</span><span onclick=\'execManifest('+JSON.stringify(p)+',true)\' class="btn clk">execute</span></div>'; }).join('') : '<div class="lbl" style="color:var(--faint)">no manifests yet — ingest/organize write them</div>'; }catch(e){ host.innerHTML='<div class="lbl" style="color:var(--faint)">manifests unavailable</div>'; } }
+async function execManifest(path, apply){ if(!path){toast('No manifest path');return;} if(apply && !window.confirm('Execute this manifest for real? (writes outputs)')) return; try{ const j=await post(apply?'/api/manifest/execute_bg':'/api/manifest/execute',{path, apply}); toast('Manifest '+(apply?'executing — watch Activity':('preview: '+(j.dry_run?'dry-run, nothing written':(j.ok!==false?'ok':(j.error||'')))))); if(apply) go('activity'); }catch(e){} }
 
-</script></body></html>
+/* ---------- ACTIVITY ---------- */
+async function renderActivity(){
+  const scr=el('scr_activity');
+  scr.innerHTML='<div class="h1">Activity <span style="color:var(--acc)">// runtime ledger</span></div>'
+    +'<div id="actLive" style="max-width:820px" class="card"></div>'
+    +'<div style="max-width:820px"><div class="lbl" style="margin-bottom:9px">[ Stages this run ]</div><div id="actStages"></div></div>';
+  pollStatus(true);
+}
+function renderStatus(st){
+  const live=el('actLive'); if(!live) return; const busy=!!st.busy;
+  const pct=Math.round((typeof st.progress==='number'?st.progress:0)*100);
+  live.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span class="lbl">Current task</span><span style="display:inline-flex;align-items:center;gap:6px;font:600 9px/1 var(--mono);letter-spacing:.12em;color:'+(busy?'var(--acc)':'var(--faint)')+'">'+(busy?'<span style="width:6px;height:6px;border-radius:50%;background:var(--acc);animation:flick 1.4s ease-in-out infinite"></span>RUNNING':'IDLE')+'</span></div>'
+    +'<div style="font-family:var(--disp);font-weight:600;font-size:22px;letter-spacing:.02em;color:var(--ink)">'+esc(st.message||'idle')+'</div>'
+    +'<div style="position:relative;height:8px;background:var(--panel2);overflow:hidden;margin:12px 0">'+(busy&&pct===0?'<i style="position:absolute;top:0;bottom:0;left:0;width:34%;background:var(--acc);animation:indet 1.8s ease-in-out infinite"></i>':'<i style="display:block;height:100%;width:'+pct+'%;background:var(--acc)"></i>')+'</div>'
+    +'<div style="display:flex;gap:34px"><div><div style="font:600 8px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)">progress</div><div style="font-family:var(--disp);font-weight:700;font-size:22px;color:var(--ink);margin-top:3px">'+pct+'%</div></div>'
+    +(st.last_error?'<div><div style="font:600 8px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--fault)">last error</div><div style="font:500 10px/1.3 var(--mono);color:var(--fault);margin-top:3px;max-width:520px">'+esc(st.last_error)+'</div></div>':'')+'</div>';
+}
+async function renderPerfStages(){
+  const host=el('actStages'); if(!host) return;
+  try{ const p=await api('/api/perf'); const stages=(p&&(p.stages||p.steps))||[];
+    if(!stages.length){ host.innerHTML='<div class="lbl" style="color:var(--faint)">no completed run yet — book a set</div>'; return; }
+    host.innerHTML=stages.map((s,i)=>'<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--panel);border:1px solid var(--edge);margin-bottom:5px"><span style="font:600 9px/1 var(--mono);color:var(--faint);width:20px">'+String(i+1).padStart(2,'0')+'</span><span style="flex:1;font:600 11px/1 var(--mono);color:var(--dim)">'+esc(s.name||s.stage||s.label||'stage')+'</span><div style="width:180px;height:4px;background:var(--panel2);overflow:hidden"><i style="display:block;height:100%;width:100%;background:var(--dim)"></i></div><span style="font:500 9.5px/1 var(--mono);color:var(--dim);width:60px;text-align:right">'+esc(s.seconds!=null?(Number(s.seconds).toFixed(1)+'s'):(s.t||s.duration||''))+'</span></div>').join('');
+  }catch(e){ host.innerHTML='<div class="lbl" style="color:var(--faint)">perf ledger unavailable</div>'; }
+}
+
+/* ---------- LIBRARY ---------- */
+async function renderLibrary(){
+  const scr=el('scr_library');
+  const mods=[
+    {name:'Ingest', top:'var(--acc)', desc:'Copy from any drive into the managed library. Content-hash deduped, manifest-journaled, rollback-able.', actions:[['Dry-run',"libAction('/api/ingest',{apply:false})",0],['Ingest now',"libAction('/api/ingest',{apply:true})",1]]},
+    {name:'Organize + retag', top:'var(--edge2)', desc:'Build the Artist/Album/NN Title tree with amended tags — copies only, masters untouched.', actions:[['Preview',"libAction('/api/organize',{apply:false})",0],['Organize',"libAction('/api/organize',{apply:true})",0]]},
+    {name:'Reorganize', top:'var(--edge2)', desc:'Move the ORIGINAL files in place into a clean tree. Reversible; unidentifiable → _unsorted/. Preview → Apply → Rollback.', actions:[['Preview',"reorgPreview()",0],['Apply',"reorgApply()",0],['Rollback',"reorgRollback()",0]]},
+    {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default, dry-run proposals.', actions:[['Identify (opt-in)',"libAction('/api/identify',{})",0]]},
+    {name:'Deep clean', top:'var(--edge2)', desc:'Listen to each file: real songs vs silence/static/corrupt; find empty + art-only folders.', actions:[['Scan',"libAction('/api/deepclean/scan',{})",0]]},
+  ];
+  scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Library</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">feed &amp; clean · sources copied, never mutated · journaled &amp; reversible</span></div>'
+    +'<div class="card"><div class="lbl" style="margin-bottom:10px">[ Pipeline ]</div><div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button class="btn" onclick="post(\'/api/scan_bg\',{}).then(()=>go(\'activity\'))">Scan</button>'
+    +'<button class="btn" onclick="post(\'/api/analyze_bg\',{limit:0}).then(()=>go(\'activity\'))">Analyze</button>'
+    +'<button class="btn" onclick="post(\'/api/extract_loops_bg\',{limit:0,auto_approve:true,force:false}).then(()=>go(\'activity\'))">Extract loops</button>'
+    +'<button class="btn" onclick="post(\'/api/extract_loops_bg\',{limit:0,auto_approve:true,force:true}).then(()=>go(\'activity\'))">Re-extract (force)</button>'
+    +'<button class="btn primary" onclick="post(\'/api/ear_crate/build\',{taste_profile:S.resident,force:false}).then(j=>toast(\'Ear crate: \'+(j.inserted||0)+\' new, \'+(j.adopted||0)+\' adopted\'))">Build ear crate</button>'
+    +'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">'
+    +mods.map(m=>'<div style="background:var(--panel);border:1px solid var(--edge);border-top:2px solid '+m.top+';padding:13px 14px;display:flex;flex-direction:column;gap:8px"><div style="font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.04em;color:var(--ink);text-transform:uppercase">'+m.name+'</div><div style="font:400 10px/1.5 var(--mono);color:var(--dim);flex:1">'+m.desc+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'+m.actions.map(a=>'<span onclick="'+a[1]+'" class="clk" style="font:600 8.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:'+(a[2]?'var(--accink)':'var(--dim)')+';background:'+(a[2]?'var(--acc)':'var(--panel2)')+';border:1px solid '+(a[2]?'var(--acc)':'var(--edge2)')+';padding:8px 11px">'+a[0]+'</span>').join('')+'</div></div>').join('')
+    +'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+    +'<div class="card" style="flex:1;min-width:320px"><div class="lbl" style="margin-bottom:10px">[ Loop review // quota approval ]</div>'
+      +'<div id="loopCounts" style="font:500 10px/1.4 var(--mono);color:var(--dim);margin-bottom:9px">loading…</div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font:500 9px/1 var(--mono);color:var(--faint)">approve up to</span><input id="quotaN" value="60" style="width:70px;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)"><button class="btn primary" onclick="quotaApprove()">Approve quota</button><button class="btn" onclick="loadLoopReview()">Refresh</button></div>'
+      +'<div style="font:400 8.5px/1.4 var(--mono);color:var(--faint);margin-top:8px">bounded, role-balanced promotion of candidate loops → the hot pool, then Build ear crate.</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;border-top:1px solid var(--edge);padding-top:10px"><span style="font:600 8px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">candidate loops · human review</span><button class="btn" onclick="loopRejectAll()">Reject all candidates</button></div>'
+      +'<div id="loopList" style="margin-top:8px"><div class="lbl" style="color:var(--faint)">loading…</div></div></div>'
+    +'<div class="card" style="flex:1;min-width:320px"><div class="lbl" style="margin-bottom:10px">[ Playlist // query → m3u8 ]</div>'
+      +'<div style="display:flex;flex-direction:column;gap:7px"><input id="plName" placeholder="playlist name" value="set" style="background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)">'
+      +'<input id="plQuery" placeholder="query e.g. bpm:110-124 role:vox" style="background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font:500 9px/1 var(--mono);color:var(--faint)">minutes</span><input id="plMin" value="60" style="width:64px;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 10px/1 var(--mono);color:var(--ink)"><button class="btn primary" onclick="proposePlaylist()">Build playlist</button></div></div>'
+      +'<div id="plOut" style="font:400 9px/1.4 var(--mono);color:var(--faint);margin-top:8px"></div></div>'
+    +'</div>'
+    +'<div class="card"><div id="libTracksHdr" class="lbl" style="margin-bottom:10px">[ Tracks ]</div>'
+    +'<div style="display:flex;font:600 8px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:0 0 8px;border-bottom:1px solid var(--edge)"><span style="flex:2">Title</span><span style="flex:1.4">Artist</span><span style="width:60px">BPM</span><span style="width:50px">Key</span><span style="width:60px">Vocal</span><span style="width:60px">Loops</span></div>'
+    +'<div id="libTracks"><div class="lbl" style="color:var(--faint);padding-top:10px">loading…</div></div></div>';
+  loadTracks(); loadLoopReview();
+}
+let REORG={signature:null, journal:null};
+async function reorgPreview(){ toast('Reorganize preview…'); try{ const j=await post('/api/reorganize/plan',{}); if(j.ok===false){toast(j.error||'preview failed');return;} REORG.signature=j.signature; toast('DRY-RUN: '+(j.planned||0)+' moves, '+(j.quarantined||0)+' → _unsorted. Nothing moved — press Apply.'); }catch(e){} }
+async function reorgApply(){ if(!REORG.signature){toast('Preview first (dry-run before any move)');return;} try{ const j=await post('/api/reorganize/apply',{signature:REORG.signature}); if(j.ok){REORG.journal=j.journal; toast('Reorganized '+(j.moved||0)+' files. Rollback is now available.'); loadTracks();} else toast(j.error||'apply refused (re-preview)'); }catch(e){} }
+async function reorgRollback(){ if(!REORG.journal){toast('Nothing to undo — no applied reorganize this session');return;} try{ const dry=await post('/api/reorganize/rollback',{journal:REORG.journal, apply:false}); const n=dry.restored||dry.would_restore||dry.planned||0; if(!window.confirm('Undo the reorganize? Restores ~'+n+' files to their original locations.')) return; const j=await post('/api/reorganize/rollback',{journal:REORG.journal, apply:true}); toast(j.ok?('Undo complete: '+(j.restored||0)+' files restored'):(j.error||'undo failed')); loadTracks(); }catch(e){} }
+function loopRow(l){
+  const title=esc(l.title||(l.path?l.path.split(/[\\/]/).pop():'loop'));
+  const chip=(label,status,on)=>'<span class="clk" onclick="loopSetStatus(\''+l.id+'\',\''+status+'\')" style="font:600 8px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:'+(on?'var(--accink)':'var(--dim)')+';background:'+(on?'var(--acc)':'var(--panel2)')+';border:1px solid '+(on?'var(--acc)':'var(--edge2)')+';padding:6px 9px">'+label+'</span>';
+  return '<div style="display:flex;align-items:center;gap:8px;font:500 9.5px/1.3 var(--mono);color:var(--dim);padding:7px 0;border-bottom:1px solid var(--edge)">'
+    +'<span style="flex:2;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+title+'</span>'
+    +'<span style="flex:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.artist||'—')+'</span>'
+    +'<span style="width:72px;color:var(--acc)">'+esc(l.role||'—')+'</span>'
+    +'<span style="width:44px">'+(l.bpm!=null?Math.round(l.bpm):'–')+'</span>'
+    +'<span style="width:44px">'+(l.score!=null?Number(l.score).toFixed(2):'–')+'</span>'
+    +'<span style="display:flex;gap:5px;margin-left:auto">'+chip('Approve','approved',true)+chip('Reject','rejected',false)+chip('Lock','approved',false)+'</span>'
+    +'</div>';
+}
+async function loadLoopReview(){ const h=el('loopCounts'); if(!h)return; try{ const j=await api('/api/loops?status=candidate'); const c=j.counts||{}; h.innerHTML='candidates <b style="color:var(--ink)">'+(c.candidate||0)+'</b> · approved <b style="color:var(--acc)">'+(c.approved||0)+'</b> · rejected '+(c.rejected||0)+' · total '+(c.total||0); const list=el('loopList'); if(list){ const items=j.items||[]; list.innerHTML = items.length ? items.slice(0,100).map(loopRow).join('') : '<div class="lbl" style="color:var(--faint);padding-top:6px">no candidate loops — approved via quota or nothing extracted yet</div>'; } }catch(e){ h.textContent='loops unavailable'; const list=el('loopList'); if(list) list.innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; } }
+async function loopSetStatus(id,status){ try{ await post('/api/loop_status',{loop_id:id,status:status}); toast(status==='approved'?'Loop approved + locked (survives quota)':'Loop '+status); loadLoopReview(); }catch(e){} }
+async function loopRejectAll(){ if(!window.confirm('Reject ALL candidate loops? Human-approved (locked) loops are untouched.'))return; try{ const j=await post('/api/loops/bulk_status',{status:'rejected',from_status:'candidate'}); toast('Rejected '+(j.updated||0)+' candidate loops'); loadLoopReview(); }catch(e){} }
+async function quotaApprove(){ const n=parseInt(el('quotaN').value)||60; try{ const j=await post('/api/loops/auto_approve_quota',{max_loops:n}); toast('Quota approved '+(j.approved||j.promoted||j.count||0)+' loops → hot pool'); loadLoopReview(); }catch(e){} }
+async function proposePlaylist(){ const name=el('plName').value||'playlist', q=el('plQuery').value||'', mins=parseInt(el('plMin').value)||60; toast('Building playlist…'); try{ const j=await post('/api/playlist/propose',{name, query:q, target_minutes:mins}); const nT=(j.entries&&j.entries.length)||j.count||j.tracks||0; el('plOut').innerHTML=(j.path?('<span class="clk" style="color:var(--acc)" onclick=\'openFolder('+JSON.stringify(j.path)+')\'>open ▸</span> '+esc(j.path)+' · '):'')+nT+' tracks'; toast('Playlist "'+name+'": '+nT+' tracks'); }catch(e){} }
+async function openFolder(path){ if(!path){toast('No path');return;} try{ const j=await post('/api/open_folder',{path}); if(j&&j.ok===false) toast(j.error||'open failed'); }catch(e){} }
+async function loadTracks(){
+  try{ const j=await api('/api/tracks'); const items=j.items||[];
+    el('libTracksHdr').textContent='[ Tracks // '+items.length+' ]';
+    el('libTracks').innerHTML=items.slice(0,200).map(t=>'<div style="display:flex;font:500 10.5px/1 var(--mono);color:var(--dim);padding:9px 0;border-bottom:1px solid var(--edge)"><span style="flex:2;color:var(--ink)">'+esc(t.title||(t.path?t.path.split(/[\\/]/).pop():'—'))+'</span><span style="flex:1.4">'+esc(t.artist||'—')+'</span><span style="width:60px">'+(t.bpm!=null?Math.round(t.bpm):'–')+'</span><span style="width:50px">'+keyName(t.key_root,t.key_mode)+'</span><span style="width:60px">'+(t.vocal_likelihood!=null?Number(t.vocal_likelihood).toFixed(2):'–')+'</span><span style="width:60px">'+(t.loop_count!=null?t.loop_count:0)+'</span></div>').join('') || '<div class="lbl" style="color:var(--faint);padding-top:10px">no tracks — Scan a music folder in Setup</div>';
+  }catch(e){ el('libTracks').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; }
+}
+async function libAction(path,body){ toast('Running '+path.split('/').pop()+'…'); try{ const j=await post(path,body); toast(path.split('/').pop()+': '+(j.dry_run?'DRY-RUN — ':'')+(j.planned!=null?j.planned+' planned':(j.ok!==false?'ok':JSON.stringify(j).slice(0,120)))); if(/scan|identify|deepclean/.test(path)) go('activity'); }catch(e){} }
+
+/* ---------- SETUP ---------- */
+async function renderSetup(){
+  const scr=el('scr_setup'); scr.innerHTML='<div class="h1">Setup <span style="color:var(--acc)">// system</span></div><div class="lbl">loading…</div>';
+  let d={}; try{ d=await api('/api/defaults'); }catch(e){}
+  const cfg=d.configured||{}; const music=cfg.master_root||d.music_folder||''; const ws=cfg.working_root||d.workspace_folder||'';
+  const workers=cfg.workers; const depth=cfg.analysis_seconds||180;
+  scr.innerHTML='<div class="h1">Setup <span style="color:var(--acc)">// system</span></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1100px">'
+    +'<div class="card"><div class="lbl" style="margin-bottom:11px">[ Workspace ]</div>'
+      +'<div style="font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:5px">Music folder · read-only source</div>'
+      +'<input id="setMusic" value="'+esc(music)+'" style="width:100%;background:var(--panel2);border:1px solid var(--edge);padding:9px 11px;font:500 10.5px/1 var(--mono);color:var(--ink);margin-bottom:11px">'
+      +'<div style="font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:5px">Workspace · all output lives here</div>'
+      +'<input id="setWs" value="'+esc(ws)+'" style="width:100%;background:var(--panel2);border:1px solid var(--edge);padding:9px 11px;font:500 10.5px/1 var(--mono);color:var(--ink)">'
+      +'<div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap"><button class="btn" onclick="browseInto(\'setMusic\')">Browse…</button><button class="btn" onclick="scoutDrives()">Scout drives</button><button class="btn" onclick="openFolder(el(\'setWs\').value)">Open workspace</button><button class="btn primary" onclick="saveWorkspace()">Save workspace</button></div></div>'
+    +'<div class="card"><div class="lbl" style="margin-bottom:11px">[ Performance ]</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="font:500 10.5px/1 var(--mono);color:var(--dim)">Analysis workers</span><button class="btn primary" onclick="toggleWorkers()">'+(workers?('GENTLE · '+workers+' CORES'):'FULL SEND')+'</button></div>'
+      +'<div style="font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:5px">Analysis depth · seconds/track</div>'
+      +'<div style="display:flex;align-items:center;gap:10px"><div style="flex:1;height:5px;background:var(--panel2)"><i style="display:block;height:100%;width:'+Math.min(100,depth/12).toFixed(0)+'%;background:var(--dim)"></i></div><span style="font:600 11px/1 var(--mono);color:var(--ink)">'+depth+'s</span></div>'
+      +'<div style="font:400 9px/1.4 var(--mono);color:var(--faint);margin-top:9px">parallel decode + analysis; caches per file (.npz) so re-runs are incremental</div></div>'
+    +'<div class="card"><div class="lbl" style="margin-bottom:11px">[ Network // the only switch ]</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font:600 11px/1.2 var(--mono);color:var(--ink)">AcoustID identify</div><div style="font:400 9px/1.4 var(--mono);color:var(--faint);margin-top:3px">off by default · the core never touches the network</div></div><span style="font:600 9px/1 var(--mono);letter-spacing:.1em;color:var(--fault);border:1px solid var(--fault);padding:8px 12px">OFF</span></div>'
+      +'<div style="font:500 9px/1 var(--mono);color:var(--faint);margin-top:12px">key · <span style="color:var(--dim)">EARCRATE_ACOUSTID_KEY</span> — free from acoustid.org</div></div>'
+    +'<div class="card"><div class="lbl" style="margin-bottom:11px">[ Health &amp; migration ]</div>'
+      +'<div style="display:flex;gap:7px;margin-bottom:11px"><button class="btn" onclick="runDoctor()">Run doctor</button><button class="btn" onclick="libAction(\'/api/migrate/plan\',{})">Migrate legacy</button></div>'
+      +'<div id="doctorOut" style="font:500 9.5px/1.6 var(--mono);color:var(--faint)">doctor not run yet</div></div>'
+    +'</div>'
+    +'<div class="card" style="max-width:1100px"><div class="lbl" style="margin-bottom:11px">[ Skin ]</div><div style="display:flex;gap:10px;flex-wrap:wrap">'
+    +Object.keys(SKINS).map(k=>{const on=k===S.skin;return '<button onclick="setSkin(\''+k+'\')" style="display:flex;align-items:center;gap:9px;font:600 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:'+(on?'var(--ink)':'var(--dim)')+';background:'+(on?'var(--panel2)':'transparent')+';border:1px solid '+(on?'var(--acc)':'var(--edge2)')+';padding:11px 15px;cursor:pointer"><span style="width:14px;height:14px;background:'+SKINS[k].swatch+'"></span>'+SKINS[k].name+'</button>';}).join('')
+    +'</div></div>';
+}
+async function browseInto(id){ try{ const j=await post('/api/browse_dir',{current:el(id).value}); if(j.ok&&j.path) el(id).value=j.path; }catch(e){} }
+async function scoutDrives(){ toast('Scouting for a workspace next to your music…'); try{ const j=await post('/api/workspace_candidates',{music_folder:el('setMusic').value}); const cands=j.candidates||j.items||(j.workspace_folder?[{path:j.workspace_folder}]:[]); if(cands.length){ el('setWs').value=cands[0].path||cands[0]; toast('Scouted '+cands.length+' workspace candidate(s) — top one filled in'); } else toast('No candidates found — pick a workspace manually'); }catch(e){} }
+async function saveWorkspace(){ try{ const j=await post('/api/config_workspace',{music_folder:el('setMusic').value, workspace_folder:el('setWs').value}); toast(j.ok!==false?'Workspace saved':(j.error||'save failed')); }catch(e){} }
+async function toggleWorkers(){ try{ const d=await api('/api/defaults'); const cur=(d.configured||{}).workers||0; const next=cur?0:4; await post('/api/config',{...(d.configured||{}), workers:next}); toast('Workers → '+(next?next+' cores':'full send')); renderSetup(); }catch(e){} }
+async function runDoctor(){ el('doctorOut').textContent='running doctor…'; try{ const j=await post('/api/doctor',{}); const raw=j.checks||j.items||[]; const list=Array.isArray(raw)?raw:Object.entries(raw).map(([k,v])=>({name:k,ok:v})); el('doctorOut').innerHTML=list.map(c=>((c.ok!==false)?'✓ ':'✕ ')+esc(c.name||c.detail||'')).join('<br>')||esc(JSON.stringify(j).slice(0,300)); }catch(e){ el('doctorOut').textContent=e.message; } }
+
+/* ---------- QUERY ---------- */
+function onQuery(){ if(S.mode==='crate') renderCrateList(); }
+
+/* ---------- TRANSPORT / PLAYER (carried over from the working UI) ---------- */
+const AP = ()=>el('renderPlayer');
+function playClip(path,start,end,name){ const a=AP(); if(!path){toast('No audio for this atom');return;} let src=audioUrl(path); if(start!=null) src+='#t='+Number(start).toFixed(2)+(end!=null?','+Number(end).toFixed(2):''); a.src=src; a.play().catch(()=>{}); el('xportName').textContent=name||'atom'; el('xportSub').textContent='auditioning'; }
+function setPlayer(path){ const a=AP(); if(!path){ a.removeAttribute('src'); a.load(); el('xportName').textContent='none loaded'; el('xportSub').textContent='book a set or play a demo'; return; } window.__renderPath=path; a.src=audioUrl(path); a.play().catch(()=>{}); el('xportName').textContent=path.split(/[\\/]/).pop(); el('xportSub').textContent='render'; }
+function togglePlay(){ const a=AP(); if(!a.getAttribute('src')){ toast('Nothing loaded — Book a set or Play demo'); return; } if(a.paused) a.play().catch(()=>{}); else a.pause(); }
+function syncPlay(){ el('playGlyph').innerHTML = AP().paused ? '<svg width="12" height="13" viewBox="0 0 12 13"><path d="M1 1 L11 6.5 L1 12 Z" fill="var(--accink)"></path></svg>' : '<svg width="12" height="13" viewBox="0 0 12 13"><rect x="1.5" y="0" width="3.1" height="13" fill="var(--accink)"></rect><rect x="7.4" y="0" width="3.1" height="13" fill="var(--accink)"></rect></svg>'; }
+function setVol(ev){ const box=ev.currentTarget; const r=box.getBoundingClientRect(); const p=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)); AP().volume=p; el('volBar').style.width=(p*100)+'%'; }
+function ecShuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+async function endlessQueue(){ const j=await api('/api/renders'); return (j.items||[]).filter(r=>r.current_engine && r.quality_gate_passed!==false).map(r=>r.path); }
+async function toggleEndless(){ if(ENDLESS.on){ ENDLESS.on=false; AP().pause(); el('endlessBtn').style.color='var(--dim)'; return; } const items=await endlessQueue(); if(!items.length){ toast('No renders yet — Play demo or Book a set'); return; } ENDLESS.on=true; ENDLESS.queue=ecShuffle(items.slice()); ENDLESS.i=-1; el('endlessBtn').style.color='var(--acc)'; endlessNext(); }
+function endlessNext(){ if(!ENDLESS.on)return; ENDLESS.i=(ENDLESS.i+1)%ENDLESS.queue.length; setPlayer(ENDLESS.queue[ENDLESS.i]); }
+function endlessSkip(){ if(ENDLESS.on) endlessNext(); }
+async function playDemo(){ toast('Synthesizing a warm-up demo set…'); try{ await post('/api/demo/seed',{count:8}); const items=await endlessQueue(); if(items.length){ ENDLESS.on=true; ENDLESS.queue=ecShuffle(items.slice()); ENDLESS.i=-1; el('endlessBtn').style.color='var(--acc)'; endlessNext(); toast('Demo set playing endlessly. Book a set to compile YOUR library.'); } }catch(e){} }
+async function station(sig){ try{ await post('/api/station/feedback',{signal:sig}); toast(sig==='fire'?'🔥 hotter — biases the next compile':sig==='ice'?'🧊 cooler — biases the next compile':'⏭ logged'); }catch(e){} }
+
+/* ---------- polling ---------- */
+async function pollStatus(force){
+  try{ const st=await api('/api/status');
+    const busy=!!st.busy; el('onlineDot').style.background=busy?'var(--acc)':'var(--faint)';
+    el('onlineTxt').textContent=busy?'ENGINE BUSY':'SYSTEM ONLINE';
+    el('engineTxt').textContent=busy?(String(st.message||'working').slice(0,60)):'idle';
+    if(S.mode==='activity'){ renderStatus(st); if(force) renderPerfStages(); }
+  }catch(e){}
+}
+function tickTransport(){ const a=AP(); const cur=a.currentTime||0, dur=a.duration||0; el('tElapsed').textContent=mmss(cur); el('tDur').textContent=dur?mmss(dur):'0:00'; el('tBar').style.width=(dur?(cur/dur*100):0)+'%'; syncPlay(); }
+
+/* ---------- boot ---------- */
+function boot(){
+  applySkin(); renderNav();
+  const a=AP(); a.addEventListener('ended',()=>{ if(ENDLESS.on) endlessNext(); }); a.addEventListener('play',syncPlay); a.addEventListener('pause',syncPlay);
+  setInterval(tickTransport,500);
+  setInterval(()=>pollStatus(false),2000);
+  go(S.mode);
+}
+boot();
+</script>
+</body>
+</html>

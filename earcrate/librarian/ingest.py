@@ -413,7 +413,11 @@ def reorganize_source(self, data: Dict[str, Any]) -> Dict[str, Any]:
                           f"{root.name}; {quarantined} unidentifiable -> _unsorted/; {already} already "
                           f"conforming. Journaled and fully reversible; nothing deleted.")}
     approved = str(data.get("signature") or "")
-    if approved and approved != sig:
+    if not approved:
+        return {"ok": False, "dry_run": True, "requires_signature": True,
+                "error": "refusing to reorganize (move files in place) without an approved signature; run the preview (apply:false) and pass its signature to apply",
+                "expected_signature": sig}
+    if approved != sig:
         return {"ok": False, "error": "library changed since you approved this plan; re-run the preview",
                 "expected_signature": sig}
     journal = c.agent_root / "reorg_journal" / f"reorg-{ulidish()}.jsonl"

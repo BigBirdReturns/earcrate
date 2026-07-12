@@ -1,0 +1,55 @@
+{
+  "library_root": "<local music folder, redacted>",
+  "as_of": "2026-07-11",
+  "scan": {
+    "total_files": 5407,
+    "total_duration_hours": 336.8
+  },
+  "deepclean": {
+    "checked": 5382,
+    "real_songs": 5381,
+    "junk_count": 1,
+    "empty_folder_count": 0,
+    "art_only_folder_count": 158,
+    "image_files": 954,
+    "sidecar_files": 169
+  },
+  "reorganize": {
+    "planned": 168,
+    "already_conforming": 5216,
+    "quarantined": 0,
+    "moved": 168,
+    "errors": 0,
+    "signature": "0f1b522d89d9bef2c46dea4ccd243030d8e12cabd7c21cc70c3b989041c36688"
+  },
+  "cleanup_deletions": {
+    "art_only_folders_removed": 158,
+    "corrupt_files_removed": 1,
+    "method": "Windows Recycle Bin (SHFileOperationW, FOF_ALLOWUNDO) -- recoverable, not an earcrate feature"
+  },
+  "pre_existing_analysis_data_not_from_this_session": {
+    "note": "Found already present in the freshly-created workspace DB; timestamps cluster right around the v0.8.12 merge (936c3c7, 2026-07-11T07:05:50Z). Likely feasibility/validation data from building or testing that release, not output of this session.",
+    "analyzer_version": "gt-v0.6.1-earcrate-feasibility",
+    "features_rows": 288,
+    "avg_bpm": 123.42,
+    "avg_vocal_likelihood": 0.683,
+    "loops_rows": 3453,
+    "loops_by_role": {
+      "vocal": 2400,
+      "bass": 518,
+      "texture": 282,
+      "full": 150,
+      "harmony": 57,
+      "drum_anchor": 46
+    },
+    "loops_by_bar_length": {
+      "1": 303,
+      "2": 511,
+      "4": 2571,
+      "8": 68
+    },
+    "loops_by_status": {
+      "candidate": 3453
+    }
+  }
+}

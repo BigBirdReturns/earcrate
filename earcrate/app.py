@@ -6,7 +6,7 @@ from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
-from earcrate.providers import get
+from earcrate.providers import get, stem_capability
 
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -229,8 +229,10 @@ class EarcrateCore:
                 workers=int(cfg.get("workers", 0)),
                 seed=int(cfg.get("seed", 1337)),
                 analysis_seconds=int(cfg.get("analysis_seconds", DEFAULT_ANALYSIS_SECONDS)),
+                stem_provider=str(cfg.get("stem_provider", "noop") or "noop"),
             )
             self.ensure_layout()
+            self._export_l3_root()
             self.connect_db()
         except Exception:
             self.config = None
@@ -254,8 +256,9 @@ class EarcrateCore:
                 continue
             if common == aa or common == bb:
                 raise ValueError(f"{label} must not contain each other")
-        self.config = Config(master, working, stems, playlists, agent, int(data.get("sample_rate", DEFAULT_SAMPLE_RATE)), int(data.get("workers", 0)), int(data.get("seed", 1337)), int(data.get("analysis_seconds", DEFAULT_ANALYSIS_SECONDS)))
+        self.config = Config(master, working, stems, playlists, agent, int(data.get("sample_rate", DEFAULT_SAMPLE_RATE)), int(data.get("workers", 0)), int(data.get("seed", 1337)), int(data.get("analysis_seconds", DEFAULT_ANALYSIS_SECONDS)), str(data.get("stem_provider", "noop") or "noop"))
         self.ensure_layout()
+        self._export_l3_root()
         cfg_path = self.config.agent_root / "config.json"
         cfg_path.write_text(json.dumps(self.config.as_dict(), indent=2), encoding="utf-8")
         self.write_toml_config()
@@ -698,8 +701,24 @@ class EarcrateCore:
 
     def ensure_layout(self) -> None:
         c = self.ensure_config()
-        for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "logs"]:
+        for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "cache" / "L3", c.agent_root / "logs"]:
             p.mkdir(parents=True, exist_ok=True)
+
+    def _export_l3_root(self) -> None:
+        """Point the L3 ArtifactStore default at a STABLE workspace path so the
+        StemProvider's store and the renderer's get("artifacts") resolve to the
+        SAME on-disk root (a produced stem key actually resolves). Without this a
+        default ArtifactStore() lands in a private mkdtemp and the two halves of
+        the stem path never meet."""
+        c = self.config
+        if not c:
+            return
+        l3 = c.agent_root / "cache" / "L3"
+        try:
+            l3.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        os.environ["EARCRATE_L3_ROOT"] = str(l3)
 
     def connect_db(self) -> None:
         c = self.ensure_config()
@@ -1036,7 +1055,16 @@ class EarcrateCore:
                 checks.append({"name": "janitor", "ok": True, "detail": json.loads(jl.read_text(encoding="utf-8")).get("summary", "ran")})
             except Exception:
                 pass
-        return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict()}
+        # Surface the stem capability HONESTLY (informational, not a pass/fail
+        # check): a box with no torch/demucs is perfectly healthy, it just cannot
+        # separate stems. Setup/doctor readers see exactly why the feature is off.
+        cap = stem_capability()
+        cap = dict(cap)
+        cap["provider"] = c.stem_provider
+        cap["note"] = ("stem separation ready" if cap.get("ready")
+                       else "stem separation OFF — needs torch+demucs on a CUDA box; "
+                            "default NoopStemProvider in use")
+        return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict(), "stem_capability": cap}
 
     def startup_janitor(self) -> Dict[str, Any]:
         """Launch-time cleanup of everything old versions are known to leave behind.
@@ -3186,6 +3214,39 @@ class EarcrateCore:
             return {"error": "fpcalc gave no JSON"}
         return {"duration": float(d.get("duration") or 0.0), "fingerprint": str(d.get("fingerprint") or "")}
 
+    @staticmethod
+    def _join_artist_credit(artists: List[Dict[str, Any]]) -> Optional[str]:
+        # AcoustID/MusicBrainz return an ordered artist credit; each entry may
+        # carry a `joinphrase` (" feat. ", " & ", ...) that belongs BETWEEN it
+        # and the next name. Honour it so collaborations read correctly; only
+        # fall back to "; " when the response has no join phrases at all.
+        named = [a for a in artists if a.get("name")]
+        if not named:
+            return None
+        if any(a.get("joinphrase") for a in named):
+            out = ""
+            for i, a in enumerate(named):
+                out += a["name"]
+                if i < len(named) - 1:
+                    out += a.get("joinphrase") or "; "
+            return out.strip() or None
+        return "; ".join(a["name"] for a in named) or None
+
+    @staticmethod
+    def _pick_release_group(rgs: List[Dict[str, Any]]) -> Optional[str]:
+        # Don't blindly take releasegroups[0]: MusicBrainz often lists
+        # compilations/soundtracks before the studio album. Prefer a primary
+        # "Album" with no compilation-ish secondary type.
+        titled = [rg for rg in rgs if rg.get("title")]
+        if not titled:
+            return None
+        def _rank(rg: Dict[str, Any]):
+            sec = [str(s).lower() for s in (rg.get("secondarytypes") or [])]
+            noncomp = 0 if ("compilation" in sec or "soundtrack" in sec) else 1
+            is_album = 1 if str(rg.get("type") or "").lower() == "album" else 0
+            return (noncomp, is_album)
+        return max(titled, key=_rank).get("title")
+
     def _parse_acoustid(self, data: Dict[str, Any]) -> Dict[str, Any]:
         if data.get("status") != "ok":
             return {"ok": False, "error": (data.get("error") or {}).get("message", "lookup failed")}
@@ -3193,23 +3254,46 @@ class EarcrateCore:
         if not results:
             return {"ok": True, "match": None}
         best = max(results, key=lambda r: r.get("score", 0.0))
-        rec = (best.get("recordings") or [None])[0]
-        if not rec:
-            return {"ok": True, "match": None, "score": round(float(best.get("score", 0.0)), 3)}
-        artists = rec.get("artists") or []
-        artist = "; ".join(a.get("name", "") for a in artists if a.get("name")) or None
-        rgs = rec.get("releasegroups") or []
-        album = rgs[0].get("title") if rgs and rgs[0].get("title") else None
+        score = round(float(best.get("score", 0.0)), 3)
+        # A single AcoustID result maps to several MusicBrainz recordings and the
+        # first is frequently a bare stub ({"id": ...} with no title/artists).
+        # Blindly taking recordings[0] silently discarded real matches, so rank
+        # recordings by how much usable metadata they actually carry.
+        recs = best.get("recordings") or []
+        def _rec_rank(r: Dict[str, Any]):
+            has_artist = 1 if any(a.get("name") for a in (r.get("artists") or [])) else 0
+            has_title = 1 if r.get("title") else 0
+            has_rg = 1 if r.get("releasegroups") else 0
+            return (has_artist, has_title, has_rg)
+        rec = max(recs, key=_rec_rank) if recs else None
+        if not rec or not (rec.get("title") or rec.get("artists")):
+            return {"ok": True, "match": None, "score": score}
+        artist = self._join_artist_credit(rec.get("artists") or [])
+        album = self._pick_release_group(rec.get("releasegroups") or [])
         return {"ok": True, "match": {"artist": artist, "title": rec.get("title"), "album": album,
-                                      "mbid": rec.get("id"), "score": round(float(best.get("score", 0.0)), 3)}}
+                                      "mbid": rec.get("id"), "score": score}}
+
+    # AcoustID web service. meta tokens MUST be whitespace-separated: in an
+    # x-www-form-urlencoded body a literal "+" encodes to %2B, which the server
+    # reads as one bogus token ("recordings+releasegroups+...") and returns no
+    # recordings -- the cause of ~0 identities across the real run. Passing a
+    # space lets urlencode emit a "+" (= space on the wire) so the tokens split.
+    ACOUSTID_ENDPOINT = "https://api.acoustid.org/v2/lookup"
+    ACOUSTID_META = "recordings releasegroups"
+
+    def _acoustid_params(self, fingerprint: str, duration: float, api_key: str) -> Dict[str, str]:
+        return {
+            "client": api_key,
+            "duration": str(int(round(duration))),
+            "fingerprint": fingerprint,
+            "meta": self.ACOUSTID_META,
+            "format": "json",
+        }
 
     def _acoustid_lookup(self, fingerprint: str, duration: float, api_key: str) -> Dict[str, Any]:
         import urllib.request, urllib.parse
-        body = urllib.parse.urlencode({
-            "client": api_key, "duration": str(int(round(duration))), "fingerprint": fingerprint,
-            "meta": "recordings+releasegroups+compress", "format": "json",
-        }).encode("utf-8")
-        req = urllib.request.Request("https://api.acoustid.org/v2/lookup", data=body,
+        body = urllib.parse.urlencode(self._acoustid_params(fingerprint, duration, api_key)).encode("utf-8")
+        req = urllib.request.Request(self.ACOUSTID_ENDPOINT, data=body,
                                      headers={"User-Agent": "earcrate/1.0", "Content-Type": "application/x-www-form-urlencoded"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             return self._parse_acoustid(json.loads(resp.read().decode("utf-8")))
@@ -3300,7 +3384,18 @@ class EarcrateCore:
                     old[k] = (v[0] if v else "")
             if all(old.get(k, "") == v for k, v in new.items()):
                 continue  # already correct
-            changes.append({"path": str(path), "file_id": p.get("file_id"), "old": old, "new": new,
+            # Resolve the library file_id even when the proposal omits it (path-only
+            # proposals are a supported input). Without this the DB `tags` rows stay
+            # STALE after the on-disk retag, and a following reorganize files by the
+            # OLD identity (wrong Artist/Album, or _unsorted) -- the identity never
+            # reaches reorganize's target computation.
+            fid = p.get("file_id")
+            if not fid:
+                r = db.execute("SELECT id FROM files WHERE path=?", (str(path),)).fetchone()
+                if r is None:
+                    r = db.execute("SELECT id FROM files WHERE path=?", (str(path.resolve()),)).fetchone()
+                fid = r["id"] if r else None
+            changes.append({"path": str(path), "file_id": fid, "old": old, "new": new,
                             "score": p.get("score")})
         sig = sha256_text(json_dumps([[ch["path"], ch["new"]] for ch in sorted(changes, key=lambda x: x["path"])]))
         if not apply:
@@ -3808,39 +3903,46 @@ class EarcrateCore:
 
         _VOCAL_EAR_ROLES = ("VOX_HOOK", "VOX_VERSE", "VOX_SHOUT")
 
-        def separated_vocal_source(pcm_sha: str, src_path: str) -> Optional[np.ndarray]:
-            """v3 §5.2 StemProvider seam: consult ``get("stems")`` for a real
-            vocals stem so a GPU box gets vocal-on-instrumental. The DEFAULT no-op
-            reports stems unavailable and returns None here, so the caller FALLS
-            BACK to the full-mix decode — byte-identical to the pre-seam path. A
-            provider may hand back the stem as a filesystem path OR an L3 artifact
-            key (routed through ``get("artifacts")``); both resolve to decoded
-            samples sliced at the SAME loop window as the mix."""
+        def separated_vocal_source(pcm_sha: str, src_path: str) -> Tuple[Optional[np.ndarray], Optional[str]]:
+            """v3 §5.2 StemProvider seam: consult the SELECTED provider for a real
+            vocals stem so a GPU box gets vocal-on-instrumental. Selection is
+            ``EARCRATE_STEMS`` (env) > ``config.stem_provider`` > the registered
+            default; the shipped "noop" value maps to ``get("stems")`` (the
+            registered default), which reports stems unavailable and yields None
+            here so the caller FALLS BACK to the full-mix decode — byte-identical
+            to the pre-seam path. A provider may hand back the stem as a filesystem
+            path OR an L3 artifact key (routed through the SHARED ``get("artifacts")``
+            store, same EARCRATE_L3_ROOT the provider wrote to); both resolve to
+            decoded samples sliced at the SAME loop window as the mix. Returns
+            ``(samples_or_None, reason_or_None)`` so the caller can SURFACE why a
+            fallback happened instead of swallowing it silently."""
+            selected = os.environ.get("EARCRATE_STEMS") or getattr(c, "stem_provider", None) or "noop"
             try:
-                sep = get("stems").separate(str(pcm_sha), str(src_path), ["vocals"])
-            except Exception:
-                return None
+                prov = get("stems") if selected == "noop" else get("stems", selected)
+                sep = prov.separate(str(pcm_sha), str(src_path), ["vocals"])
+            except Exception as exc:
+                return None, "stem provider %r error: %s" % (selected, exc)
             if not sep or not sep.get("available"):
-                return None
+                return None, str((sep or {}).get("reason") or "stems unavailable")
             ref = (sep.get("stems") or {}).get("vocals")
             if not ref:
-                return None
+                return None, "provider %r reported available but produced no vocals stem" % (selected,)
             # (a) direct filesystem path to a materialized stem
             try:
                 if isinstance(ref, (str, Path)) and Path(ref).exists():
-                    return decode_audio(Path(ref), sr).astype(np.float32)
-            except Exception:
-                pass
-            # (b) L3 artifact key -> resolve bytes through the ArtifactStore seam
+                    return decode_audio(Path(ref), sr).astype(np.float32), None
+            except Exception as exc:
+                return None, "vocals stem path decode failed: %s" % (exc,)
+            # (b) L3 artifact key -> resolve bytes through the SHARED ArtifactStore
             try:
                 got = get("artifacts").get(str(ref))
                 if got and got.get("data"):
                     tmpf = transform_cache_dir / ("stem_" + sha256_text(str(ref)) + ".wav")
                     tmpf.write_bytes(got["data"])
-                    return decode_audio(tmpf, sr).astype(np.float32)
-            except Exception:
-                pass
-            return None
+                    return decode_audio(tmpf, sr).astype(np.float32), None
+            except Exception as exc:
+                return None, "vocals stem artifact resolve failed: %s" % (exc,)
+            return None, "vocals stem ref did not resolve through the shared L3 store"
 
         def render_section_deck(sidx: int, sec: Dict[str, Any], tail_len: int) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
             sec_len = int(round(int(sec["bars"]) * 4 * 60.0 / bpm * sr))
@@ -3862,16 +3964,22 @@ class EarcrateCore:
                     # returns None, so we fall back to the full-mix decode below —
                     # byte-identical to today. Record which source fed the layer.
                     stem_source = "mix"
+                    stem_reason = None
                     source = None
                     _ear = str(layer.get("ear_role") or "")
                     _role = str(layer.get("role") or info.get("role") or "")
                     if _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
                         pcm_sha = info.get("audio_sha256")
                         if pcm_sha:
-                            stem_arr = separated_vocal_source(str(pcm_sha), path)
+                            stem_arr, stem_reason = separated_vocal_source(str(pcm_sha), path)
                             if stem_arr is not None:
                                 source = stem_arr
                                 stem_source = "vocals"
+                                stem_reason = None
+                            else:
+                                # visible fallback: record WHY this vocal layer fell
+                                # back to the full mix instead of a real stem.
+                                report["stem_reason"] = stem_reason
                     if source is None:
                         if path not in audio_cache:
                             audio_cache[path] = decode_audio(Path(path), sr)
@@ -3942,7 +4050,7 @@ class EarcrateCore:
                                     tail_parts[group] = np.zeros(tail_len, dtype=np.float32)
                                 n_tail = min(tail_len, tail_audio.size)
                                 tail_parts[group][:n_tail] += tail_audio[:n_tail].astype(np.float32)
-                        report["layers"].append({**drop_base, "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "stem_source": stem_source, "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
+                        report["layers"].append({**drop_base, "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "stem_source": stem_source, "stem_reason": stem_reason, "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
                 except Exception as exc:
                     report["drops"].append({**drop_base, "reason": f"unexpected render error: {exc}"})
                     continue

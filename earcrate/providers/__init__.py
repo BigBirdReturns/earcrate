@@ -58,5 +58,5 @@ def default_name(kind: str) -> Optional[str]:
 # this file in build ORDER). In package mode they run here and, as a side
 # effect, execute each module's module-level register() calls.
 from earcrate.providers.artifacts import ArtifactStore
-from earcrate.providers.stems import StemProvider, NoopStemProvider, DemucsStemProvider
+from earcrate.providers.stems import StemProvider, NoopStemProvider, DemucsStemProvider, stem_capability
 from earcrate.providers.retrieval import CandidateRetriever, FullScanRetriever, EmbeddingProvider, NoopEmbeddingProvider, VectorIndex, LinearScanIndex

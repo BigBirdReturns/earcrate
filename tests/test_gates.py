@@ -1456,8 +1456,8 @@ def test_no_unfed_handoffs():
     # "functional" only with a real GPU receipt (see MILESTONES.md §1). Kept here
     # with honest reasons rather than promoted to "wired == working".
     DEFERRED_SEAMS = {
-        "stems":        "StemProvider: call site present in render, but _run_demucs is a stub, no config selects demucs, and provider/renderer use different ArtifactStores — feature OFF/unverified pending a GPU receipt (MILESTONES.md §1).",
-        "artifacts":    "ArtifactStore: consumed by the stems path only; not yet a single workspace-scoped store shared by provider and renderer — see stems.",
+        "stems":        "StemProvider: call path complete + gated with a FAKE (config/env selection -> shared workspace L3 store -> materialize -> resolve -> cache-before-separate), but the REAL Demucs run is UNVERIFIED pending a 4060 receipt (MILESTONES.md §1).",
+        "artifacts":    "ArtifactStore: now a single workspace-scoped store (EARCRATE_L3_ROOT) shared by the stems provider and the renderer's get('artifacts') -- see stems.",
         "embedding":    "EmbeddingProvider — no embeddings computed yet; ANN retrieval is v3 §5.4. Noop (returns None) is the default.",
         "vector_index": "VectorIndex — linear scan is the live path; ANN index is v3 §5.4. LinearScan is the default.",
     }
@@ -1743,6 +1743,361 @@ def test_loop_status_endpoints_contract():
         else: os.environ.pop("EARCRATE_HOME", None)
 
 
+def test_stem_path_producible():
+    """v3 §5.2 stem PRODUCIBILITY — the CPU half of the GPU stem path, proven
+    end-to-end with a FAKE demucs (NO torch). Exercises the wiring a real GPU
+    receipt will one day light up: a workspace-scoped SHARED L3 store, a
+    config-SELECTED provider that MATERIALIZES a stem, the renderer RESOLVING that
+    key back through the SAME store, a CACHE-first 2nd pass that does NOT re-run
+    the producer, an HONEST capability probe, a SURFACED fallback reason, and
+    byte-identical behavior under the noop default.
+
+    HONESTY: this proves the call/select/materialize/resolve/cache PATH with a
+    synthetic producer. It does NOT run Demucs and does NOT touch a GPU — the real
+    separation stays UNVERIFIED pending a 4060 receipt.
+
+    RED-first: on the pre-change code the produced artifact key never resolves
+    (provider and renderer used different ArtifactStores), render never selected
+    the provider, the 2nd pass re-ran the producer, and stem_capability() / the
+    surfaced stem_reason did not exist — so the vocal layer stays stem_source=='mix'
+    (isolated proof: neutering only the EARCRATE_L3_ROOT export reproduces exactly
+    the 'did not RESOLVE through the SHARED store' failure)."""
+    import tempfile, os, json, io
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from earcrate.app import EarcrateCore as _Core, ENGINE_VERSION
+    from earcrate.core.util import arrangement_sha, ulidish, now_utc
+    import earcrate.providers as P
+    from earcrate.providers.stems import DemucsStemProvider, stem_capability
+
+    # (3) HONEST capability probe: this torch-absent box reports NOT ready.
+    cap = stem_capability()
+    assert set(cap) >= {"torch", "demucs", "cuda", "ready"}, cap
+    assert cap["ready"] is False and cap["torch"] is False and cap["demucs"] is False, \
+        "stem_capability() must HONESTLY report not-ready (no torch/demucs here): %r" % (cap,)
+
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"): (tmp / d).mkdir()
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    sl = os.environ.get("EARCRATE_L3_ROOT")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+
+    # A FAKE demucs that SUBCLASSES the real provider, so it drives the REAL
+    # cache-first + L3 materialization seam, but produces a synthetic 660 Hz
+    # vocals tone instead of running torch/CUDA. It counts how many times the
+    # (expensive) producer actually runs.
+    class _FakeDemucs(DemucsStemProvider):
+        name = "fakedemucs"
+        runs = 0
+        def _run_demucs(self, audio_path, roles):
+            type(self).runs += 1
+            _sr = 44100
+            _t = np.arange(int(_sr * 8)) / _sr
+            wav = (0.5 * np.sin(2 * np.pi * 660.0 * _t)).astype(np.float32)
+            out = {}
+            for r in roles:
+                buf = io.BytesIO(); sf.write(buf, wav, _sr, format="WAV"); out[r] = buf.getvalue()
+            return out
+
+    try:
+        bpm = 120.0
+        core = _Core()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                        "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 8})
+        db = core.conn()
+        pool = _v3_build_render_pool(core, db, tmp, bpm=bpm)
+        # Deposit the L0 sound identity (files.audio_sha256) the seam keys on.
+        for i in range(len(pool)):
+            db.execute("UPDATE files SET audio_sha256=? WHERE id=?", (f"pcm_f{i}", f"f{i}"))
+        db.commit()
+        vocal_shas = {f"pcm_f{i}" for i in range(len(pool)) if pool[i]["role"] == "vocal"}
+        assert vocal_shas, "fixture produced no vocal sources"
+
+        params = {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": bpm, "quality_mode": "stable_deck"}
+        arr = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
+        assert arr.get("sections"), "composer produced an empty arrangement"
+        sv = core.save_plan("stemplan", arr, "girl_talk_v1")
+        plan = core.load_plan(sv["plan_hash"])["plan"]
+
+        def _render(tag):
+            mid = ulidish()
+            db.execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
+                       (mid, "m", plan.get("seed"), json.dumps(plan.get("params") or {}),
+                        json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
+            db.commit()
+            dst = tmp / "work" / "renders" / f"out_{tag}.wav"
+            res = core.render_mashup(mid, dst)
+            rep = json.loads(Path(res["report"]).read_text(encoding="utf-8"))
+            return res, rep
+
+        # (A) DEFAULT noop -> full-mix fallback baseline; reason SURFACED, not swallowed.
+        assert P.default_name("stems") == "noop"
+        res0, rep0 = _render("noop")
+        assert res0.get("presented") is True, res0
+        y0, _ = sf.read(str(res0["path"]))
+        vlm0 = [ly for ly in rep0["layers"] if ly.get("role") == "vocal"]
+        assert vlm0, "no vocal layer rendered — gate would be vacuous"
+        assert all(ly.get("stem_source") == "mix" for ly in vlm0), \
+            "noop default must fall back to the full mix"
+        assert all(ly.get("stem_reason") for ly in vlm0), \
+            "(5) fallback must SURFACE a stem_reason on the layer, not swallow it"
+
+        # (B) SELECT the fake via config; it MATERIALIZES a stem into the SHARED store,
+        #     and the renderer RESOLVES that key back through get('artifacts').
+        P.register("stems", "fakedemucs", _FakeDemucs)
+        core.config.stem_provider = "fakedemucs"
+        _FakeDemucs.runs = 0
+        res1, rep1 = _render("fake1")
+        vlm1 = [ly for ly in rep1["layers"] if ly.get("role") == "vocal"]
+        assert vlm1 and all(ly.get("stem_source") == "vocals" for ly in vlm1), \
+            "materialized stem did not RESOLVE through the SHARED store (RED without EARCRATE_L3_ROOT)"
+        assert _FakeDemucs.runs >= 1, "producer must run on a cold cache"
+        runs_cold = _FakeDemucs.runs
+        y1, _ = sf.read(str(res1["path"]))
+        assert not (y0.shape == y1.shape and np.array_equal(y0, y1)), \
+            "the produced stem never changed the audio (not fed through)"
+
+        # (4) CACHE-first: a 2nd render is a cache HIT — the producer is NOT re-run.
+        res2, rep2 = _render("fake2")
+        vlm2 = [ly for ly in rep2["layers"] if ly.get("role") == "vocal"]
+        assert vlm2 and all(ly.get("stem_source") == "vocals" for ly in vlm2), \
+            "cached stem did not resolve on the 2nd render"
+        assert _FakeDemucs.runs == runs_cold, \
+            "(4) 2nd render RE-RAN the producer — cache-before-separate not honored"
+
+        # (C) restore the noop default -> byte-identical to (A): the seam is a no-op here.
+        core.config.stem_provider = "noop"
+        P._REGISTRY.get("stems", {}).pop("fakedemucs", None)
+        res3, rep3 = _render("noop2")
+        y3, _ = sf.read(str(res3["path"]))
+        assert y0.shape == y3.shape and np.array_equal(y0, y3), \
+            "noop re-render not byte-identical — fallback drifted"
+
+        # (3b) capability probe is still honest at the end.
+        assert stem_capability()["ready"] is False
+    finally:
+        P._DEFAULTS["stems"] = "noop"
+        P._REGISTRY.get("stems", {}).pop("fakedemucs", None)
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+        if sl is not None: os.environ["EARCRATE_L3_ROOT"] = sl
+        else: os.environ.pop("EARCRATE_L3_ROOT", None)
+
+    assert P.default_name("stems") == "noop"
+
+
+def test_identify_then_reorganize_uses_new_identity():
+    """Milestone gate: a corrected identity from apply_identities must reach
+    reorganize's target computation. apply_identities rewrites tags on disk AND
+    must sync the DB `tags` rows that reorganize_source reads to place a file;
+    when the proposal is path-only (no file_id -- a supported input form), the
+    stale-DB bug left the DB carrying the OLD identity, so reorganize filed the
+    track under the wrong Artist/Album (or _unsorted). After the fix the planned
+    destination uses the NEW identity. Synthetic file, NOT the real 585-track run."""
+    import tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    from mutagen import File as MF
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    try:
+        lib = tmp / "lib"
+        f = lib / "Wrong Artist" / "Wrong Album" / "Wrong Artist - Wrong Song.flac"
+        f.parent.mkdir(parents=True)
+        t = np.arange(44100 * 2) / 44100
+        sf.write(str(f), (0.3 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
+        mf = MF(str(f), easy=True)
+        mf["artist"] = ["Wrong Artist"]; mf["title"] = ["Wrong Song"]; mf["album"] = ["Wrong Album"]; mf.save()
+        core = EarcrateCore()
+        core.configure({"master_root": str(lib), "working_root": str(tmp / "w"),
+                        "agent_root": str(tmp / "a")})
+        core.scan()
+        # PATH-ONLY proposal (no file_id): apply_identities supports proposals keyed
+        # by path; this is exactly the input that left the DB stale before the fix.
+        props = [{"path": str(f), "artist": "Real Artist", "title": "Real Song",
+                  "album": "Real Album", "score": 0.98}]
+        dry = core.apply_identities({"proposals": props, "apply": False})
+        assert dry["dry_run"] and dry["would_retag"] == 1, dry
+        applied = core.apply_identities({"proposals": props, "apply": True, "signature": dry["signature"]})
+        assert applied.get("ok") and applied.get("retagged") == 1, applied
+        # The DB `tags` reorganize reads MUST now carry the corrected identity.
+        dbtags = dict(core.conn().execute(
+            "SELECT t.key, t.value FROM tags t JOIN files fi ON fi.id=t.file_id WHERE fi.path=?",
+            (str(f),)).fetchall())
+        assert dbtags.get("artist") == "Real Artist" and dbtags.get("album") == "Real Album" \
+            and dbtags.get("title") == "Real Song", \
+            f"apply_identities left the DB tags stale -> reorganize will misfile: {dbtags}"
+        # reorganize's PLANNED destination must use the NEW identity, not the stale one.
+        plan = core.reorganize_source({"apply": False})
+        dests = [s["to"] for s in plan.get("samples", [])]
+        assert dests == ["Real Artist/Real Album/Real Song.flac"], \
+            f"reorganize used the STALE identity instead of the corrected one: {dests}"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        else: os.environ.pop("HOME", None)
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_workspace_pointer_stable_across_entrypoints():
+    """v0.8.26 gate (real-library defect): the app-global workspace pointer must
+    resolve to the SAME location no matter which entry point starts the process.
+    `python -m earcrate` sets sys.modules['__main__'].__file__ to the package
+    __main__.py; the `earcrate` console script sets it to a wrapper in a bin/
+    dir; the frozen single-file build sets it to the one script. The OLD
+    visible_app_dir() anchored to that __main__ path (and fell back to cwd), so
+    the package entry point and the CLI entry point wrote earcrate_workspace.json
+    to DIFFERENT files and saw DIFFERENT workspaces. This gate simulates both
+    resolution paths (and the cwd-sensitivity) and asserts they agree, with
+    EARCRATE_HOME both unset and set. RED on the unfixed code: the two paths
+    diverged."""
+    import os, sys, tempfile
+    from pathlib import Path
+    from earcrate.core.util import visible_app_dir
+
+    main = sys.modules["__main__"]
+    saved_mf = getattr(main, "__file__", None)
+    saved_ech = os.environ.get("EARCRATE_HOME")
+    saved_cwd = os.getcwd()
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        # Two distinct, writable launcher homes: a package __main__.py and a
+        # console-script wrapper living in a separate bin/ directory.
+        pkg = tmp / "site-packages" / "earcrate"; pkg.mkdir(parents=True)
+        binp = tmp / "venv" / "bin"; binp.mkdir(parents=True)
+
+        def resolve_as(main_file, cwd):
+            main.__file__ = str(main_file)
+            os.chdir(str(cwd))
+            return visible_app_dir().resolve()
+
+        # --- EARCRATE_HOME UNSET: the divergent case on the unfixed code -------
+        os.environ.pop("EARCRATE_HOME", None)
+        pkg_dir = resolve_as(pkg / "__main__.py", pkg)      # `python -m earcrate`
+        cli_dir = resolve_as(binp / "earcrate", binp)       # `earcrate configure ...`
+        assert pkg_dir == cli_dir, (
+            "workspace pointer diverges between package and CLI entry points: "
+            f"{pkg_dir} != {cli_dir}")
+
+        # cwd must not move the pointer either (it used to fall back to cwd).
+        cwd_a = resolve_as(pkg / "__main__.py", pkg)
+        cwd_b = resolve_as(pkg / "__main__.py", binp)
+        assert cwd_a == cwd_b, f"pointer is cwd-dependent: {cwd_a} != {cwd_b}"
+
+        # --- EARCRATE_HOME SET: honored identically by both entry points -------
+        home = tmp / "explicit_home"
+        os.environ["EARCRATE_HOME"] = str(home)
+        h_pkg = resolve_as(pkg / "__main__.py", pkg)
+        h_cli = resolve_as(binp / "earcrate", binp)
+        assert h_pkg == h_cli == home.resolve(), (
+            f"EARCRATE_HOME not honored consistently: {h_pkg} / {h_cli} / {home}")
+    finally:
+        if saved_mf is not None: main.__file__ = saved_mf
+        else: main.__dict__.pop("__file__", None)
+        if saved_ech is not None: os.environ["EARCRATE_HOME"] = saved_ech
+        else: os.environ.pop("EARCRATE_HOME", None)
+        os.chdir(saved_cwd)
+
+
+def test_identify_parses_acoustid_and_guards_key():
+    """v0.8.14+ gate: AcoustID response parsing picks the best-score recording and
+    extracts artist/title/album/mbid; empty/error responses are handled; the
+    fingerprint path works when fpcalc is present; identify refuses without a key.
+    v0.8.26 hardening: realistic response shapes pin the parse/selection defects
+    that produced ~0 identities, and an offline check pins the lookup request body."""
+    import shutil, tempfile, os
+    from pathlib import Path
+    import numpy as np, soundfile as sf
+    core = EarcrateCore.__new__(EarcrateCore)
+    sample = {"status": "ok", "results": [
+        {"score": 0.42, "id": "x", "recordings": [{"id": "wrong", "title": "Nope", "artists": [{"name": "NopeBand"}]}]},
+        {"score": 0.98, "id": "y", "recordings": [{"id": "mbid-123", "title": "Ace of Spades",
+            "artists": [{"id": "a", "name": "Motörhead"}], "releasegroups": [{"id": "rg", "title": "Ace of Spades"}]}]}]}
+    m = core._parse_acoustid(sample)["match"]
+    assert m["artist"] == "Motörhead" and m["title"] == "Ace of Spades" and m["album"] == "Ace of Spades"
+    assert m["mbid"] == "mbid-123" and m["score"] == 0.98
+    assert core._parse_acoustid({"status": "ok", "results": []})["match"] is None
+    assert core._parse_acoustid({"status": "error", "error": {"message": "bad"}})["ok"] is False
+
+    # -- Realistic AcoustID shapes that pinned real defects (v0.8.26) ----------
+    # (1) A single result maps to several MusicBrainz recordings; the first is a
+    # bare stub with no metadata. Taking recordings[0] blindly threw the real
+    # match away (a prime suspect for ~0 identities on the real run).
+    stub_first = {"status": "ok", "results": [{"score": 0.91, "id": "r", "recordings": [
+        {"id": "bare"},
+        {"id": "real", "title": "Real Song", "artists": [{"name": "Real Artist"}],
+         "releasegroups": [{"id": "g", "title": "Real Album", "type": "Album"}]}]}]}
+    m1 = core._parse_acoustid(stub_first)["match"]
+    assert m1 is not None and m1["title"] == "Real Song", "must not discard a match hidden behind a stub recording"
+    assert m1["artist"] == "Real Artist" and m1["album"] == "Real Album" and m1["mbid"] == "real"
+
+    # (2) Multi-artist credit must honour joinphrase, not flatten to "; ".
+    feat = {"status": "ok", "results": [{"score": 0.9, "id": "r", "recordings": [
+        {"id": "z", "title": "Empire State of Mind",
+         "artists": [{"name": "Jay-Z", "joinphrase": " feat. "}, {"name": "Alicia Keys"}]}]}]}
+    assert core._parse_acoustid(feat)["match"]["artist"] == "Jay-Z feat. Alicia Keys"
+    # ...but with no joinphrases present, still degrade to a readable list.
+    plain2 = {"status": "ok", "results": [{"score": 0.9, "id": "r", "recordings": [
+        {"id": "z", "title": "Split", "artists": [{"name": "A"}, {"name": "B"}]}]}]}
+    assert core._parse_acoustid(plain2)["match"]["artist"] == "A; B"
+
+    # (3) Album selection must prefer the studio album over a compilation that
+    # MusicBrainz happens to list first.
+    rgs = {"status": "ok", "results": [{"score": 0.88, "id": "r", "recordings": [
+        {"id": "z", "title": "Song", "artists": [{"name": "Band"}], "releasegroups": [
+            {"id": "c", "title": "Now 50", "type": "Album", "secondarytypes": ["Compilation"]},
+            {"id": "a", "title": "Debut", "type": "Album"}]}]}]}
+    assert core._parse_acoustid(rgs)["match"]["album"] == "Debut", "prefer the album over the compilation"
+
+    # (4) Missing releasegroups is fine (album None), match still stands; and a
+    # low-score result loses to a high-score one even when listed first.
+    norg = {"status": "ok", "results": [
+        {"score": 0.97, "id": "hi", "recordings": [{"id": "h", "title": "Hit", "artists": [{"name": "Star"}]}]},
+        {"score": 0.20, "id": "lo", "recordings": [{"id": "l", "title": "Demo", "artists": [{"name": "Nobody"}]}]}]}
+    mn = core._parse_acoustid(norg)["match"]
+    assert mn["title"] == "Hit" and mn["album"] is None and mn["score"] == 0.97
+
+    # (5) A result whose recordings carry no title/artists is not a usable match.
+    empty = {"status": "ok", "results": [{"score": 0.8, "id": "r", "recordings": [{"id": "only"}]}]}
+    assert core._parse_acoustid(empty)["match"] is None
+
+    # -- Request building (offline): the lookup body must be well-formed. The
+    # bug: meta was "recordings+releasegroups+compress" with literal "+", which
+    # urlencode turns into %2B so AcoustID reads ONE bogus token and returns no
+    # recordings. Tokens must be whitespace-separated on the wire.
+    import urllib.parse as _u
+    params = core._acoustid_params("AQAB_fake_fp", 213.7, "MYKEY")
+    body = _u.urlencode(params)
+    decoded = _u.parse_qs(body)
+    meta_tokens = decoded["meta"][0].split()
+    assert "recordings" in meta_tokens and "releasegroups" in meta_tokens, "must request recordings+releasegroups"
+    assert all("+" not in tok for tok in meta_tokens), "meta tokens must not be glued by a literal '+'"
+    assert len(meta_tokens) >= 2, "meta must decode to multiple whitespace-separated fields"
+    assert decoded["client"][0] == "MYKEY" and decoded["format"][0] == "json"
+    assert decoded["duration"][0] == "214" and decoded["fingerprint"][0] == "AQAB_fake_fp"
+    assert core.ACOUSTID_ENDPOINT.endswith("/v2/lookup")
+    if shutil.which("fpcalc"):
+        tmpwav = Path(tempfile.mkdtemp()) / "fp.wav"
+        t = np.arange(44100 * 12) / 44100
+        sf.write(str(tmpwav), (0.4 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
+        fp = core._fingerprint_file(tmpwav)
+        assert fp.get("fingerprint") and fp.get("duration", 0) > 0, "fpcalc must yield a fingerprint"
+    tmp = Path(tempfile.mkdtemp())
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME"); sk = os.environ.get("EARCRATE_ACOUSTID_KEY")
+    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp); os.environ.pop("EARCRATE_ACOUSTID_KEY", None)
+    try:
+        (tmp / "m").mkdir(); sf.write(str(tmp / "m" / "x.wav"), np.zeros((1000, 2), "float32"), 44100)
+        c = EarcrateCore(); c.configure({"master_root": str(tmp / "m"), "working_root": str(tmp / "w"), "agent_root": str(tmp / "a")})
+        assert c.identify_tracks({})["ok"] is False, "identify must refuse without an API key"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+        if sk is not None: os.environ["EARCRATE_ACOUSTID_KEY"] = sk
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted({k: v for k, v in globals().items() if k.startswith("test_")}.items()):
@@ -1879,43 +2234,6 @@ def test_deep_clean_hears_junk_but_keeps_voice():
     finally:
         if saved is not None:
             os.environ["HOME"] = saved
-
-
-def test_identify_parses_acoustid_and_guards_key():
-    """v0.8.14 gate: AcoustID response parsing picks the best-score recording and
-    extracts artist/title/album/mbid; empty/error responses are handled; the
-    fingerprint path works when fpcalc is present; identify refuses without a key."""
-    import shutil, tempfile, os
-    from pathlib import Path
-    import numpy as np, soundfile as sf
-    core = EarcrateCore.__new__(EarcrateCore)
-    sample = {"status": "ok", "results": [
-        {"score": 0.42, "id": "x", "recordings": [{"id": "wrong", "title": "Nope", "artists": [{"name": "NopeBand"}]}]},
-        {"score": 0.98, "id": "y", "recordings": [{"id": "mbid-123", "title": "Ace of Spades",
-            "artists": [{"id": "a", "name": "Motörhead"}], "releasegroups": [{"id": "rg", "title": "Ace of Spades"}]}]}]}
-    m = core._parse_acoustid(sample)["match"]
-    assert m["artist"] == "Motörhead" and m["title"] == "Ace of Spades" and m["album"] == "Ace of Spades"
-    assert m["mbid"] == "mbid-123" and m["score"] == 0.98
-    assert core._parse_acoustid({"status": "ok", "results": []})["match"] is None
-    assert core._parse_acoustid({"status": "error", "error": {"message": "bad"}})["ok"] is False
-    if shutil.which("fpcalc"):
-        tmpwav = Path(tempfile.mkdtemp()) / "fp.wav"
-        t = np.arange(44100 * 12) / 44100
-        sf.write(str(tmpwav), (0.4 * np.sin(2 * np.pi * 220 * t)).astype("float32"), 44100)
-        fp = core._fingerprint_file(tmpwav)
-        assert fp.get("fingerprint") and fp.get("duration", 0) > 0, "fpcalc must yield a fingerprint"
-    tmp = Path(tempfile.mkdtemp())
-    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME"); sk = os.environ.get("EARCRATE_ACOUSTID_KEY")
-    os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp); os.environ.pop("EARCRATE_ACOUSTID_KEY", None)
-    try:
-        (tmp / "m").mkdir(); sf.write(str(tmp / "m" / "x.wav"), np.zeros((1000, 2), "float32"), 44100)
-        c = EarcrateCore(); c.configure({"master_root": str(tmp / "m"), "working_root": str(tmp / "w"), "agent_root": str(tmp / "a")})
-        assert c.identify_tracks({})["ok"] is False, "identify must refuse without an API key"
-    finally:
-        if sh is not None: os.environ["HOME"] = sh
-        if se is not None: os.environ["EARCRATE_HOME"] = se
-        else: os.environ.pop("EARCRATE_HOME", None)
-        if sk is not None: os.environ["EARCRATE_ACOUSTID_KEY"] = sk
 
 
 def test_apply_identities_retags_and_reverses():

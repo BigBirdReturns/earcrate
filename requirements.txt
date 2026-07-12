@@ -4,3 +4,11 @@ librosa>=0.10,<0.12
 soundfile>=0.12
 pyloudnorm>=0.1.1
 mutagen>=1.47
+# OPTIONAL — stem separation (v3 §5.2 DemucsStemProvider). NOT installed by
+# default: the shipped box runs the NoopStemProvider and never separates. To opt
+# a real CUDA GPU box in, install torch (CUDA build for your platform) and demucs
+# out of band, then set stem_provider=demucs (or env EARCRATE_STEMS=demucs):
+#     pip install torch --index-url https://download.pytorch.org/whl/cu121
+#     pip install demucs
+# Left OUT of this file on purpose — torch is a large, platform/CUDA-specific
+# dependency and the feature stays UNVERIFIED until a real GPU receipt exists.

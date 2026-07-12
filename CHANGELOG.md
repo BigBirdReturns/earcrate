@@ -1,5 +1,48 @@
 # EarCrate — CHANGELOG
 
+## v0.8.26 — milestone 1: stem-path CPU completion (still OFF/UNVERIFIED) + 3 real-library defects
+- The stem path's CPU half is now correct end to end, so a 4060 receipt becomes
+  PRODUCIBLE — but the feature stays OFF by default and the real Demucs run is
+  UNVERIFIED. No "works on a GPU" claim until the receipt exists.
+  - ONE workspace-scoped shared L3 `ArtifactStore` (`EARCRATE_L3_ROOT`, set by
+    configure to `<agent_root>/cache/L3`): the provider materializes and the
+    renderer resolves through the SAME store — the two-temp-dirs bug is gone.
+  - Provider SELECTION: config `stem_provider` (default `noop`) + env
+    `EARCRATE_STEMS`; render selects it. Default stays no-op.
+  - Honest capability PROBE `stem_capability()` → {torch,demucs,cuda,ready},
+    surfaced in `doctor()` — reports not-ready here.
+  - CACHE-before-separate: a known stem is reused without re-running the producer.
+  - SURFACED fallback: render records `stem_reason` instead of a silent swallow.
+  - Real (guarded) `_run_demucs` implemented — but UNEXECUTED here.
+  - `requirements.txt` documents the OPTIONAL torch/demucs install; torch is NOT a
+    shipped dependency.
+  - Gate `test_stem_path_producible` proves select→materialize→resolve→cache with a
+    FAKE demucs writing to the shared store (byte-identical under the no-op default).
+    Its own docstring states it does NOT run Demucs. The detector keeps `stems`
+    honestly deferred: "call path complete + gated with a fake; real Demucs run
+    UNVERIFIED pending a 4060 receipt."
+- Real-library defects (from `main`; fixed at the code level, gated on synthetic
+  fixtures — the live 585-file run is still the true test):
+  - **AcoustID identify**: the request `meta` was malformed (a literal `+` in
+    `recordings+releasegroups+compress` collapsed under URL-encoding), so lookups
+    came back thin — plausibly the 0/585. Fixed the encoding; hardened the parse
+    gate with realistic multi-result shapes.
+  - **identify → reorganize stale DB**: `apply_identities` now resolves the library
+    `file_id` by path and writes the corrected identity where `reorganize` reads
+    it, so a re-tag flows into the destination. Gate
+    `test_identify_then_reorganize_uses_new_identity`.
+  - **workspace-pointer package-vs-CLI mismatch**: `visible_app_dir()` anchored to
+    `__main__.__file__` (different under `-m` vs the console script) and fell back
+    to cwd — so the two entry points wrote different pointers. Now anchored to the
+    `earcrate` package location, deterministic across entry points (and the
+    single-file build). Gate `test_workspace_pointer_stable_across_entrypoints`.
+- The AcoustID gate was moved BEFORE the `__main__` runner so it actually executes
+  in CI (it previously sat in the never-run tail).
+- 36/36 gates green; single-file builds + self-test.
+- Honest remainders (from each agent's `honest_unverified`): the real Demucs/GPU
+  separation (needs a 4060 receipt), the live keyed AcoustID run on the real
+  library, and Windows-specific pointer paths — none exercised here.
+
 ## v0.8.25 — correction: the stem "feature" is infrastructure, not a working feature
 - HONEST CORRECTION of v0.8.24's overclaim (caught in external review of PR #25).
   v0.8.24 said stems "reach render" and implied a 4060 with Demucs would produce

@@ -26,25 +26,41 @@ def app_state_dir() -> Path:
 def visible_app_dir() -> Path:
     """A VISIBLE, portable home for the single app-global pointer file — never a
     hidden AppData/dotfolder nest. Order: EARCRATE_HOME override, then the
-    directory of the running app (portable, next to START_HERE), then the current
-    working directory, then the user profile as a last resort. The pointer is one
-    small file; it does not create a cluttered top-level folder."""
+    directory that HOLDS the earcrate package (portable, next to START_HERE),
+    then the user profile as a last resort. The pointer is one small file; it
+    does not create a cluttered top-level folder.
+
+    The anchor must be IDENTICAL across every entry point so that
+    `python -m earcrate`, the `earcrate` console script, and the frozen
+    single-file build all resolve the SAME workspace pointer. The previous
+    implementation anchored to ``sys.modules['__main__'].__file__``: that is the
+    package ``__main__.py`` under ``-m`` but the console-script wrapper in a
+    ``bin/`` dir under the CLI, so the two entry points wrote the pointer to
+    DIFFERENT files and could not see each other's workspace. It also fell back
+    to the current working directory, making the pointer cwd-dependent. Both
+    of those are non-deterministic and are the bug this function fixes.
+
+    Instead we anchor to the location of THIS module — every entry point imports
+    it, so the result does not depend on which launcher started the process, nor
+    on the cwd."""
     env = os.environ.get("EARCRATE_HOME")
     if env:
         return Path(env).expanduser()
     cand: Optional[Path] = None
-    main = sys.modules.get("__main__")
-    mf = getattr(main, "__file__", None) if main is not None else None
-    if mf:
-        try:
-            cand = Path(mf).resolve().parent
-        except Exception:
-            cand = None
+    try:
+        here = Path(__file__).resolve()
+        # Normal package layout: .../<root>/earcrate/core/util.py, where <root>
+        # is the portable folder next to START_HERE. In the concatenated
+        # single-file build this module IS the running script (name != util.py),
+        # so we sit beside that single file instead.
+        if here.name == "util.py" and here.parent.name == "core" and len(here.parents) >= 3:
+            cand = here.parents[2]
+        else:
+            cand = here.parent
+    except Exception:
+        cand = None
     if cand is None:
-        try:
-            cand = Path.cwd()
-        except Exception:
-            cand = Path.home()
+        cand = Path.home()
     try:
         cand.mkdir(parents=True, exist_ok=True)
         probe = cand / "earcrate_write_probe.tmp"

@@ -27,7 +27,17 @@ _EVICT_ORDER = ("ephemeral", "warm")
 class ArtifactStore:
     def __init__(self, root: Optional[Any] = None):
         if root is None:
-            root = Path(tempfile.mkdtemp(prefix="earcrate_l3_"))
+            # A workspace that has been configured exports EARCRATE_L3_ROOT
+            # (core.configure sets it to <agent_root>/cache/L3). Defaulting to it
+            # makes BOTH the provider's store and the renderer's get("artifacts")
+            # resolve to the SAME on-disk root, so a materialized stem key
+            # actually resolves. With NO workspace configured we fall back to a
+            # private mkdtemp (unshared) so nothing leaks between processes.
+            env_root = os.environ.get("EARCRATE_L3_ROOT")
+            if env_root:
+                root = Path(env_root)
+            else:
+                root = Path(tempfile.mkdtemp(prefix="earcrate_l3_"))
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
 

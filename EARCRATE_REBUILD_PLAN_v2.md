@@ -1,3 +1,7 @@
+> **SUPERSEDED by `EARCRATE_REBUILD_PLAN_v3.md`** (the Constitution). Kept for
+> lineage. v3 banks every lesson below as an invariant with an executable gate
+> and adopts the identity-first five-layer architecture.
+
 # EARCRATE REBUILD PLAN v2 — "fully fully," lessons encoded
 
 **Constitution:** executable acceptance tests → `JUKEBREAKER_SPEC_v2_CONSOLIDATED.md`

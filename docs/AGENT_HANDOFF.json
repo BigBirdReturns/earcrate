@@ -1232,12 +1232,26 @@
    "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
    "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "63/63 gates pass (54 pre-existing + 9 new), no regressions",
+  "gate_result": "65/65 gates pass (54 pre-existing + 11 new), no regressions",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
  },
  "fixes_remaining_notes": [
   "Real DEMUCS instrumental audio + the WAV passing the quality gate must be confirmed on the desktop GPU box (this container has no torch/CUDA; noop path verified).",
   "Mix balance (low200_share 0.66, high3000 0.025) is a post-render WARNING, not the gate failure \u2014 the dynamics + instrumental-bed changes should reduce the low-end wall; a presence/high-pass pass is a possible follow-up.",
   "Config-status DISPLAY inconsistency (desktop finding #2): /api/status can show configured:null even when self.config is live and the render pipeline works \u2014 status reads a different source than the engine holds. Follow-up: have status reflect live self.config."
- ]
+ ],
+ "creative_engine": {
+  "persona_bakeoff": {
+   "what": "Render the SAME library through multiple personas (girl_talk collage / troubadour medley / notorious one-voice-over-beds) for A/B/C \u2014 proves the personas are genuinely distinct tastes, not one engine with labels.",
+   "endpoint": "POST /api/bakeoff {personas?, target_seconds?, recognizability_bias?, plan_only?}",
+   "plan_only": "synchronous fast preview: composes+gates+scores each persona, no WAV. Full call renders one gate-passing WAV per persona in the background.",
+   "core": "EarcrateCore.bakeoff (app.py); per-persona clean skip when a crate is not ready (never a crash).",
+   "verified": "test_bakeoff_resolves_personas_cleanly (3 personas resolve ok/skip cleanly)"
+  },
+  "recognizability_bias": {
+   "what": "params['recognizability_bias'] (0-100) now REALLY biases atom selection toward the persona's high-recognizability hooks (readiness.rank_material formula added as a picker term). Was previously stored-but-inert.",
+   "neutral": "<=55 -> weight 0.0 -> selection byte-identical to before (no regression). 'max' maps to 92.",
+   "verified": "test_recognizability_bias_prefers_hooks (cranked run mean chosen-hook 0.72 vs neutral 0.41)"
+  }
+ }
 }

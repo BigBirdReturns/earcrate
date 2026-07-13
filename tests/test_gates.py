@@ -3185,3 +3185,57 @@ def test_arrangement_has_macro_dynamics(tmp_path):
     dbs = [sec_db(s) for s in secs]
     # Real loudness variance across sections — the opposite of "effectively flat".
     assert (max(dbs) - min(dbs)) >= 1.5, f"section loudness must vary; spread was only {max(dbs)-min(dbs):.1f} dB"
+
+
+def test_recognizability_bias_prefers_hooks(tmp_path):
+    """params['recognizability_bias'] must actually bias SELECTION toward the
+    persona's high-recognizability hooks (readiness.rank_material formula), not sit
+    inert in params. Cranked runs reach for the 'oh, THAT song' payoff."""
+    import copy
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    pool = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    proto = [a for a in pool if a.get("ear_role") == "VOX_HOOK"][0]
+    for i in range(8):
+        a = copy.deepcopy(proto)
+        a["id"] = f"hk{i}"; a["atom_id"] = f"hk{i}"; a["source_track_key"] = f"hooksrc{i}"
+        a["hook_score"] = round(0.15 + 0.8 * (i / 7), 3); a["score"] = 0.6
+        pool.append(a)
+
+    def mean_hook(bias):
+        arr = core.compose_taste_arrangement(list(pool), {"taste_profile": "girl_talk_v1", "target_seconds": 48,
+              "bpm": 120.0, "quality_mode": "stable_deck", "recognizability_bias": bias}, seed=5)
+        hk = []
+        for s in arr["sections"]:
+            for ly in s["layers"]:
+                if ly.get("role") == "vocal" or str(ly.get("ear_role")).startswith("VOX"):
+                    m = [a for a in pool if (a.get("atom_id") or a.get("id")) == ly.get("atom_id")]
+                    if m:
+                        hk.append(float(m[0].get("hook_score") or 0))
+        return sum(hk) / len(hk) if hk else 0.0
+
+    neutral, cranked = mean_hook(0), mean_hook(92)
+    assert cranked > neutral, f"recognizability crank must raise chosen-hook strength ({cranked:.3f} !> {neutral:.3f})"
+
+
+def test_bakeoff_resolves_personas_cleanly(tmp_path):
+    """The persona bake-off composes the SAME material through several personas and
+    each resolves to ok / clean-skip (never a crash), so you can A/B/C how each
+    taste reinterprets the library."""
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    bo = core.bakeoff({"plan_only": True, "recognizability_bias": "max", "target_seconds": 16,
+                       "personas": ["girl_talk_v1", "troubadour_v1", "notorious_v1"]})
+    assert len(bo["bakeoff"]) == 3
+    assert bo["recognizability_bias"] == 92, "max crank must map to a concrete bias value"
+    for r in bo["bakeoff"]:
+        assert "taste_profile" in r and "contract" in r and "ok" in r, f"malformed bakeoff entry: {r}"
+        # every persona must be either a real compose (ok) or a clean skip — never a crash/traceback
+        assert r["ok"] is True or r.get("skipped") is True or r.get("error"), f"persona neither ran nor skipped cleanly: {r}"

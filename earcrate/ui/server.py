@@ -307,6 +307,12 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.one_click_mix(data)); return
             if path == "/api/render_plan":
                 self._json(200, self.core.run_background(self.core.render_plan, data)); return
+            if path == "/api/bakeoff":
+                # plan_only is a fast, synchronous A/B/C preview (compose+gate, no
+                # WAV); a full bake-off renders one WAV per persona in the background.
+                if bool(data.get("plan_only")):
+                    self._json(200, self.core.bakeoff(data)); return
+                self._json(200, self.core.run_background(self.core.bakeoff, data)); return
             if path == "/api/reorganize/plan":
                 self._json(200, self.core.reorganize_source({**data, "apply": False})); return
             if path == "/api/reorganize/apply":

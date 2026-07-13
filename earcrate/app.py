@@ -3113,6 +3113,17 @@ class EarcrateCore:
         sparks = [x for x in pool if x.get("ear_role") in {"PICKUP_FILL","DROP_HIT","TRANSITION_TAIL","TEXTURE","VOX_SHOUT"}]
         for xs in (foreground, floors, basses, sparks):
             xs.sort(key=lambda x: (float(x.get("score") or 0.0), float(x.get("hook_score") or 0.0), str(x.get("id"))), reverse=True)
+        # Recognizability bias (params["recognizability_bias"], 0-100): above the
+        # neutral band it adds the persona's OWN recognizability score — hooks/riffs
+        # are the "oh, THAT song" payoff, using readiness.rank_material's formula —
+        # as an extra picker term, so a cranked run reaches for the most instantly-
+        # known material. Neutral/absent -> recog_w 0.0 -> selection byte-identical.
+        _recog_bias = float(params.get("recognizability_bias") or 0.0)
+        recog_w = max(0.0, (_recog_bias - 55.0) / 45.0) * 0.5
+        _VOX_RECOG = {"VOX_HOOK", "VOX_VERSE", "VOX_SHOUT"}
+        def _recog_score(x: Dict[str, Any]) -> float:
+            hook = float(x.get("hook_score") or 0.0); sc = float(x.get("score") or 0.0)
+            return (0.7 * hook + 0.3 * sc) if str(x.get("ear_role")) in _VOX_RECOG else (0.35 * hook + 0.25 * sc)
         recent_sources: List[str] = []
         recent_loop_ids: List[str] = []
         prev_sec: Optional[Dict[str, Any]] = None
@@ -3187,7 +3198,7 @@ class EarcrateCore:
                     reasons = dict(reasons); reasons["human_verdict"] = "approved"
                 balance = -0.18 * source_use.get(src, 0)
                 jitter = rng.random() * 0.01
-                scored.append((float(x.get("score") or 0.0) * 0.44 + edge * 0.38 + novelty + balance - penalty + jitter, x, edge, reasons))
+                scored.append((float(x.get("score") or 0.0) * 0.44 + edge * 0.38 + recog_w * _recog_score(x) + novelty + balance - penalty + jitter, x, edge, reasons))
             if not scored:
                 return None
             # Hard rotation (v0.6.4): while the turnover target is unmet, unused
@@ -5122,6 +5133,62 @@ class EarcrateCore:
         result = self.execute_manifest(manifest, apply=True)
         return {"ok": result.get("ok", True) if isinstance(result, dict) else True,
                 "manifest": manifest, "arrangement_sha": arr_sha, "render": result}
+
+    def bakeoff(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Persona bake-off: render the SAME library through several personas so you
+        HEAR how each taste reinterprets it — girl_talk's dense collage vs
+        troubadour's key-matched medley vs notorious's one-voice-over-foreign-beds.
+        Each persona composes from its own approved pool with an optional
+        recognizability crank. plan_only=True returns the composed arrangements +
+        gate + score WITHOUT rendering (fast A/B/C preview); otherwise it renders a
+        gate-passing WAV per persona. Personas whose crate is not ready are reported
+        as a clean skip, never a crash — the bake-off shows what each taste CAN do
+        with the material you have."""
+        personas = list(data.get("personas") or ["girl_talk_v1", "troubadour_v1", "notorious_v1"])
+        target_seconds = float(data.get("target_seconds") or 120)
+        plan_only = bool(data.get("plan_only"))
+        raw_bias = data.get("recognizability_bias")
+        bias: Optional[int] = None
+        if raw_bias is not None and str(raw_bias) != "":
+            bias = 92 if str(raw_bias).lower() in ("max", "maximize", "high", "1", "true") else int(raw_bias)
+        results: List[Dict[str, Any]] = []
+        for pid in personas:
+            entry: Dict[str, Any] = {"taste_profile": pid}
+            prof = TASTE_PROFILES.get(pid)
+            if prof is None:
+                entry.update(ok=False, error="unknown persona"); results.append(entry); continue
+            entry["contract"] = prof.get("contract") or prof.get("name") or pid
+            try:
+                pool = self.approved_atom_pool(pid)
+                if not pool:
+                    entry.update(ok=False, skipped=True, error="no approved atoms for this persona yet"); results.append(entry); continue
+                rd = self.taste_readiness(pid, target_seconds)
+                if not rd.get("ready"):
+                    entry.update(ok=False, skipped=True, error="crate not ready: " + "; ".join(rd.get("failures") or []),
+                                 have=rd.get("have"), need=rd.get("need")); results.append(entry); continue
+                seed = self.next_render_seed(self.ensure_config().seed)
+                params: Dict[str, Any] = {"taste_profile": pid, "target_seconds": target_seconds, "seed": seed,
+                                          "quality_mode": "stable_deck", "mix_mode": "tastespec_graph"}
+                if bias is not None:
+                    params["recognizability_bias"] = bias
+                if plan_only:
+                    arr = self.compose_taste_arrangement(pool, dict(params), seed)
+                    gate = self.taste_arrangement_gate(arr)
+                    entry.update(ok=bool(gate.get("passed")), seed=seed, bpm=arr.get("bpm"),
+                                 sections=len(arr.get("sections") or []), score=self.score_arrangement(arr),
+                                 taste_gate={"passed": gate.get("passed"), "failures": gate.get("failures") or []})
+                else:
+                    params["post_render_gate"] = True
+                    proposal = self.propose_taste_mashup(params)  # composes, gates, registers a mashup + manifest
+                    render = self.execute_manifest(proposal["manifest"], apply=True)
+                    ok = render.get("ok", True) if isinstance(render, dict) else True
+                    entry.update(ok=ok, seed=seed, render=render, arrangement_sha=proposal.get("arrangement_sha"),
+                                 score=self.score_arrangement(proposal["arrangement"]))
+            except Exception as exc:
+                entry.update(ok=False, error=str(exc))
+            results.append(entry)
+        return {"ok": any(r.get("ok") for r in results), "recognizability_bias": bias,
+                "target_seconds": target_seconds, "plan_only": plan_only, "bakeoff": results}
 
     def list_plans(self) -> Dict[str, Any]:
         rows = self.conn().execute("SELECT id,name,taste_profile,plan_hash,created_at FROM saved_plans ORDER BY created_at DESC LIMIT 100").fetchall()

@@ -129,3 +129,12 @@ arrangement passes girl_talk's tolerance and fails the other two on foreground c
 persisted or surfaced; status only shows the last render. Had to use `plan_only` to see WHY personas were
 skipped. Same class as the QA "run_background never resets busy / drops return" findings — the bake-off
 needs to persist its per-persona outcome (a run-bundle artifact or status field).
+
+### Raw artifacts (committed for the cloud to reason over)
+- `docs/desktop_render_reports/girl_talk_v1-PASS-e8f419e7.render_report.json` — full gate metrics +
+  every layer's stem_source/transform for the passing render (the numbers behind rms_std_db 3.19).
+- `docs/desktop_render_reports/bakeoff_plan_only_maxrecog.json` — the `plan_only` bake-off output:
+  three personas, **byte-identical `score` objects**, girl_talk gate PASS vs troubadour/notorious FAIL
+  ("foreground rail coverage too low"). This is the raw proof of the persona-non-differentiation bug.
+(The rendered WAV itself is not committed — it's a human listening artifact; all machine-actionable
+signal is in these two JSONs.)

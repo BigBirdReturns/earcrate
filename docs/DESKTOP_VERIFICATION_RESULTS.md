@@ -64,3 +64,31 @@ POST /api/one_click_bg  {taste_profile:"girl_talk_v1"}       # "Book a set"
 - **Mix balance**: high-pass/low-shelf so `low200_share` isn't 0.66; presence lift for `high3000_share`.
 - **Config**: (a) make `/api/status` read the live `self.config`/resolved pointer so a configured app
   never shows `configured:null`; (b) unify pointer resolution across `-m` and dist entry points.
+
+---
+
+## UPDATE — re-run after commit `84f825d` (PASS ✅)
+Pulled `84f825d "Make renders actually mixable: arrangement dynamics + separated instrumental beds"`,
+re-ran on the same real library with `EARCRATE_STEMS=demucs`, Book a set. Analysis was already banked
+(features 96 / ear_atoms 1152 / edges 540), so it went straight to compose → render.
+
+**Quality gate PASSED — no failures, no warnings.** Real accepted WAV:
+`work/renders/EarCrate Set-earcrate_v0827-736bff5b-1339.wav` (23.6 MB, 178.3 s).
+
+| metric | before (rejected) | after (accepted) | note |
+|---|---|---|---|
+| rms_std_db | 0.72 | **3.24** | flat → breathing (~4.5×) |
+| low200_share | 0.66 | **0.59** | low end more balanced |
+| high3000_share | 0.025 | **0.031** | now above 0.030 target (warning cleared) |
+| layers | 77 | 75 | |
+| stem_source | `{mix:36, vocals:41}` | **`{instrumental:34, vocals:41}`** | beds are now demucs `no_vocals` instrumentals, not full-mix loops |
+
+The fix landed end-to-end on the real box + RTX 4060 demucs path: **acapellas over CLEAN separated
+instrumental beds, arranged with dynamics.** The engine's happy path is confirmed solid.
+
+## STILL OPEN — config trap (the last "fresh launch borks" surface)
+`python -m earcrate --serve` STILL booted to `/api/status configured:null` and required a manual
+`POST /api/config` before Book-a-set would run (the render then worked). So the remaining defect is
+purely the **config-resolution/status layer**, not the engine:
+- make `/api/status` report the live resolved config (never `null` when the engine holds `self.config`);
+- unify pointer write (`visible_app_dir`) vs read (`pointer_search_dirs`) so `-m` and dist agree.

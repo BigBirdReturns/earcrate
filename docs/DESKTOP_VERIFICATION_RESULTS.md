@@ -138,3 +138,28 @@ needs to persist its per-persona outcome (a run-bundle artifact or status field)
   ("foreground rail coverage too low"). This is the raw proof of the persona-non-differentiation bug.
 (The rendered WAV itself is not committed — it's a human listening artifact; all machine-actionable
 signal is in these two JSONs.)
+
+---
+
+## UPDATE — persona differentiation FIX verified (commit `893d613`)
+Pulled `893d613` (+ `40da2de` auto-relocate, `5f59287` machine preset). Re-ran
+`/api/bakeoff {plan_only:true}` (persona defaults, no bias). **Personas now compose DISTINCT
+arrangements** — no longer byte-identical:
+
+| persona | score.total | bed_layers | source_tracks | taste_gate |
+|---|---|---|---|---|
+| girl_talk_v1 | 43.87 | 23 | 18 | PASS |
+| troubadour_v1 | **38.39** | **5** | **13** | FAIL: floor 0.31 + foreground 0.61 too low |
+| notorious_v1 | **38.63** | **17** | **16** | FAIL: foreground 0.66 too low |
+
+(Before the fix: all three were `43.87 / 23 / 18`.) The composition bug is FIXED — troubadour now
+builds a sparse key-matched medley (5 beds), notorious sits between. **The remaining gap is
+material-depth, not logic:** on the 96-file / 1152-loop pool only girl_talk's dense-collage style
+clears its coverage gate; troubadour/notorious's sparser, voice-forward styles leave floor/foreground
+coverage short. Fix = analyze a bigger / more taste-diverse slice so each persona finds enough
+matching material.
+
+Notes: auto-seed/relocate (`40da2de`/`5f59287`) was a no-op here because the box is already configured
+to the C: workspace (the seed only relocates a truly-fresh box); `machine_defaults.json` (D: persist +
+S: NVMe cache) is correct for a clean first run. `/api/status configured:null` still reproduces (the
+status-source display bug), but the engine was configured and the bake-off ran.

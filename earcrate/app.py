@@ -536,6 +536,16 @@ class EarcrateCore:
                 os.environ.setdefault("EARCRATE_CACHE_ROOT", str(Path(str(d["cache_root"])).expanduser()))
             if d.get("stem_provider"):
                 os.environ.setdefault("EARCRATE_STEMS", str(d["stem_provider"]))
+            # One-time relocation: if the target workspace doesn't exist yet but a
+            # prior one does (e.g. moving off C: onto D:), move it FIRST so the
+            # analyzed DB / atoms / judgments / renders come along — no re-analyze.
+            # Journaled; the regenerable cache rebuilds on the fast disk. Idempotent
+            # (after the first launch the target exists, so this is skipped).
+            reloc = str(d.get("relocate_from") or "").strip()
+            if workspace and reloc:
+                with contextlib.suppress(Exception):
+                    if not Path(workspace).expanduser().exists() and Path(reloc).expanduser().exists():
+                        self.relocate_workspace({"old": reloc, "new": workspace, "apply": True})
             payload: Dict[str, Any] = {"music_folder": master, "workspace_folder": workspace}
             if d.get("workers") is not None:
                 payload["workers"] = int(d["workers"])

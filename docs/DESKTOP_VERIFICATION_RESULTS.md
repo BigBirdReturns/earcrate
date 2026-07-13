@@ -92,3 +92,40 @@ instrumental beds, arranged with dynamics.** The engine's happy path is confirme
 purely the **config-resolution/status layer**, not the engine:
 - make `/api/status` report the live resolved config (never `null` when the engine holds `self.config`);
 - unify pointer write (`visible_app_dir`) vs read (`pointer_search_dirs`) so `-m` and dist agree.
+
+---
+
+## PERSONA BAKE-OFF — real box results (commit `dda8bc0`, `recognizability_bias: "max"` → 92)
+Built all three crates on the 96-analyzed-file pool (`/api/ear_crate/build` + `/api/taste/graph` per
+persona): each has 1152 approved atoms; edges girl_talk 540 / troubadour 360 / notorious 360.
+`/api/taste/readiness` reports **`ready:true` for all three**.
+
+### Only `girl_talk_v1` renders; the other two fail the taste gate
+`plan_only:true` bake-off (synchronous, returns per-persona gate outcomes):
+| persona | taste_gate | failure | rendered? |
+|---|---|---|---|
+| girl_talk_v1 | **PASS** | — | ✅ `EarCrate Set-…-e8f419e7-1344.wav` (rms_std_db **3.19**, low200 0.59, high3000 0.020, 49 layers) |
+| troubadour_v1 | FAIL | `foreground rail coverage too low (0.61)` | ✗ (swallowed by bakeoff `except`) |
+| notorious_v1 | FAIL | `foreground rail coverage too low (0.66)` | ✗ (swallowed by bakeoff `except`) |
+
+### BUG: personas don't differentiate — identical arrangement for all three
+Every persona's `score` object is **byte-identical** (`total 43.8719`, `voice_layers 27`, `bed_layers 23`,
+`source_tracks 18`, `realized_chaos 0.667` …), and `taste_readiness().have` is identical across personas
+(`foreground 683, floor 25, bass 443, spark 222, sources 94`). So `approved_atom_pool(persona)` +
+`compose_taste_arrangement` produce the SAME arrangement regardless of persona — the bake-off's premise
+("girl_talk's dense collage vs troubadour's key-matched medley vs notorious's one-voice-over-foreign-beds")
+is NOT realized. The only thing that varies is the **per-persona gate threshold**, so the one identical
+arrangement passes girl_talk's tolerance and fails the other two on foreground coverage.
+- **Likely cause:** on a 96-file / 1152-loop pool the per-persona `build_ear_crate` scoring doesn't diverge
+  (same loops win every persona), and/or `compose_taste_arrangement` isn't applying the persona's taste
+  params to selection. Needs either a bigger/more diverse analyzed pool OR persona-aware composition.
+- **`recognizability_bias: max` (→92) is dynamics-negative:** girl_talk at max landed rms_std_db 2.65–2.82
+  (one rejected "cave/muffle", one passed with warnings); a neutral one_click hit 3.19. Max recog trades
+  arc/presence for familiarity — expose the tradeoff or cap the crank.
+
+### `run_background` discards the bake-off summary (recurring pattern)
+`/api/bakeoff` (non-plan_only) is dispatched through `run_background`, which returns `{started:true}` and
+**discards `bakeoff()`'s return value** — so the per-persona `results[]` (ok/skip/error/gate) is never
+persisted or surfaced; status only shows the last render. Had to use `plan_only` to see WHY personas were
+skipped. Same class as the QA "run_background never resets busy / drops return" findings — the bake-off
+needs to persist its per-persona outcome (a run-bundle artifact or status field).

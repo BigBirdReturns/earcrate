@@ -18,6 +18,14 @@ from abc import ABC, abstractmethod
 
 DEFAULT_ROLES = ("vocals", "drums", "bass", "other")
 
+# Loading htdemucs + moving it to the GPU costs seconds. Reloading it on EVERY
+# separate() call left the GPU mostly idle between per-file loads (the ~30%-util
+# symptom): a single render needs ~40 separations = ~40 model loads. Cache the
+# resident model per (model_version, device) so it loads ONCE and every later
+# separation reuses it. Lock-guarded because the HTTP server is threaded.
+_MODEL_CACHE: Dict[str, Any] = {}
+_MODEL_LOCK = threading.Lock()
+
 
 def stem_capability() -> Dict[str, bool]:
     """HONEST capability probe for the stem path. Reports whether the heavy deps
@@ -183,9 +191,14 @@ class DemucsStemProvider(StemProvider):
                 "use the default NoopStemProvider." % (exc,)
             ) from None
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model = get_model(self.model_version)
-        model.to(device)
-        model.eval()
+        cache_key = "%s|%s" % (self.model_version, device)
+        with _MODEL_LOCK:
+            model = _MODEL_CACHE.get(cache_key)
+            if model is None:
+                model = get_model(self.model_version)
+                model.to(device)
+                model.eval()
+                _MODEL_CACHE[cache_key] = model  # resident: reused across every separation
         wav = AudioFile(str(audio_path)).read(
             streams=0, samplerate=model.samplerate, channels=model.audio_channels)
         ref = wav.mean(0)

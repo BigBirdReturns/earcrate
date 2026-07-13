@@ -1253,5 +1253,17 @@
    "neutral": "<=55 -> weight 0.0 -> selection byte-identical to before (no regression). 'max' maps to 92.",
    "verified": "test_recognizability_bias_prefers_hooks (cranked run mean chosen-hook 0.72 vs neutral 0.41)"
   }
+ },
+ "performance": {
+  "demucs_model_cache": {
+   "symptom": "'full send' used ~10% CPU / ~30% GPU during compose->render",
+   "root_cause": "_run_demucs reloaded the htdemucs model + moved it to GPU on EVERY separate() call (~40 loads per render) -> GPU idle during each load; render mix itself is single-threaded (the ~10% CPU).",
+   "fix": "module-level model cache keyed by (model_version, device) in providers/stems.py \u2014 model loads once, reused across all separations (this render, subsequent renders, and later bake-off personas via the content-addressed L3 cache).",
+   "unverified_here": "no torch/CUDA in this env; the utilization improvement is a desktop-GPU confirmation.",
+   "further_throughput_todo": [
+    "Pre-separate the render's unique (pcm_sha, role) stems BEFORE the single-threaded mix loop so the GPU is fed continuously instead of lazily one file at a time.",
+    "Parallelize per-layer librosa transforms (time-stretch/pitch) across cores to lift render-phase CPU from ~1 core."
+   ]
+  }
  }
 }

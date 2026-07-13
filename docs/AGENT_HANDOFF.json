@@ -8,7 +8,7 @@
   "strategy_design": "complete",
   "qa_swarm": "complete",
   "qa_findings_embedded": true,
-  "note": "All QA blocker/high findings addressed & verified at core+HTTP+DOM layers; 62/62 gates. Only the happy-path WAV render remains desktop-only (needs real music)."
+  "note": "All QA blocker/high findings + the desktop render-quality failure (flat render) addressed. Render now has an energy curve AND uses the separated instrumental for beds. Real-GPU WAV confirmation is the desktop's next run."
  },
  "live_symptom": "App 'borks' shortly after launch on the desktop. User picked failure mode 'Loads, then errors'. Suspected auto-analyze dying on a config-resolution trap during the Book-a-Set flow.",
  "root_cause": {
@@ -1204,6 +1204,21 @@
      "change": "renders the EXACT shown/loaded arrangement (registers a mashup row from it, executes its render_mashup manifest) with the same pre-render gates; falls back to one_click only when no plan is loaded. VERIFIED error/refusal paths (happy render needs real music)"
     }
    ]
+  },
+  {
+   "batch": "tier4-render-quality (the tunes)",
+   "fixes": [
+    {
+     "finding": "Flat render fails post-render quality gate (rms_std_db 0.72 'effectively flat')",
+     "where": "app.py compose_taste_arrangement section loop",
+     "change": "added a macro-dynamics ENERGY CURVE (sparse intro 0.32 / sustain 0.74 / build 0.66 / drop 1.0 / periodic breakdown 0.44) that trims each section's gain and sheds bass/spark in quiet sections. VERIFIED live: 7.7 dB section-loudness spread (was ~0); gate test_arrangement_has_macro_dynamics locks it"
+    },
+    {
+     "finding": "Instrumental never separated \u2014 bed layers used song B's FULL MIX (vocals bleed) instead of a clean instrumental; only the vocal stem was ever lifted",
+     "where": "app.py render_section_deck + separated_stem_source; providers/stems.py DemucsStemProvider",
+     "change": "provider now produces a 'no_vocals' instrumental (sum of drums+bass+other); renderer requests 'vocals' for vocal layers and 'no_vocals' for bed layers -> acapella-over-clean-instrumental (the point of separation). Noop default still falls back to mix byte-identically. VERIFIED via updated test_render_consults_stem_seam (requests both roles, correct source routing, graceful fallback)"
+    }
+   ]
   }
  ],
  "fixes_remaining_high": [],
@@ -1217,11 +1232,12 @@
    "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
    "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "62/62 gates pass (54 pre-existing + 8 new), no regressions",
+  "gate_result": "63/63 gates pass (54 pre-existing + 9 new), no regressions",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
  },
  "fixes_remaining_notes": [
-  "render_plan / one_click HAPPY-PATH render (an actual WAV) can only be verified with real music that reaches TasteSpec readiness (vocals+drums) -> confirm on desktop via Debug-EarCrate.cmd. Synthetic tones correctly refuse.",
-  "Latent: propose_plan (preview) composes without the quality_mode/mix_mode flags that propose_taste_mashup adds; render_plan sidesteps this by rendering the exact arrangement object rather than recomposing."
+  "Real DEMUCS instrumental audio + the WAV passing the quality gate must be confirmed on the desktop GPU box (this container has no torch/CUDA; noop path verified).",
+  "Mix balance (low200_share 0.66, high3000 0.025) is a post-render WARNING, not the gate failure \u2014 the dynamics + instrumental-bed changes should reduce the low-end wall; a presence/high-pass pass is a possible follow-up.",
+  "Config-status DISPLAY inconsistency (desktop finding #2): /api/status can show configured:null even when self.config is live and the render pipeline works \u2014 status reads a different source than the engine holds. Follow-up: have status reflect live self.config."
  ]
 }

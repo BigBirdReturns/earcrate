@@ -195,13 +195,29 @@ class DemucsStemProvider(StemProvider):
         sources = sources * ref.std() + ref.mean()
         names = list(getattr(model, "sources", []))
         out: Dict[str, bytes] = {}
+
+        def _emit(arr) -> bytes:
+            buf = _io.BytesIO()
+            _sf.write(buf, arr.astype(_np.float32), int(model.samplerate), format="WAV")
+            return buf.getvalue()
+
         for role in roles:
             if role not in names:
                 continue
             arr = sources[names.index(role)].cpu().numpy().T  # (samples, channels)
-            buf = _io.BytesIO()
-            _sf.write(buf, arr.astype(_np.float32), int(model.samplerate), format="WAV")
-            out[role] = buf.getvalue()
+            out[role] = _emit(arr)
+        # "no_vocals" is the INSTRUMENTAL tape track: the sum of every non-vocal
+        # source (drums+bass+other). It is the clean bed a foreign acapella rides
+        # over — equivalent to demucs --two-stems=vocals, but reusing the 4-stem
+        # model so both the vocal and the instrumental come from one separation and
+        # are cached independently in L3.
+        if "no_vocals" in roles:
+            idxs = [i for i, n in enumerate(names) if n != "vocals"]
+            if idxs:
+                inst = sources[idxs[0]]
+                for i in idxs[1:]:
+                    inst = inst + sources[i]
+                out["no_vocals"] = _emit(inst.cpu().numpy().T)
         return out
 
 

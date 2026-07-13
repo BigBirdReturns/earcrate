@@ -1778,17 +1778,32 @@ def test_render_consults_stem_seam():
         assert P.default_name("stems") == "fake"
         res_vox, rep_vox = _render("fake")
 
-        # (b1) the seam was consulted with the RIGHT pcm_sha, ONLY for vocals.
-        assert _FakeStems.calls, "render never CONSULTED the StemProvider seam for a vocal layer (RED)"
-        assert all(c["roles"] == ("vocals",) for c in _FakeStems.calls), \
-            "render must request the 'vocals' stem from the seam"
-        assert all(c["pcm_sha"] in vocal_shas for c in _FakeStems.calls), \
-            "seam consulted with a non-vocal pcm_sha (should only run for vocal layers)"
+        # (b1) the seam was consulted with the RIGHT pcm_sha and the RIGHT role per
+        # layer: "vocals" (the acapella) for vocal layers, "no_vocals" (the clean
+        # instrumental bed) for the drums/bass/harmony layers. Requesting the
+        # instrumental is the point of separation — an acapella over a clean bed,
+        # not over another song's full mix.
+        assert _FakeStems.calls, "render never CONSULTED the StemProvider seam (RED)"
+        assert all(c["roles"] in (("vocals",), ("no_vocals",)) for c in _FakeStems.calls), \
+            "render must request either the 'vocals' (acapella) or 'no_vocals' (instrumental) stem"
+        vocal_calls = [c for c in _FakeStems.calls if c["roles"] == ("vocals",)]
+        inst_calls = [c for c in _FakeStems.calls if c["roles"] == ("no_vocals",)]
+        assert vocal_calls, "render must request the 'vocals' stem for vocal layers"
+        assert inst_calls, "render must request the 'no_vocals' (instrumental) stem for bed layers"
+        assert all(c["pcm_sha"] in vocal_shas for c in vocal_calls), \
+            "the vocals stem was requested for a non-vocal source"
+        assert all(c["pcm_sha"] not in vocal_shas for c in inst_calls), \
+            "the instrumental stem should be requested for bed (non-vocal) layers"
 
-        # (b2) the returned stem actually FED the render (recorded + audible).
+        # (b2) the returned stem actually FED the render (recorded + audible). The
+        # fake provider only serves a vocals stem, so vocal layers ride it and the
+        # bed layers gracefully fall back to the full mix (no no_vocals produced).
         vocal_layers_vox = [ly for ly in rep_vox["layers"] if ly.get("role") == "vocal"]
         assert vocal_layers_vox and all(ly.get("stem_source") == "vocals" for ly in vocal_layers_vox), \
             "a consulted, available vocals stem was not recorded as the layer source"
+        bed_layers_vox = [ly for ly in rep_vox["layers"] if ly.get("role") != "vocal"]
+        assert all(ly.get("stem_source") == "mix" for ly in bed_layers_vox), \
+            "bed layers must fall back to mix when the provider serves no instrumental stem"
         y_vox, _ = sf.read(str(res_vox["path"]))
         assert not (y_mix.shape == y_vox.shape and np.array_equal(y_mix, y_vox)), \
             "the vocals stem was consulted but never changed the audio (seam not fed through)"
@@ -3141,3 +3156,32 @@ def test_post_render_gate_rejects_before_wav_write():
 if __name__ == "__main__":
     from run_gates import main as _run_all_gates
     raise SystemExit(_run_all_gates())
+
+
+def test_arrangement_has_macro_dynamics(tmp_path):
+    """The composer must give the track an ENERGY CURVE (sparse intro, builds,
+    drops, breakdowns) rather than parking every 4-bar section at the same
+    loudness. Flat, equal-energy sections were the real desktop failure: the
+    post-render quality gate rejected the render with 'rms_std_db catastrophically
+    low; render is effectively flat'. This locks in per-section loudness variance."""
+    import math, statistics as st
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    pool = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    arr = core.compose_taste_arrangement(list(pool),
+            {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": 120.0, "quality_mode": "stable_deck"}, seed=7)
+    secs = arr.get("sections") or []
+    assert secs, "composer produced no sections"
+    energies = [round(float(s.get("energy_level") or 0), 2) for s in secs]
+    # The opening section eases in (was a flat 0.7); this is the tell the curve is live.
+    assert abs(energies[0] - 0.32) < 0.01, f"intro must ease in at 0.32, got {energies[0]}"
+
+    def sec_db(s):
+        amp = sum(10 ** (float(ly.get("gain_db", 0)) / 20.0) for ly in s.get("layers") or []) or 1e-6
+        return 20 * math.log10(amp)
+    dbs = [sec_db(s) for s in secs]
+    # Real loudness variance across sections — the opposite of "effectively flat".
+    assert (max(dbs) - min(dbs)) >= 1.5, f"section loudness must vary; spread was only {max(dbs)-min(dbs):.1f} dB"

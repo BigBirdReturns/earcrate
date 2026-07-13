@@ -3215,33 +3215,56 @@ class EarcrateCore:
         while bar < total_bars:
             bars = min(section_bars, total_bars - bar)
             sec_type = "drop" if idx % 4 == 0 and idx > 0 else ("build" if idx % 4 == 3 else "sustain")
+            # Macro-dynamics: an energy curve so the track BREATHES — sparse intro,
+            # builds, full drops, and periodic breakdowns — instead of every 4-bar
+            # section sitting at identical loudness. Flat, equal-energy sections
+            # were the post-render quality-gate failure (rms_std_db ~0, "effectively
+            # flat"). `etrim` moves each section's loudness in dB; the quiet sections
+            # also shed bass/spark so the low-end wall (low200_share ~0.66) opens up
+            # and the mix gains spectral variety, not just level. Gain-only elsewhere,
+            # so floor/foreground bar-coverage (and the taste gate) is untouched.
+            if idx == 0:
+                energy = 0.32                      # sparse open — ease in, don't slam
+            elif sec_type == "drop":
+                energy = 1.0                        # full hit
+            elif sec_type == "build":
+                energy = 0.66                       # rising into the drop
+            elif idx % 8 == 6:
+                energy = 0.44                       # periodic breakdown — pull back
+            else:
+                energy = 0.74                       # sustain
+            etrim = round((energy - 0.74) * 12.0, 1)   # ~ -5dB (intro) .. 0 .. +3.1dB (drop)
+            low_energy = energy < 0.5
             floor = pick(floors, None, "floor") or (floors[idx % len(floors)] if floors else None)
             fg = pick(foreground, floor, "vocal_over_bed", role="vocal") if foreground and floor else (pick(foreground, None, "foreground", role="vocal") if foreground else None)
             bass = None
-            if basses and floor and str(floor.get("ear_role")) != "BASS_RIFF" and float(floor.get("low_share") or 0.0) < 0.34:
+            if basses and floor and not low_energy and str(floor.get("ear_role")) != "BASS_RIFF" and float(floor.get("low_share") or 0.0) < 0.34:
                 bass = pick(basses, floor, "bass_over_drums", role="bass")
-            spark = pick(sparks, floor or fg, "spark_into_phrase") if sparks and (idx % 2 == 1 or sec_type == "drop") else None
+            spark = pick(sparks, floor or fg, "spark_into_phrase") if sparks and (sec_type == "drop" or (idx % 2 == 1 and not low_energy)) else None
             layers: List[Dict[str, Any]] = []
             if floor:
-                add_layer(layers, floor, str(floor.get("role") or "harmony"), -8.5 if sec_type != "drop" else -7.0, 0, bars)
+                add_layer(layers, floor, str(floor.get("role") or "harmony"), (-8.5 if sec_type != "drop" else -7.0) + etrim, 0, bars)
             if bass and not any(x.get("role") == "bass" for x in layers):
-                add_layer(layers, bass, "bass", -7.5, 0, bars)
+                add_layer(layers, bass, "bass", -7.5 + etrim, 0, bars)
             if fg:
                 fg_len = min(bars, 4 if str(fg.get("ear_role")) != "VOX_SHOUT" else 1)
                 fg_off = 0 if idx == 0 else (0 if fg_len >= bars else rng.choice([0, max(0,bars-fg_len)]))
-                add_layer(layers, fg, "vocal" if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(fg.get("role") or "harmony"), -6.5 if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else -10.5, fg_off, fg_len)
+                # The vocal carries breakdowns — keep it up-front even when quiet, so
+                # a breakdown is "acapella-forward", not just "everything quieter".
+                fg_trim = etrim if not low_energy else max(etrim, -2.0)
+                add_layer(layers, fg, "vocal" if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(fg.get("role") or "harmony"), (-6.5 if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else -10.5) + fg_trim, fg_off, fg_len)
             if spark:
                 slen = 1 if bars <= 4 else 2
-                add_layer(layers, spark, str(spark.get("role") or "texture"), -16.0, max(0, bars - slen), slen)
+                add_layer(layers, spark, str(spark.get("role") or "texture"), -16.0 + etrim, max(0, bars - slen), slen)
             if not any(x.get("role") in {"drum_anchor","bass","harmony","full"} for x in layers) and floors:
                 for cand in floors:
-                    if add_layer(layers, cand, str(cand.get("role") or "harmony"), -8.5, 0, bars):
+                    if add_layer(layers, cand, str(cand.get("role") or "harmony"), -8.5 + etrim, 0, bars):
                         break
             if idx == 0 and not any(x.get("role") == "vocal" or x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"} for x in layers) and foreground:
                 intro_fg = pick(foreground, floor, "vocal_over_bed", role="vocal") or foreground[0]
-                add_layer(layers, intro_fg, "vocal" if str(intro_fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(intro_fg.get("role") or "harmony"), -6.5, 0, min(bars, 4))
+                add_layer(layers, intro_fg, "vocal" if str(intro_fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(intro_fg.get("role") or "harmony"), -6.5 + etrim, 0, min(bars, 4))
             transition = self.plan_transition(prev_sec, sec_type, int(prev_sec.get("target_key") or target_key) if prev_sec else None, target_key, bar, bars, layers, int(params.get("chaos") or 72), int(params.get("drama") or 82), rng)
-            sec = {"bar_start": bar, "bars": bars, "type": sec_type, "energy_level": 0.9 if sec_type == "drop" else 0.7, "target_key": target_key, "transition_in": transition, "layers": layers}
+            sec = {"bar_start": bar, "bars": bars, "type": sec_type, "energy_level": round(energy, 2), "target_key": target_key, "transition_in": transition, "layers": layers}
             sections.append(sec)
             prev_sec = sec
             bar += bars
@@ -4684,9 +4707,11 @@ class EarcrateCore:
 
         _VOCAL_EAR_ROLES = ("VOX_HOOK", "VOX_VERSE", "VOX_SHOUT")
 
-        def separated_vocal_source(pcm_sha: str, src_path: str) -> Tuple[Optional[np.ndarray], Optional[str], Optional[str]]:
+        def separated_stem_source(pcm_sha: str, src_path: str, stem_role: str = "vocals") -> Tuple[Optional[np.ndarray], Optional[str], Optional[str]]:
             """v3 §5.2 StemProvider seam: consult the SELECTED provider for a real
-            vocals stem so a GPU box gets vocal-on-instrumental. Selection is
+            stem (``stem_role`` = "vocals" for the acapella, "no_vocals" for the
+            clean instrumental bed) so a GPU box gets acapella-on-instrumental —
+            the whole point of the separation. Selection is
             ``EARCRATE_STEMS`` (env) > ``config.stem_provider`` > the registered
             default; the shipped "noop" value maps to ``get("stems")`` (the
             registered default), which reports stems unavailable and yields None
@@ -4700,14 +4725,14 @@ class EarcrateCore:
             selected = os.environ.get("EARCRATE_STEMS") or getattr(c, "stem_provider", None) or "noop"
             try:
                 prov = get("stems") if selected == "noop" else get("stems", selected)
-                sep = prov.separate(str(pcm_sha), str(src_path), ["vocals"])
+                sep = prov.separate(str(pcm_sha), str(src_path), [stem_role])
             except Exception as exc:
                 return None, "stem provider %r error: %s" % (selected, exc), None
             if not sep or not sep.get("available"):
                 return None, str((sep or {}).get("reason") or "stems unavailable"), None
-            ref = (sep.get("stems") or {}).get("vocals")
+            ref = (sep.get("stems") or {}).get(stem_role)
             if not ref:
-                return None, "provider %r reported available but produced no vocals stem" % (selected,), None
+                return None, "provider %r reported available but produced no %s stem" % (selected, stem_role), None
             identity_data = {
                 "provider": str(sep.get("provider") or selected),
                 "model_version": sep.get("model_version"),
@@ -4777,7 +4802,7 @@ class EarcrateCore:
                     if _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
                         pcm_sha = info.get("audio_sha256")
                         if pcm_sha:
-                            stem_arr, stem_reason, stem_identity = separated_vocal_source(str(pcm_sha), path)
+                            stem_arr, stem_reason, stem_identity = separated_stem_source(str(pcm_sha), path, "vocals")
                             if stem_arr is not None:
                                 source = stem_arr
                                 stem_source = "vocals"
@@ -4789,6 +4814,23 @@ class EarcrateCore:
                         else:
                             stem_reason = "verified full-track audio identity missing; run Analyze before stem separation"
                             report["stem_reason"] = stem_reason
+                    else:
+                        # Bed layers (drums/bass/harmony) ride the INSTRUMENTAL stem
+                        # (demucs no_vocals) when a provider can produce one, so a
+                        # foreign acapella sits over a CLEAN instrumental instead of
+                        # song B's FULL MIX — which still carries B's own vocals and
+                        # muddies the bed. The no-op default returns None here, so a
+                        # non-GPU box FALLS BACK to the full-mix decode below,
+                        # byte-identical to the pre-seam path.
+                        pcm_sha = info.get("audio_sha256")
+                        if pcm_sha:
+                            stem_arr, inst_reason, inst_identity = separated_stem_source(str(pcm_sha), path, "no_vocals")
+                            if stem_arr is not None:
+                                source = stem_arr
+                                stem_source = "instrumental"
+                                stem_identity = inst_identity
+                            else:
+                                report.setdefault("stem_reason_instrumental", inst_reason)
                     if source is None:
                         if path not in audio_cache:
                             audio_cache[path] = decode_audio(Path(path), sr)

@@ -549,7 +549,7 @@ async function libAction(path,body){ toast('Running '+path.split('/').pop()+'…
 async function renderSetup(){
   const scr=el('scr_setup'); scr.innerHTML='<div class="h1">Setup <span style="color:var(--acc)">// system</span></div><div class="lbl">loading…</div>';
   let d={}; try{ d=await api('/api/defaults'); }catch(e){}
-  const cfg=d.configured||{}; const music=cfg.master_root||d.music_folder||''; const ws=cfg.working_root||d.workspace_folder||'';
+  const cfg=d.configured||{}; const music=cfg.master_root||d.music_folder||''; const ws=d.configured_workspace||d.workspace_folder||'';
   const workers=cfg.workers; const depth=cfg.analysis_seconds||180;
   scr.innerHTML='<div class="h1">Setup <span style="color:var(--acc)">// system</span></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1100px">'
@@ -602,20 +602,28 @@ async function station(sig){ try{ await post('/api/station/feedback',{signal:sig
 /* ---------- polling ---------- */
 async function pollStatus(force){
   try{ const st=await api('/api/status');
-    const busy=!!st.busy; el('onlineDot').style.background=busy?'var(--acc)':'var(--faint)';
-    el('onlineTxt').textContent=busy?'ENGINE BUSY':'SYSTEM ONLINE';
-    el('engineTxt').textContent=busy?(String(st.message||'working').slice(0,60)):'idle';
+    const busy=!!st.busy; const err=(!busy&&st.last_error)?String(st.last_error):'';
+    el('onlineDot').style.background=busy?'var(--acc)':(err?'var(--fault)':'var(--faint)');
+    el('onlineTxt').textContent=busy?'ENGINE BUSY':(err?'ERROR':'SYSTEM ONLINE');
+    el('engineTxt').textContent=busy?(String(st.message||'working').slice(0,60)):(err?err.slice(0,60):'idle');
     if(S.mode==='activity'){ renderStatus(st); if(force) renderPerfStages(); }
   }catch(e){}
 }
 function tickTransport(){ const a=AP(); const cur=a.currentTime||0, dur=a.duration||0; el('tElapsed').textContent=mmss(cur); el('tDur').textContent=dur?mmss(dur):'0:00'; el('tBar').style.width=(dur?(cur/dur*100):0)+'%'; syncPlay(); }
 
 /* ---------- boot ---------- */
-function boot(){
+async function boot(){
   applySkin(); renderNav();
+  // Surface any otherwise-swallowed request failure (bare api() GETs reject with
+  // no catch) instead of the view silently breaking.
+  window.addEventListener('unhandledrejection',ev=>{ const m=(ev.reason&&ev.reason.message)||ev.reason||'request failed'; toast('✕ '+m); });
   const a=AP(); a.addEventListener('ended',()=>{ if(ENDLESS.on) endlessNext(); }); a.addEventListener('play',syncPlay); a.addEventListener('pause',syncPlay);
   setInterval(tickTransport,500);
   setInterval(()=>pollStatus(false),2000);
+  // First-run routing: an unconfigured box has nothing to Play. Land the user on
+  // Setup with a nudge instead of a dead Play screen + a JAM button that 500s.
+  let configured=null; try{ const d=await api('/api/defaults'); configured=d.configured; }catch(e){}
+  if(!configured && S.mode==='play'){ S.mode='setup'; toast('Welcome — point EarCrate at your music folder to begin'); }
   go(S.mode);
 }
 boot();

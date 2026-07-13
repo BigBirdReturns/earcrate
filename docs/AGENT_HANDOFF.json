@@ -1107,5 +1107,47 @@
   },
   "top_blocker": "Identify/Deep-clean wedge engine busy forever (app.py:5217-5229 run_background never resets on success)",
   "silent_failure_cluster": "500 tracebacks never shown (index.html:155); pollStatus swallows errors + heartbeat shows green on failure (index.html:603-610); dead controls: Ingest, Identify apply/rollback, /api/rollback, Migrate apply"
- }
+ },
+ "fixes_applied": [
+  {
+   "batch": "tier1-reliability-spine",
+   "commit": "pending",
+   "fixes": [
+    {
+     "finding": "Identify/Deep-clean wedge engine busy forever",
+     "where": "app.py run_background",
+     "change": "target() now finalizes status on success (resets busy, progress=1.0) only if the job did not already, and reports {ok:false} payloads as errors instead of silent success"
+    },
+    {
+     "finding": "config trap A (pointer write/read mismatch)",
+     "where": "app.py configure()",
+     "change": "pointer now written to every dir in pointer_search_dirs(), so a different entry point resolves the same workspace"
+    },
+    {
+     "finding": "re-save nests workspace, orphans DB",
+     "where": "app.py configure_workspace() + default_paths() + index.html renderSetup",
+     "change": "configure_workspace un-nests a /work path with sibling agent/; default_paths exposes configured_workspace (working_root.parent); Setup field binds to that root not the /work subdir"
+    },
+    {
+     "finding": "first-run dead-end (land on Play, JAM 500s silently)",
+     "where": "index.html boot()",
+     "change": "unconfigured box routes to Setup with a welcome nudge"
+    },
+    {
+     "finding": "500 tracebacks / api() rejections never shown; pollStatus lies green",
+     "where": "index.html boot()+pollStatus",
+     "change": "global unhandledrejection toast; header dot goes red on last_error instead of staying SYSTEM ONLINE"
+    }
+   ]
+  }
+ ],
+ "fixes_remaining_high": [
+  "Preflight always reports READY (frontend reads j.failures, backend returns j.warnings/j.ready) \u2014 readiness surface",
+  "Dead controls: Ingest (no source folder), Identify apply/rollback, /api/rollback, Migrate apply",
+  "Workbench Render ignores composed/loaded plan and recomposes from scratch",
+  "Perf 'Stages this run' panel reads wrong shape (always empty)",
+  "Playlist count always 0 + open link never appears (shape mismatch)",
+  "Judge button only on PASSED renders (can't inspect failures)",
+  "Previous transport button skips forward"
+ ]
 }

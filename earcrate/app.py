@@ -536,7 +536,22 @@ class EarcrateCore:
         cfg_path.write_text(json.dumps(self.config.as_dict(), indent=2), encoding="utf-8")
         self.write_toml_config()
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.pointer_path.write_text(json.dumps({"config_json": str(cfg_path)}, indent=2), encoding="utf-8")
+        pointer_body = json.dumps({"config_json": str(cfg_path)}, indent=2)
+        self.pointer_path.write_text(pointer_body, encoding="utf-8")
+        # Trap A fix: load_config_if_present READS by scanning pointer_search_dirs()
+        # (which vary by how the process was started — `python -m earcrate` vs the
+        # launcher vs a driver script). Writing the pointer to ONLY visible_app_dir
+        # let a different entry point fail to find it and report "not configured" on
+        # an already-configured box (MILESTONES.md pointer-mismatch defect). Write it
+        # to every legitimate read location so the workspace resolves regardless of
+        # entry point. The pointer is one small gitignored file.
+        for d in pointer_search_dirs():
+            with contextlib.suppress(Exception):
+                target = d / self.pointer_path.name
+                if os.path.normcase(str(target.resolve())) == os.path.normcase(str(self.pointer_path.resolve())):
+                    continue
+                d.mkdir(parents=True, exist_ok=True)
+                target.write_text(pointer_body, encoding="utf-8")
         self.connect_db()
         return {"ok": True, "config": self.config.as_dict()}
 
@@ -549,9 +564,14 @@ class EarcrateCore:
         # open, not a hidden AppData nest. Must not sit inside the music folder
         # (INV-1 path separation), so use a sibling under the profile.
         workspace = Path(sibling_workspace(str(music)))
+        # When configured, the workspace ROOT the user picked is the parent of
+        # working_root (derive appends "work"). The Setup field must bind to THIS,
+        # not to working_root itself, or every re-save nests one level deeper.
+        configured_workspace = str(Path(self.config.working_root).parent) if self.config else None
         return {
             "music_folder": str(music),
             "workspace_folder": str(workspace),
+            "configured_workspace": configured_workspace,
             "derived": self.derive_workspace_paths(str(music), str(workspace)),
             "configured": self.config.as_dict() if self.config else None,
         }
@@ -765,6 +785,14 @@ class EarcrateCore:
             raise ValueError("music_folder is required")
         if not workspace:
             workspace = sibling_workspace(music)
+        # Idempotency guard against the re-save nesting bug: derive_workspace_paths
+        # appends "work"/"agent"/... UNDER the given folder. If the caller hands us a
+        # path that is already a derived subdir (basename "work" with a sibling
+        # "agent"), treat its PARENT as the workspace root so a second save resolves
+        # the SAME paths instead of creating .../work/work and orphaning the DB.
+        wpath = Path(workspace).expanduser()
+        if wpath.name == "work" and (wpath.parent / "agent").is_dir():
+            workspace = str(wpath.parent)
         paths = self.derive_workspace_paths(music, workspace)
         if data.get("analysis_seconds"):
             paths["analysis_seconds"] = int(data["analysis_seconds"])
@@ -5221,7 +5249,25 @@ class EarcrateCore:
             self.status.update({"busy": True, "message": "starting", "progress": 0, "last_error": None})
         def target():
             try:
-                fn(*args, **kwargs)
+                result = fn(*args, **kwargs)
+                # Many jobs (scan/analyze) clear busy themselves at completion; only
+                # finalize when they did NOT, so we never wedge "busy" forever
+                # (identify/deep-clean/one_click previously never reset on success)
+                # and never clobber a job's own final message.
+                with self.status_lock:
+                    still_busy = bool(self.status.get("busy"))
+                if still_busy:
+                    if isinstance(result, dict) and result.get("ok") is False:
+                        # A job that returns {ok:false} FAILED without raising
+                        # (e.g. "AcoustID API key required"): report it, don't
+                        # silently claim success.
+                        msg = str(result.get("error") or "operation failed")
+                        self.set_status(f"error: {msg}", busy=False, error=msg)
+                    else:
+                        done_msg = "done"
+                        if isinstance(result, dict):
+                            done_msg = str(result.get("message") or result.get("summary") or "done")
+                        self.set_status(done_msg, progress=1.0, busy=False)
             except Exception as exc:
                 traceback.print_exc()
                 self.set_status(f"error: {exc}", busy=False, error=str(exc))

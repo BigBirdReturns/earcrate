@@ -1,6 +1,7 @@
 from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.app import *
+from earcrate.core.util import visible_app_dir
 HTML_PAGE = (Path(__file__).resolve().parent / "static" / "index.html").read_text(encoding="utf-8")  # single-file build inlines this
 
 
@@ -20,14 +21,75 @@ def _resolve_build_stamp() -> str:
 
 
 HTML_PAGE = HTML_PAGE.replace("__ENGINE_VERSION__", f"{ENGINE_DISPLAY_VERSION} · build {_resolve_build_stamp()}")  # single-sourced from deps.py
+
+
+# --- Live backend debug log ---------------------------------------------------
+# Opt-in via the EARCRATE_DEBUG env var. When set, every HTTP request and its
+# outcome (status + elapsed ms) is appended to a single tailable logfile, and any
+# handler exception is written with its FULL traceback. This is the backend's
+# live "what is it doing / where is it failing" feed: run the app in one window
+# and follow the log in another (Debug-EarCrate.cmd wires both up for you).
+# Off by default so ordinary runs and the executable gates write no stray file.
+#   EARCRATE_DEBUG=1                       -> default location, beside the app
+#   EARCRATE_DEBUG=C:\path\earcrate.log    -> that exact file (used by the .cmd)
+_DEBUG_OFF = {"", "0", "false", "no", "off"}
+
+
+class _DebugLog:
+    """Thread-safe append-only log. ThreadingHTTPServer serves requests
+    concurrently, so writes are serialized under a lock. Resolved once at import;
+    when disabled every write is a cheap early return."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._path: Optional[Path] = None
+        raw = str(os.environ.get("EARCRATE_DEBUG") or "").strip()
+        self.on = raw.lower() not in _DEBUG_OFF
+        if self.on:
+            try:
+                # A path-like value is used verbatim (so the app and the tailing
+                # window agree on ONE file); a bare flag picks the default spot.
+                if "/" in raw or "\\" in raw or raw.lower().endswith(".log"):
+                    self._path = Path(raw).expanduser()
+                else:
+                    self._path = visible_app_dir() / "earcrate_debug.log"
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                self.on = False
+                self._path = None
+
+    def path(self) -> Optional[Path]:
+        return self._path
+
+    def write(self, line: str) -> None:
+        if not self.on or self._path is None:
+            return
+        stamp = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        try:
+            with self._lock, self._path.open("a", encoding="utf-8") as f:
+                f.write(f"{stamp}  {line}\n")
+                f.flush()
+        except Exception:
+            pass
+
+
+DEBUG_LOG = _DebugLog()
+
+
 class JBHandler(BaseHTTPRequestHandler):
     core: EarcrateCore = None  # type: ignore
     token: str = ""
+    _status: int = 0
 
     def log_message(self, fmt: str, *args: Any) -> None:
         return
 
+    def _safe_path(self) -> str:
+        # Never let the per-session token land in a logfile the user may share.
+        return re.sub(r"([?&]token=)[^&]*", r"\1<redacted>", self.path or "")
+
     def _send(self, status: int, body: bytes, content_type: str = "application/json") -> None:
+        self._status = status
         try:
             self.send_response(status)
             self.send_header("Content-Type", content_type + "; charset=utf-8")
@@ -59,6 +121,7 @@ class JBHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Range", f"bytes */{size}")
             self.end_headers()
             return
+        self._status = status
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Accept-Ranges", "bytes")
@@ -89,6 +152,8 @@ class JBHandler(BaseHTTPRequestHandler):
         return (q.get("token") or [""])[0] == self.token
 
     def do_GET(self) -> None:
+        _t0 = time.perf_counter()
+        self._status = 0
         try:
             parsed = urllib.parse.urlparse(self.path)
             if parsed.path == "/":
@@ -166,9 +231,16 @@ class JBHandler(BaseHTTPRequestHandler):
                 return
             self._json(404, {"error": "not found"})
         except Exception as exc:
+            if DEBUG_LOG.on:
+                DEBUG_LOG.write("ERROR  GET  " + self._safe_path() + "\n" + traceback.format_exc().rstrip())
             self._json(500, {"error": str(exc), "trace": traceback.format_exc()})
+        finally:
+            if DEBUG_LOG.on:
+                DEBUG_LOG.write(f"GET   {self._status or '---'}  {int((time.perf_counter() - _t0) * 1000)}ms  {self._safe_path()}")
 
     def do_POST(self) -> None:
+        _t0 = time.perf_counter()
+        self._status = 0
         try:
             if not self._check_token():
                 self._json(403, {"error": "bad token"})
@@ -266,7 +338,17 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.judge_render(str(data.get("path") or ""), str(data.get("ref") or "") or None)); return
             self._json(404, {"error": "not found"})
         except Exception as exc:
+            if DEBUG_LOG.on:
+                try:
+                    body_preview = json.dumps(locals().get("data") or {}, ensure_ascii=False)[:800]
+                except Exception:
+                    body_preview = "<unreadable body>"
+                DEBUG_LOG.write("ERROR  POST " + urllib.parse.urlparse(self.path).path
+                                + "  body=" + body_preview + "\n" + traceback.format_exc().rstrip())
             self._json(500, {"error": str(exc), "trace": traceback.format_exc()})
+        finally:
+            if DEBUG_LOG.on:
+                DEBUG_LOG.write(f"POST  {self._status or '---'}  {int((time.perf_counter() - _t0) * 1000)}ms  {urllib.parse.urlparse(self.path).path}")
 
 
 def serve(open_browser: bool = True, port: int = 0) -> None:
@@ -278,6 +360,9 @@ def serve(open_browser: bool = True, port: int = 0) -> None:
     host, actual_port = server.server_address
     url = f"http://127.0.0.1:{actual_port}/?token={urllib.parse.quote(token)}"
     print(f"earcrate is running on {url}")
+    if DEBUG_LOG.on and DEBUG_LOG.path() is not None:
+        print(f"[debug] backend log: {DEBUG_LOG.path()}")
+        print(f'[debug] live-tail:   Get-Content -Path "{DEBUG_LOG.path()}" -Wait -Tail 50   (PowerShell)')
     # Warm librosa's numba JIT off the request path so the first analyze/render
     # does not block ~5-10s on compilation and look like a freeze.
     threading.Thread(target=warmup_dsp, daemon=True).start()

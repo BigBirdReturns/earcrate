@@ -1232,7 +1232,7 @@
    "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
    "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "67/67 gates pass (54 pre-existing + 13 new), no regressions",
+  "gate_result": "69/69 gates pass",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
  },
  "fixes_remaining_notes": [
@@ -1284,6 +1284,17 @@
     "ArtifactStore (L3) unconfigured fallback: visible_app_dir()/cache/L3, honoring EARCRATE_CACHE_ROOT (was a random mkdtemp temp dir)."
    ],
    "verified": "no home-root litter on configure; cache + L3 fall back under the visible app dir, never temp; 67/67 gates"
+  }
+ },
+ "machine": {
+  "BAM_Desktop": {
+   "drive_rule": "C: never used. D: (DataArray, 16TB) for everything persistent; S: (Dev-NVMe, 238GB) for the hot regenerable cache.",
+   "master_root": "D:\\BonkyJones Backups\\Music Library",
+   "workspace": "D:\\BonkyJones Backups\\EarCrate-Workspace",
+   "cache_root": "S:\\earcrate_cache (EARCRATE_CACHE_ROOT)",
+   "stem_provider": "demucs",
+   "preset": "machine_defaults.json (repo root) auto-configures on first launch via EarcrateCore._seed_from_machine_defaults; safe no-op when the D: library isn't mounted.",
+   "relocation": "POST /api/relocate_workspace {old:'C:\\\\Users\\\\BAM-Desktop\\\\EarCrate-Workspace', new:'D:\\\\BonkyJones Backups\\\\EarCrate-Workspace', apply:true} \u2014 run ONCE to move the existing C: workspace (DB/atoms/judgments/renders) onto D: with no re-analyze; regenerable cache is left to rebuild on S:."
   }
  }
 }

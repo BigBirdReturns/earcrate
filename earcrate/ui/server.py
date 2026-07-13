@@ -266,6 +266,10 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.open_folder(str(data.get("path") or ""))); return
             if path == "/api/config_workspace":
                 self._json(200, self.core.configure_workspace(data)); return
+            if path == "/api/relocate_workspace":
+                self._json(200, self.core.relocate_workspace(data)); return
+            if path == "/api/capabilities":
+                self._json(200, self.core.machine_capabilities()); return
             if path == "/api/workspace_candidates":
                 self._json(200, self.core.workspace_candidates(str(data.get("music_folder") or ""))); return
             if path == "/api/browse_dir":

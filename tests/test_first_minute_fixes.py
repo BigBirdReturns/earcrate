@@ -191,3 +191,54 @@ def test_cache_root_redirects_to_fast_disk(tmp_path):
         assert str(nvme) in str(core._cache_root())
     finally:
         os.environ.pop("EARCRATE_CACHE_ROOT", None)
+
+
+def test_machine_defaults_auto_seed(tmp_path):
+    """A committed machine preset auto-configures on first run (no manual POST),
+    routing the cache to the preset's fast disk — but ONLY when the library exists,
+    so it's a safe no-op on any other box."""
+    import json
+    from earcrate.app import EarcrateCore
+    home = tmp_path / "home"; home.mkdir()
+    os.environ["EARCRATE_HOME"] = str(home)
+    for k in ("EARCRATE_CACHE_ROOT", "EARCRATE_STEMS", "EARCRATE_DEFAULTS"):
+        os.environ.pop(k, None)
+    master = tmp_path / "D_music"; master.mkdir()
+    ws = tmp_path / "D_ws"; cache = tmp_path / "S_cache"
+    (home / "machine_defaults.json").write_text(json.dumps({
+        "master_root": str(master), "workspace_folder": str(ws),
+        "cache_root": str(cache), "stem_provider": "demucs", "workers": 0}))
+    c = EarcrateCore()
+    assert c.config is not None, "preset must auto-configure when the library exists"
+    assert str(c.config.master_root) == str(master)
+    assert os.environ.get("EARCRATE_CACHE_ROOT") == str(cache), "cache must route to the preset's disk"
+
+    # missing library drive -> safe no-op
+    home2 = tmp_path / "home2"; home2.mkdir()
+    os.environ["EARCRATE_HOME"] = str(home2); os.environ.pop("EARCRATE_CACHE_ROOT", None)
+    (home2 / "machine_defaults.json").write_text(json.dumps({
+        "master_root": str(tmp_path / "does_not_exist"), "workspace_folder": str(ws)}))
+    assert EarcrateCore().config is None, "must not configure against a missing library"
+
+
+def test_relocate_workspace_preserves_db(tmp_path):
+    """Relocating a workspace (e.g. off C: onto D:) preserves the analyzed DB and
+    renders (no re-analyze), drops the stale config, and does NOT move the
+    regenerable cache (it rebuilds on the NVMe)."""
+    core, _ = _core(tmp_path)
+    old = tmp_path / "C_ws"; new = tmp_path / "D_ws"
+    (old / "agent").mkdir(parents=True); (old / "work" / "renders").mkdir(parents=True)
+    (old / "agent" / "cache" / "L3").mkdir(parents=True)
+    (old / "agent" / "earcrate.sqlite").write_text("DB")
+    (old / "agent" / "config.json").write_text('{"master_root":"C:/stale"}')
+    (old / "work" / "renders" / "set.wav").write_text("WAV")
+    (old / "agent" / "cache" / "L3" / "stem.bin").write_text("STEM")
+
+    assert core.relocate_workspace({"old": str(old), "new": str(new)}).get("dry_run") is True
+    res = core.relocate_workspace({"old": str(old), "new": str(new), "apply": True})
+    assert res.get("ok")
+    assert (new / "agent" / "earcrate.sqlite").read_text() == "DB", "DB must survive (no re-analyze)"
+    assert (new / "work" / "renders" / "set.wav").exists()
+    assert not (new / "agent" / "config.json").exists(), "stale config must be dropped"
+    assert not (new / "agent" / "cache").exists(), "regenerable cache must not be moved"
+    assert not (old / "agent").exists(), "old tree must be moved out"

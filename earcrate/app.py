@@ -490,6 +490,7 @@ class EarcrateCore:
                         self.pointer_path.write_text(self.legacy_pointer_path.read_text(encoding="utf-8"), encoding="utf-8")
                         pointer = self.pointer_path
             if pointer is None or cfg is None:
+                self._seed_from_machine_defaults()
                 return
             self.pointer_resolved_from = pointer
             self.config = Config(
@@ -510,6 +511,39 @@ class EarcrateCore:
         except Exception:
             self.config = None
             self.db = None
+
+    def _seed_from_machine_defaults(self) -> None:
+        """First-run auto-config from a committed machine preset, so a known box
+        'just works' on the RIGHT visible drives with no manual POST /api/config.
+        Source: EARCRATE_DEFAULTS env > machine_defaults.json beside the app. Only
+        fires when unconfigured AND the master library actually exists (never
+        configures against a missing drive), so it is a safe no-op everywhere else."""
+        if self.config is not None:
+            return
+        try:
+            src = os.environ.get("EARCRATE_DEFAULTS")
+            cand = Path(src).expanduser() if src else (visible_app_dir() / "machine_defaults.json")
+            if not cand.exists():
+                return
+            d = json.loads(cand.read_text(encoding="utf-8"))
+            master = str(d.get("master_root") or "").strip()
+            workspace = str(d.get("workspace_folder") or d.get("workspace_root") or "").strip()
+            if not master or not Path(master).expanduser().exists():
+                return  # never auto-configure against a library that isn't mounted
+            # Route the hot cache to the configured fast disk (the NVMe) and the
+            # stem provider, BEFORE configure() so _export_l3_root lands on it.
+            if d.get("cache_root"):
+                os.environ.setdefault("EARCRATE_CACHE_ROOT", str(Path(str(d["cache_root"])).expanduser()))
+            if d.get("stem_provider"):
+                os.environ.setdefault("EARCRATE_STEMS", str(d["stem_provider"]))
+            payload: Dict[str, Any] = {"music_folder": master, "workspace_folder": workspace}
+            if d.get("workers") is not None:
+                payload["workers"] = int(d["workers"])
+            if d.get("analysis_seconds"):
+                payload["analysis_seconds"] = int(d["analysis_seconds"])
+            self.configure_workspace(payload)
+        except Exception:
+            self.config = None  # a bad preset must never wedge startup
 
     def configure(self, data: Dict[str, Any]) -> Dict[str, Any]:
         master = Path(data["master_root"]).expanduser().resolve()
@@ -803,6 +837,54 @@ class EarcrateCore:
         if data.get("workers") is not None:
             paths["workers"] = int(data["workers"])
         return self.configure(paths)
+
+    def relocate_workspace(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Move an existing workspace to a new home (e.g. off C: onto the D: array),
+        preserving the analyzed DB, atoms, judgments, and renders so nothing is
+        re-analyzed. Dry-run by default. The regenerable cache (L3 stems +
+        transforms) is deliberately NOT moved — it rebuilds under the NVMe
+        EARCRATE_CACHE_ROOT. Stale config/pointer in the moved tree is dropped so
+        the machine preset reconfigures the workspace at its new location."""
+        old = Path(str(data.get("old") or "")).expanduser()
+        new = Path(str(data.get("new") or "")).expanduser()
+        apply = bool(data.get("apply"))
+        if not old.exists() or not old.is_dir():
+            return {"ok": False, "error": f"old workspace not found: {old}"}
+        if new.exists() and old.resolve() == new.resolve():
+            return {"ok": False, "error": "old and new are the same path"}
+        # Move the durable subtrees; skip the regenerable cache dir.
+        subs = [s for s in ("agent", "work", "playlists", "stems") if (old / s).exists()]
+        moves = [(old / s, new / s) for s in subs]
+        if not apply:
+            return {"ok": True, "dry_run": True, "old": str(old), "new": str(new),
+                    "planned": [{"from": str(a), "to": str(b)} for a, b in moves],
+                    "note": "regenerable cache (agent/cache) is NOT moved — it rebuilds under EARCRATE_CACHE_ROOT (the NVMe). Run with apply:true to move for real."}
+        for _a, b in moves:
+            if b.exists():
+                return {"ok": False, "error": f"refusing to overwrite existing {b}; move it aside first"}
+        new.mkdir(parents=True, exist_ok=True)
+        moved: List[Dict[str, str]] = []
+        for a, b in moves:
+            b.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(a), str(b))
+            moved.append({"from": str(a), "to": str(b)})
+        # Drop the moved tree's stale config + any old cache so nothing points back
+        # at the old drive; the machine preset reconfigures to `new`.
+        with contextlib.suppress(Exception):
+            (new / "agent" / "config.json").unlink()
+        with contextlib.suppress(Exception):
+            (new / "agent" / "config.toml").unlink()
+        with contextlib.suppress(Exception):
+            shutil.rmtree(new / "agent" / "cache", ignore_errors=True)  # regenerates on the NVMe
+        journal = None
+        with contextlib.suppress(Exception):
+            jdir = new / "agent"
+            jdir.mkdir(parents=True, exist_ok=True)
+            journal = jdir / "relocate_journal.json"
+            journal.write_text(json.dumps({"old": str(old), "new": str(new), "moved": moved, "at": now_utc()}, indent=2), encoding="utf-8")
+        return {"ok": True, "old": str(old), "new": str(new), "moved": moved,
+                "journal": str(journal) if journal else None,
+                "note": "Workspace relocated. Launch normally — the machine preset will configure the new location; the DB/atoms/judgments/renders came with it, so no re-analyze. Cache rebuilds on the NVMe."}
 
     def write_toml_config(self) -> None:
         assert self.config

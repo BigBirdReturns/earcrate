@@ -1,0 +1,9 @@
+{
+  "_comment": "Machine preset for BAM-Desktop. Auto-applied on first launch when unconfigured (see EarcrateCore._seed_from_machine_defaults). DRIVE RULE: C: is never used; everything that persists lives on D: (the 16 TB DataArray), and the hot regenerable cache is routed to S: (Dev-NVMe). Delete this file, set EARCRATE_DEFAULTS to a different path, or just POST /api/config to override.",
+  "master_root": "D:\\BonkyJones Backups\\Music Library",
+  "workspace_folder": "D:\\BonkyJones Backups\\EarCrate-Workspace",
+  "cache_root": "S:\\earcrate_cache",
+  "stem_provider": "demucs",
+  "workers": 0,
+  "analysis_seconds": 180
+}

@@ -4116,8 +4116,31 @@ class EarcrateCore:
         return {"ok": not errors, "retagged": retagged, "errors": errors, "journal": str(journal),
                 "db_unresolved": unresolved, "note": note}
 
+    def identify_journals(self) -> Dict[str, Any]:
+        """List identify-rollback journals (newest first) so the UI can undo the most
+        recent tag rewrite. Each apply_identities run writes exactly one
+        agent_root/identify_journal/retag-<ulid>.jsonl."""
+        c = self.ensure_config()
+        d = c.agent_root / "identify_journal"
+        items: List[Dict[str, Any]] = []
+        if d.exists():
+            for p in sorted(d.glob("retag-*.jsonl"), key=lambda x: x.stat().st_mtime, reverse=True):
+                try:
+                    n = sum(1 for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip())
+                except Exception:
+                    n = 0
+                items.append({"path": str(p), "count": n,
+                              "mtime": _dt.datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="seconds")})
+        return {"ok": True, "items": items}
+
     def rollback_identities(self, data: Dict[str, Any]) -> Dict[str, Any]:
         journal = Path(str(data.get("journal") or ""))
+        # Default to the most recent journal so the UI can offer a one-click undo
+        # without threading the per-run path through a background apply.
+        if not str(data.get("journal") or "").strip():
+            js = self.identify_journals().get("items") or []
+            if js:
+                journal = Path(js[0]["path"])
         if not journal.exists():
             return {"ok": False, "error": "identify journal not found"}
         apply = bool(data.get("apply"))
@@ -5024,6 +5047,39 @@ class EarcrateCore:
         score = self.score_arrangement(arrangement)
         gate = self.taste_arrangement_gate(arrangement)
         return {"ok": True, "arrangement": arrangement, "score": score, "taste_gate": gate, "seed": seed}
+
+    def render_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Render the EXACT arrangement the Workbench is showing — not a fresh
+        compose. propose_plan produced this arrangement for the timeline surface;
+        rendering it directly (register a mashup row from the arrangement, then
+        execute its render_mashup manifest) guarantees the WAV IS the plan you saw,
+        with no re-harvest and no seed/param-parity guesswork. The same pre-render
+        gates as propose_taste_mashup apply, so a refused plan never writes theater."""
+        c = self.ensure_config()
+        arrangement = data.get("arrangement")
+        if not arrangement or not arrangement.get("sections"):
+            return {"ok": False, "error": "no arrangement to render — propose or load a plan first"}
+        preflight = self.arrangement_preflight_gate(arrangement)
+        taste_gate = self.taste_arrangement_gate(arrangement)
+        if not preflight.get("passed") or not taste_gate.get("passed"):
+            fails = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
+            return {"ok": False, "error": "plan failed the pre-render gate: " + "; ".join(fails)}
+        params = arrangement.get("params") or {}
+        seed = int(params.get("seed") or data.get("seed") or c.seed)
+        name = safe_name(str(data.get("name") or params.get("name") or "EarCrate Set"), "EarCrate Set")
+        arr_sha = arrangement_sha(arrangement)
+        mashup_id = ulidish()
+        render_name = f"{name}-{ENGINE_VERSION}-{arr_sha[:8]}-{seed}.wav"
+        dst = c.working_root / "renders" / render_name
+        self.conn().execute(
+            "INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
+            (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
+        self.conn().commit()
+        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
+        manifest = self.write_manifest("tastespec", seed, f"Render Workbench plan '{name}'", [op])
+        result = self.execute_manifest(manifest, apply=True)
+        return {"ok": result.get("ok", True) if isinstance(result, dict) else True,
+                "manifest": manifest, "arrangement_sha": arr_sha, "render": result}
 
     def list_plans(self) -> Dict[str, Any]:
         rows = self.conn().execute("SELECT id,name,taste_profile,plan_hash,created_at FROM saved_plans ORDER BY created_at DESC LIMIT 100").fetchall()

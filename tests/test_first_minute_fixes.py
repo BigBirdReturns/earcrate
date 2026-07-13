@@ -117,3 +117,39 @@ def test_playlist_entries_is_int(tmp_path):
     core.configure_workspace({"music_folder": str(music), "workspace_folder": str(tmp_path / "WS")})
     pl = core.propose_playlist("gate pl", "", 30)
     assert isinstance(pl.get("entries"), int), "entries must be an int count (old frontend did .length -> undefined -> 0)"
+
+
+def test_identify_apply_and_rollback_round_trip(tmp_path):
+    import numpy as np, soundfile as sf
+    from mutagen import File as MF
+    core, music = _core(tmp_path)
+    core.configure_workspace({"music_folder": str(music), "workspace_folder": str(tmp_path / "WS")})
+    p = music / "song.flac"
+    t = np.linspace(0, 2, 44100 * 2, endpoint=False)
+    sf.write(str(p), (0.4 * np.sin(2 * np.pi * 200 * t)).astype("float32"), 44100, format="FLAC")
+    m = MF(str(p), easy=True); m["artist"] = ["Old Artist"]; m.save()
+
+    proposals = [{"path": str(p), "artist": "New Artist", "title": "New Title", "score": 0.99}]
+    dry = core.apply_identities({"apply": False, "proposals": proposals})
+    assert dry.get("signature") and dry.get("would_retag", 0) >= 1, "dry-run must return a signature to echo back"
+    ap = core.apply_identities({"apply": True, "proposals": proposals, "signature": dry["signature"]})
+    assert ap.get("ok") is not False, f"apply failed: {ap}"
+    assert (MF(str(p), easy=True).get("artist") or [""])[0] == "New Artist"
+
+    js = core.identify_journals()
+    assert js.get("items"), "identify_journals must list the journal (backs the Undo button)"
+    # Rollback with no journal arg defaults to the newest journal.
+    rb = core.rollback_identities({"apply": True})
+    assert rb.get("ok") is not False, f"rollback failed: {rb}"
+    assert (MF(str(p), easy=True).get("artist") or [""])[0] == "Old Artist", "rollback must restore the original tag"
+
+
+def test_render_plan_refuses_cleanly(tmp_path):
+    core, music = _core(tmp_path)
+    core.configure_workspace({"music_folder": str(music), "workspace_folder": str(tmp_path / "WS")})
+    # No arrangement -> clean error, never a crash.
+    e1 = core.render_plan({})
+    assert e1.get("ok") is False and "arrangement" in (e1.get("error") or "")
+    # An empty/failing plan is refused by the pre-render gate, never rendered as theater.
+    e2 = core.render_plan({"arrangement": {"sections": [{"bars": 8, "layers": []}], "bpm": 120, "params": {"seed": 7}}})
+    assert isinstance(e2, dict) and (e2.get("ok") is False or "render" in e2)

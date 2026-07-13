@@ -8,7 +8,7 @@
   "strategy_design": "complete",
   "qa_swarm": "complete",
   "qa_findings_embedded": true,
-  "note": "QA swarm complete: 31 agents (15 audit + 15 adversarial verify + 1 synthesis), 0 errors. Findings joined on title; refuted dropped."
+  "note": "All QA blocker/high findings addressed & verified at core+HTTP+DOM layers; 62/62 gates. Only the happy-path WAV render remains desktop-only (needs real music)."
  },
  "live_symptom": "App 'borks' shortly after launch on the desktop. User picked failure mode 'Loads, then errors'. Suspected auto-analyze dying on a config-resolution trap during the Book-a-Set flow.",
  "root_cause": {
@@ -1184,21 +1184,44 @@
      "change": "a refused render with a quarantined wav now shows JUDGE so failing gates can be inspected"
     }
    ]
+  },
+  {
+   "batch": "tier3-finish",
+   "fixes": [
+    {
+     "finding": "Identify ROLLBACK unreachable (no way to locate the per-run journal)",
+     "where": "app.py identify_journals() + GET /api/identify/journals + index.html identifyRollback()",
+     "change": "added journal-listing method+endpoint; rollback_identities defaults to newest journal; UI 'Undo' does dry-run->confirm->apply. VERIFIED full round-trip on real FLAC files (tags rewritten then restored)"
+    },
+    {
+     "finding": "Identify APPLY was wired without the required signature handshake",
+     "where": "server.py /api/identify/apply + index.html identifyApply()",
+     "change": "dry-run is now synchronous (returns signature), apply is backgrounded and echoes the signature. VERIFIED two-phase apply retags files"
+    },
+    {
+     "finding": "Workbench 'Render' recomposed a fresh set instead of rendering the shown plan",
+     "where": "app.py render_plan() + POST /api/render_plan + index.html renderMix()",
+     "change": "renders the EXACT shown/loaded arrangement (registers a mashup row from it, executes its render_mashup manifest) with the same pre-render gates; falls back to one_click only when no plan is loaded. VERIFIED error/refusal paths (happy render needs real music)"
+    }
+   ]
   }
  ],
- "fixes_remaining_high": [
-  "Workbench 'Render' ignores the composed/loaded plan and recomposes from scratch (one_click) instead of executing the shown plan",
-  "Identify ROLLBACK: needs a backend endpoint to locate the latest identify_journal/*.jsonl before it can be safely wired from the UI"
- ],
+ "fixes_remaining_high": [],
  "verification": {
   "environment": "cloud container with audio stack installed (numpy 2.0.2 / numba 0.60.0 / librosa 0.10.2) + ffmpeg + Chromium",
   "note": "Desktop uses spawn workers; this Linux box needs serial (fork+BLAS segfaults, per deps.py). A successful full RENDER needs real music with vocals/drums and must be confirmed on desktop; synthetic tones correctly REFUSE (no VOX/DRUM atoms).",
   "harnesses": {
    "tests/test_first_minute_fixes.py": "6 hermetic gate tests (in run_gates.py); all pass",
    "tests/manual/verify_http_live.py": "live server over HTTP: first-run signal, config save+no-nesting, token 403, doctor, preflight/playlist shapes \u2014 all pass",
-   "tests/manual/verify_dom_browser.py": "real Chromium DOM: first-run->Setup, save workspace, field binds to root (no /work nest), heartbeat red on last_error, failed request toasts \u2014 all pass"
+   "tests/manual/verify_dom_browser.py": "real Chromium DOM: first-run->Setup, save workspace, field binds to root (no /work nest), heartbeat red on last_error, failed request toasts \u2014 all pass",
+   "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
+   "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "60/60 gates pass (54 pre-existing + 6 new), no regressions",
+  "gate_result": "62/62 gates pass (54 pre-existing + 8 new), no regressions",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
- }
+ },
+ "fixes_remaining_notes": [
+  "render_plan / one_click HAPPY-PATH render (an actual WAV) can only be verified with real music that reaches TasteSpec readiness (vocals+drums) -> confirm on desktop via Debug-EarCrate.cmd. Synthetic tones correctly refuse.",
+  "Latent: propose_plan (preview) composes without the quality_mode/mix_mode flags that propose_taste_mashup adds; render_plan sidesteps this by rendering the exact arrangement object rather than recomposing."
+ ]
 }

@@ -206,6 +206,9 @@ class JBHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/renders":
                 self._json(200, self.core.list_renders())
                 return
+            if parsed.path == "/api/identify/journals":
+                self._json(200, self.core.identify_journals())
+                return
             if parsed.path == "/api/audio":
                 q = urllib.parse.parse_qs(parsed.query)
                 raw = (q.get("path") or [""])[0]
@@ -302,6 +305,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.run_background(self.core.one_click_mix, data)); return
             if path == "/api/one_click":
                 self._json(200, self.core.one_click_mix(data)); return
+            if path == "/api/render_plan":
+                self._json(200, self.core.run_background(self.core.render_plan, data)); return
             if path == "/api/reorganize/plan":
                 self._json(200, self.core.reorganize_source({**data, "apply": False})); return
             if path == "/api/reorganize/apply":
@@ -309,6 +314,10 @@ class JBHandler(BaseHTTPRequestHandler):
             if path == "/api/reorganize/rollback":
                 self._json(200, self.core.rollback_reorganize(data)); return
             if path == "/api/identify/apply":
+                # Dry-run (apply:false) must be SYNCHRONOUS so the UI can read the
+                # signature it has to echo back; the real apply is backgrounded.
+                if not bool(data.get("apply", False)):
+                    self._json(200, self.core.apply_identities(data)); return
                 self._json(200, self.core.run_background(self.core.apply_identities, data)); return
             if path == "/api/identify/rollback":
                 self._json(200, self.core.rollback_identities(data)); return

@@ -386,7 +386,7 @@ async function renderWorkbench(){
 }
 async function savePlan(){ if(!window.__plan){toast('Propose a plan first');return;} const name=prompt('Save plan as:','set '+new Date().toISOString().slice(0,10)); if(!name)return; try{ const j=await post('/api/timeline/save',{name, plan:window.__plan, taste_profile:S.resident}); toast(j.ok!==false?('Saved "'+name+'" · '+String(j.plan_hash||'').slice(0,8)):(j.error||'save failed')); loadPlans(); }catch(e){} }
 async function loadPlans(){ const host=el('wbPlans'); if(!host)return; try{ const j=await api('/api/timeline/list'); window.__plans=j.items||[]; host.innerHTML=window.__plans.length? window.__plans.map((p,i)=>'<span class="btn clk" onclick="loadPlan('+i+')">'+esc(p.name||'plan')+' ·'+String(p.plan_hash||'').slice(0,6)+'</span>').join('') : '<span style="font:500 9px/1 var(--mono);color:var(--faint)">no saved plans yet</span>'; }catch(e){ host.innerHTML='<span style="font:500 9px/1 var(--mono);color:var(--faint)">plans unavailable</span>'; } }
-async function loadPlan(i){ const p=(window.__plans||[])[i]; if(!p)return; try{ const j=await post('/api/timeline/load',{plan_hash:p.plan_hash}); if(j.ok!==false){ window.__plan=j.plan||j.arrangement; renderPlanRails(window.__plan); el('wbPlanMeta').textContent='loaded "'+esc(j.name||p.name||'')+'"'; toast('Loaded plan "'+(j.name||p.name||'')+'"'); } else toast(j.error||'load failed'); }catch(e){} }
+async function loadPlan(i){ const p=(window.__plans||[])[i]; if(!p)return; try{ const j=await post('/api/timeline/load',{plan_hash:p.plan_hash}); if(j.ok!==false){ window.__plan=j.plan||j.arrangement; window.__planSeed=(window.__plan&&window.__plan.params&&window.__plan.params.seed)||j.seed; window.__planFailed=false; renderPlanRails(window.__plan); el('wbPlanMeta').textContent='loaded "'+esc(j.name||p.name||'')+'" — Render to compile it'; toast('Loaded plan "'+(j.name||p.name||'')+'"'); } else toast(j.error||'load failed'); }catch(e){} }
 async function preflight(){ toast('Preflight…'); try{ const j=await post('/api/preflight',{taste_profile:S.resident, target_seconds:120}); const ok=j.ok!==false && j.ready!==false; const why=(j.warnings&&j.warnings[0])||j.error||'crate not ready'; toast('Preflight: '+(ok?('READY to render'+(j.pool_size!=null?(' · '+j.pool_size+' loops'):'')):('NOT READY — '+why))); }catch(e){} }
 function renderPipe(active){
   const steps=[['Scan','sources'],['Analyze','bpm · key · downbeats'],['Extract','loops ≤12/track'],['Ear crate','auditioned atoms'],['Graph','typed edges'],['Choose deck','feasible sources'],['Compose rails','floor · fgnd · spark'],['Pre-gates','must pass'],['Render','write wav'],['Post-gate','audible truth']];
@@ -405,7 +405,7 @@ async function proposePlan(){
   el('wbPlanMeta').textContent='composing…';
   try{ const j=await post('/api/timeline/propose',{target_seconds:120, taste_profile:S.resident});
     if(!j.ok){ el('wbPlanMeta').textContent=j.error||'refused'; el('wbPlan').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(j.error||'refused')+'</div>'; return; }
-    window.__plan=j.arrangement; const fails=((j.taste_gate||{}).failures)||[];
+    window.__plan=j.arrangement; window.__planSeed=j.seed; window.__planFailed=(((j.taste_gate||{}).failures)||[]).length>0; const fails=((j.taste_gate||{}).failures)||[];
     el('wbPlanMeta').textContent=(j.seed!=null?'seed '+j.seed:'')+' · '+(j.arrangement.bpm||0).toFixed(1)+' BPM · '+(fails.length?'REFUSED':'PASSES');
     renderPlanRails(j.arrangement); renderPre(fails); renderPipe(6);
   }catch(e){ el('wbPlanMeta').textContent='error'; }
@@ -426,7 +426,18 @@ function renderPlanRails(arr){
     +railRow('Floor','floor')+railRow('Fgnd','fgnd')+railRow('Spark','spark');
 }
 async function buildGraph(){ toast('Building pair graph…'); try{ const j=await post('/api/taste/graph',{taste_profile:S.resident}); toast(j.ok?('Graph: '+j.edges+' edges'):(j.error||'graph failed')); }catch(e){} }
-async function renderMix(){ toast('Rendering — watch Activity…'); try{ await post('/api/one_click_bg',{taste_profile:S.resident}); go('activity'); }catch(e){} }
+async function renderMix(){
+  // Render the EXACT plan shown in the Workbench when there is one; only fall back
+  // to a fresh auto-compose (one_click) when nothing is loaded.
+  if(window.__plan && window.__plan.sections){
+    if(window.__planFailed){ toast('This plan was REFUSED by the taste gate — propose again or adjust the crate'); return; }
+    toast('Rendering the shown plan — watch Activity…');
+    try{ await post('/api/render_plan',{arrangement:window.__plan, seed:window.__planSeed, taste_profile:S.resident}); go('activity'); }catch(e){}
+    return;
+  }
+  toast('Composing + rendering a fresh set — watch Activity…');
+  try{ await post('/api/one_click_bg',{taste_profile:S.resident}); go('activity'); }catch(e){}
+}
 
 /* ---------- SESSIONS ---------- */
 async function renderSessions(){
@@ -484,7 +495,7 @@ async function renderLibrary(){
     {name:'Ingest', top:'var(--acc)', desc:'Copy from any drive into the managed library. Content-hash deduped, manifest-journaled, rollback-able.', extra:'<div style="display:flex;gap:6px"><input id="ingestSrc" placeholder="source folder to copy from" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 9.5px/1 var(--mono);color:var(--ink)"><button class="btn" onclick="browseInto(\'ingestSrc\')">Browse…</button></div>', actions:[['Dry-run',"ingestRun(false)",0],['Ingest now',"ingestRun(true)",1]]},
     {name:'Organize + retag', top:'var(--edge2)', desc:'Build the Artist/Album/NN Title tree with amended tags — copies only, masters untouched.', actions:[['Preview',"libAction('/api/organize',{apply:false})",0],['Organize',"libAction('/api/organize',{apply:true})",0]]},
     {name:'Reorganize', top:'var(--edge2)', desc:'Move the ORIGINAL files in place into a clean tree. Reversible; unidentifiable → _unsorted/. Preview → Apply → Rollback.', actions:[['Preview',"reorgPreview()",0],['Apply',"reorgApply()",0],['Rollback',"reorgRollback()",0]]},
-    {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default. Step 1: Identify writes dry-run proposals. Step 2: Apply rewrites tags on ≥0.85 matches.', actions:[['1 · Identify (opt-in)',"identifyRun()",0],['2 · Apply saved',"identifyApply()",0]]},
+    {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default. Step 1: Identify writes dry-run proposals. Step 2: Apply rewrites tags on ≥0.85 matches.', actions:[['1 · Identify (opt-in)',"identifyRun()",0],['2 · Apply saved',"identifyApply()",0],['Undo',"identifyRollback()",0]]},
     {name:'Deep clean', top:'var(--edge2)', desc:'Listen to each file: real songs vs silence/static/corrupt; find empty + art-only folders.', actions:[['Scan',"libAction('/api/deepclean/scan',{})",0]]},
   ];
   scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Library</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">feed &amp; clean · sources copied, never mutated · journaled &amp; reversible</span></div>'
@@ -549,7 +560,8 @@ let MIGRATE={signature:null};
 async function migratePreview(){ toast('Migration preview…'); try{ const j=await post('/api/migrate/plan',{}); if(j.ok===false){ toast(j.error||'preview failed'); return; } MIGRATE.signature=j.signature||j.expected_signature||null; toast('DRY-RUN: '+(j.planned!=null?j.planned+' item(s) to migrate':'previewed')+(MIGRATE.signature?' — press Apply':' (nothing to migrate)')); }catch(e){} }
 async function migrateApply(){ if(!MIGRATE.signature){ toast('Preview first (dry-run before migrating)'); return; } if(!window.confirm('Migrate the legacy workspace now? Additive + journaled; nothing is deleted.')) return; try{ const j=await post('/api/migrate/apply',{signature:MIGRATE.signature}); toast(j.ok!==false?'Migration running — watch Activity':(j.error||'migrate refused (re-preview)')); if(j.ok!==false) go('activity'); }catch(e){} }
 async function identifyRun(){ toast('Identify (network · dry-run proposals)…'); try{ const j=await post('/api/identify',{}); toast(j.ok!==false?'Identify running — watch Activity, then Apply':(j.error||'identify failed')); go('activity'); }catch(e){} }
-async function identifyApply(){ if(!window.confirm('Apply saved AcoustID proposals? Rewrites tags on matched files (score ≥ 0.85). Run Identify first.'))return; try{ const j=await post('/api/identify/apply',{apply:true}); toast(j.ok!==false?'Applying identities — watch Activity':(j.error||'apply failed')); go('activity'); }catch(e){} }
+async function identifyApply(){ let dry; try{ dry=await post('/api/identify/apply',{apply:false}); }catch(e){ return; } if(dry.ok===false){ toast(dry.error||'run Identify first'); return; } const sig=dry.signature; const n=dry.would_retag!=null?dry.would_retag:0; if(!n){ toast('No proposals to apply — run Identify first'); return; } if(!window.confirm('Apply AcoustID identities? Rewrites tags on '+n+' file(s) (score ≥ 0.85). Reversible via Undo.'))return; try{ const j=await post('/api/identify/apply',{apply:true, signature:sig}); toast(j.ok!==false?'Applying identities — watch Activity':(j.error||'apply failed')); go('activity'); }catch(e){} }
+async function identifyRollback(){ let js; try{ js=await api('/api/identify/journals'); }catch(e){ return; } const items=(js&&js.items)||[]; if(!items.length){ toast('No Identify run to undo'); return; } const jp=items[0].path; try{ const dry=await post('/api/identify/rollback',{journal:jp,apply:false}); const n=dry.would_restore!=null?dry.would_restore:(dry.restored||0); if(!window.confirm('Undo the most recent Identify? Restores original tags on '+n+' file(s).'))return; const j=await post('/api/identify/rollback',{journal:jp,apply:true}); toast(j.ok!==false?('Identify undone: '+(j.restored||0)+' file(s) restored'):(j.error||'undo failed')); loadTracks(); }catch(e){} }
 async function libAction(path,body){ toast('Running '+path.split('/').pop()+'…'); try{ const j=await post(path,body); toast(path.split('/').pop()+': '+(j.dry_run?'DRY-RUN — ':'')+(j.planned!=null?j.planned+' planned':(j.ok!==false?'ok':JSON.stringify(j).slice(0,120)))); if(/scan|identify|deepclean/.test(path)) go('activity'); }catch(e){} }
 
 /* ---------- SETUP ---------- */

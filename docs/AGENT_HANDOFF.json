@@ -1,0 +1,73 @@
+{
+  "schema": "earcrate.agent_handoff/v1",
+  "generated_by": "claude-code (Opus) session on branch claude/code-buddy-communication-bp04lk",
+  "repo": "BigBirdReturns/earcrate",
+  "base_version": "v0.8.27",
+  "design_doc": "docs/FIRST_MINUTE_DESIGN.md",
+  "status": {
+    "strategy_design": "complete",
+    "qa_swarm": "running",
+    "qa_findings_embedded": false,
+    "note": "qa_findings[] will be populated and this file re-committed when the UI QA swarm completes."
+  },
+  "live_symptom": "App 'borks' shortly after launch on the desktop. User picked failure mode 'Loads, then errors'. Suspected auto-analyze dying on a config-resolution trap during the Book-a-Set flow.",
+  "root_cause": {
+    "confidence": "high (static analysis, corroborated by MILESTONES.md:46-47)",
+    "primary": "first_run_dead_end",
+    "items": [
+      {
+        "id": "first_run_dead_end",
+        "severity": "blocker",
+        "summary": "boot() defaults to renderPlay() (index.html:146,614). On a fresh box there is no config, so residents()->taste_readiness()->ensure_config() raises 'earcrate is not configured yet' (app.py:970-972). The 'Book a set' button (index.html:249) has NO config guard; clicking it runs one_click_taste_mix -> ensure_config() raises -> caught into status.last_error (app.py:5225-5227) -> user sees red 'not configured' on Activity. This is the borked first minute.",
+        "fix_steps": [1, 2, 3]
+      },
+      {
+        "id": "config_trap_A_pointer_mismatch",
+        "severity": "high",
+        "summary": "configure() WRITES the workspace pointer to visible_app_dir() (app.py:539) but load_config_if_present() READS by scanning pointer_search_dirs() (app.py:448-449), which depends on how the process was started (util.py:90-106). When they disagree, setup succeeds but the next launch via a different entry point cannot find the pointer -> config stays None -> all downstream throws 'not configured'. MILESTONES.md:46-47 records this exact defect.",
+        "fix_steps": [4]
+      },
+      {
+        "id": "config_trap_B_source_existence_gate",
+        "severity": "high",
+        "summary": "_valid_pointer() returns None if master_root does not exist on disk (app.py:470-471). A correctly-persisted config silently fails to load if the music drive is unmounted or the folder renamed; UI then lies 'not configured' instead of 'your music folder moved'.",
+        "fix_steps": [4]
+      }
+    ]
+  },
+  "key_insight": "'Book a set' (bookSet index.html:280 -> POST /api/one_click_bg server.py:301 -> one_click_taste_mix app.py:3300) is ALREADY the entire pipeline: doctor -> scan -> fail-fast harvest loop (analyze -> extract_loops -> build_ear_crate until taste_readiness().ready, app.py:3336-3363) -> build_compatibility_graph -> propose_taste_mashup -> execute_manifest. The 'JAM button' the owner remembers is this. The vertical-slice engine exists; the work is gating it behind a readiness UI and turning refusals into guidance.",
+  "readiness_ledger_rows": [
+    {"row": 1, "name": "Environment OK", "state_source": "doctor().checks[] app.py:1352-1389", "tag": "EXISTS", "gap": "doctor() opens with ensure_config() app.py:1353 so it cannot report ffmpeg-missing pre-config; split env checks from root checks"},
+    {"row": 2, "name": "Workspace configured", "state_source": "default_paths().configured app.py:556 (null => not configured)", "tag": "EXISTS"},
+    {"row": 3, "name": "Library scanned", "state_source": "scan() {total} app.py:1478 / /api/tracks count", "tag": "GAP", "gap": "no endpoint returns 'N known / N analyzed' as a first-class number"},
+    {"row": 4, "name": "Atoms extracted & approved", "state_source": "taste_readiness() app.py:2815 -> have/need/failures/pool_size", "tag": "EXISTS", "note": "failures[] IS the blocked-reason verbatim"},
+    {"row": 5, "name": "Compatibility graph built", "state_source": "build_compatibility_graph() {edges} app.py:2876 / /api/taste/graph", "tag": "GAP", "gap": "graph computed on demand, not persisted as a ready flag; no staleness marker"},
+    {"row": 6, "name": "Ready to JAM", "state_source": "taste_readiness().ready app.py:2839 AND preflight().ready app.py:3441-3462", "tag": "EXISTS", "note": "two separate calls, never unified"}
+  ],
+  "jam_preconditions": [
+    {"cond": "configured", "source": "default_paths().configured != null (app.py:556)"},
+    {"cond": "environment_ok", "source": "doctor().ok (app.py:1389); ffmpeg/ffprobe present app.py:1355-1356; roots writable"},
+    {"cond": "readiness_met", "source": "taste_readiness().ready == true, failures[] empty (app.py:2839); per-role have>=need from readiness_need() plan/math.py:49"},
+    {"cond": "preflight_passes", "source": "preflight().ready over approved loop pool (app.py:3441); guards 'No approved loops' app.py:3451"}
+  ],
+  "readiness_floors_120s_target": {"foreground": 4, "floor": 6, "bass": 3, "spark": 5, "sources": 5, "source": "plan/math.py:49-64"},
+  "roadmap": [
+    {"step": 1, "title": "Config-optional doctor + GET /api/readiness_ledger", "type": "new", "effort_days": 1, "files": ["earcrate/app.py:1352", "earcrate/ui/server.py"], "effect": "Unblocks everything; fixes pre-config runDoctor 500", "unblocks_symptom": ["first_run_dead_end"]},
+    {"step": 2, "title": "First-run routing to Setup + persistent Ledger UI", "type": "cheap", "effort_days": 1, "files": ["earcrate/ui/static/index.html:614", "index.html:359", "index.html:603"], "effect": "Kills land-on-Play dead end", "unblocks_symptom": ["first_run_dead_end"]},
+    {"step": 3, "title": "JAM disabled-with-reason bound to ledger", "type": "cheap", "effort_days": 0.5, "files": ["earcrate/ui/static/index.html:280", "index.html:249"], "effect": "Kills the silent-500 JAM", "unblocks_symptom": ["first_run_dead_end"]},
+    {"step": 4, "title": "Config-resolution trap fixes (A: write pointer to all read-dirs; B: degraded source_missing state)", "type": "new", "effort_days": 2, "files": ["earcrate/app.py:539", "earcrate/app.py:470-471", "earcrate/core/util.py:90-106"], "effect": "Durable reliability fix; without it steps 1-3 intermittently report 'not configured'", "unblocks_symptom": ["config_trap_A_pointer_mismatch", "config_trap_B_source_existence_gate"]},
+    {"step": 5, "title": "3-step Setup Wizard with live validation + workspace_candidates reasons", "type": "new", "effort_days": 2, "files": ["earcrate/ui/static/index.html:549", "earcrate/app.py:607"], "effect": "The 'walk them through setup' half of the vision"},
+    {"step": 6, "title": "Slice payoff: auto-play first render on one_click success", "type": "cheap", "effort_days": 0.5, "files": ["earcrate/ui/static/index.html:590", "earcrate/app.py:3418"], "effect": "Completes 'user hears one mashup'"},
+    {"step": 7, "title": "Graph-freshness receipt + surface janitor legacy_workspaces", "type": "new", "effort_days": 1, "files": ["earcrate/app.py:2876", "earcrate/app.py:1433"], "effect": "Deployment polish; lower urgency"},
+    {"step": 8, "title": "Debug-log Setup toggle + reveal-log button", "type": "cheap", "effort_days": 0.5, "files": ["earcrate/ui/server.py:35-76"], "effect": "Support story; no engine change"}
+  ],
+  "desktop_verification": {
+    "how": "Run Debug-EarCrate.cmd (sets EARCRATE_DEBUG=<repo>\\earcrate_debug.log, opens app + live-tail monitor window).",
+    "confirm_root_cause": "Reproduce 'Book a set'. Expect 'POST 500 ...ms /api/one_click_bg' and an ERROR block whose traceback contains 'earcrate is not configured yet' -> confirms first_run_dead_end / config trap. If the trace is something else, it is a NEW bug not covered here.",
+    "debug_log_seam": "earcrate/ui/server.py:35-76 (_DebugLog, EARCRATE_DEBUG-gated, token redacted, off by default)."
+  },
+  "already_shipped_this_branch": [
+    {"commit": "add opt-in live backend debug log", "files": ["earcrate/ui/server.py", "Debug-EarCrate.cmd", ".gitignore"]}
+  ],
+  "qa_findings": []
+}

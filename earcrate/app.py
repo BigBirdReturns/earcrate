@@ -3396,6 +3396,20 @@ class EarcrateCore:
             del recent_loop_ids[:-32]
             del recent_sources[:-32]
             return True
+        # --- PERSONA SHAPE: what actually makes the personas diverge instead of
+        # producing one identical arrangement. Derived from the persona contract
+        # (source_turnover + density_model), never hardcoded per persona:
+        #   * how long a bed / voice is HELD before rotating (girl_talk turns over
+        #     fast; troubadour holds one persistent bed; notorious rides a single
+        #     foreground voice for whole verses), and
+        #   * the simultaneous-layer budget (troubadour = minimal layering; girl_talk
+        #     = dense collage).
+        _sec_seconds = section_bars * 4 * 60.0 / max(1e-6, render_bpm)
+        floor_hold = max(1, int(round(float(profile.get("max_source_run_s") or 16.0) / max(1e-6, _sec_seconds))))
+        fg_hold = max(1, int(round(float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS) / max(1e-6, _sec_seconds))))
+        max_layers_persona = max(2, int(profile.get("max_layers") or 4))
+        held_floor: Optional[Dict[str, Any]] = None; held_floor_left = 0
+        held_fg: Optional[Dict[str, Any]] = None; held_fg_left = 0
         while bar < total_bars:
             bars = min(section_bars, total_bars - bar)
             sec_type = "drop" if idx % 4 == 0 and idx > 0 else ("build" if idx % 4 == 3 else "sustain")
@@ -3419,8 +3433,19 @@ class EarcrateCore:
                 energy = 0.74                       # sustain
             etrim = round((energy - 0.74) * 12.0, 1)   # ~ -5dB (intro) .. 0 .. +3.1dB (drop)
             low_energy = energy < 0.5
-            floor = pick(floors, None, "floor") or (floors[idx % len(floors)] if floors else None)
-            fg = pick(foreground, floor, "vocal_over_bed", role="vocal") if foreground and floor else (pick(foreground, None, "foreground", role="vocal") if foreground else None)
+            # HOLD the bed/voice for the persona's run length before rotating.
+            if held_floor is not None and held_floor_left > 0 and playable(held_floor, "floor") is not None:
+                floor = held_floor; held_floor_left -= 1
+            else:
+                floor = pick(floors, None, "floor") or (floors[idx % len(floors)] if floors else None)
+                held_floor, held_floor_left = floor, (floor_hold - 1)
+            if held_fg is not None and held_fg_left > 0 and playable(held_fg, "vocal") is not None:
+                fg = held_fg; held_fg_left -= 1
+            elif foreground:
+                fg = pick(foreground, floor, "vocal_over_bed", role="vocal") if floor else pick(foreground, None, "foreground", role="vocal")
+                held_fg, held_fg_left = fg, (fg_hold - 1)
+            else:
+                fg = None
             bass = None
             if basses and floor and not low_energy and str(floor.get("ear_role")) != "BASS_RIFF" and float(floor.get("low_share") or 0.0) < 0.34:
                 bass = pick(basses, floor, "bass_over_drums", role="bass")
@@ -3447,6 +3472,12 @@ class EarcrateCore:
             if idx == 0 and not any(x.get("role") == "vocal" or x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"} for x in layers) and foreground:
                 intro_fg = pick(foreground, floor, "vocal_over_bed", role="vocal") or foreground[0]
                 add_layer(layers, intro_fg, "vocal" if str(intro_fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(intro_fg.get("role") or "harmony"), -6.5 + etrim, 0, min(bars, 4))
+            # Persona layer budget: trim the stack to the persona's density (troubadour
+            # minimal layering -> bed + voice only; girl_talk dense). Keep the vocal and
+            # a floor; shed spark first, then bass.
+            if len(layers) > max_layers_persona:
+                _pri = {"vocal": 0, "drum_anchor": 1, "harmony": 1, "full": 1, "bass": 2}
+                layers = sorted(layers, key=lambda l: _pri.get(str(l.get("role")), 3))[:max_layers_persona]
             transition = self.plan_transition(prev_sec, sec_type, int(prev_sec.get("target_key") or target_key) if prev_sec else None, target_key, bar, bars, layers, int(params.get("chaos") or 72), int(params.get("drama") or 82), rng)
             sec = {"bar_start": bar, "bars": bars, "type": sec_type, "energy_level": round(energy, 2), "target_key": target_key, "transition_in": transition, "layers": layers}
             sections.append(sec)

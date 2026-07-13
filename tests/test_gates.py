@@ -3239,3 +3239,47 @@ def test_bakeoff_resolves_personas_cleanly(tmp_path):
         assert "taste_profile" in r and "contract" in r and "ok" in r, f"malformed bakeoff entry: {r}"
         # every persona must be either a real compose (ok) or a clean skip — never a crash/traceback
         assert r["ok"] is True or r.get("skipped") is True or r.get("error"), f"persona neither ran nor skipped cleanly: {r}"
+
+
+def test_personas_produce_divergent_arrangements(tmp_path):
+    """The three personas must produce STRUCTURALLY different arrangements from the
+    same pool — not one arrangement judged by three gate thresholds. girl_talk =
+    dense + fast source turnover; troubadour = minimal layering + held sources;
+    notorious = one foreground voice held for long runs. Driven by each persona's
+    source_turnover/density contract."""
+    import copy, statistics as st
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    base = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    pool = []
+    for m in range(6):
+        for a in base:
+            b = copy.deepcopy(a); uid = f"{a['id']}_{m}"
+            b["id"] = uid; b["atom_id"] = uid; b["source_track_key"] = f"src_{uid}"
+            b["path"] = f"/fake/{uid}.wav"; b["title"] = f"Track {uid}"
+            pool.append(b)
+
+    def shape(pid):
+        arr = core.compose_taste_arrangement(list(pool), {"taste_profile": pid, "target_seconds": 120,
+              "bpm": 120.0, "quality_mode": "stable_deck"}, seed=5)
+        secs = arr["sections"]
+        lp = [len(s["layers"]) for s in secs]
+        fg = [([l for l in s["layers"] if l.get("role") == "vocal"] or [{}])[0].get("source_track_key") for s in secs]
+        runs = []; cur = None; n = 0
+        for k in fg:
+            if k == cur and k:
+                n += 1
+            else:
+                if cur:
+                    runs.append(n)
+                cur = k; n = 1 if k else 0
+        if cur:
+            runs.append(n)
+        return {"avg_layers": st.mean(lp), "avg_fg_run": st.mean(runs) if runs else 0}
+
+    gt, tr, no = shape("girl_talk_v1"), shape("troubadour_v1"), shape("notorious_v1")
+    assert gt["avg_layers"] > tr["avg_layers"], f"girl_talk must layer denser than troubadour ({gt['avg_layers']} !> {tr['avg_layers']})"
+    assert no["avg_fg_run"] > gt["avg_fg_run"], f"notorious must hold a voice longer than girl_talk ({no['avg_fg_run']} !> {gt['avg_fg_run']})"

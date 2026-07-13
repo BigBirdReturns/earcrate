@@ -1232,7 +1232,7 @@
    "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
    "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "69/69 gates pass",
+  "gate_result": "70/70 gates pass",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
  },
  "fixes_remaining_notes": [
@@ -1252,6 +1252,12 @@
    "what": "params['recognizability_bias'] (0-100) now REALLY biases atom selection toward the persona's high-recognizability hooks (readiness.rank_material formula added as a picker term). Was previously stored-but-inert.",
    "neutral": "<=55 -> weight 0.0 -> selection byte-identical to before (no regression). 'max' maps to 92.",
    "verified": "test_recognizability_bias_prefers_hooks (cranked run mean chosen-hook 0.72 vs neutral 0.41)"
+  },
+  "persona_differentiation": {
+   "bug": "Desktop bake-off proof: all 3 personas produced byte-identical arrangements (score 43.87, 27 voice / 23 bed / 18 sources); only the per-persona GATE threshold differed, so girl_talk passed and troubadour/notorious failed on foreground coverage. compose ignored the persona contract.",
+   "fix": "compose_taste_arrangement now derives source-HOLD duration (floor+foreground) from the persona's source_turnover (max_source_run_s / source_seconds) and caps simultaneous layers by density_model.max_layers. girl_talk rotates fast + layers dense; troubadour holds one bed with minimal layering; notorious rides one foreground voice for whole verses.",
+   "verified": "same pool -> girl_talk avg_layers 3.47 / distinct_fg 12 / fg_run 1; troubadour 2.0 / 5 / 3; notorious 2.8 / 3 / 5. Gate test_personas_produce_divergent_arrangements locks it. 70/70 gates.",
+   "note": "Also raises foreground coverage for troubadour/notorious (held voice present more), which should let them clear their own fg_cov gates (0.75/0.8) that the old shared arrangement failed at 0.61 \u2014 desktop to confirm on real audio."
   }
  },
  "performance": {

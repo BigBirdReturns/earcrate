@@ -538,15 +538,19 @@ class EarcrateCore:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         pointer_body = json.dumps({"config_json": str(cfg_path)}, indent=2)
         self.pointer_path.write_text(pointer_body, encoding="utf-8")
-        # Trap A fix: load_config_if_present READS by scanning pointer_search_dirs()
-        # (which vary by how the process was started — `python -m earcrate` vs the
-        # launcher vs a driver script). Writing the pointer to ONLY visible_app_dir
-        # let a different entry point fail to find it and report "not configured" on
-        # an already-configured box (MILESTONES.md pointer-mismatch defect). Write it
-        # to every legitimate read location so the workspace resolves regardless of
-        # entry point. The pointer is one small gitignored file.
+        # Trap A fix, kept VISIBLE: load_config_if_present READS by scanning
+        # pointer_search_dirs() (which vary by entry point — `python -m earcrate` vs
+        # the launcher). Mirror the pointer to those read locations so a different
+        # entry point still resolves the workspace — but ONLY to visible, app-adjacent
+        # dirs. Never litter the user's home ROOT or a temp dir with a stray pointer
+        # (setting EARCRATE_HOME makes this a single, deterministic location).
+        _home = Path.home().resolve()
+        _tmp = Path(tempfile.gettempdir()).resolve()
         for d in pointer_search_dirs():
             with contextlib.suppress(Exception):
+                dr = d.resolve()
+                if dr == _home or dr == _tmp or _tmp in dr.parents:
+                    continue  # visible-only: no home-root / temp litter
                 target = d / self.pointer_path.name
                 if os.path.normcase(str(target.resolve())) == os.path.normcase(str(self.pointer_path.resolve())):
                     continue
@@ -1022,7 +1026,8 @@ class EarcrateCore:
                 pass
         if self.config is not None:
             return self.config.agent_root / "cache"
-        return Path(tempfile.gettempdir()) / "earcrate_cache"
+        # Pre-config fallback stays VISIBLE and app-adjacent — never a temp dir.
+        return visible_app_dir() / "cache"
 
     def _export_l3_root(self) -> None:
         """Point the L3 ArtifactStore default at a STABLE cache path so the

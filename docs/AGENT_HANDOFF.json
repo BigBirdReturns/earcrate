@@ -1275,6 +1275,15 @@
    "endpoint": "GET /api/capabilities",
    "verified": "test_machine_capabilities_probe_and_degrade (probed 4 cores here; no GPU -> noop; recommendation follows the probed GPU)",
    "next": "wire recommendations into config defaults on first-run (auto-pick workers/stem_provider/analysis depth by tier), and let the Setup wizard show 'what your box can deliver'."
+  },
+  "visible_only_defaults": {
+   "principle": "Never default to AppData or temp; everything the app writes lives in visible, app-adjacent locations. AppData is touched ONLY read-only to adopt legacy installs.",
+   "fixes": [
+    "Trap-A pointer mirror no longer writes into the home root or any temp dir (was littering ~/earcrate_workspace.json); it writes only to visible, app-adjacent dirs. Setting EARCRATE_HOME makes it a single deterministic location.",
+    "_cache_root() unconfigured fallback: visible_app_dir()/cache (was system temp).",
+    "ArtifactStore (L3) unconfigured fallback: visible_app_dir()/cache/L3, honoring EARCRATE_CACHE_ROOT (was a random mkdtemp temp dir)."
+   ],
+   "verified": "no home-root litter on configure; cache + L3 fall back under the visible app dir, never temp; 67/67 gates"
   }
  }
 }

@@ -1154,13 +1154,41 @@
      "change": "entries is an int count (not .length); shows 'N tracks proposed' + manifest link; verified entries==int over the wire"
     }
    ]
+  },
+  {
+   "batch": "tier2-dead-controls-and-transport",
+   "fixes": [
+    {
+     "finding": "Ingest dead control (no source folder -> always errored)",
+     "where": "index.html renderLibrary + ingestRun()",
+     "change": "added a source-folder input + Browse; posts {sources:[dir],apply}; VERIFIED over HTTP: dry-run plans 2 files, apply copies them"
+    },
+    {
+     "finding": "Migrate apply unreachable (only ran dry-run plan)",
+     "where": "index.html Setup + migratePreview/migrateApply()",
+     "change": "preview->apply mirroring reorg, remembers signature; VERIFIED preview returns a usable signature"
+    },
+    {
+     "finding": "Identify apply/rollback dead-end",
+     "where": "index.html + identifyRun/identifyApply()",
+     "change": "wired Identify (dry-run proposals) -> Apply (uses saved proposals, tag rewrite >=0.85); errors now surface via run_background fix. ROLLBACK intentionally NOT wired blind"
+    },
+    {
+     "finding": "Previous transport button skipped forward",
+     "where": "index.html transport + endlessPrev()",
+     "change": "added endlessPrev(); left button now steps back in the endless queue; glyphs corrected; VERIFIED wired in DOM"
+    },
+    {
+     "finding": "Judge button only on PASSED renders",
+     "where": "index.html renderSessions",
+     "change": "a refused render with a quarantined wav now shows JUDGE so failing gates can be inspected"
+    }
+   ]
   }
  ],
  "fixes_remaining_high": [
-  "Dead controls: Ingest (no source folder), Identify apply/rollback, /api/rollback, Migrate apply",
-  "Workbench Render ignores composed/loaded plan and recomposes from scratch",
-  "Judge button only on PASSED renders (can't inspect failures)",
-  "Previous transport button skips forward"
+  "Workbench 'Render' ignores the composed/loaded plan and recomposes from scratch (one_click) instead of executing the shown plan",
+  "Identify ROLLBACK: needs a backend endpoint to locate the latest identify_journal/*.jsonl before it can be safely wired from the UI"
  ],
  "verification": {
   "environment": "cloud container with audio stack installed (numpy 2.0.2 / numba 0.60.0 / librosa 0.10.2) + ffmpeg + Chromium",

@@ -93,11 +93,11 @@ button{font-family:inherit}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:540px;margin:0 auto">
       <div style="display:flex;align-items:center;gap:22px">
         <span class="clk" onclick="playDemo()" title="Synthesize a warm-up demo set" style="font:600 9px/1 var(--mono);color:var(--dim)">DEMO</span>
-        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="13" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M1 1 L10 6 L1 11 Z" fill="var(--dim)"></path></svg>
+        <svg class="clk" onclick="endlessPrev()" width="16" height="12" viewBox="0 0 16 12" title="Previous"><rect x="1" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M15 1 L6 6 L15 11 Z" fill="var(--dim)"></path></svg>
         <span onclick="togglePlay()" class="clk" style="width:40px;height:40px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px var(--accGlow)">
           <span id="playGlyph"><svg width="12" height="13" viewBox="0 0 12 13"><path d="M1 1 L11 6.5 L1 12 Z" fill="var(--accink)"></path></svg></span>
         </span>
-        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="1" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M15 1 L6 6 L15 11 Z" fill="var(--dim)"></path></svg>
+        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="13" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M1 1 L10 6 L1 11 Z" fill="var(--dim)"></path></svg>
         <span id="endlessBtn" class="clk" onclick="toggleEndless()" title="Endless radio" style="font:600 15px/1 var(--mono);color:var(--acc)">∞</span>
       </div>
       <div style="display:flex;align-items:center;gap:11px;width:100%">
@@ -435,11 +435,12 @@ async function renderSessions(){
   const rows = items.length ? items.map(s=>{
       const pass=s.passed!==false; const ink=pass?'var(--dim)':'var(--fault)'; const accent=pass?'var(--edge2)':'var(--fault)';
       const playable=s.kind==='render'&&pass;
+      const canJudge=s.kind==='render'&&s.path;  // a refusal with a quarantined wav can still be judged to see WHICH gates failed
       return '<div style="display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--edge);border-left:3px solid '+accent+';padding:12px 15px">'
         +'<span style="flex:0 0 auto;width:34px;height:34px;background:var(--panel2);border:1px solid var(--edge2);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--mono);color:var(--dim)">'+(pass?'♪':'⊘')+'</span>'
         +'<div style="min-width:0;flex:1"><div style="font-family:var(--disp);font-weight:600;font-size:16px;letter-spacing:.03em;color:var(--ink);text-transform:uppercase">'+esc(s.name||'')+'</div><div style="font:500 9.5px/1.3 var(--mono);color:var(--faint);margin-top:2px">'+esc((s.meta||'')+' · '+(s.mtime||''))+'</div><div style="font:500 9px/1.3 var(--mono);color:'+ink+'">'+esc(s.receipts||'')+'</div></div>'
         +'<span style="font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:'+ink+'">'+(pass?'PASS':'REFUSED')+'</span>'
-        +(playable?('<span onclick=\'setPlayer('+JSON.stringify(s.path)+')\' class="btn clk">PLAY ▸</span><span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span><span onclick=\'openFolder('+JSON.stringify(s.path)+')\' class="btn clk">OPEN</span>'):('<span onclick="go(\'crate\')" class="btn clk">WHY ▸</span>'))
+        +(playable?('<span onclick=\'setPlayer('+JSON.stringify(s.path)+')\' class="btn clk">PLAY ▸</span><span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span><span onclick=\'openFolder('+JSON.stringify(s.path)+')\' class="btn clk">OPEN</span>'):((canJudge?'<span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span>':'')+'<span onclick="go(\'crate\')" class="btn clk">WHY ▸</span>'))
         +'</div>';
     }).join('') : '<div class="lbl" style="color:var(--faint)">no sessions yet — book a set from Play</div>';
   scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Sessions</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">every render AND every refusal · a refusal is a session too</span></div>'
@@ -480,10 +481,10 @@ async function renderPerfStages(){
 async function renderLibrary(){
   const scr=el('scr_library');
   const mods=[
-    {name:'Ingest', top:'var(--acc)', desc:'Copy from any drive into the managed library. Content-hash deduped, manifest-journaled, rollback-able.', actions:[['Dry-run',"libAction('/api/ingest',{apply:false})",0],['Ingest now',"libAction('/api/ingest',{apply:true})",1]]},
+    {name:'Ingest', top:'var(--acc)', desc:'Copy from any drive into the managed library. Content-hash deduped, manifest-journaled, rollback-able.', extra:'<div style="display:flex;gap:6px"><input id="ingestSrc" placeholder="source folder to copy from" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 9.5px/1 var(--mono);color:var(--ink)"><button class="btn" onclick="browseInto(\'ingestSrc\')">Browse…</button></div>', actions:[['Dry-run',"ingestRun(false)",0],['Ingest now',"ingestRun(true)",1]]},
     {name:'Organize + retag', top:'var(--edge2)', desc:'Build the Artist/Album/NN Title tree with amended tags — copies only, masters untouched.', actions:[['Preview',"libAction('/api/organize',{apply:false})",0],['Organize',"libAction('/api/organize',{apply:true})",0]]},
     {name:'Reorganize', top:'var(--edge2)', desc:'Move the ORIGINAL files in place into a clean tree. Reversible; unidentifiable → _unsorted/. Preview → Apply → Rollback.', actions:[['Preview',"reorgPreview()",0],['Apply',"reorgApply()",0],['Rollback',"reorgRollback()",0]]},
-    {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default, dry-run proposals.', actions:[['Identify (opt-in)',"libAction('/api/identify',{})",0]]},
+    {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default. Step 1: Identify writes dry-run proposals. Step 2: Apply rewrites tags on ≥0.85 matches.', actions:[['1 · Identify (opt-in)',"identifyRun()",0],['2 · Apply saved',"identifyApply()",0]]},
     {name:'Deep clean', top:'var(--edge2)', desc:'Listen to each file: real songs vs silence/static/corrupt; find empty + art-only folders.', actions:[['Scan',"libAction('/api/deepclean/scan',{})",0]]},
   ];
   scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Library</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">feed &amp; clean · sources copied, never mutated · journaled &amp; reversible</span></div>'
@@ -495,7 +496,7 @@ async function renderLibrary(){
     +'<button class="btn primary" onclick="post(\'/api/ear_crate/build\',{taste_profile:S.resident,force:false}).then(j=>toast(\'Ear crate: \'+(j.inserted||0)+\' new, \'+(j.adopted||0)+\' adopted\'))">Build ear crate</button>'
     +'</div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">'
-    +mods.map(m=>'<div style="background:var(--panel);border:1px solid var(--edge);border-top:2px solid '+m.top+';padding:13px 14px;display:flex;flex-direction:column;gap:8px"><div style="font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.04em;color:var(--ink);text-transform:uppercase">'+m.name+'</div><div style="font:400 10px/1.5 var(--mono);color:var(--dim);flex:1">'+m.desc+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'+m.actions.map(a=>'<span onclick="'+a[1]+'" class="clk" style="font:600 8.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:'+(a[2]?'var(--accink)':'var(--dim)')+';background:'+(a[2]?'var(--acc)':'var(--panel2)')+';border:1px solid '+(a[2]?'var(--acc)':'var(--edge2)')+';padding:8px 11px">'+a[0]+'</span>').join('')+'</div></div>').join('')
+    +mods.map(m=>'<div style="background:var(--panel);border:1px solid var(--edge);border-top:2px solid '+m.top+';padding:13px 14px;display:flex;flex-direction:column;gap:8px"><div style="font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.04em;color:var(--ink);text-transform:uppercase">'+m.name+'</div><div style="font:400 10px/1.5 var(--mono);color:var(--dim);flex:1">'+m.desc+'</div>'+(m.extra||'')+'<div style="display:flex;gap:7px;flex-wrap:wrap">'+m.actions.map(a=>'<span onclick="'+a[1]+'" class="clk" style="font:600 8.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:'+(a[2]?'var(--accink)':'var(--dim)')+';background:'+(a[2]?'var(--acc)':'var(--panel2)')+';border:1px solid '+(a[2]?'var(--acc)':'var(--edge2)')+';padding:8px 11px">'+a[0]+'</span>').join('')+'</div></div>').join('')
     +'</div>'
     +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
     +'<div class="card" style="flex:1;min-width:320px"><div class="lbl" style="margin-bottom:10px">[ Loop review // quota approval ]</div>'
@@ -543,6 +544,12 @@ async function loadTracks(){
     el('libTracks').innerHTML=items.slice(0,200).map(t=>'<div style="display:flex;font:500 10.5px/1 var(--mono);color:var(--dim);padding:9px 0;border-bottom:1px solid var(--edge)"><span style="flex:2;color:var(--ink)">'+esc(t.title||(t.path?t.path.split(/[\\/]/).pop():'—'))+'</span><span style="flex:1.4">'+esc(t.artist||'—')+'</span><span style="width:60px">'+(t.bpm!=null?Math.round(t.bpm):'–')+'</span><span style="width:50px">'+keyName(t.key_root,t.key_mode)+'</span><span style="width:60px">'+(t.vocal_likelihood!=null?Number(t.vocal_likelihood).toFixed(2):'–')+'</span><span style="width:60px">'+(t.loop_count!=null?t.loop_count:0)+'</span></div>').join('') || '<div class="lbl" style="color:var(--faint);padding-top:10px">no tracks — Scan a music folder in Setup</div>';
   }catch(e){ el('libTracks').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; }
 }
+async function ingestRun(apply){ const src=((el('ingestSrc')&&el('ingestSrc').value)||'').trim(); if(!src){ toast('Pick a source folder to ingest from'); return; } toast(apply?'Ingesting…':'Ingest dry-run…'); try{ const j=await post('/api/ingest',{sources:[src],apply}); if(j.ok===false){ toast(j.error||'ingest failed'); return; } const n=(j.planned!=null?j.planned:(j.copied||0)); toast('Ingest '+(apply?'':'dry-run · ')+n+' file(s)'+(apply?' copied':' to copy')+(j.skipped_duplicates?(' · '+j.skipped_duplicates+' dupes skipped'):'')); if(apply) loadTracks(); }catch(e){} }
+let MIGRATE={signature:null};
+async function migratePreview(){ toast('Migration preview…'); try{ const j=await post('/api/migrate/plan',{}); if(j.ok===false){ toast(j.error||'preview failed'); return; } MIGRATE.signature=j.signature||j.expected_signature||null; toast('DRY-RUN: '+(j.planned!=null?j.planned+' item(s) to migrate':'previewed')+(MIGRATE.signature?' — press Apply':' (nothing to migrate)')); }catch(e){} }
+async function migrateApply(){ if(!MIGRATE.signature){ toast('Preview first (dry-run before migrating)'); return; } if(!window.confirm('Migrate the legacy workspace now? Additive + journaled; nothing is deleted.')) return; try{ const j=await post('/api/migrate/apply',{signature:MIGRATE.signature}); toast(j.ok!==false?'Migration running — watch Activity':(j.error||'migrate refused (re-preview)')); if(j.ok!==false) go('activity'); }catch(e){} }
+async function identifyRun(){ toast('Identify (network · dry-run proposals)…'); try{ const j=await post('/api/identify',{}); toast(j.ok!==false?'Identify running — watch Activity, then Apply':(j.error||'identify failed')); go('activity'); }catch(e){} }
+async function identifyApply(){ if(!window.confirm('Apply saved AcoustID proposals? Rewrites tags on matched files (score ≥ 0.85). Run Identify first.'))return; try{ const j=await post('/api/identify/apply',{apply:true}); toast(j.ok!==false?'Applying identities — watch Activity':(j.error||'apply failed')); go('activity'); }catch(e){} }
 async function libAction(path,body){ toast('Running '+path.split('/').pop()+'…'); try{ const j=await post(path,body); toast(path.split('/').pop()+': '+(j.dry_run?'DRY-RUN — ':'')+(j.planned!=null?j.planned+' planned':(j.ok!==false?'ok':JSON.stringify(j).slice(0,120)))); if(/scan|identify|deepclean/.test(path)) go('activity'); }catch(e){} }
 
 /* ---------- SETUP ---------- */
@@ -568,7 +575,7 @@ async function renderSetup(){
       +'<div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font:600 11px/1.2 var(--mono);color:var(--ink)">AcoustID identify</div><div style="font:400 9px/1.4 var(--mono);color:var(--faint);margin-top:3px">off by default · the core never touches the network</div></div><span style="font:600 9px/1 var(--mono);letter-spacing:.1em;color:var(--fault);border:1px solid var(--fault);padding:8px 12px">OFF</span></div>'
       +'<div style="font:500 9px/1 var(--mono);color:var(--faint);margin-top:12px">key · <span style="color:var(--dim)">EARCRATE_ACOUSTID_KEY</span> — free from acoustid.org</div></div>'
     +'<div class="card"><div class="lbl" style="margin-bottom:11px">[ Health &amp; migration ]</div>'
-      +'<div style="display:flex;gap:7px;margin-bottom:11px"><button class="btn" onclick="runDoctor()">Run doctor</button><button class="btn" onclick="libAction(\'/api/migrate/plan\',{})">Migrate legacy</button></div>'
+      +'<div style="display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap"><button class="btn" onclick="runDoctor()">Run doctor</button><button class="btn" onclick="migratePreview()">Migrate: preview</button><button class="btn" onclick="migrateApply()">Migrate: apply</button></div>'
       +'<div id="doctorOut" style="font:500 9.5px/1.6 var(--mono);color:var(--faint)">doctor not run yet</div></div>'
     +'</div>'
     +'<div class="card" style="max-width:1100px"><div class="lbl" style="margin-bottom:11px">[ Skin ]</div><div style="display:flex;gap:10px;flex-wrap:wrap">'
@@ -595,6 +602,7 @@ function ecShuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.ran
 async function endlessQueue(){ const j=await api('/api/renders'); return (j.items||[]).filter(r=>r.current_engine && r.quality_gate_passed!==false).map(r=>r.path); }
 async function toggleEndless(){ if(ENDLESS.on){ ENDLESS.on=false; AP().pause(); el('endlessBtn').style.color='var(--dim)'; return; } const items=await endlessQueue(); if(!items.length){ toast('No renders yet — Play demo or Book a set'); return; } ENDLESS.on=true; ENDLESS.queue=ecShuffle(items.slice()); ENDLESS.i=-1; el('endlessBtn').style.color='var(--acc)'; endlessNext(); }
 function endlessNext(){ if(!ENDLESS.on)return; ENDLESS.i=(ENDLESS.i+1)%ENDLESS.queue.length; setPlayer(ENDLESS.queue[ENDLESS.i]); }
+function endlessPrev(){ if(!ENDLESS.on||!ENDLESS.queue.length){ const a=AP(); if(a.src) a.currentTime=0; return; } ENDLESS.i=(ENDLESS.i-1+ENDLESS.queue.length)%ENDLESS.queue.length; setPlayer(ENDLESS.queue[ENDLESS.i]); }
 function endlessSkip(){ if(ENDLESS.on) endlessNext(); }
 async function playDemo(){ toast('Synthesizing a warm-up demo set…'); try{ await post('/api/demo/seed',{count:8}); const items=await endlessQueue(); if(items.length){ ENDLESS.on=true; ENDLESS.queue=ecShuffle(items.slice()); ENDLESS.i=-1; el('endlessBtn').style.color='var(--acc)'; endlessNext(); toast('Demo set playing endlessly. Book a set to compile YOUR library.'); } }catch(e){} }
 async function station(sig){ try{ await post('/api/station/feedback',{signal:sig}); toast(sig==='fire'?'🔥 hotter — biases the next compile':sig==='ice'?'🧊 cooler — biases the next compile':'⏭ logged'); }catch(e){} }

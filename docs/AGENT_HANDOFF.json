@@ -1137,17 +1137,40 @@
      "finding": "500 tracebacks / api() rejections never shown; pollStatus lies green",
      "where": "index.html boot()+pollStatus",
      "change": "global unhandledrejection toast; header dot goes red on last_error instead of staying SYSTEM ONLINE"
+    },
+    {
+     "finding": "Preflight always READY (frontend read phantom j.failures)",
+     "where": "index.html preflight()",
+     "change": "reads j.ready + j.warnings (backend crate_readiness_audit shape); verified against live preflight output"
+    },
+    {
+     "finding": "Perf 'Stages this run' always empty",
+     "where": "index.html renderPerfStages()",
+     "change": "reads p.ledger.stages (last_perf returns {ok,path,ledger}); verified stages=[{name,ok,seconds,...}]"
+    },
+    {
+     "finding": "Playlist always '0 tracks'",
+     "where": "index.html proposePlaylist()",
+     "change": "entries is an int count (not .length); shows 'N tracks proposed' + manifest link; verified entries==int over the wire"
     }
    ]
   }
  ],
  "fixes_remaining_high": [
-  "Preflight always reports READY (frontend reads j.failures, backend returns j.warnings/j.ready) \u2014 readiness surface",
   "Dead controls: Ingest (no source folder), Identify apply/rollback, /api/rollback, Migrate apply",
   "Workbench Render ignores composed/loaded plan and recomposes from scratch",
-  "Perf 'Stages this run' panel reads wrong shape (always empty)",
-  "Playlist count always 0 + open link never appears (shape mismatch)",
   "Judge button only on PASSED renders (can't inspect failures)",
   "Previous transport button skips forward"
- ]
+ ],
+ "verification": {
+  "environment": "cloud container with audio stack installed (numpy 2.0.2 / numba 0.60.0 / librosa 0.10.2) + ffmpeg + Chromium",
+  "note": "Desktop uses spawn workers; this Linux box needs serial (fork+BLAS segfaults, per deps.py). A successful full RENDER needs real music with vocals/drums and must be confirmed on desktop; synthetic tones correctly REFUSE (no VOX/DRUM atoms).",
+  "harnesses": {
+   "tests/test_first_minute_fixes.py": "6 hermetic gate tests (in run_gates.py); all pass",
+   "tests/manual/verify_http_live.py": "live server over HTTP: first-run signal, config save+no-nesting, token 403, doctor, preflight/playlist shapes \u2014 all pass",
+   "tests/manual/verify_dom_browser.py": "real Chromium DOM: first-run->Setup, save workspace, field binds to root (no /work nest), heartbeat red on last_error, failed request toasts \u2014 all pass"
+  },
+  "gate_result": "60/60 gates pass (54 pre-existing + 6 new), no regressions",
+  "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
+ }
 }

@@ -1005,21 +1005,97 @@ class EarcrateCore:
         for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "cache" / "L3", c.agent_root / "logs"]:
             p.mkdir(parents=True, exist_ok=True)
 
+    def _cache_root(self) -> Path:
+        """Where the HOT, regenerable cache lives (L3 separated stems + transform
+        clips). Order: EARCRATE_CACHE_ROOT (point this at a fast NVMe scratch,
+        independent of where masters/workspace live) > agent_root/cache >
+        a temp dir when unconfigured. Everything here is content-addressed and
+        evictable, so a fast, even small, disk is ideal — nothing here is a source
+        of truth. Defaulting to agent_root/cache keeps the pre-existing behavior."""
+        env = os.environ.get("EARCRATE_CACHE_ROOT")
+        if env:
+            try:
+                p = Path(env).expanduser()
+                p.mkdir(parents=True, exist_ok=True)
+                return p
+            except Exception:
+                pass
+        if self.config is not None:
+            return self.config.agent_root / "cache"
+        return Path(tempfile.gettempdir()) / "earcrate_cache"
+
     def _export_l3_root(self) -> None:
-        """Point the L3 ArtifactStore default at a STABLE workspace path so the
+        """Point the L3 ArtifactStore default at a STABLE cache path so the
         StemProvider's store and the renderer's get("artifacts") resolve to the
         SAME on-disk root (a produced stem key actually resolves). Without this a
         default ArtifactStore() lands in a private mkdtemp and the two halves of
         the stem path never meet."""
-        c = self.config
-        if not c:
+        if self.config is None:
             return
-        l3 = c.agent_root / "cache" / "L3"
+        l3 = self._cache_root() / "L3"
         try:
             l3.mkdir(parents=True, exist_ok=True)
         except Exception:
             pass
         os.environ["EARCRATE_L3_ROOT"] = str(l3)
+
+    def machine_capabilities(self) -> Dict[str, Any]:
+        """Probe THIS box once and report what it can deliver, plus the settings
+        that scale to it — so the app is capability-aware and degrades gracefully
+        instead of assuming any one machine. Config-optional (useful pre-setup).
+        Nothing here is hardcoded to a specific rig: everything derives from probes.
+        """
+        cores = int(os.cpu_count() or 2)
+        ram_gb: Optional[float] = None
+        try:
+            if hasattr(os, "sysconf") and "SC_PHYS_PAGES" in os.sysconf_names and "SC_PAGE_SIZE" in os.sysconf_names:
+                ram_gb = round(os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / (1024 ** 3), 1)
+        except Exception:
+            ram_gb = None
+        gpu: Dict[str, Any] = {"cuda": False, "name": None, "vram_gb": None}
+        try:
+            import torch  # type: ignore
+            if torch.cuda.is_available():
+                gpu["cuda"] = True
+                gpu["name"] = torch.cuda.get_device_name(0)
+                gpu["vram_gb"] = round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 1)
+        except Exception:
+            pass
+        stems = stem_capability()
+        cache_root = self._cache_root()
+        cache_source = "EARCRATE_CACHE_ROOT" if os.environ.get("EARCRATE_CACHE_ROOT") else ("workspace" if self.config is not None else "temp")
+        # Cheap fsync latency probe of the cache disk (is that NVMe actually fast?).
+        cache_write_ms: Optional[float] = None
+        try:
+            cache_root.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=str(cache_root), prefix=".cache_probe_", delete=True) as fh:
+                t0 = time.perf_counter()
+                fh.write(b"0" * (1024 * 256)); fh.flush(); os.fsync(fh.fileno())
+                cache_write_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        except Exception:
+            cache_write_ms = None
+        # Graceful, probe-derived recommendations — deliver to the ceiling, degrade cleanly.
+        gpu_on = bool(gpu["cuda"])
+        if gpu_on and cores >= 12:
+            tier = "workstation"
+        elif gpu_on:
+            tier = "gpu_laptop"
+        elif cores >= 8:
+            tier = "cpu_strong"
+        else:
+            tier = "modest"
+        recommended = {
+            "workers": max(1, cores - 2),
+            "stem_provider": "demucs" if gpu_on else "noop",
+            "stem_separation": "vocals+instrumental" if gpu_on else "off (full-mix beds; no CPU-melt separation)",
+            "analysis_seconds": 180 if (ram_gb is None or ram_gb >= 8) else 120,
+            "cache_root": str(cache_root),
+            "tier": tier,
+        }
+        return {"ok": True, "cpu_cores": cores, "ram_gb": ram_gb, "gpu": gpu,
+                "stem_capability": stems, "cache_root": str(cache_root),
+                "cache_root_source": cache_source, "cache_write_ms": cache_write_ms,
+                "recommended": recommended}
 
     def connect_db(self) -> None:
         c = self.ensure_config()
@@ -4573,7 +4649,7 @@ class EarcrateCore:
         mix = np.zeros(total_len, dtype=np.float32)
         audio_cache: Dict[str, np.ndarray] = {}
         transform_cache: Dict[str, np.ndarray] = {}
-        transform_cache_dir = c.agent_root / "cache" / "transforms" / ENGINE_VERSION
+        transform_cache_dir = self._cache_root() / "transforms" / ENGINE_VERSION
         transform_cache_dir.mkdir(parents=True, exist_ok=True)
         max_tail_decks = max(1, min(6, int((arrangement.get("params") or {}).get("max_aux_decks") or 3)))
         report: Dict[str, Any] = {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "bpm": bpm, "render_timestamp": now_utc(), "dj_compiler": arrangement.get("dj_compiler") or {}, "world_model": arrangement.get("world_model") or {}, "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "candidate_search": arrangement.get("candidate_search") or {}, "deck_model": {"version": "v0.5.17", "model": "varispeed_lattice_dry_multideck_tail_overlay", "max_aux_decks": max_tail_decks, "rule": "incoming downbeat stays on grid; only dry, role-approved outgoing decks overhang into the transition window"}, "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0}, "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0}

@@ -153,3 +153,41 @@ def test_render_plan_refuses_cleanly(tmp_path):
     # An empty/failing plan is refused by the pre-render gate, never rendered as theater.
     e2 = core.render_plan({"arrangement": {"sections": [{"bars": 8, "layers": []}], "bpm": 120, "params": {"seed": 7}}})
     assert isinstance(e2, dict) and (e2.get("ok") is False or "render" in e2)
+
+
+def test_machine_capabilities_probe_and_degrade(tmp_path):
+    """The capability probe must report the real box (never assume one) and derive
+    settings that degrade gracefully: no CUDA -> noop stems; the recommended stem
+    provider must match the probed GPU."""
+    core, _ = _core(tmp_path)
+    cap = core.machine_capabilities()  # config-optional
+    assert cap.get("ok") and cap.get("cpu_cores", 0) >= 1
+    rec = cap.get("recommended") or {}
+    assert rec.get("stem_provider") in ("noop", "demucs")
+    # capability-aware, not hardcoded: demucs iff a CUDA GPU was actually probed
+    assert (rec["stem_provider"] == "demucs") == bool(cap.get("gpu", {}).get("cuda")), \
+        "stem provider recommendation must follow the probed GPU, not a hardcoded assumption"
+    assert rec.get("workers", 0) >= 1 and rec.get("tier")
+
+
+def test_cache_root_redirects_to_fast_disk(tmp_path):
+    """The hot cache (L3 stems + transforms) must follow EARCRATE_CACHE_ROOT so it
+    can live on a fast NVMe independent of the workspace, and default to
+    agent_root/cache when unset (no regression)."""
+    import os
+    core, music = _core(tmp_path)
+    core.configure_workspace({"music_folder": str(music), "workspace_folder": str(tmp_path / "WS")})
+    agent = str(core.config.agent_root)
+
+    os.environ.pop("EARCRATE_CACHE_ROOT", None)
+    core._export_l3_root()
+    assert agent in os.environ["EARCRATE_L3_ROOT"], "default cache must live under agent_root"
+
+    nvme = tmp_path / "nvme"; nvme.mkdir()
+    os.environ["EARCRATE_CACHE_ROOT"] = str(nvme)
+    try:
+        core._export_l3_root()
+        assert str(nvme) in os.environ["EARCRATE_L3_ROOT"], "EARCRATE_CACHE_ROOT must redirect the cache"
+        assert str(nvme) in str(core._cache_root())
+    finally:
+        os.environ.pop("EARCRATE_CACHE_ROOT", None)

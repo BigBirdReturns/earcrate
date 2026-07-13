@@ -209,6 +209,9 @@ class JBHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/identify/journals":
                 self._json(200, self.core.identify_journals())
                 return
+            if parsed.path == "/api/capabilities":
+                self._json(200, self.core.machine_capabilities())
+                return
             if parsed.path == "/api/audio":
                 q = urllib.parse.parse_qs(parsed.query)
                 raw = (q.get("path") or [""])[0]

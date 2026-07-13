@@ -1232,7 +1232,7 @@
    "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
    "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "65/65 gates pass (54 pre-existing + 11 new), no regressions",
+  "gate_result": "67/67 gates pass (54 pre-existing + 13 new), no regressions",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
  },
  "fixes_remaining_notes": [
@@ -1264,6 +1264,17 @@
     "Pre-separate the render's unique (pcm_sha, role) stems BEFORE the single-threaded mix loop so the GPU is fed continuously instead of lazily one file at a time.",
     "Parallelize per-layer librosa transforms (time-stretch/pitch) across cores to lift render-phase CPU from ~1 core."
    ]
+  },
+  "cache_root_nvme": {
+   "what": "Hot regenerable cache (L3 separated stems + transform clips) now follows EARCRATE_CACHE_ROOT, so it can live on a fast NVMe scratch INDEPENDENT of where masters/workspace live. Defaults to agent_root/cache when unset (no regression).",
+   "seam": "EARCRATE_CACHE_ROOT env (same pattern as EARCRATE_HOME/L3/STEMS); _cache_root() drives _export_l3_root + transform_cache_dir.",
+   "verified": "test_cache_root_redirects_to_fast_disk (redirects to NVMe; defaults to workspace)"
+  },
+  "capability_awareness": {
+   "what": "machine_capabilities() probes THIS box (cores, RAM, CUDA GPU+VRAM, stem capability, cache disk fsync latency) and derives scaled, graceful recommendations (workers, stem_provider, analysis_seconds, tier) \u2014 never hardcoded to one rig; degrades to noop stems with no GPU.",
+   "endpoint": "GET /api/capabilities",
+   "verified": "test_machine_capabilities_probe_and_degrade (probed 4 cores here; no GPU -> noop; recommendation follows the probed GPU)",
+   "next": "wire recommendations into config defaults on first-run (auto-pick workers/stem_provider/analysis depth by tier), and let the Setup wizard show 'what your box can deliver'."
   }
  }
 }

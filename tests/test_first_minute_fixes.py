@@ -285,3 +285,19 @@ def test_relocate_workspace_preserves_db(tmp_path):
     assert not (new / "agent" / "config.json").exists(), "stale config must be dropped"
     assert not (new / "agent" / "cache").exists(), "regenerable cache must not be moved"
     assert not (old / "agent").exists(), "old tree must be moved out"
+
+
+def test_render_filename_carries_the_persona():
+    """The render filename must encode the PERSONA, so the same set rendered under
+    different TasteSpecs is distinguishable on disk (girl_talk collage vs
+    notorious album-marriage) rather than colliding on set-name+seed alone."""
+    from earcrate.core.util import render_output_name
+    gt = render_output_name("Friday Night", "girl_talk_v1", "earcrate_v3", "abcdef1234567890", 7)
+    no = render_output_name("Friday Night", "notorious_v1", "earcrate_v3", "abcdef1234567890", 7)
+    assert "girl_talk_v1" in gt and gt.endswith(".wav"), gt
+    assert "notorious_v1" in no, no
+    # Same set + engine + arrangement + seed but different persona -> different file.
+    assert gt != no, "persona must make the filename distinct"
+    # Path-hostile set names are sanitized (no separators leak into the filename).
+    nasty = render_output_name("A/B:C*?", "girl_talk_v1", "earcrate_v3", "deadbeefcafef00d", 1)
+    assert "/" not in nasty and ":" not in nasty and "*" not in nasty, nasty

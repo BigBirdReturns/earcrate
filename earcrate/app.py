@@ -3393,7 +3393,10 @@ class EarcrateCore:
             failures = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
             raise PlanRejectedError("TasteSpec pre-render gate refused theater: " + "; ".join(failures), arrangement, arr_sha)
         mashup_id = ulidish()
-        render_name = f"{safe_name(name)}-{ENGINE_VERSION}-{arr_sha[:8]}-{seed}.wav"
+        # Persona belongs in the filename: the same set rendered under different
+        # TasteSpecs is a DIFFERENT mashup, and on disk you must be able to tell a
+        # girl_talk collage from a notorious album-marriage at a glance.
+        render_name = render_output_name(name, taste_profile, ENGINE_VERSION, arr_sha, seed)
         dst = c.working_root / "renders" / render_name
         self.conn().execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
         self.conn().commit()

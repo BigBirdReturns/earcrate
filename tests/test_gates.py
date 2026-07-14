@@ -3724,3 +3724,35 @@ def test_judge_contracts_agree_on_low200_direction():
         dry_low200_ok = not any("mud wall" in f for f in dry["failures"])
         assert v1_1_ok == expect_ok
         assert dry_low200_ok == expect_ok, (low200, dry["failures"])
+
+
+def test_remix_personas_exist_with_distinct_spectral_targets():
+    """Branchez (bright/808/fast) and Pretty Lights (warm/vinyl/slow) are distinct
+    remix personas with their OWN spectral gate targets."""
+    from earcrate.tastespec.profiles import load_tastespec, available_profiles
+    assert {"remix_branchez_v1", "remix_prettylights_v1"} <= set(available_profiles())
+    br = load_tastespec("remix_branchez_v1")
+    pl = load_tastespec("remix_prettylights_v1")
+    assert br.get("mode") == "remix" and pl.get("mode") == "remix"
+    # Pretty Lights is deliberately darker: lower high3000 target + floor than Branchez.
+    assert pl["spectral_target"]["high3000_share"]["target"] < br["spectral_target"]["high3000_share"]["target"]
+    assert pl["spectral_target"]["high3000_share"]["floor_fail"] < br["spectral_target"]["high3000_share"]["floor_fail"]
+    # And both tolerate a warmer top than Girl Talk's bright reference.
+    from earcrate.judge.audio import GT_SPECTRAL_PROFILE
+    assert pl["spectral_target"]["high3000_share"]["floor_fail"] < GT_SPECTRAL_PROFILE["high3000_share"]["floor_fail"]
+
+
+def test_per_persona_gate_judges_a_warm_remix_on_its_own_aesthetic():
+    """A vinyl-warm render (high3000 0.05) that FAILS the bright Girl Talk presence
+    floor must PASS under the Pretty Lights profile -- judged on its own aesthetic,
+    not a foreign one. Coverage/timing stay persona-independent."""
+    core = EarcrateCore()
+    from earcrate.judge.audio import drydeck_quality_gate
+    warm = {"peak": 0.6, "audible_seconds": 118.0, "active_coverage_ratio": 0.92,
+            "silence_ratio": 0.08, "first_audible_s": 1.0, "largest_silence_gap_s": 4.0,
+            "rms_std_db": 4.0, "low200_share": 0.30, "high3000_share": 0.05}
+    gt = drydeck_quality_gate(warm, 120.0)                       # default GT profile
+    pl_prof = core._persona_spectral_profile("remix_prettylights_v1")
+    pl = drydeck_quality_gate(warm, 120.0, pl_prof)
+    assert not gt["passed"] and any("dark" in f for f in gt["failures"])
+    assert pl["passed"], f"warm render must pass on Pretty Lights' own target: {pl['failures']}"

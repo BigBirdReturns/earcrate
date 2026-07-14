@@ -110,16 +110,23 @@ GT_SPECTRAL_PROFILE = {
 }
 
 
-def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float) -> Dict[str, Any]:
+def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float,
+                         spectral_profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Post-render gate with a user-audible coverage contract.
 
     A render is not successful merely because it is a correctly sized WAV. For a
     sketch of one minute or longer, most of the timeline must contain audible
     program material, the first music must arrive promptly, and the largest dead
-    gap must stay bounded. The spectral/dynamics floors are calibrated to the
-    REAL Girl Talk distribution (see GT_SPECTRAL_PROFILE) so a render only
-    "passes" if it actually lands in the ballpark of the reference catalog.
+    gap must stay bounded.
+
+    The spectral/dynamics targets default to the REAL Girl Talk distribution
+    (GT_SPECTRAL_PROFILE), but a PERSONA may pass its own ``spectral_profile`` so
+    it is judged on its OWN aesthetic: a warm, vinyl-rolled-off chopped-soul remix
+    (Pretty Lights) legitimately has less >3kHz air than a bright modern collage,
+    and must not fail a Girl-Talk presence floor to be "correct". Coverage/timing
+    rules are persona-independent (silence is silence).
     """
+    prof = spectral_profile or GT_SPECTRAL_PROFILE
     failures: List[str] = []
     warnings: List[str] = []
     if target_seconds >= 60:
@@ -150,8 +157,8 @@ def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float) -> Di
             failures.append(f"largest silent gap too long at {largest_gap:.2f}s")
         # Dynamics: real Girl Talk rms_std_db mean 5.31 [3.23-7.62]. Target ~5;
         # a usable sketch clears ~3.5; below 1.6 the render is effectively flat.
-        rms_floor = GT_SPECTRAL_PROFILE["rms_std_db"]["floor"]
-        rms_target = GT_SPECTRAL_PROFILE["rms_std_db"]["target"]
+        rms_floor = prof["rms_std_db"]["floor"]
+        rms_target = prof["rms_std_db"]["target"]
         if rms_std < 1.6:
             failures.append("rms_std_db catastrophically low; render is effectively flat")
         elif rms_std < rms_floor:
@@ -162,7 +169,7 @@ def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float) -> Di
         # ~0.20 [0.07-0.31]; earcrate renders measured 0.59 -- a bass mud wall
         # from beds that were never high-passed. The old gate REWARDED that
         # (required low200 >= 0.38); it is inverted here to catch the mud.
-        lo = GT_SPECTRAL_PROFILE["low200_share"]
+        lo = prof["low200_share"]
         if low200 > lo["ceiling_fail"]:
             failures.append(
                 "low200_share %.2f is a low-end mud wall (real Girl Talk ~0.20, ceiling %.2f); high-pass the beds"
@@ -176,7 +183,7 @@ def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float) -> Di
         # Presence: real Girl Talk high3000_share mean 0.31 [0.19-0.53]; earcrate
         # renders measured 0.031 -- 10x too dark. The old floor 0.030 let that
         # pass; recalibrated to the real distribution.
-        hi = GT_SPECTRAL_PROFILE["high3000_share"]
+        hi = prof["high3000_share"]
         if high3000 < hi["floor_fail"]:
             failures.append(
                 "high3000_share %.3f catastrophically dark (real Girl Talk ~0.31); presence is dead" % (high3000,))

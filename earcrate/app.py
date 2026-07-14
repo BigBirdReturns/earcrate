@@ -5634,7 +5634,8 @@ class EarcrateCore:
             mix = stable_presence_restore(mix, sr)
         mix = integrated_lufs_normalize(mix, sr, -14.0)
         target_seconds = float((arrangement.get("params") or {}).get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
-        report["quality_gate"] = drydeck_quality_gate(drydeck_metrics(mix, sr), target_seconds)
+        prof_spec = self._persona_spectral_profile(str((arrangement.get("params") or {}).get("taste_profile") or ""))
+        report["quality_gate"] = drydeck_quality_gate(drydeck_metrics(mix, sr), target_seconds, prof_spec)
         selected_layers = sum(len(sec.get("layers", [])) for sec in sections)
         report["drop_count"] = len(report["drops"])
         report["selected_layer_count"] = selected_layers
@@ -5872,6 +5873,28 @@ class EarcrateCore:
             except Exception:
                 continue
         return {}
+
+    def _persona_spectral_profile(self, taste_profile: str) -> Optional[Dict[str, Any]]:
+        """A persona's own spectral gate target (a ``spectral_target`` block in its
+        TasteSpec), merged over the default GT profile so a persona may override
+        just one band (e.g. a Pretty Lights remix lowering the high3000 floor for
+        its vinyl-rolled-off top) and inherit the rest. Returns None -> the caller
+        uses the default GT profile. Never raises."""
+        if not taste_profile:
+            return None
+        try:
+            spec = (load_tastespec(taste_profile) or {}).get("spectral_target")
+        except Exception:
+            return None
+        if not isinstance(spec, dict) or not spec:
+            return None
+        merged = {k: dict(v) for k, v in GT_SPECTRAL_PROFILE.items()}
+        for band, over in spec.items():
+            if band in merged and isinstance(over, dict):
+                merged[band].update(over)
+            elif isinstance(over, dict):
+                merged[band] = dict(over)
+        return merged
 
     def bakeoff(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Persona bake-off: render the SAME library through several personas so you

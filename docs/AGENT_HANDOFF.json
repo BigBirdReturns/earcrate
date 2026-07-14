@@ -1375,5 +1375,29 @@
     "gates": "84/84 (added 7 reference-study gates on a synthetic fixture with hand-computed expected numbers)",
     "pending": "none \u2014 all four reference targets resolved (Girl Talk, Notorious xx, Pat & Sean; Branchez ruled out with rationale).",
     "branchez_verdict": "Branchez does NOT map to a persona. He is a NYC melodic-trap producer whose \"bootlegs\" are single-source REMIXES (one vocal, e.g. Rihanna \"Stay\", rebuilt over his OWN original instrumental) plus fully original productions. No track combines two identifiable songs, so there are no A/B pairings and no sample corpus to catalog. Closest FORM is notorious_v1 (keep a foreground vocal, swap the bed) but it is a remix, not a mashup \u2014 no reference dataset written (would require fabricating data)."
+  },
+  "gate_recalibration_2026-07-14": {
+    "trigger": "Desktop measured 24 real Girl Talk tracks (DESKTOP_VERIFICATION_RESULTS.md): the quality gate was 3-10x too lenient AND inverted on the low end.",
+    "real_gt_distribution": {
+      "rms_std_db": "mean 5.31 [3.23-7.62]",
+      "low200_share": "mean 0.20 [0.07-0.31]",
+      "high3000_share": "mean 0.31 [0.19-0.53]"
+    },
+    "earcrate_render_measured": {
+      "rms_std_db": 3.19,
+      "low200_share": 0.59,
+      "high3000_share": 0.031,
+      "note": "a low-end mud wall with 10x-too-dark presence that the OLD gate passed"
+    },
+    "changes": [
+      "drydeck_quality_gate: low200 is now a CEILING (fail>0.45, warn>0.34) not a floor -- the old gate REQUIRED low200>=0.38, i.e. it rewarded the bass mud.",
+      "high3000 floor raised from 0.030 to real-GT-calibrated (fail<0.09, warn<0.15, target 0.30).",
+      "rms_std warn floor 3.0->3.5 (target 5.0). Fail bands set OUTSIDE the observed real-GT range so a genuine GT render never false-fails.",
+      "GT_SPECTRAL_PROFILE constants block in earcrate/judge/audio.py holds every threshold with its provenance.",
+      "stable_presence_restore strengthened ~5x: firm low-shelf (<250Hz taming) + high-shelf presence lift (>3kHz x2.2), blend 50/50 -> 85/15 corrected. Verified on synthetic signals with earcrate drydeck_metrics: low200 down >0.10, high3000 up >2x per pass."
+    ],
+    "IMPORTANT_finding_for_desktop": "A FIXED final-master EQ CANNOT fully rescue a render that is 10x too dark -- 2.2x of near-zero high-frequency energy is still near-zero. Measured: from earcrate-like 0.59/0.031, one corrective pass reaches only ~0.47/0.05, still short of GT. The REAL lever is UPSTREAM: high-pass the instrumental beds at the point they are summed (so the sub-200 mud never accumulates) and ensure presence-carrying layers are not buried. That change lives in the render/layer-mix loop and CANNOT be verified without the real library -- please implement/verify it on the box against real audio and tighten the FAIL thresholds toward the GT range once real renders land in it.",
+    "gates": "89/89 (added 5: mud-cave fails, bottom-of-GT-range passes, fail-bands-outside-range self-consistency, low200-is-a-ceiling regression guard, corrective-moves-toward-GT).",
+    "verifiable_here_vs_not": "Verified in cloud: gate logic + corrective direction/magnitude on synthetic signals via earcrate own metrics. NOT verifiable in cloud (needs real box): whether a real render now lands in the GT spectral range."
   }
 }

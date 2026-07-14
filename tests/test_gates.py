@@ -3597,3 +3597,88 @@ def test_recurrence_hook_ranks_repeated_segment():
     # Determinism: same PCM -> same numbers.
     cs2, ce2, rc2 = song_recurrence_curve(y, SR)
     assert np.array_equal(rc, rc2), "recurrence curve not deterministic"
+
+
+# ---------------------------------------------------------------------------
+# Ground-truth spectral calibration (desktop measured 24 real Girl Talk tracks:
+# rms_std_db ~5.31 [3.23-7.62], low200_share ~0.20 [0.07-0.31], high3000_share
+# ~0.31 [0.19-0.53]). The pre-ground-truth gate was inverted on the low end and
+# floored presence 10x too low, so a mud-cave render "passed". These gates lock
+# in the corrected calibration.
+# ---------------------------------------------------------------------------
+def _coverage_ok_metrics(**spectral):
+    """A metrics dict whose coverage/timing fields all clear the gate, so only the
+    spectral/dynamics values under test decide pass/fail (target_seconds=120)."""
+    base = {
+        "peak": 0.6, "audible_seconds": 118.0, "active_coverage_ratio": 0.92,
+        "silence_ratio": 0.08, "first_audible_s": 1.0, "largest_silence_gap_s": 4.0,
+        "rms_std_db": 5.0, "low200_share": 0.20, "high3000_share": 0.31,
+    }
+    base.update(spectral)
+    return base
+
+
+def test_gate_fails_the_measured_earcrate_mud_cave():
+    """The exact render the desktop measured -- low200 0.59 (bass mud wall),
+    high3000 0.031 (10x too dark), rms_std 3.19 -- MUST now fail. Under the old
+    gate it passed (it even rewarded the bass)."""
+    from earcrate.judge.audio import drydeck_quality_gate
+    m = _coverage_ok_metrics(low200_share=0.59, high3000_share=0.031, rms_std_db=3.19)
+    g = drydeck_quality_gate(m, 120.0)
+    assert not g["passed"], f"mud-cave render must fail, got {g}"
+    joined = " ".join(g["failures"])
+    assert "mud wall" in joined, joined
+    assert "presence is dead" in joined, joined
+
+
+def test_gate_passes_a_render_at_the_bottom_of_the_real_gt_range():
+    """A render sitting at the LOW edge of the real Girl Talk distribution
+    (low200 0.31, high3000 0.19, rms 3.6) must pass -- the FAIL bands sit outside
+    the observed range, so a render that resembles GT is never false-failed."""
+    from earcrate.judge.audio import drydeck_quality_gate
+    m = _coverage_ok_metrics(low200_share=0.31, high3000_share=0.19, rms_std_db=3.6)
+    g = drydeck_quality_gate(m, 120.0)
+    assert g["passed"], f"a real-GT-range render must pass, got {g}"
+
+
+def test_gate_fail_bands_sit_outside_the_observed_real_gt_range():
+    """Self-consistency: no fail threshold may fall inside the measured real-GT
+    range, or a genuine Girl Talk render would be rejected."""
+    from earcrate.judge.audio import GT_SPECTRAL_PROFILE as P
+    assert P["low200_share"]["ceiling_fail"] > 0.31, "low200 fail must exceed real-GT max 0.31"
+    assert P["high3000_share"]["floor_fail"] < 0.19, "high3000 fail must fall below real-GT min 0.19"
+    assert P["rms_std_db"]["floor"] <= 3.5, "rms floor must not exceed the real-GT lower quartile"
+
+
+def test_low200_is_a_ceiling_not_a_floor():
+    """Regression guard for the inversion bug: a low-bass render must NOT fail for
+    being 'below a bass floor' -- the old gate required low200 >= 0.38."""
+    from earcrate.judge.audio import drydeck_quality_gate
+    m = _coverage_ok_metrics(low200_share=0.12, high3000_share=0.31, rms_std_db=5.0)
+    g = drydeck_quality_gate(m, 120.0)
+    assert g["passed"], f"a clean low-bass render must pass, got {g}"
+    assert not any("floor authority missing" in f for f in g["failures"])
+
+
+def test_presence_corrective_moves_signal_toward_gt_balance():
+    """The strengthened corrective must measurably tame the low end and lift
+    presence, measured with earcrate's OWN drydeck_metrics -- direction and a
+    real magnitude, not a token nudge. (A fixed shelf cannot fully rescue a
+    render that is 10x too dark; that is an upstream-mix lever. This proves the
+    in-path corrective is genuinely effective, not cosmetic.)"""
+    import numpy as np
+    from earcrate.judge.audio import stable_presence_restore, drydeck_metrics
+    sr = 22050
+    N = int(sr * 10.0)
+    rng = np.random.default_rng(7)
+    spec = np.fft.rfft(rng.standard_normal(N))
+    f = np.fft.rfftfreq(N, 1 / sr)
+    shape = np.ones_like(f)
+    shape[f < 200] *= 3.2          # bass-heavy
+    shape[f >= 3000] *= 0.30       # presence-starved
+    y = np.fft.irfft(spec * shape, n=N).astype(np.float32)
+    y /= max(1e-9, float(np.max(np.abs(y))))
+    before = drydeck_metrics(y, sr)
+    after = drydeck_metrics(stable_presence_restore(y, sr), sr)
+    assert after["low200_share"] < before["low200_share"] - 0.10, (before, after)
+    assert after["high3000_share"] > before["high3000_share"] * 2.0, (before, after)

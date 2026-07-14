@@ -1,0 +1,93 @@
+{
+  "note": "In-project sample answer-key corpus (curated, cited breakdowns). Graders for reference_recall + persona calibration.",
+  "answer_keys": [
+    {
+      "file": "donuts_samples.json",
+      "artist": "J Dilla",
+      "album": "Donuts",
+      "maps_to_persona": "remix_dilla_v1",
+      "tracks": 31,
+      "distinct_sources": 66,
+      "pairings": 129,
+      "pairing_mode": "same_track_cooccurrence",
+      "material_coverage_pct": 0
+    },
+    {
+      "file": "endtroducing_samples.json",
+      "artist": "DJ Shadow",
+      "album": "Endtroducing.....",
+      "maps_to_persona": "remix_shadow_v1",
+      "tracks": 13,
+      "distinct_sources": 44,
+      "pairings": 91,
+      "pairing_mode": "same_track_cooccurrence",
+      "material_coverage_pct": 2
+    },
+    {
+      "file": "girltalk_samples.json",
+      "artist": "Girl Talk",
+      "album": "All Day",
+      "maps_to_persona": null,
+      "tracks": 12,
+      "distinct_sources": 340,
+      "pairings": 621,
+      "pairing_mode": "timed_overlap",
+      "material_coverage_pct": 9
+    },
+    {
+      "file": "grey_album_samples.json",
+      "artist": "Danger Mouse",
+      "album": "The Grey Album",
+      "maps_to_persona": "remix_dangermouse_v1",
+      "tracks": 12,
+      "distinct_sources": 26,
+      "pairings": 23,
+      "pairing_mode": "same_track_cooccurrence",
+      "material_coverage_pct": 50
+    },
+    {
+      "file": "madeon_popculture_samples.json",
+      "artist": "Madeon",
+      "album": "Pop Culture",
+      "maps_to_persona": "remix_madeon_v1",
+      "tracks": 1,
+      "distinct_sources": 39,
+      "pairings": 741,
+      "pairing_mode": "same_track_cooccurrence",
+      "material_coverage_pct": 23
+    },
+    {
+      "file": "notorious_xx_samples.json",
+      "artist": "Wait What",
+      "album": "The Notorious xx",
+      "maps_to_persona": "notorious_v1",
+      "tracks": 11,
+      "distinct_sources": 22,
+      "pairings": 11,
+      "pairing_mode": "same_track_cooccurrence",
+      "material_coverage_pct": 50
+    },
+    {
+      "file": "since_i_left_you_samples.json",
+      "artist": "The Avalanches",
+      "album": "Since I Left You",
+      "maps_to_persona": "remix_avalanches_v1",
+      "tracks": 18,
+      "distinct_sources": 46,
+      "pairings": 86,
+      "pairing_mode": "same_track_cooccurrence",
+      "material_coverage_pct": 0
+    },
+    {
+      "file": "troubadour_patandsean_samples.json",
+      "artist": "Pat & Sean Kelly",
+      "album": "This Is My Brain (mashups & medleys)",
+      "maps_to_persona": "troubadour_v1",
+      "tracks": 28,
+      "distinct_sources": 52,
+      "pairings": 207,
+      "pairing_mode": "same_track_cooccurrence",
+      "material_coverage_pct": 16
+    }
+  ]
+}

@@ -88,14 +88,45 @@ def drydeck_metrics(y: np.ndarray, sr: int) -> Dict[str, float]:
     }
 
 
-def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float) -> Dict[str, Any]:
+# Ground-truth spectral/dynamics profile of REAL Girl Talk, measured by the
+# desktop session over 24 tracks of the local "All Day" catalog and replicated
+# in librosa. earcrate's exact drydeck definitions may differ slightly, so every
+# fail/warn band sits OUTSIDE the observed range rather than on the mean:
+#   rms_std_db    mean 5.31  range [3.23-7.62]
+#   low200_share  mean 0.20  range [0.07-0.31]   (earcrate render measured 0.59)
+#   high3000_share mean 0.31 range [0.19-0.53]   (earcrate render measured 0.031)
+# The pre-ground-truth gate was INVERTED on the low end (it required low200 >=
+# 0.38, i.e. it rewarded a bass mud wall) and floored presence at 0.030 -- 10x
+# below real Girl Talk, which is why a render 10x too dark still "passed". This
+# is the corrected calibration: low end is a CEILING, presence a real floor.
+# FAIL bands sit OUTSIDE the observed real-GT range so a render that actually
+# resembles Girl Talk never false-fails, while a mud-cave always fails:
+#   low200 fail 0.45  = 1.45x the real-GT max (0.31); real renders measured 0.59
+#   high3000 fail 0.09 = ~half the real-GT min (0.19); real renders measured 0.031
+GT_SPECTRAL_PROFILE = {
+    "rms_std_db":     {"target": 5.0,  "floor": 3.5},
+    "low200_share":   {"ceiling_fail": 0.45, "ceiling_warn": 0.34, "floor_warn": 0.05},
+    "high3000_share": {"target": 0.30, "floor_warn": 0.15, "floor_fail": 0.09},
+}
+
+
+def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float,
+                         spectral_profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Post-render gate with a user-audible coverage contract.
 
     A render is not successful merely because it is a correctly sized WAV. For a
     sketch of one minute or longer, most of the timeline must contain audible
     program material, the first music must arrive promptly, and the largest dead
     gap must stay bounded.
+
+    The spectral/dynamics targets default to the REAL Girl Talk distribution
+    (GT_SPECTRAL_PROFILE), but a PERSONA may pass its own ``spectral_profile`` so
+    it is judged on its OWN aesthetic: a warm, vinyl-rolled-off chopped-soul remix
+    (Pretty Lights) legitimately has less >3kHz air than a bright modern collage,
+    and must not fail a Girl-Talk presence floor to be "correct". Coverage/timing
+    rules are persona-independent (silence is silence).
     """
+    prof = spectral_profile or GT_SPECTRAL_PROFILE
     failures: List[str] = []
     warnings: List[str] = []
     if target_seconds >= 60:
@@ -124,27 +155,57 @@ def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float) -> Di
             failures.append(f"first audible material starts too late at {float(first_audible):.2f}s")
         if largest_gap > max(14.0, target_seconds * 0.18):
             failures.append(f"largest silent gap too long at {largest_gap:.2f}s")
+        # Dynamics: real Girl Talk rms_std_db mean 5.31 [3.23-7.62]. Target ~5;
+        # a usable sketch clears ~3.5; below 1.6 the render is effectively flat.
+        rms_floor = prof["rms_std_db"]["floor"]
+        rms_target = prof["rms_std_db"]["target"]
         if rms_std < 1.6:
             failures.append("rms_std_db catastrophically low; render is effectively flat")
-        elif rms_std < 3.0:
-            warnings.append("rms_std_db below target 3.0; usable sketch but dynamics need more arc")
-        if low200 < 0.38:
-            failures.append("low200_share below catastrophic floor 0.38; floor authority missing")
-        elif low200 < 0.46:
-            warnings.append("low200_share below target 0.46; bass authority weak")
-        if high3000 < 0.018:
-            failures.append("high3000_share catastrophically low; likely cave/muffle")
-        elif high3000 < 0.030:
-            warnings.append("high3000_share below target 0.030; presence repair recommended")
+        elif rms_std < rms_floor:
+            warnings.append(
+                "rms_std_db %.2f below target ~%.1f (real Girl Talk ~5.3); dynamics need more arc"
+                % (rms_std, rms_target))
+        # Low end is a CEILING, not a floor. Real Girl Talk low200_share is
+        # ~0.20 [0.07-0.31]; earcrate renders measured 0.59 -- a bass mud wall
+        # from beds that were never high-passed. The old gate REWARDED that
+        # (required low200 >= 0.38); it is inverted here to catch the mud.
+        lo = prof["low200_share"]
+        if low200 > lo["ceiling_fail"]:
+            failures.append(
+                "low200_share %.2f is a low-end mud wall (real Girl Talk ~0.20, ceiling %.2f); high-pass the beds"
+                % (low200, lo["ceiling_fail"]))
+        elif low200 > lo["ceiling_warn"]:
+            warnings.append(
+                "low200_share %.2f above real-GT range (~0.20); tame the low end" % (low200,))
+        elif low200 < lo["floor_warn"]:
+            warnings.append(
+                "low200_share %.2f very thin (real GT ~0.20); floor authority weak" % (low200,))
+        # Presence: real Girl Talk high3000_share mean 0.31 [0.19-0.53]; earcrate
+        # renders measured 0.031 -- 10x too dark. The old floor 0.030 let that
+        # pass; recalibrated to the real distribution.
+        hi = prof["high3000_share"]
+        if high3000 < hi["floor_fail"]:
+            failures.append(
+                "high3000_share %.3f catastrophically dark (real Girl Talk ~0.31); presence is dead" % (high3000,))
+        elif high3000 < hi["floor_warn"]:
+            warnings.append(
+                "high3000_share %.3f below target ~%.2f (real GT ~0.31); lift presence" % (high3000, hi["target"]))
     return {"passed": not failures, "failures": failures, "warnings": warnings, "metrics": metrics}
 
 def stable_presence_restore(y: np.ndarray, sr: int) -> np.ndarray:
-    """Small deterministic dry-deck presence repair before the final gate.
+    """Deterministic corrective EQ that moves a dry-deck mix toward the REAL
+    Girl Talk spectral balance before the final gate.
 
-    This is not an effect. It is a conservative anti-cave corrective EQ: trim
-    sub-rumble and low-mid buildup, recover a little upper-mid/high presence,
-    and keep peak headroom. It is intentionally mild so a bad arrangement still
-    fails the gate instead of being disguised.
+    Ground truth (desktop, 24 real GT tracks; see GT_SPECTRAL_PROFILE):
+    low200_share ~0.20, high3000_share ~0.31. Uncorrected earcrate renders
+    measured 0.59 / 0.031 -- a low-end mud wall with dead presence. The previous
+    version applied only a mild +1.35 presence nudge at a 50/50 blend and left
+    the render 10x too dark, so this is a STRONGER, target-directed shelving
+    corrective: a firm low-shelf that tames the sub-200 buildup and a high-shelf
+    that restores >3kHz air. It is still a FIXED, content-independent filter (no
+    dynamics, no look-ahead), so a genuinely bad arrangement still fails the gate
+    -- it corrects TONE toward the reference, it does not manufacture material or
+    dynamics.
     """
     if y.size < sr // 2:
         return y.astype(np.float32)
@@ -153,13 +214,20 @@ def stable_presence_restore(y: np.ndarray, sr: int) -> np.ndarray:
     spec = np.fft.rfft(x, n=n)
     freqs = np.fft.rfftfreq(n, 1 / sr)
     gain = np.ones_like(freqs, dtype=np.float32)
-    gain[freqs < 32] *= 0.65
-    gain[(freqs >= 180) & (freqs <= 520)] *= 0.88
-    gain[(freqs >= 2400) & (freqs <= 9500)] *= 1.35
-    gain[(freqs > 9500) & (freqs <= 14000)] *= 1.16
+    # Low-shelf: pull the bass mud wall (real GT low200 ~0.20 vs earcrate 0.59)
+    # down hard below 250 Hz, graded so it is a shelf, not a brick wall.
+    gain[freqs < 30] *= 0.40                              # sub-rumble: kill
+    gain[(freqs >= 30) & (freqs < 120)] *= 0.55          # the mud wall
+    gain[(freqs >= 120) & (freqs < 250)] *= 0.72
+    gain[(freqs >= 250) & (freqs < 500)] *= 0.90         # low-mid buildup
+    # High-shelf: restore presence/air (real GT high3000 ~0.31 vs earcrate 0.031).
+    gain[(freqs >= 3000) & (freqs < 8000)] *= 2.20       # presence
+    gain[(freqs >= 8000) & (freqs < 13000)] *= 1.80      # air
+    gain[freqs >= 13000] *= 1.40
     repaired = np.fft.irfft(spec * gain, n=n)[:x.size].astype(np.float32)
-    # Blend the repair with the original to avoid brittle highs.
-    out = (0.50 * x + 0.50 * repaired).astype(np.float32)
+    # Mostly the corrected signal (the old 50/50 blend halved the correction and
+    # left the render dark); a little dry kept in to avoid brittle transients.
+    out = (0.85 * repaired + 0.15 * x).astype(np.float32)
     peak = float(np.max(np.abs(out))) if out.size else 0.0
     if peak > 0.94:
         out *= 0.94 / peak
@@ -224,10 +292,15 @@ def judge_audio_file(path: Path, ref_path: Optional[Path] = None) -> Dict[str, A
         }
     render = metrics_one(path)
     out: Dict[str, Any] = {"render": render, "engine": render.get("engine") or ENGINE_VERSION}
+    # low200 is a CEILING, consistent with drydeck_quality_gate + the real Girl
+    # Talk distribution (~0.20 [0.07-0.31]). The old v1_1 rule REQUIRED low200 >=
+    # 0.48, which directly contradicted the dry-deck mud ceiling (fail > 0.45): a
+    # real-GT-like render (0.20) failed here while a mud wall (0.5) failed there,
+    # so nothing could satisfy both judges. See GT_SPECTRAL_PROFILE.
     gates = {
-        "rms_std_db": render["rms_std_db"] >= 4.5,
+        "rms_std_db": render["rms_std_db"] >= 3.5,
         "silence_ratio": render["silence_ratio"] <= 0.22,
-        "low200_share": render["low200_share"] >= 0.48,
+        "low200_share": render["low200_share"] <= GT_SPECTRAL_PROFILE["low200_share"]["ceiling_fail"],
         "distinct_pcs": render["distinct_pcs"] >= 4,
     }
     out["v1_1_gates"] = gates

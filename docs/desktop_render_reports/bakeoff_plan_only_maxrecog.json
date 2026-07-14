@@ -1,0 +1,156 @@
+{
+ "ok": true,
+ "recognizability_bias": 92,
+ "target_seconds": 120.0,
+ "plan_only": true,
+ "bakeoff": [
+  {
+   "taste_profile": "girl_talk_v1",
+   "contract": "recognizable foreground + stable floor + fast source turnover + phrase-grid transitions",
+   "ok": true,
+   "seed": 1350,
+   "bpm": 129.2,
+   "sections": 16,
+   "score": {
+    "total": 43.8719,
+    "veto": false,
+    "transform_violations": 0,
+    "role_leaks": 0,
+    "predicted_silence_ratio": 0.0,
+    "hard_air_transitions": 0,
+    "max_stretch_pct": 7.501,
+    "max_abs_residual_pitch_shift": 1.112,
+    "max_source_reuse": 4,
+    "source_tracks": 18,
+    "source_diversity": 0.36,
+    "pitch_centers": 1,
+    "named_transitions": 15,
+    "dynamic_sections": 3,
+    "false_blends": 0,
+    "voice_layers": 27,
+    "bed_layers": 23,
+    "duration_bars": 64,
+    "layer_events": 50,
+    "covered_bar_ratio": 1.0,
+    "avg_layer_depth": 2.0938,
+    "music_sections": 16,
+    "empty_music_sections": 0,
+    "first_layer_bar": 0,
+    "realized_chaos": 0.667,
+    "realized_drama": 0.469,
+    "realized_whiplash": 0.576,
+    "realized_vocal": 0.54,
+    "intent_targets": {
+     "chaos": 0.55,
+     "drama": 0.7,
+     "whiplash": 0.55,
+     "vocal": 0.7
+    }
+   },
+   "taste_gate": {
+    "passed": true,
+    "failures": []
+   }
+  },
+  {
+   "taste_profile": "troubadour_v1",
+   "contract": "long key-matched medley: one persistent harmonic bed, sequential recognizable hooks spliced at phrase boundaries, constant tempo, minimal layering",
+   "ok": false,
+   "seed": 1351,
+   "bpm": 129.2,
+   "sections": 16,
+   "score": {
+    "total": 43.9153,
+    "veto": false,
+    "transform_violations": 0,
+    "role_leaks": 0,
+    "predicted_silence_ratio": 0.0,
+    "hard_air_transitions": 0,
+    "max_stretch_pct": 7.501,
+    "max_abs_residual_pitch_shift": 1.112,
+    "max_source_reuse": 4,
+    "source_tracks": 18,
+    "source_diversity": 0.3673,
+    "pitch_centers": 1,
+    "named_transitions": 15,
+    "dynamic_sections": 3,
+    "false_blends": 0,
+    "voice_layers": 27,
+    "bed_layers": 22,
+    "duration_bars": 64,
+    "layer_events": 49,
+    "covered_bar_ratio": 1.0,
+    "avg_layer_depth": 1.9844,
+    "music_sections": 16,
+    "empty_music_sections": 0,
+    "first_layer_bar": 0,
+    "realized_chaos": 0.667,
+    "realized_drama": 0.469,
+    "realized_whiplash": 0.588,
+    "realized_vocal": 0.551,
+    "intent_targets": {
+     "chaos": 0.55,
+     "drama": 0.7,
+     "whiplash": 0.55,
+     "vocal": 0.7
+    }
+   },
+   "taste_gate": {
+    "passed": false,
+    "failures": [
+     "foreground rail coverage too low (0.61)"
+    ]
+   }
+  },
+  {
+   "taste_profile": "notorious_v1",
+   "contract": "one voice over another era's beds: a single foreground identity rides foreign instrumentals for whole verses",
+   "ok": false,
+   "seed": 1352,
+   "bpm": 129.2,
+   "sections": 16,
+   "score": {
+    "total": 43.8719,
+    "veto": false,
+    "transform_violations": 0,
+    "role_leaks": 0,
+    "predicted_silence_ratio": 0.0,
+    "hard_air_transitions": 0,
+    "max_stretch_pct": 7.501,
+    "max_abs_residual_pitch_shift": 1.112,
+    "max_source_reuse": 4,
+    "source_tracks": 18,
+    "source_diversity": 0.36,
+    "pitch_centers": 1,
+    "named_transitions": 15,
+    "dynamic_sections": 3,
+    "false_blends": 0,
+    "voice_layers": 27,
+    "bed_layers": 23,
+    "duration_bars": 64,
+    "layer_events": 50,
+    "covered_bar_ratio": 1.0,
+    "avg_layer_depth": 2.0469,
+    "music_sections": 16,
+    "empty_music_sections": 0,
+    "first_layer_bar": 0,
+    "realized_chaos": 0.667,
+    "realized_drama": 0.469,
+    "realized_whiplash": 0.576,
+    "realized_vocal": 0.54,
+    "intent_targets": {
+     "chaos": 0.55,
+     "drama": 0.7,
+     "whiplash": 0.55,
+     "vocal": 0.7
+    }
+   },
+   "taste_gate": {
+    "passed": false,
+    "failures": [
+     "foreground rail coverage too low (0.61)"
+    ]
+   }
+  }
+ ]
+}

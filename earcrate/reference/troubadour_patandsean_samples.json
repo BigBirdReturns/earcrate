@@ -1,0 +1,302 @@
+{
+  "album": "This Is My Brain (mashups & medleys)",
+  "artist": "Pat & Sean Kelly",
+  "maps_to_persona": "troubadour_v1",
+  "sources": [
+    "https://patandseankelly.com/mash-ups-and-medleys",
+    "https://patandseankelly.com/music",
+    "https://www.youtube.com/c/TheRevereBand-Patandseankelly",
+    "https://www.youtube.com/@patandseankelly",
+    "https://open.spotify.com/artist/7pjqjzYDWwG7oLfhBiPwTx",
+    "https://music.apple.com/us/artist/pat-and-sean-kelly/1400084315",
+    "https://boingboing.net/2023/11/26/this-one-minute-mashup-of-twenty-songs-is-brilliant.html"
+  ],
+  "notes": "One track = one medley/mashup video. The songs strung together are the samples, IN ORDER. Structure is the troubadour splice: one continuous harmonic bed hosting sequential recognizable hooks. Timestamps are undocumented for this catalog (start_s/end_s null throughout). Track titles are the primary ground truth (verified via YouTube oembed and the artist's own site); song lists inside vaguely-named medleys come from search snippets / secondary write-ups and are marked in per-track note when order or membership is only partially confirmed. Two-song blends interleave rather than stack (opposite of Girl Talk collision). role is null unless a clear held-bed-vs-sung-hook distinction was documented. Durations for the 20 'This Is My Brain' tracks are from the artist's music page; standalone-video durations left null. YouTube watch-page and Invidious fetches were blocked (403/402) from this environment, so full video descriptions could not be scraped; oembed titles and web-search snippets were used instead.",
+  "tracks": [
+    {
+      "index": 1,
+      "title": "All The Things She Said + What Is Love?",
+      "duration_s": 77,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "t.A.T.u.", "source_title": "All The Things She Said", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Haddaway", "source_title": "What Is Love", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Babydoll (12 songs you can sing to Babydoll)",
+      "duration_s": 96,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "note": "Medley: 'Babydoll' is the constant held bed; 12 recognizable hooks are sung over it in sequence. The 12 overlaid songs are not individually documented in accessible sources, so only the bed is listed.",
+      "samples": [
+        { "source_artist": "Ari Abdul", "source_title": "Babydoll", "start_s": null, "end_s": null, "role": "bed" }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "302 AM",
+      "duration_s": 89,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "note": "Late-night 'This Is My Brain At...' chord-progression medley. Individual song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 4,
+      "title": "Drive + Wonderwall",
+      "duration_s": 136,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "Incubus", "source_title": "Drive", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Oasis", "source_title": "Wonderwall", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 5,
+      "title": "Acoustic Guitar",
+      "duration_s": 169,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "note": "Medley of acoustic-guitar songs over one bed. Individual song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 6,
+      "title": "Pop Punk/Emo Night",
+      "duration_s": 111,
+      "source_url": "https://www.youtube.com/watch?v=OIgOjWrNBd4",
+      "note": "Emo/pop-punk medley (2000s emo canon: My Chemical Romance, Fall Out Boy, Paramore, Taking Back Sunday, Jimmy Eat World range per artist hashtags). Exact ordered song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 7,
+      "title": "Pop Punk/Emo Night (Part 2)",
+      "duration_s": 141,
+      "source_url": "https://www.youtube.com/watch?v=ERMB-PGyEQM",
+      "note": "Second emo/pop-punk medley. Exact ordered song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 8,
+      "title": "Misery Business + A Favor House Atlantic",
+      "duration_s": 63,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "Paramore", "source_title": "Misery Business", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Coheed and Cambria", "source_title": "A Favor House Atlantic", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 9,
+      "title": "3:59 AM",
+      "duration_s": 79,
+      "source_url": "https://www.youtube.com/watch?v=Lrh1pCV8TNY",
+      "note": "Stunt medley ~20 songs in ~1:19 (the ~15 songs/min ceiling). Sequential hooks over a single shared I-V-vi-IV bed. Song membership from a Boing Boing write-up / search snippet; ORDER is approximate (secondary source, not the video's own description).",
+      "samples": [
+        { "source_artist": "LMFAO", "source_title": "Party Rock Anthem", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Rihanna", "source_title": "We Found Love", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Carly Rae Jepsen", "source_title": "Call Me Maybe", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "The Darkness", "source_title": "I Believe in a Thing Called Love", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "System of a Down", "source_title": "Chop Suey!", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Sisqo", "source_title": "Thong Song", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Earth, Wind & Fire", "source_title": "September", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "The Weeknd", "source_title": "I Can't Feel My Face", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Nicki Minaj", "source_title": "Starships", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "One Direction", "source_title": "What Makes You Beautiful", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Echosmith", "source_title": "Cool Kids", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "ABBA", "source_title": "Gimme! Gimme! Gimme! (A Man After Midnight)", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Marvin Gaye & Tammi Terrell", "source_title": "Ain't No Mountain High Enough", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Paramore", "source_title": "Ain't It Fun", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Icona Pop", "source_title": "I Love It", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Post Malone", "source_title": "Congratulations", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "The Cardigans", "source_title": "Lovefool", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "The Outfield", "source_title": "Your Love", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Rob Zombie", "source_title": "Dragula", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Taylor Swift", "source_title": "Anti-Hero", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 10,
+      "title": "3:01 AM",
+      "duration_s": 108,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "note": "Late-night 'This Is My Brain At...' chord-progression medley. Individual song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 11,
+      "title": "Chasing Cars + Fast Car",
+      "duration_s": 74,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "Snow Patrol", "source_title": "Chasing Cars", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Tracy Chapman", "source_title": "Fast Car", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 12,
+      "title": "Rosé Supernova",
+      "duration_s": 155,
+      "source_url": "https://www.youtube.com/watch?v=OW3OUJrWyJk",
+      "note": "Portmanteau blend confirmed via search: Chappell Roan 'Red Wine Supernova' interleaved with Oasis 'Champagne Supernova'.",
+      "samples": [
+        { "source_artist": "Chappell Roan", "source_title": "Red Wine Supernova", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Oasis", "source_title": "Champagne Supernova", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 13,
+      "title": "Spotify Top 20",
+      "duration_s": 112,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "note": "Medley of ~20 current chart hits over one bed. Individual song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 14,
+      "title": "Sailor Song + Caramel",
+      "duration_s": 194,
+      "source_url": "https://www.youtube.com/watch?v=GCgllE9Ss8s",
+      "note": "Full-length two-song interleave (their viral one). Confirmed via search: Gigi Perez 'Sailor Song' + Sleep Token 'Caramel'.",
+      "samples": [
+        { "source_artist": "Gigi Perez", "source_title": "Sailor Song", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Sleep Token", "source_title": "Caramel", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 15,
+      "title": "4 AM",
+      "duration_s": 80,
+      "source_url": "https://www.youtube.com/watch?v=jL6aescD6Qw",
+      "note": "Late-night chord-progression medley. Only a partial, unordered set of hooks is documented (from the video's own hashtags: #morethanafeeling #cestlavie #bewitched); full ordered list not available.",
+      "samples": [
+        { "source_artist": "Boston", "source_title": "More Than a Feeling", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "B*Witched", "source_title": "C'est la Vie", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Laufey", "source_title": "Bewitched", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 16,
+      "title": "Tipsy + Come On Get Higher",
+      "duration_s": 63,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "J-Kwon", "source_title": "Tipsy", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Matt Nathanson", "source_title": "Come On Get Higher", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 17,
+      "title": "I Like Me Better + Your Body Is a Wonderland",
+      "duration_s": 63,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "Lauv", "source_title": "I Like Me Better", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "John Mayer", "source_title": "Your Body Is a Wonderland", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 18,
+      "title": "Closer + Something Just Like This",
+      "duration_s": 78,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "The Chainsmokers feat. Halsey", "source_title": "Closer", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "The Chainsmokers & Coldplay", "source_title": "Something Just Like This", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 19,
+      "title": "Heads Will Roll + Gimme! Gimme! Gimme!",
+      "duration_s": 73,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "samples": [
+        { "source_artist": "Yeah Yeah Yeahs", "source_title": "Heads Will Roll", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "ABBA", "source_title": "Gimme! Gimme! Gimme! (A Man After Midnight)", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 20,
+      "title": "The Middle + The Middle",
+      "duration_s": 117,
+      "source_url": "https://patandseankelly.com/mash-ups-and-medleys",
+      "note": "Two different songs that share the title 'The Middle', blended.",
+      "samples": [
+        { "source_artist": "Jimmy Eat World", "source_title": "The Middle", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Zedd, Maren Morris & Grey", "source_title": "The Middle", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 21,
+      "title": "Seven Nation Army x Sweet Dreams (Mashup)",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=k3f0M691Bi4",
+      "samples": [
+        { "source_artist": "The White Stripes", "source_title": "Seven Nation Army", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Eurythmics", "source_title": "Sweet Dreams (Are Made of This)", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 22,
+      "title": "Stargazing + Pompeii (Full Mashup)",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=LSw0iGWCmew",
+      "samples": [
+        { "source_artist": "Myles Smith", "source_title": "Stargazing", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Bastille", "source_title": "Pompeii", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 23,
+      "title": "Goin Down Down (Mashup)",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=rvhvq2NU8eE",
+      "note": "Title portmanteau of the two hooks.",
+      "samples": [
+        { "source_artist": "Fall Out Boy", "source_title": "Sugar, We're Goin Down", "start_s": null, "end_s": null, "role": null },
+        { "source_artist": "Nelly", "source_title": "Country Grammar (Hot..)", "start_s": null, "end_s": null, "role": null }
+      ]
+    },
+    {
+      "index": 24,
+      "title": "HEY Medley",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=c2jldQXqL90",
+      "note": "Medley of songs whose hook is the word 'Hey' (e.g. Hey Ya / Hey Jude / Hey Soul Sister family), strung over one bed. Exact ordered song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 25,
+      "title": "California Kid (FULL Mashup & Medley)",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=TC_K1n1EHOI",
+      "note": "Their original 'California Kid' woven into a medley of songs that fit its progression (the original acts as the held bed). The overlaid song list is not documented in accessible sources.",
+      "samples": [
+        { "source_artist": "Pat & Sean Kelly", "source_title": "California Kid", "start_s": null, "end_s": null, "role": "bed" }
+      ]
+    },
+    {
+      "index": 26,
+      "title": "It's 3:58am and your brain won't stop mashing up songs (This Is My Brain At... Part 3)",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=mop_1UAecFI",
+      "note": "Described by the artist as 'a medley of mashups over the same chord progression' - the clearest statement of the troubadour one-bed contract. Individual song list not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 27,
+      "title": "Pat & Sean: Mashups: Volume 1",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=PGpKoDJPbfs",
+      "note": "Compilation of several of their two-song mashups back-to-back ('overlapping melodies, the strange satisfaction of hearing more than one song at once'). Per-mashup breakdown not documented in accessible sources.",
+      "samples": []
+    },
+    {
+      "index": 28,
+      "title": "Pat & Sean: Mashups: Volume 2",
+      "duration_s": null,
+      "source_url": "https://www.youtube.com/watch?v=uHF3Bqb-joA",
+      "note": "Compilation bringing together five of their mashups back-to-back. Per-mashup breakdown not documented in accessible sources.",
+      "samples": []
+    }
+  ]
+}

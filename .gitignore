@@ -14,6 +14,7 @@ agent/
 earcrate_workspace.json
 .deps_installed
 config.json
+earcrate_debug.log
 
 # local agent state / transient workflow worktrees (never commit)
 .claude/

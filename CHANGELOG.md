@@ -1,5 +1,68 @@
 # EarCrate — CHANGELOG
 
+## v0.8.29 — PR-27 review fixes: anti-aliased resampler, external-vocal integrity, dist import guard
+- FIX **render brightness at the source**: `resample_or_fit` was `np.interp` —
+  linear interpolation, a first-order-hold low-pass sitting in the render hot
+  path (every varispeed clip), shaving the top octave off EVERY layer before
+  mixing. Measured: ~6% relative high-band loss per pass at a typical 6%
+  varispeed — a CONTRIBUTING (not sole) cause of the "presence-dark" renders;
+  it compounded across every layer and no downstream EQ can restore aliased
+  content. Now polyphase FIR (`scipy.signal.resample_poly`), deterministic,
+  exact-length. The dominant presence fix remains the finishing chain (see
+  PR-27 review: pedalboard EQ/bus + matchering reference-master).
+- FIX **external vocal tail loop-tiling (blocker)**: a dropped take's final
+  window (shorter than its section) was loop-tiled to fill the slot, replaying
+  the last words as a stutter-echo on essentially every external remix. New
+  pure `fit_external_clip`: trim when long, keep short when short — the bed
+  carries the rest of the section instrumental, per the stamped contract.
+- FIX **14 ms fade dips inside the held vocal**: `fade_out` was unconditional,
+  so the continuous take dipped to zero at every 4-bar section seam. New pure
+  `external_edge_fades`: fade in only at the take's first window (or mid-section
+  entry), fade out only in the window that truly reaches the vocal's end.
+- FIX **dist-only ModuleNotFoundError (3 endpoints)**: function-level
+  `from earcrate.` imports survive the column-0 strip and crash the standalone
+  single file at call time (`/api/materials/regions`, `reference_recall`,
+  `plan_reference_extraction`). Imports hoisted to module top; the build now
+  REFUSES to build any indented earcrate import so the class is extinct.
+- FIX **album flow counted rejected renders as made tracks**: `render_album`
+  discarded the manifest-execution result, so a gate-rejected render appeared
+  on the tracklist as a phantom WAV. It now lands in `skipped[]` with the gate
+  reason (rides the v0.8.28 F3 non-ok contract).
+- External remix integrity + honesty: the render now re-verifies the dropped
+  file's PCM identity against the propose-time receipt (a swapped file drops
+  with a clear reason instead of shipping under the old identity); feasibility
+  demands bed-only turnover (needed//3, floor 2) instead of re-imposing the
+  full-set source contract the composer explicitly waives for external mode.
+- Gate-suite sandbox is now UNCONDITIONAL (was setdefault): a user who exports
+  EARCRATE_HOME at their real workspace still gets the test sandbox.
+- MusicBrainz batch: transient fetch errors are no longer cached forever —
+  resumes retry them.
+
+## v0.8.28 — turnover freshness pass + gate-suite pointer sandbox
+- FIX **stagnant crate through the one-click path**: the fail-fast harvest
+  gates ENTRY (stop analyzing the moment readiness is satisfied) but nothing
+  gated GROWTH — tracks added after the crate first became ready were scanned
+  yet never analyzed by one-click, so every set recycled the same sources
+  while readiness itself reported `bottleneck: sources`. One-click now runs a
+  bounded freshness pass after readiness: at most ONE `harvest_batch` of
+  never-analyzed tracks per run (analyze → extract → re-crate → recompute
+  readiness), accounted in the harvest log and runtime ledger, opt-out via
+  `skip_freshness`. Zero work on a stable library; loops enter as candidates
+  (quota/human review still owns approval); no gate or threshold changed.
+  Observed live over the API: tracks stuck at `bpm=None, loops=0` under the
+  old path were analyzed and looped by the one-click run itself
+  (`freshness_*` stages in the perf ledger). Gates:
+  `test_freshness_harvest_folds_new_tracks_into_ready_crate`,
+  `test_freshness_harvest_costs_nothing_on_stable_library`,
+  `test_one_click_runs_freshness_pass_between_readiness_and_graph`.
+- FIX **the shipped test suite hijacked the real workspace pointer**: gates
+  constructing `EarcrateCore()` wrote the app-global pointer at the repo root,
+  so `python tests/run_gates.py` silently re-pointed a configured workspace at
+  a deleted temp fixture (observed live: a fresh server booted into
+  `/tmp/tmp…/` instead of the user library). The runner and `test_gates.py`
+  now sandbox `EARCRATE_HOME` for the whole suite; gate
+  `test_gate_suite_sandboxes_the_workspace_pointer` pins the contract.
+
 ## v0.8.27 — release consolidation: truthful gates, fail-hard renders, durable receipts
 - Consolidates the v0.8.16–v0.8.25 architecture and seam work with the parallel
   v0.8.26 real-library fixes under one package-visible release version.

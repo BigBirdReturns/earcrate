@@ -1,0 +1,2519 @@
+{
+  "album": "All Day",
+  "artist": "Girl Talk",
+  "sources": [
+    "https://adereth.github.io/oneoff/girltalk-v2/AllDaySamplesWithSets.json",
+    "https://adereth.github.io/oneoff/girltalk-v2/",
+    "https://www.torontomike.com/2010/11/girl_talks_all_day_sample_list/",
+    "https://illegalart.net/allday/samples.html",
+    "https://www.last.fm/music/Girl+Talk/All+Day"
+  ],
+  "tracks": [
+    {
+      "index": 1,
+      "title": "Oh No",
+      "duration_s": 340,
+      "samples": [
+        {
+          "source_artist": "Black Sabbath",
+          "source_title": "War Pigs",
+          "start_s": 3,
+          "end_s": 128,
+          "role": null
+        },
+        {
+          "source_artist": "2Pac",
+          "source_title": "How Do U Want It",
+          "start_s": 13,
+          "end_s": 15,
+          "role": null
+        },
+        {
+          "source_artist": "Jay-Z",
+          "source_title": "99 Problems",
+          "start_s": 15,
+          "end_s": 16,
+          "role": null
+        },
+        {
+          "source_artist": "The D.O.C.",
+          "source_title": "It's Funky Enough",
+          "start_s": 20,
+          "end_s": 54,
+          "role": null
+        },
+        {
+          "source_artist": "JC featuring",
+          "source_title": "Vote 4 Me",
+          "start_s": 20,
+          "end_s": 54,
+          "role": null
+        },
+        {
+          "source_artist": "Ludacris",
+          "source_title": "Move Bitch",
+          "start_s": 20,
+          "end_s": 122,
+          "role": null
+        },
+        {
+          "source_artist": "Jay-Z",
+          "source_title": "Empire State of Mind",
+          "start_s": 61,
+          "end_s": 123,
+          "role": null
+        },
+        {
+          "source_artist": "N.W.A",
+          "source_title": "Express Yourself \" (portion sampled samples \"Express Yourself\" by  Charles Wright & the Watts 103rd Street Rhythm Band )",
+          "start_s": 122,
+          "end_s": 162,
+          "role": null
+        },
+        {
+          "source_artist": "Eminem",
+          "source_title": "Crack a Bottle",
+          "start_s": 124,
+          "end_s": 159,
+          "role": null
+        },
+        {
+          "source_artist": "Cali Swag District",
+          "source_title": "Teach Me How to Dougie",
+          "start_s": 125,
+          "end_s": 154,
+          "role": null
+        },
+        {
+          "source_artist": "The Pack",
+          "source_title": "This Shit Slappin'",
+          "start_s": 132,
+          "end_s": 134,
+          "role": null
+        },
+        {
+          "source_artist": "Jane's Addiction",
+          "source_title": "Jane Says",
+          "start_s": 133,
+          "end_s": 154,
+          "role": null
+        },
+        {
+          "source_artist": "David Banner",
+          "source_title": "Get Like Me",
+          "start_s": 133,
+          "end_s": 165,
+          "role": null
+        },
+        {
+          "source_artist": "M.I.A.",
+          "source_title": "Paper Planes",
+          "start_s": 160,
+          "end_s": 162,
+          "role": null
+        },
+        {
+          "source_artist": "Jimmy Smith",
+          "source_title": "I'm Gonna Love You Just a Little More Babe",
+          "start_s": 163,
+          "end_s": 165,
+          "role": null
+        },
+        {
+          "source_artist": "Dorrough",
+          "source_title": "Ice Cream Paint Job",
+          "start_s": 165,
+          "end_s": 250,
+          "role": null
+        },
+        {
+          "source_artist": "The Brothers Johnson",
+          "source_title": "Strawberry Letter 23",
+          "start_s": 165,
+          "end_s": 250,
+          "role": null
+        },
+        {
+          "source_artist": "J-Kwon",
+          "source_title": "Tipsy '09",
+          "start_s": 250,
+          "end_s": 290,
+          "role": null
+        },
+        {
+          "source_artist": "Ramones",
+          "source_title": "Blitzkrieg Bop",
+          "start_s": 251,
+          "end_s": 340,
+          "role": null
+        },
+        {
+          "source_artist": "Slick Rick",
+          "source_title": "La Di Da Di",
+          "start_s": 255,
+          "end_s": 258,
+          "role": null
+        },
+        {
+          "source_artist": "The Doors",
+          "source_title": "Waiting for the Sun",
+          "start_s": 259,
+          "end_s": 287,
+          "role": null
+        },
+        {
+          "source_artist": "Aaliyah",
+          "source_title": "Try Again",
+          "start_s": 261,
+          "end_s": 290,
+          "role": null
+        },
+        {
+          "source_artist": "Trina",
+          "source_title": "Look Back at Me",
+          "start_s": 285,
+          "end_s": 295,
+          "role": null
+        },
+        {
+          "source_artist": "N.W.A",
+          "source_title": "Appetite for Destruction\" (portion sampled samples \"Get Me Back on Time, Engine #9\" by  Wilson Pickett )",
+          "start_s": 293,
+          "end_s": 294,
+          "role": null
+        },
+        {
+          "source_artist": "Missy Elliott",
+          "source_title": "Get Ur Freak On",
+          "start_s": 296,
+          "end_s": 339,
+          "role": null
+        },
+        {
+          "source_artist": "Busta Rhymes",
+          "source_title": "Make It Clap",
+          "start_s": 339,
+          "end_s": 340,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Let It Out",
+      "duration_s": 390,
+      "samples": [
+        {
+          "source_artist": "Bun B",
+          "source_title": "Pop It 4 Pimp",
+          "start_s": 0,
+          "end_s": 9,
+          "role": null
+        },
+        {
+          "source_artist": "General Public",
+          "source_title": "Tenderness",
+          "start_s": 8,
+          "end_s": 82,
+          "role": null
+        },
+        {
+          "source_artist": "Jay-Z",
+          "source_title": "Can I Get A...",
+          "start_s": 15,
+          "end_s": 91,
+          "role": null
+        },
+        {
+          "source_artist": "Citizen King",
+          "source_title": "Better Days (And the Bottom Drops Out)\" (portion sampled samples \" Eric B. Is President \" by  Eric B. & Rakim )",
+          "start_s": 83,
+          "end_s": 84,
+          "role": null
+        },
+        {
+          "source_artist": "Allen Toussaint",
+          "source_title": "Get Out of My Life, Woman",
+          "start_s": 84,
+          "end_s": 87,
+          "role": null
+        },
+        {
+          "source_artist": "Juicy J",
+          "source_title": "Twerk",
+          "start_s": 84,
+          "end_s": 142,
+          "role": null
+        },
+        {
+          "source_artist": "Electric Light Orchestra",
+          "source_title": "Mr. Blue Sky",
+          "start_s": 89,
+          "end_s": 164,
+          "role": null
+        },
+        {
+          "source_artist": "Barry White",
+          "source_title": "I'm Gonna Love You Just a Little More Baby",
+          "start_s": 142,
+          "end_s": 143,
+          "role": null
+        },
+        {
+          "source_artist": "Clipse",
+          "source_title": "I'm Good",
+          "start_s": 143,
+          "end_s": 171,
+          "role": null
+        },
+        {
+          "source_artist": "Craig Mack",
+          "source_title": "Flava in Ya Ear  (Remix)",
+          "start_s": 164,
+          "end_s": 196,
+          "role": null
+        },
+        {
+          "source_artist": "Christina Aguilera",
+          "source_title": "Woohoo",
+          "start_s": 165,
+          "end_s": 171,
+          "role": null
+        },
+        {
+          "source_artist": "Billy Preston",
+          "source_title": "Nothing from Nothing",
+          "start_s": 167,
+          "end_s": 168,
+          "role": null
+        },
+        {
+          "source_artist": "Rancid",
+          "source_title": "Ruby Soho",
+          "start_s": 169,
+          "end_s": 170,
+          "role": null
+        },
+        {
+          "source_artist": "Jay-Z",
+          "source_title": "D.O.A. (Death of Auto-Tune) \" (portion sampled samples \"In the Space\" by  Janko Nilovi&#263;  and Dave Sucky)",
+          "start_s": 172,
+          "end_s": 174,
+          "role": null
+        },
+        {
+          "source_artist": "GZA",
+          "source_title": "Liquid Swords\" (portion sampled samples \"Groovin'\" by  Willie Mitchell )",
+          "start_s": 174,
+          "end_s": 193,
+          "role": null
+        },
+        {
+          "source_artist": "Beck",
+          "source_title": "Loser \" (portion sampled samples \"I Walk on Gilded Splinters\" by  Johnny Jenkins )",
+          "start_s": 194,
+          "end_s": 280,
+          "role": null
+        },
+        {
+          "source_artist": "Jim Jones",
+          "source_title": "Pop Champagne",
+          "start_s": 198,
+          "end_s": 227,
+          "role": null
+        },
+        {
+          "source_artist": "Snoop Dogg",
+          "source_title": "Drop It Like It's Hot",
+          "start_s": 204,
+          "end_s": 249,
+          "role": null
+        },
+        {
+          "source_artist": "Rihanna",
+          "source_title": "Hard",
+          "start_s": 229,
+          "end_s": 237,
+          "role": null
+        },
+        {
+          "source_artist": "Wale",
+          "source_title": "Pretty Girls",
+          "start_s": 237,
+          "end_s": 313,
+          "role": null
+        },
+        {
+          "source_artist": "Jean Knight",
+          "source_title": "Mr. Big Stuff",
+          "start_s": 281,
+          "end_s": 313,
+          "role": null
+        },
+        {
+          "source_artist": "Deftones",
+          "source_title": "Around the Fur",
+          "start_s": 313,
+          "end_s": 318,
+          "role": null
+        },
+        {
+          "source_artist": "Sir Mix-a-Lot",
+          "source_title": "Posse on Broadway",
+          "start_s": 313,
+          "end_s": 390,
+          "role": null
+        },
+        {
+          "source_artist": "Black Rob",
+          "source_title": "Whoa!",
+          "start_s": 315,
+          "end_s": 324,
+          "role": null
+        },
+        {
+          "source_artist": "Fugazi",
+          "source_title": "Waiting Room",
+          "start_s": 324,
+          "end_s": 388,
+          "role": null
+        },
+        {
+          "source_artist": "Dr. Octagon",
+          "source_title": "Blue Flowers\" (portion sampled samples \"Bumpin' Bus Stop\" by Thunder and Lightning)",
+          "start_s": 333,
+          "end_s": 334,
+          "role": null
+        },
+        {
+          "source_artist": "Rihanna",
+          "source_title": "Rude Boy",
+          "start_s": 335,
+          "end_s": 390,
+          "role": null
+        },
+        {
+          "source_artist": "Boogie Down Productions",
+          "source_title": "South Bronx \" (portion sampled samples \" Get Up Offa That Thing \" by  James Brown )",
+          "start_s": 388,
+          "end_s": 390,
+          "role": null
+        },
+        {
+          "source_artist": "Whodini",
+          "source_title": "I'm a Ho",
+          "start_s": 388,
+          "end_s": 390,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "That's Right",
+      "duration_s": 323,
+      "samples": [
+        {
+          "source_artist": "Fabolous",
+          "source_title": "Can't Deny It",
+          "start_s": 0,
+          "end_s": 39,
+          "role": null
+        },
+        {
+          "source_artist": "Jay-Z",
+          "source_title": "On to the Next One",
+          "start_s": 16,
+          "end_s": 18,
+          "role": null
+        },
+        {
+          "source_artist": "DMX",
+          "source_title": "What's My Name?",
+          "start_s": 18,
+          "end_s": 19,
+          "role": null
+        },
+        {
+          "source_artist": "Peter Gabriel",
+          "source_title": "In Your Eyes",
+          "start_s": 19,
+          "end_s": 93,
+          "role": null
+        },
+        {
+          "source_artist": "Slim",
+          "source_title": "Break U Down (Remix)",
+          "start_s": 19,
+          "end_s": 108,
+          "role": null
+        },
+        {
+          "source_artist": "Foxy Brown",
+          "source_title": "Hot Spot",
+          "start_s": 23,
+          "end_s": 61,
+          "role": null
+        },
+        {
+          "source_artist": "Nine Inch Nails",
+          "source_title": "Closer \" (portion sampled samples \"Night Clubbing\" by  Iggy Pop )",
+          "start_s": 29,
+          "end_s": 61,
+          "role": null
+        },
+        {
+          "source_artist": "OMG Girlz",
+          "source_title": "Haterz",
+          "start_s": 61,
+          "end_s": 109,
+          "role": null
+        },
+        {
+          "source_artist": "Swizz Beatz",
+          "source_title": "Guilty",
+          "start_s": 67,
+          "end_s": 78,
+          "role": null
+        },
+        {
+          "source_artist": "DJ Amaze",
+          "source_title": "I Wanna Rock",
+          "start_s": 68,
+          "end_s": 151,
+          "role": null
+        },
+        {
+          "source_artist": "Kid Cudi",
+          "source_title": "Make Her Say \" (portion sampled samples \"In the Morning Time\" by  Tramaine )",
+          "start_s": 77,
+          "end_s": 98,
+          "role": null
+        },
+        {
+          "source_artist": "50 Cent",
+          "source_title": "Window Shopper",
+          "start_s": 79,
+          "end_s": 80,
+          "role": null
+        },
+        {
+          "source_artist": "E-40",
+          "source_title": "Break Ya Ankles",
+          "start_s": 80,
+          "end_s": 81,
+          "role": null
+        },
+        {
+          "source_artist": "Cassidy",
+          "source_title": "B-Boy Stance",
+          "start_s": 81,
+          "end_s": 82,
+          "role": null
+        },
+        {
+          "source_artist": "Nas",
+          "source_title": "Got Ur Self A…",
+          "start_s": 82,
+          "end_s": 83,
+          "role": null
+        },
+        {
+          "source_artist": "Nicki Minaj",
+          "source_title": "Your Love",
+          "start_s": 84,
+          "end_s": 85,
+          "role": null
+        },
+        {
+          "source_artist": "Spacehog",
+          "source_title": "In the Meantime \" (portion sampled samples \" Telephone and Rubber Band \" by  Penguin Cafe Orchestra )",
+          "start_s": 99,
+          "end_s": 151,
+          "role": null
+        },
+        {
+          "source_artist": "Terror Squad",
+          "source_title": "Lean Back",
+          "start_s": 109,
+          "end_s": 130,
+          "role": null
+        },
+        {
+          "source_artist": "Ester Dean",
+          "source_title": "Drop It Low",
+          "start_s": 153,
+          "end_s": 159,
+          "role": null
+        },
+        {
+          "source_artist": "Uncle Louie",
+          "source_title": "I Like Funky Music",
+          "start_s": 160,
+          "end_s": 161,
+          "role": null
+        },
+        {
+          "source_artist": "Beastie Boys",
+          "source_title": "Paul Revere \" (portion sampled samples \"It's Yours\" by  T La Rock  and  Jazzy Jay )",
+          "start_s": 162,
+          "end_s": 163,
+          "role": null
+        },
+        {
+          "source_artist": "MC Shan",
+          "source_title": "The Bridge\" (portion sampled samples \"Impeach the President\" by  The Honey Drippers )",
+          "start_s": 162,
+          "end_s": 211,
+          "role": null
+        },
+        {
+          "source_artist": "Beyoncé",
+          "source_title": "Single Ladies (Put a Ring on It)",
+          "start_s": 162,
+          "end_s": 240,
+          "role": null
+        },
+        {
+          "source_artist": "M.O.P.",
+          "source_title": "Ante Up \" (portion sampled samples \"Soul Sister, Brown Sugar\" by  Sam & Dave )",
+          "start_s": 170,
+          "end_s": 319,
+          "role": null
+        },
+        {
+          "source_artist": "Whodini",
+          "source_title": "Friends",
+          "start_s": 231,
+          "end_s": 319,
+          "role": null
+        },
+        {
+          "source_artist": "Miley Cyrus",
+          "source_title": "Party in the U.S.A.",
+          "start_s": 242,
+          "end_s": 319,
+          "role": null
+        },
+        {
+          "source_artist": "Dr. Dre",
+          "source_title": "The Next Episode",
+          "start_s": 319,
+          "end_s": 320,
+          "role": null
+        },
+        {
+          "source_artist": "Portishead",
+          "source_title": "Sour Times \" (portion sampled samples \"Danube Incident\" by  Lalo Schifrin )",
+          "start_s": 321,
+          "end_s": 323,
+          "role": null
+        },
+        {
+          "source_artist": "Miley Cyrus",
+          "source_title": "Party in the U.S.A.",
+          "start_s": 322,
+          "end_s": 323,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Jump on Stage",
+      "duration_s": 383,
+      "samples": [
+        {
+          "source_artist": "Naughty by Nature",
+          "source_title": "Everything's Gonna Be Alright",
+          "start_s": 6,
+          "end_s": 7,
+          "role": null
+        },
+        {
+          "source_artist": "Big Boi",
+          "source_title": "Shutterbugg",
+          "start_s": 7,
+          "end_s": 81,
+          "role": null
+        },
+        {
+          "source_artist": "Amerie",
+          "source_title": "Why R U \" (portion sampled samples \" Ego Trippin' \" by  Ultramagnetic MCs )",
+          "start_s": 8,
+          "end_s": 66,
+          "role": null
+        },
+        {
+          "source_artist": "Talking Heads",
+          "source_title": "Take Me to the River",
+          "start_s": 67,
+          "end_s": 159,
+          "role": null
+        },
+        {
+          "source_artist": "Ice Cube",
+          "source_title": "We Be Clubbin'",
+          "start_s": 72,
+          "end_s": 81,
+          "role": null
+        },
+        {
+          "source_artist": "V.I.C.",
+          "source_title": "Wobble",
+          "start_s": 72,
+          "end_s": 85,
+          "role": null
+        },
+        {
+          "source_artist": "50 Cent",
+          "source_title": "Get Up",
+          "start_s": 73,
+          "end_s": 83,
+          "role": null
+        },
+        {
+          "source_artist": "Diddy",
+          "source_title": "Tell Me",
+          "start_s": 74,
+          "end_s": 86,
+          "role": null
+        },
+        {
+          "source_artist": "The Edgar Winter Group",
+          "source_title": "Frankenstein",
+          "start_s": 76,
+          "end_s": 91,
+          "role": null
+        },
+        {
+          "source_artist": "50 Cent",
+          "source_title": "Disco Inferno",
+          "start_s": 89,
+          "end_s": 91,
+          "role": null
+        },
+        {
+          "source_artist": "Skee-Lo",
+          "source_title": "I Wish",
+          "start_s": 91,
+          "end_s": 159,
+          "role": null
+        },
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Hypnotize",
+          "start_s": 91,
+          "end_s": 159,
+          "role": null
+        },
+        {
+          "source_artist": "T'Pau",
+          "source_title": "Heart and Soul",
+          "start_s": 101,
+          "end_s": 164,
+          "role": null
+        },
+        {
+          "source_artist": "Jadakiss",
+          "source_title": "Who's Real",
+          "start_s": 160,
+          "end_s": 186,
+          "role": null
+        },
+        {
+          "source_artist": "Janet Jackson",
+          "source_title": "Love Will Never Do (Without You)",
+          "start_s": 164,
+          "end_s": 165,
+          "role": null
+        },
+        {
+          "source_artist": "New Edition",
+          "source_title": "If It Isn't Love",
+          "start_s": 168,
+          "end_s": 169,
+          "role": null
+        },
+        {
+          "source_artist": "Radiohead",
+          "source_title": "Creep",
+          "start_s": 170,
+          "end_s": 264,
+          "role": null
+        },
+        {
+          "source_artist": "Ol' Dirty Bastard",
+          "source_title": "Shimmy Shimmy Ya",
+          "start_s": 182,
+          "end_s": 248,
+          "role": null
+        },
+        {
+          "source_artist": "Public Enemy",
+          "source_title": "Public Enemy No. 1\" (portion sampled samples \"Feel the Heartbeat\" by  Treacherous Three )",
+          "start_s": 187,
+          "end_s": 189,
+          "role": null
+        },
+        {
+          "source_artist": "Cypress Hill",
+          "source_title": "How I Could Just Kill a Man \" (portion sampled samples \"Midnight Theme\" by  Manzel )",
+          "start_s": 229,
+          "end_s": 246,
+          "role": null
+        },
+        {
+          "source_artist": "Busta Rhymes",
+          "source_title": "Dangerous",
+          "start_s": 258,
+          "end_s": 268,
+          "role": null
+        },
+        {
+          "source_artist": "Prince",
+          "source_title": "Delirious",
+          "start_s": 263,
+          "end_s": 301,
+          "role": null
+        },
+        {
+          "source_artist": "Master P",
+          "source_title": "Rock It",
+          "start_s": 268,
+          "end_s": 311,
+          "role": null
+        },
+        {
+          "source_artist": "Prince & the New Power Generation",
+          "source_title": "Gett Off",
+          "start_s": 306,
+          "end_s": 307,
+          "role": null
+        },
+        {
+          "source_artist": "Beastie Boys",
+          "source_title": "Hey Ladies",
+          "start_s": 307,
+          "end_s": 375,
+          "role": null
+        },
+        {
+          "source_artist": "Iggy Pop",
+          "source_title": "Lust for Life",
+          "start_s": 307,
+          "end_s": 380,
+          "role": null
+        },
+        {
+          "source_artist": "White Town",
+          "source_title": "Your Woman",
+          "start_s": 313,
+          "end_s": 315,
+          "role": null
+        },
+        {
+          "source_artist": "Rob Base and DJ E-Z Rock",
+          "source_title": "Joy and Pain",
+          "start_s": 316,
+          "end_s": 317,
+          "role": null
+        },
+        {
+          "source_artist": "Lady GaGa",
+          "source_title": "LoveGame",
+          "start_s": 316,
+          "end_s": 383,
+          "role": null
+        },
+        {
+          "source_artist": "Herbie Hancock",
+          "source_title": "Rockit",
+          "start_s": 380,
+          "end_s": 383,
+          "role": null
+        },
+        {
+          "source_artist": "Mr. Cheeks",
+          "source_title": "Lights, Camera, Action!  (Remix)",
+          "start_s": 380,
+          "end_s": 383,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "title": "This Is the Remix",
+      "duration_s": 363,
+      "samples": [
+        {
+          "source_artist": "Justin Timberlake",
+          "source_title": "SexyBack",
+          "start_s": 1,
+          "end_s": 37,
+          "role": null
+        },
+        {
+          "source_artist": "Bananarama",
+          "source_title": "Cruel Summer",
+          "start_s": 1,
+          "end_s": 50,
+          "role": null
+        },
+        {
+          "source_artist": "Diddy-Dirty Money",
+          "source_title": "Hello Good Morning  (Remix)",
+          "start_s": 6,
+          "end_s": 37,
+          "role": null
+        },
+        {
+          "source_artist": "Swizz Beatz",
+          "source_title": "It's Me Bitches",
+          "start_s": 9,
+          "end_s": 11,
+          "role": null
+        },
+        {
+          "source_artist": "Snoop Dogg",
+          "source_title": "Gangsta Luv",
+          "start_s": 38,
+          "end_s": 109,
+          "role": null
+        },
+        {
+          "source_artist": "Lil' Kim",
+          "source_title": "The Jump Off",
+          "start_s": 43,
+          "end_s": 110,
+          "role": null
+        },
+        {
+          "source_artist": "Genesis",
+          "source_title": "Tonight, Tonight, Tonight",
+          "start_s": 52,
+          "end_s": 54,
+          "role": null
+        },
+        {
+          "source_artist": "The Jackson 5",
+          "source_title": "I Want You Back",
+          "start_s": 56,
+          "end_s": 123,
+          "role": null
+        },
+        {
+          "source_artist": "N.W.A",
+          "source_title": "Straight Outta Compton \" (portion sampled samples \"Get Me Back on Time, Engine #9\" by  Wilson Pickett )",
+          "start_s": 63,
+          "end_s": 65,
+          "role": null
+        },
+        {
+          "source_artist": "George Michael",
+          "source_title": "Freedom! '90",
+          "start_s": 110,
+          "end_s": 111,
+          "role": null
+        },
+        {
+          "source_artist": "Busta Rhymes",
+          "source_title": "Stop the Party",
+          "start_s": 111,
+          "end_s": 115,
+          "role": null
+        },
+        {
+          "source_artist": "Billy Squier",
+          "source_title": "The Big Beat",
+          "start_s": 113,
+          "end_s": 115,
+          "role": null
+        },
+        {
+          "source_artist": "Gang Starr",
+          "source_title": "DWYCK",
+          "start_s": 113,
+          "end_s": 131,
+          "role": null
+        },
+        {
+          "source_artist": "DMX",
+          "source_title": "Party Up (Up in Here)",
+          "start_s": 115,
+          "end_s": 124,
+          "role": null
+        },
+        {
+          "source_artist": "Beastie Boys",
+          "source_title": "Intergalactic \" (portion sampled samples \" The New Style \" by  Beastie Boys )",
+          "start_s": 123,
+          "end_s": 124,
+          "role": null
+        },
+        {
+          "source_artist": "Toadies",
+          "source_title": "Possum Kingdom",
+          "start_s": 125,
+          "end_s": 221,
+          "role": null
+        },
+        {
+          "source_artist": "2 Live Crew",
+          "source_title": "Banned in the U.S.A.",
+          "start_s": 132,
+          "end_s": 133,
+          "role": null
+        },
+        {
+          "source_artist": "B.o.B",
+          "source_title": "Nothin' on You",
+          "start_s": 133,
+          "end_s": 151,
+          "role": null
+        },
+        {
+          "source_artist": "Method Man & Redman",
+          "source_title": "Tear It Off",
+          "start_s": 152,
+          "end_s": 170,
+          "role": null
+        },
+        {
+          "source_artist": "DJ Jubilee",
+          "source_title": "Get Ready, Ready!",
+          "start_s": 173,
+          "end_s": 202,
+          "role": null
+        },
+        {
+          "source_artist": "Lil Jon and the East Side Boyz",
+          "source_title": "Get Low",
+          "start_s": 206,
+          "end_s": 279,
+          "role": null
+        },
+        {
+          "source_artist": "Simon and Garfunkel",
+          "source_title": "Cecilia",
+          "start_s": 219,
+          "end_s": 279,
+          "role": null
+        },
+        {
+          "source_artist": "U2",
+          "source_title": "Sunday Bloody Sunday",
+          "start_s": 234,
+          "end_s": 260,
+          "role": null
+        },
+        {
+          "source_artist": "Third Eye Blind",
+          "source_title": "Semi-Charmed Life",
+          "start_s": 260,
+          "end_s": 262,
+          "role": null
+        },
+        {
+          "source_artist": "Kid 'n Play",
+          "source_title": "Rollin' with Kid 'n Play",
+          "start_s": 262,
+          "end_s": 284,
+          "role": null
+        },
+        {
+          "source_artist": "Fabolous",
+          "source_title": "Young'n (Holla Back)",
+          "start_s": 280,
+          "end_s": 348,
+          "role": null
+        },
+        {
+          "source_artist": "Heavy D & the Boyz",
+          "source_title": "We Got Our Own Thang",
+          "start_s": 284,
+          "end_s": 285,
+          "role": null
+        },
+        {
+          "source_artist": "The Grateful Dead",
+          "source_title": "Casey Jones",
+          "start_s": 285,
+          "end_s": 288,
+          "role": null
+        },
+        {
+          "source_artist": "Ice Cube",
+          "source_title": "The Nigga Ya Love to Hate",
+          "start_s": 288,
+          "end_s": 289,
+          "role": null
+        },
+        {
+          "source_artist": "INXS",
+          "source_title": "Need You Tonight",
+          "start_s": 289,
+          "end_s": 349,
+          "role": null
+        },
+        {
+          "source_artist": "Main Source",
+          "source_title": "Looking at the Front Door",
+          "start_s": 332,
+          "end_s": 349,
+          "role": null
+        },
+        {
+          "source_artist": "The Clash",
+          "source_title": "Should I Stay or Should I Go",
+          "start_s": 333,
+          "end_s": 355,
+          "role": null
+        },
+        {
+          "source_artist": "LL Cool J",
+          "source_title": "Jingling Baby (Remixed But Still Jingling)",
+          "start_s": 334,
+          "end_s": 350,
+          "role": null
+        },
+        {
+          "source_artist": "Marva Whitney",
+          "source_title": "Unwind Yourself",
+          "start_s": 335,
+          "end_s": 353,
+          "role": null
+        },
+        {
+          "source_artist": "Lisa Lisa and Cult Jam",
+          "source_title": "Let the Beat Hit 'Em \" (portion sampled samples \"AJ Scratch\" by  Kurtis Blow )",
+          "start_s": 350,
+          "end_s": 363,
+          "role": null
+        },
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Nasty Girl",
+          "start_s": 352,
+          "end_s": 354,
+          "role": null
+        },
+        {
+          "source_artist": "Pet Shop Boys",
+          "source_title": "Opportunities (Let's Make Lots of Money)",
+          "start_s": 359,
+          "end_s": 363,
+          "role": null
+        },
+        {
+          "source_artist": "James Brown",
+          "source_title": "Funky Drummer",
+          "start_s": 359,
+          "end_s": 363,
+          "role": null
+        },
+        {
+          "source_artist": "Cream",
+          "source_title": "Sunshine of Your Love",
+          "start_s": 359,
+          "end_s": 363,
+          "role": null
+        },
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Nasty Girl",
+          "start_s": 362,
+          "end_s": 363,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "title": "On and On",
+      "duration_s": 310,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Nasty Boy",
+          "start_s": 3,
+          "end_s": 62,
+          "role": null
+        },
+        {
+          "source_artist": "Trina",
+          "source_title": "Pull Over (Remix)",
+          "start_s": 65,
+          "end_s": 142,
+          "role": null
+        },
+        {
+          "source_artist": "Kesha",
+          "source_title": "Tik Tok",
+          "start_s": 70,
+          "end_s": 86,
+          "role": null
+        },
+        {
+          "source_artist": "Grand Funk Railroad",
+          "source_title": "We're an American Band",
+          "start_s": 83,
+          "end_s": 85,
+          "role": null
+        },
+        {
+          "source_artist": "New Order",
+          "source_title": "Bizarre Love Triangle",
+          "start_s": 85,
+          "end_s": 153,
+          "role": null
+        },
+        {
+          "source_artist": "Birdman",
+          "source_title": "I Want It All",
+          "start_s": 88,
+          "end_s": 110,
+          "role": null
+        },
+        {
+          "source_artist": "Chubb Rock",
+          "source_title": "Treat 'Em Right",
+          "start_s": 127,
+          "end_s": 145,
+          "role": null
+        },
+        {
+          "source_artist": "Britney Spears",
+          "source_title": "Circus",
+          "start_s": 152,
+          "end_s": 153,
+          "role": null
+        },
+        {
+          "source_artist": "White Zombie",
+          "source_title": "Thunder Kiss '65",
+          "start_s": 153,
+          "end_s": 238,
+          "role": null
+        },
+        {
+          "source_artist": "Ying Yang Twins",
+          "source_title": "Wild Out",
+          "start_s": 154,
+          "end_s": 222,
+          "role": null
+        },
+        {
+          "source_artist": "Ludacris",
+          "source_title": "Everybody Drunk\" (portion sampled samples \"You Don't Want Drama\" by  8Ball & MJG )",
+          "start_s": 211,
+          "end_s": 233,
+          "role": null
+        },
+        {
+          "source_artist": "De La Soul",
+          "source_title": "Me Myself and I",
+          "start_s": 223,
+          "end_s": 224,
+          "role": null
+        },
+        {
+          "source_artist": "Lyn Collins",
+          "source_title": "Think (About It)",
+          "start_s": 225,
+          "end_s": 229,
+          "role": null
+        },
+        {
+          "source_artist": "Daft Punk",
+          "source_title": "Television Rules the Nation",
+          "start_s": 225,
+          "end_s": 302,
+          "role": null
+        },
+        {
+          "source_artist": "U2",
+          "source_title": "With or Without You",
+          "start_s": 233,
+          "end_s": 302,
+          "role": null
+        },
+        {
+          "source_artist": "Twista",
+          "source_title": "Wetter",
+          "start_s": 240,
+          "end_s": 289,
+          "role": null
+        },
+        {
+          "source_artist": "Robert Palmer",
+          "source_title": "Addicted to Love",
+          "start_s": 273,
+          "end_s": 288,
+          "role": null
+        },
+        {
+          "source_artist": "DJ OGB",
+          "source_title": "Hands Up",
+          "start_s": 288,
+          "end_s": 290,
+          "role": null
+        },
+        {
+          "source_artist": "Aphex Twin",
+          "source_title": "Windowlicker",
+          "start_s": 295,
+          "end_s": 310,
+          "role": null
+        },
+        {
+          "source_artist": "Lady Gaga",
+          "source_title": "Bad Romance",
+          "start_s": 297,
+          "end_s": 310,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "title": "Get It Get It",
+      "duration_s": 334,
+      "samples": [
+        {
+          "source_artist": "Soulja Boy",
+          "source_title": "Pretty Boy Swag",
+          "start_s": 2,
+          "end_s": 71,
+          "role": null
+        },
+        {
+          "source_artist": "George Clinton",
+          "source_title": "Atomic Dog",
+          "start_s": 26,
+          "end_s": 42,
+          "role": null
+        },
+        {
+          "source_artist": "Fatman Scoop",
+          "source_title": "Party Anthem",
+          "start_s": 71,
+          "end_s": 100,
+          "role": null
+        },
+        {
+          "source_artist": "Kraftwerk",
+          "source_title": "It's More Fun to Compute",
+          "start_s": 72,
+          "end_s": 84,
+          "role": null
+        },
+        {
+          "source_artist": "Black Eyed Peas",
+          "source_title": "Boom Boom Pow",
+          "start_s": 84,
+          "end_s": 109,
+          "role": null
+        },
+        {
+          "source_artist": "Daft Punk",
+          "source_title": "One More Time",
+          "start_s": 87,
+          "end_s": 109,
+          "role": null
+        },
+        {
+          "source_artist": "Rage Against the Machine",
+          "source_title": "Killing in the Name",
+          "start_s": 102,
+          "end_s": 139,
+          "role": null
+        },
+        {
+          "source_artist": "Rye Rye",
+          "source_title": "Bang",
+          "start_s": 110,
+          "end_s": 152,
+          "role": null
+        },
+        {
+          "source_artist": "Steve Miller Band",
+          "source_title": "Jungle Love",
+          "start_s": 139,
+          "end_s": 145,
+          "role": null
+        },
+        {
+          "source_artist": "O'mega Red",
+          "source_title": "Endz",
+          "start_s": 139,
+          "end_s": 152,
+          "role": null
+        },
+        {
+          "source_artist": "Gucci Mane",
+          "source_title": "Spotlight",
+          "start_s": 139,
+          "end_s": 152,
+          "role": null
+        },
+        {
+          "source_artist": "Jibbs",
+          "source_title": "The Dedication (Ay DJ)",
+          "start_s": 144,
+          "end_s": 147,
+          "role": null
+        },
+        {
+          "source_artist": "Depeche Mode",
+          "source_title": "Just Can't Get Enough",
+          "start_s": 147,
+          "end_s": 222,
+          "role": null
+        },
+        {
+          "source_artist": "Pitbull",
+          "source_title": "Hotel Room Service",
+          "start_s": 153,
+          "end_s": 222,
+          "role": null
+        },
+        {
+          "source_artist": "will.i.am",
+          "source_title": "Check It Out \" (portion sampled samples \" Think (About It) \" by  Lyn Collin )",
+          "start_s": 154,
+          "end_s": 182,
+          "role": null
+        },
+        {
+          "source_artist": "Steve Winwood",
+          "source_title": "Roll with It",
+          "start_s": 184,
+          "end_s": 185,
+          "role": null
+        },
+        {
+          "source_artist": "Kid Cudi",
+          "source_title": "Day 'n' Nite  ( Crookers  Remix)",
+          "start_s": 185,
+          "end_s": 229,
+          "role": null
+        },
+        {
+          "source_artist": "Starpoint",
+          "source_title": "Object of My Desire",
+          "start_s": 216,
+          "end_s": 244,
+          "role": null
+        },
+        {
+          "source_artist": "The Who",
+          "source_title": "Won't Get Fooled Again",
+          "start_s": 226,
+          "end_s": 229,
+          "role": null
+        },
+        {
+          "source_artist": "Katy Perry",
+          "source_title": "California Gurls",
+          "start_s": 228,
+          "end_s": 230,
+          "role": null
+        },
+        {
+          "source_artist": "Frankie Smith",
+          "source_title": "Double Dutch Bus",
+          "start_s": 229,
+          "end_s": 245,
+          "role": null
+        },
+        {
+          "source_artist": "Daft Punk",
+          "source_title": "Digital Love \" (portion sampled samples \"I Love You More\" by  George Duke )",
+          "start_s": 235,
+          "end_s": 323,
+          "role": null
+        },
+        {
+          "source_artist": "Missy Elliott",
+          "source_title": "Gossip Folks",
+          "start_s": 245,
+          "end_s": 275,
+          "role": null
+        },
+        {
+          "source_artist": "Outkast",
+          "source_title": "The Way You Move",
+          "start_s": 275,
+          "end_s": 304,
+          "role": null
+        },
+        {
+          "source_artist": "Young Jeezy",
+          "source_title": "Bottom of the Map",
+          "start_s": 275,
+          "end_s": 325,
+          "role": null
+        },
+        {
+          "source_artist": "Free School",
+          "source_title": "Grey Goose (Whatcha Sippin' On)",
+          "start_s": 276,
+          "end_s": 288,
+          "role": null
+        },
+        {
+          "source_artist": "DJ Laz",
+          "source_title": "Move Shake Drop",
+          "start_s": 277,
+          "end_s": 320,
+          "role": null
+        },
+        {
+          "source_artist": "MGMT",
+          "source_title": "Kids",
+          "start_s": 320,
+          "end_s": 328,
+          "role": null
+        },
+        {
+          "source_artist": "The Grass Roots",
+          "source_title": "Let's Live for Today",
+          "start_s": 326,
+          "end_s": 328,
+          "role": null
+        },
+        {
+          "source_artist": "Run-D.M.C.",
+          "source_title": "It's Tricky",
+          "start_s": 328,
+          "end_s": 334,
+          "role": null
+        },
+        {
+          "source_artist": "Young Jeezy",
+          "source_title": "Bottom of the Map",
+          "start_s": 328,
+          "end_s": 334,
+          "role": null
+        },
+        {
+          "source_artist": "Afro-Rican",
+          "source_title": "Give It All You Got (Doggy Style)",
+          "start_s": 328,
+          "end_s": 334,
+          "role": null
+        },
+        {
+          "source_artist": "Belinda Carlisle",
+          "source_title": "Heaven Is a Place on Earth",
+          "start_s": 328,
+          "end_s": 334,
+          "role": null
+        },
+        {
+          "source_artist": "Black Box",
+          "source_title": "Everybody Everybody",
+          "start_s": 331,
+          "end_s": 334,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "title": "Down for the Count",
+      "duration_s": 399,
+      "samples": [
+        {
+          "source_artist": "Krave featuring",
+          "source_title": "Go Crazy",
+          "start_s": 0,
+          "end_s": 8,
+          "role": null
+        },
+        {
+          "source_artist": "Derek and the Dominos",
+          "source_title": "Layla",
+          "start_s": 12,
+          "end_s": 103,
+          "role": null
+        },
+        {
+          "source_artist": "B.o.B",
+          "source_title": "Haterz Everywhere",
+          "start_s": 25,
+          "end_s": 103,
+          "role": null
+        },
+        {
+          "source_artist": "Mandrill",
+          "source_title": "Honey Butt",
+          "start_s": 103,
+          "end_s": 104,
+          "role": null
+        },
+        {
+          "source_artist": "Alanis Morissette",
+          "source_title": "You Oughta Know",
+          "start_s": 106,
+          "end_s": 107,
+          "role": null
+        },
+        {
+          "source_artist": "Warrant",
+          "source_title": "Cherry Pie",
+          "start_s": 107,
+          "end_s": 108,
+          "role": null
+        },
+        {
+          "source_artist": "Mandrill",
+          "source_title": "Positive Thing",
+          "start_s": 108,
+          "end_s": 109,
+          "role": null
+        },
+        {
+          "source_artist": "Michael Jackson",
+          "source_title": "Black or White",
+          "start_s": 108,
+          "end_s": 110,
+          "role": null
+        },
+        {
+          "source_artist": "Flo Rida",
+          "source_title": "Right Round",
+          "start_s": 110,
+          "end_s": 117,
+          "role": null
+        },
+        {
+          "source_artist": "DJ Class",
+          "source_title": "I'm the Shit",
+          "start_s": 110,
+          "end_s": 154,
+          "role": null
+        },
+        {
+          "source_artist": "Crystal Waters",
+          "source_title": "Gypsy Woman (She's Homeless)",
+          "start_s": 118,
+          "end_s": 148,
+          "role": null
+        },
+        {
+          "source_artist": "Dominique Young Unique",
+          "source_title": "Show My Ass",
+          "start_s": 133,
+          "end_s": 215,
+          "role": null
+        },
+        {
+          "source_artist": "Madness",
+          "source_title": "Our House",
+          "start_s": 150,
+          "end_s": 215,
+          "role": null
+        },
+        {
+          "source_artist": "Love and Rockets",
+          "source_title": "So Alive",
+          "start_s": 155,
+          "end_s": 170,
+          "role": null
+        },
+        {
+          "source_artist": "LL Cool J",
+          "source_title": "Control Myself",
+          "start_s": 200,
+          "end_s": 207,
+          "role": null
+        },
+        {
+          "source_artist": "Janet Jackson",
+          "source_title": "Someone to Call My Lover",
+          "start_s": 201,
+          "end_s": 205,
+          "role": null
+        },
+        {
+          "source_artist": "Pitbull",
+          "source_title": "Krazy",
+          "start_s": 216,
+          "end_s": 222,
+          "role": null
+        },
+        {
+          "source_artist": "Federico Franchi",
+          "source_title": "Cream",
+          "start_s": 216,
+          "end_s": 222,
+          "role": null
+        },
+        {
+          "source_artist": "T. Rex",
+          "source_title": "20th Century Boy",
+          "start_s": 219,
+          "end_s": 277,
+          "role": null
+        },
+        {
+          "source_artist": "MSTRKRFT",
+          "source_title": "Bounce",
+          "start_s": 221,
+          "end_s": 280,
+          "role": null
+        },
+        {
+          "source_artist": "The Rapture",
+          "source_title": "House of Jealous Lovers",
+          "start_s": 267,
+          "end_s": 355,
+          "role": null
+        },
+        {
+          "source_artist": "Chelley",
+          "source_title": "Took the Night",
+          "start_s": 280,
+          "end_s": 281,
+          "role": null
+        },
+        {
+          "source_artist": "Young MC",
+          "source_title": "Bust a Move",
+          "start_s": 281,
+          "end_s": 335,
+          "role": null
+        },
+        {
+          "source_artist": "Kylie Minogue",
+          "source_title": "Can't Get You Out of My Head",
+          "start_s": 282,
+          "end_s": 326,
+          "role": null
+        },
+        {
+          "source_artist": "Shorty Long",
+          "source_title": "Function at the Junction",
+          "start_s": 315,
+          "end_s": 334,
+          "role": null
+        },
+        {
+          "source_artist": "Dennis Coffey",
+          "source_title": "Scorpio",
+          "start_s": 319,
+          "end_s": 342,
+          "role": null
+        },
+        {
+          "source_artist": "Trick Daddy",
+          "source_title": "Take It to Da House",
+          "start_s": 329,
+          "end_s": 341,
+          "role": null
+        },
+        {
+          "source_artist": "Usher",
+          "source_title": "OMG",
+          "start_s": 340,
+          "end_s": 350,
+          "role": null
+        },
+        {
+          "source_artist": "Trick Daddy",
+          "source_title": "Shut Up",
+          "start_s": 350,
+          "end_s": 392,
+          "role": null
+        },
+        {
+          "source_artist": "The Temptations",
+          "source_title": "Get Ready",
+          "start_s": 351,
+          "end_s": 392,
+          "role": null
+        },
+        {
+          "source_artist": "Billy Idol",
+          "source_title": "Mony Mony",
+          "start_s": 356,
+          "end_s": 384,
+          "role": null
+        },
+        {
+          "source_artist": "Duke Williams and the Extremes",
+          "source_title": "Chinese Chicken",
+          "start_s": 368,
+          "end_s": 369,
+          "role": null
+        },
+        {
+          "source_artist": "2 Live Crew",
+          "source_title": "Get It Girl",
+          "start_s": 370,
+          "end_s": 383,
+          "role": null
+        },
+        {
+          "source_artist": "Ghost Town DJ's",
+          "source_title": "My Boo",
+          "start_s": 385,
+          "end_s": 399,
+          "role": null
+        },
+        {
+          "source_artist": "Cyndi Lauper",
+          "source_title": "Time After Time",
+          "start_s": 392,
+          "end_s": 399,
+          "role": null
+        },
+        {
+          "source_artist": "T.I.",
+          "source_title": "Got Your Back",
+          "start_s": 392,
+          "end_s": 399,
+          "role": null
+        },
+        {
+          "source_artist": "Young Dro",
+          "source_title": "Freeze Me",
+          "start_s": 396,
+          "end_s": 399,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "title": "Make Me Wanna",
+      "duration_s": 384,
+      "samples": [
+        {
+          "source_artist": "Basement Jaxx",
+          "source_title": "Where's Your Head At?",
+          "start_s": 55,
+          "end_s": 133,
+          "role": null
+        },
+        {
+          "source_artist": "Rick Ross",
+          "source_title": "B.M.F. (Blowin' Money Fast)",
+          "start_s": 71,
+          "end_s": 133,
+          "role": null
+        },
+        {
+          "source_artist": "Beastie Boys",
+          "source_title": "Root Down",
+          "start_s": 80,
+          "end_s": 91,
+          "role": null
+        },
+        {
+          "source_artist": "B.o.B",
+          "source_title": "Bet I",
+          "start_s": 135,
+          "end_s": 140,
+          "role": null
+        },
+        {
+          "source_artist": "Waka Flocka Flame",
+          "source_title": "Hard in da Paint",
+          "start_s": 137,
+          "end_s": 217,
+          "role": null
+        },
+        {
+          "source_artist": "Mr. Oizo",
+          "source_title": "Flat Beat",
+          "start_s": 140,
+          "end_s": 211,
+          "role": null
+        },
+        {
+          "source_artist": "Arcade Fire",
+          "source_title": "Wake Up",
+          "start_s": 212,
+          "end_s": 273,
+          "role": null
+        },
+        {
+          "source_artist": "Birdman",
+          "source_title": "Money to Blow",
+          "start_s": 212,
+          "end_s": 273,
+          "role": null
+        },
+        {
+          "source_artist": "Ginuwine",
+          "source_title": "Pony",
+          "start_s": 212,
+          "end_s": 273,
+          "role": null
+        },
+        {
+          "source_artist": "Crime Mob",
+          "source_title": "Knuck If You Buck",
+          "start_s": 247,
+          "end_s": 267,
+          "role": null
+        },
+        {
+          "source_artist": "Baby Bash",
+          "source_title": "Good for My Money",
+          "start_s": 273,
+          "end_s": 274,
+          "role": null
+        },
+        {
+          "source_artist": "Van Halen",
+          "source_title": "Eruption",
+          "start_s": 274,
+          "end_s": 281,
+          "role": null
+        },
+        {
+          "source_artist": "Radiohead",
+          "source_title": "Idioteque",
+          "start_s": 274,
+          "end_s": 348,
+          "role": null
+        },
+        {
+          "source_artist": "The Isley Brothers",
+          "source_title": "Shout",
+          "start_s": 277,
+          "end_s": 347,
+          "role": null
+        },
+        {
+          "source_artist": "Yeah Yeah Yeahs",
+          "source_title": "Heads Will Roll",
+          "start_s": 281,
+          "end_s": 294,
+          "role": null
+        },
+        {
+          "source_artist": "DJ Funk",
+          "source_title": "Pop Those Thangs",
+          "start_s": 281,
+          "end_s": 376,
+          "role": null
+        },
+        {
+          "source_artist": "The Ting Tings",
+          "source_title": "That's Not My Name",
+          "start_s": 294,
+          "end_s": 295,
+          "role": null
+        },
+        {
+          "source_artist": "J. Cole",
+          "source_title": "Blow Up",
+          "start_s": 318,
+          "end_s": 384,
+          "role": null
+        },
+        {
+          "source_artist": "Jordan Knight",
+          "source_title": "Give It to You",
+          "start_s": 320,
+          "end_s": 321,
+          "role": null
+        },
+        {
+          "source_artist": "Travis Porter",
+          "source_title": "Go Shorty Go",
+          "start_s": 322,
+          "end_s": 375,
+          "role": null
+        },
+        {
+          "source_artist": "Travis Porter",
+          "source_title": "Go Shorty Go",
+          "start_s": 376,
+          "end_s": 384,
+          "role": null
+        },
+        {
+          "source_artist": "Clipse",
+          "source_title": "Champion",
+          "start_s": 376,
+          "end_s": 384,
+          "role": null
+        },
+        {
+          "source_artist": "Blue Oyster Cult",
+          "source_title": "(Don't Fear) the Reaper",
+          "start_s": 383,
+          "end_s": 384,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "title": "Steady Shock",
+      "duration_s": 349,
+      "samples": [
+        {
+          "source_artist": "Usher",
+          "source_title": "Lil Freak",
+          "start_s": 5,
+          "end_s": 46,
+          "role": null
+        },
+        {
+          "source_artist": "T-Pain",
+          "source_title": "Reverse Cowgirl",
+          "start_s": 28,
+          "end_s": 29,
+          "role": null
+        },
+        {
+          "source_artist": "Young T",
+          "source_title": "Work Dat Lumba",
+          "start_s": 46,
+          "end_s": 52,
+          "role": null
+        },
+        {
+          "source_artist": "Soulja Boy",
+          "source_title": "Bird Walk",
+          "start_s": 47,
+          "end_s": 95,
+          "role": null
+        },
+        {
+          "source_artist": "The Cars",
+          "source_title": "Moving in Stereo",
+          "start_s": 48,
+          "end_s": 54,
+          "role": null
+        },
+        {
+          "source_artist": "J-Kwon",
+          "source_title": "Yeah",
+          "start_s": 51,
+          "end_s": 52,
+          "role": null
+        },
+        {
+          "source_artist": "N.E.R.D",
+          "source_title": "Everyone Nose (All the Girls Standing in the Line for the Bathroom)",
+          "start_s": 55,
+          "end_s": 83,
+          "role": null
+        },
+        {
+          "source_artist": "Bruce Springsteen",
+          "source_title": "Dancing in the Dark",
+          "start_s": 55,
+          "end_s": 109,
+          "role": null
+        },
+        {
+          "source_artist": "Party Boyz",
+          "source_title": "Flex (Remix)",
+          "start_s": 96,
+          "end_s": 121,
+          "role": null
+        },
+        {
+          "source_artist": "2Pac",
+          "source_title": "Me Against the World",
+          "start_s": 109,
+          "end_s": 211,
+          "role": null
+        },
+        {
+          "source_artist": "Supergrass",
+          "source_title": "Alright",
+          "start_s": 122,
+          "end_s": 196,
+          "role": null
+        },
+        {
+          "source_artist": "Bone Thugs-n-Harmony",
+          "source_title": "1st of tha Month",
+          "start_s": 126,
+          "end_s": 191,
+          "role": null
+        },
+        {
+          "source_artist": "George Harrison",
+          "source_title": "Got My Mind Set on You",
+          "start_s": 166,
+          "end_s": 190,
+          "role": null
+        },
+        {
+          "source_artist": "Drake",
+          "source_title": "Over",
+          "start_s": 192,
+          "end_s": 272,
+          "role": null
+        },
+        {
+          "source_artist": "Harvey Danger",
+          "source_title": "Flagpole Sitta",
+          "start_s": 197,
+          "end_s": 198,
+          "role": null
+        },
+        {
+          "source_artist": "Collective Soul",
+          "source_title": "Shine",
+          "start_s": 198,
+          "end_s": 199,
+          "role": null
+        },
+        {
+          "source_artist": "A Flock of Seagulls",
+          "source_title": "I Ran (So Far Away)",
+          "start_s": 205,
+          "end_s": 262,
+          "role": null
+        },
+        {
+          "source_artist": "OutKast",
+          "source_title": "B.O.B.",
+          "start_s": 262,
+          "end_s": 327,
+          "role": null
+        },
+        {
+          "source_artist": "Nirvana",
+          "source_title": "Aneurysm",
+          "start_s": 263,
+          "end_s": 339,
+          "role": null
+        },
+        {
+          "source_artist": "Three 6 Mafia",
+          "source_title": "Who Run It",
+          "start_s": 263,
+          "end_s": 339,
+          "role": null
+        },
+        {
+          "source_artist": "Phoenix",
+          "source_title": "1901",
+          "start_s": 327,
+          "end_s": 338,
+          "role": null
+        },
+        {
+          "source_artist": "Ludacris",
+          "source_title": "My Chick Bad",
+          "start_s": 339,
+          "end_s": 340,
+          "role": null
+        },
+        {
+          "source_artist": "Phoenix",
+          "source_title": "1901",
+          "start_s": 340,
+          "end_s": 349,
+          "role": null
+        },
+        {
+          "source_artist": "Beyoncé",
+          "source_title": "Diva",
+          "start_s": 340,
+          "end_s": 349,
+          "role": null
+        },
+        {
+          "source_artist": "Ludacris",
+          "source_title": "How Low \" (portion sampled samples \" Bring the Noise \" by  Public Enemy )",
+          "start_s": 347,
+          "end_s": 349,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "title": "Triple Double",
+      "duration_s": 389,
+      "samples": [
+        {
+          "source_artist": "Diamond",
+          "source_title": "Lotta Money",
+          "start_s": 0,
+          "end_s": 3,
+          "role": null
+        },
+        {
+          "source_artist": "Devo",
+          "source_title": "Whip It",
+          "start_s": 43,
+          "end_s": 70,
+          "role": null
+        },
+        {
+          "source_artist": "Public Enemy",
+          "source_title": "Bring the Noise",
+          "start_s": 47,
+          "end_s": 57,
+          "role": null
+        },
+        {
+          "source_artist": "SupaSTAAR featuring",
+          "source_title": "Head 'N Shoulders",
+          "start_s": 72,
+          "end_s": 82,
+          "role": null
+        },
+        {
+          "source_artist": "Keri Hilson",
+          "source_title": "Turnin' Me On",
+          "start_s": 79,
+          "end_s": 81,
+          "role": null
+        },
+        {
+          "source_artist": "Blondie",
+          "source_title": "Dreaming",
+          "start_s": 82,
+          "end_s": 83,
+          "role": null
+        },
+        {
+          "source_artist": "Joe Jackson",
+          "source_title": "Steppin' Out",
+          "start_s": 82,
+          "end_s": 153,
+          "role": null
+        },
+        {
+          "source_artist": "Lil Wayne",
+          "source_title": "A Milli",
+          "start_s": 83,
+          "end_s": 165,
+          "role": null
+        },
+        {
+          "source_artist": "Nirvana",
+          "source_title": "In Bloom",
+          "start_s": 153,
+          "end_s": 154,
+          "role": null
+        },
+        {
+          "source_artist": "Crooked I",
+          "source_title": "Everythang",
+          "start_s": 165,
+          "end_s": 196,
+          "role": null
+        },
+        {
+          "source_artist": "Neil Diamond",
+          "source_title": "Cherry, Cherry",
+          "start_s": 167,
+          "end_s": 206,
+          "role": null
+        },
+        {
+          "source_artist": "Lil Jon",
+          "source_title": "Snap Yo Fingers",
+          "start_s": 196,
+          "end_s": 218,
+          "role": null
+        },
+        {
+          "source_artist": "50 Cent",
+          "source_title": "Wanksta",
+          "start_s": 207,
+          "end_s": 208,
+          "role": null
+        },
+        {
+          "source_artist": "Devo",
+          "source_title": "Gates of Steel",
+          "start_s": 207,
+          "end_s": 292,
+          "role": null
+        },
+        {
+          "source_artist": "Ice Cube",
+          "source_title": "It Was a Good Day",
+          "start_s": 219,
+          "end_s": 278,
+          "role": null
+        },
+        {
+          "source_artist": "J-Kwon",
+          "source_title": "Tipsy '09",
+          "start_s": 277,
+          "end_s": 292,
+          "role": null
+        },
+        {
+          "source_artist": "Drake",
+          "source_title": "Forever",
+          "start_s": 292,
+          "end_s": 295,
+          "role": null
+        },
+        {
+          "source_artist": "Willow Smith",
+          "source_title": "Whip My Hair",
+          "start_s": 292,
+          "end_s": 376,
+          "role": null
+        },
+        {
+          "source_artist": "The Bangz featuring",
+          "source_title": "Found My Swag",
+          "start_s": 296,
+          "end_s": 297,
+          "role": null
+        },
+        {
+          "source_artist": "The Rolling Stones",
+          "source_title": "Paint It, Black",
+          "start_s": 298,
+          "end_s": 373,
+          "role": null
+        },
+        {
+          "source_artist": "Wiz Khalifa",
+          "source_title": "Black and Yellow",
+          "start_s": 299,
+          "end_s": 378,
+          "role": null
+        },
+        {
+          "source_artist": "The Young Rascals",
+          "source_title": "Good Lovin'",
+          "start_s": 307,
+          "end_s": 309,
+          "role": null
+        },
+        {
+          "source_artist": "Van Halen",
+          "source_title": "Jump",
+          "start_s": 374,
+          "end_s": 376,
+          "role": null
+        },
+        {
+          "source_artist": "Fine Young Cannibals",
+          "source_title": "Good Thing",
+          "start_s": 377,
+          "end_s": 378,
+          "role": null
+        },
+        {
+          "source_artist": "Gucci Mane",
+          "source_title": "Making Love to the Money",
+          "start_s": 379,
+          "end_s": 380,
+          "role": null
+        },
+        {
+          "source_artist": "Gucci Mane",
+          "source_title": "Gucci Time",
+          "start_s": 379,
+          "end_s": 389,
+          "role": null
+        },
+        {
+          "source_artist": "Fine Young Cannibals",
+          "source_title": "Good Thing  ( Prince Paul  remix)",
+          "start_s": 379,
+          "end_s": 389,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "title": "Every Day",
+      "duration_s": 312,
+      "samples": [
+        {
+          "source_artist": "Darude",
+          "source_title": "Sandstorm",
+          "start_s": 35,
+          "end_s": 36,
+          "role": null
+        },
+        {
+          "source_artist": "Gloria Estefan",
+          "source_title": "Words Get in the Way",
+          "start_s": 36,
+          "end_s": 37,
+          "role": null
+        },
+        {
+          "source_artist": "T-No featuring",
+          "source_title": "Fucked Up",
+          "start_s": 61,
+          "end_s": 62,
+          "role": null
+        },
+        {
+          "source_artist": "Jay-Z",
+          "source_title": "Dirt Off Your Shoulder",
+          "start_s": 61,
+          "end_s": 143,
+          "role": null
+        },
+        {
+          "source_artist": "Mims",
+          "source_title": "Move (If You Wanna)",
+          "start_s": 66,
+          "end_s": 68,
+          "role": null
+        },
+        {
+          "source_artist": "DJ Unk",
+          "source_title": "Futuristic Slide",
+          "start_s": 68,
+          "end_s": 70,
+          "role": null
+        },
+        {
+          "source_artist": "Billy Idol",
+          "source_title": "Dancing with Myself",
+          "start_s": 71,
+          "end_s": 153,
+          "role": null
+        },
+        {
+          "source_artist": "Modern English",
+          "source_title": "I Melt with You",
+          "start_s": 71,
+          "end_s": 155,
+          "role": null
+        },
+        {
+          "source_artist": "Gucci Mane",
+          "source_title": "I'm the Shit",
+          "start_s": 147,
+          "end_s": 289,
+          "role": null
+        },
+        {
+          "source_artist": "Cassidy",
+          "source_title": "Face to Face",
+          "start_s": 155,
+          "end_s": 156,
+          "role": null
+        },
+        {
+          "source_artist": "Rich Boy",
+          "source_title": "Drop",
+          "start_s": 155,
+          "end_s": 290,
+          "role": null
+        },
+        {
+          "source_artist": "Hotstylz",
+          "source_title": "Lookin Boy",
+          "start_s": 156,
+          "end_s": 164,
+          "role": null
+        },
+        {
+          "source_artist": "Lil Wil",
+          "source_title": "Bust It Open",
+          "start_s": 156,
+          "end_s": 290,
+          "role": null
+        },
+        {
+          "source_artist": "Hall & Oates",
+          "source_title": "You Make My Dreams",
+          "start_s": 164,
+          "end_s": 165,
+          "role": null
+        },
+        {
+          "source_artist": "Bobby Valentino",
+          "source_title": "Beep",
+          "start_s": 165,
+          "end_s": 168,
+          "role": null
+        },
+        {
+          "source_artist": "Mann",
+          "source_title": "Fight Come wit It",
+          "start_s": 168,
+          "end_s": 169,
+          "role": null
+        },
+        {
+          "source_artist": "John Lennon",
+          "source_title": "Imagine",
+          "start_s": 168,
+          "end_s": 300,
+          "role": null
+        },
+        {
+          "source_artist": "UGK",
+          "source_title": "One Day",
+          "start_s": 181,
+          "end_s": 234,
+          "role": null
+        },
+        {
+          "source_artist": "Chick Da Flyest featuring",
+          "source_title": "Marvelous",
+          "start_s": 235,
+          "end_s": 236,
+          "role": null
+        },
+        {
+          "source_artist": "Barbee featuring",
+          "source_title": "Come See Bout Me",
+          "start_s": 243,
+          "end_s": 265,
+          "role": null
+        },
+        {
+          "source_artist": "T.I.",
+          "source_title": "Rubberband Man",
+          "start_s": 250,
+          "end_s": 251,
+          "role": null
+        },
+        {
+          "source_artist": "DMX",
+          "source_title": "Get at Me Dog",
+          "start_s": 250,
+          "end_s": 251,
+          "role": null
+        },
+        {
+          "source_artist": "Rosalind Rice featuring",
+          "source_title": "Hustler",
+          "start_s": 253,
+          "end_s": 256,
+          "role": null
+        },
+        {
+          "source_artist": "Freeway",
+          "source_title": "Flipside",
+          "start_s": 270,
+          "end_s": 271,
+          "role": null
+        },
+        {
+          "source_artist": "Master P",
+          "source_title": "Ooohhhwee",
+          "start_s": 281,
+          "end_s": 282,
+          "role": null
+        }
+      ]
+    }
+  ]
+}

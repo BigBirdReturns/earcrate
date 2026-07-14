@@ -1,0 +1,508 @@
+{
+  "album": "Since I Left You",
+  "artist": "The Avalanches",
+  "maps_to_persona": "remix_avalanches_v1",
+  "sources": [
+    "https://en.wikipedia.org/wiki/Since_I_Left_You",
+    "https://en.wikipedia.org/wiki/Frontier_Psychiatrist",
+    "https://www.whosampled.com/album/The-Avalanches/Since-I-Left-You/"
+  ],
+  "notes": "Album reportedly 900-3500 samples; no master list kept. Only DOCUMENTED backbone samples (Wikipedia album/single articles + WhoSampled per-track). HIGH confidence on the singles; MEDIUM elsewhere. Two interstitials left empty. Timestamps null.",
+  "tracks": [
+    {
+      "index": 1,
+      "title": "Since I Left You",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Main Attraction",
+          "source_title": "Everyday",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Rose Royce",
+          "source_title": "Daddy Rich",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Tony Mottola",
+          "source_title": "Anema e core",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Duprees",
+          "source_title": "The Sky's the Limit",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Lamont Dozier",
+          "source_title": "Take Off Your Make-Up",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Klaus Wunderlich",
+          "source_title": "Let's Do the Latin Hustle",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Stay Another Season",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Madonna",
+          "source_title": "Holiday",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "MC Miker G & Deejay Sven",
+          "source_title": "Holiday Rap",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Radio",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Mandrill",
+          "source_title": "Fat City Strut",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Main Attraction",
+          "source_title": "One Must Cry",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Atlanta Rhythm Section",
+          "source_title": "So Into You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Sergio Mendes & Brasil '66",
+          "source_title": "Day Tripper (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Two Hearts in 3/4 Time",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Neil Ardley",
+          "source_title": "Rainbow Seven",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "title": "Avalanche Rock",
+      "duration_s": null,
+      "samples": []
+    },
+    {
+      "index": 6,
+      "title": "Flight Tonight",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Sylvester",
+          "source_title": "Rock the Box",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Raekwon",
+          "source_title": "Glaciers of Ice",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Vanilla Fudge",
+          "source_title": "Take Me for a Little While",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The 5th Dimension",
+          "source_title": "A Love Like Ours",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "title": "Close to You",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Nancy Wilson",
+          "source_title": "Tonight May Have to Last Me All My Life",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Isley Brothers",
+          "source_title": "Tell Me When You Need It Again",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Camp Lo",
+          "source_title": "Sparkle",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Atlanta Rhythm Section",
+          "source_title": "So Into You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "title": "Diners Only",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Cerrone",
+          "source_title": "Love in C Minor",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Camp Lo",
+          "source_title": "Sparkle",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "title": "A Different Feeling",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Debbie Reynolds",
+          "source_title": "Tammy",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Cerrone",
+          "source_title": "Love in C Minor",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Kay-Gees",
+          "source_title": "Keep on Saying",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "title": "Electricity",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Vaughan Mason and Crew",
+          "source_title": "Bounce, Rock, Skate, Roll",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Rotary Connection",
+          "source_title": "Life Could",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Sun Ra",
+          "source_title": "Say",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "title": "Tonight May Have To Last Me All My Life",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Nancy Wilson",
+          "source_title": "Tonight May Have to Last Me All My Life",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "title": "Pablo's Cruise",
+      "duration_s": null,
+      "samples": []
+    },
+    {
+      "index": 13,
+      "title": "Frontier Psychiatrist",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Enoch Light Singers",
+          "source_title": "My Way of Life",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Wayne and Shuster",
+          "source_title": "Frontier Psychiatrist",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Harvey Mandel",
+          "source_title": "Wade in the Water",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Maurice Jarre",
+          "source_title": "Lawrence of Arabia (Main Theme)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Flo Sandon's",
+          "source_title": "El Negro Zumbon",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "title": "Etoh",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Four Freshmen",
+          "source_title": "Days of Wine and Roses",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Five Americans",
+          "source_title": "Western Union",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Modern Jazz Quartet",
+          "source_title": "One Never Knows",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Tony Mottola",
+          "source_title": "Anema e core",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Les Baxter",
+          "source_title": "Via Veneto",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "title": "Summer Crane",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Francoise Hardy",
+          "source_title": "Oh Oh Cheri",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Cyrkle",
+          "source_title": "The Visit (She Was Here)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The 5th Dimension",
+          "source_title": "Dimension 5ive",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Heatwave",
+          "source_title": "Boogie Nights",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "War",
+          "source_title": "H2 Overture",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "title": "Little Journey",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Madonna",
+          "source_title": "Holiday",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "title": "Live at Dominoes",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Boney M.",
+          "source_title": "Ma Baker",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The 5th Dimension",
+          "source_title": "Dimension 5ive",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Lafayette Afro Rock Band",
+          "source_title": "Hihache",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Basement Jaxx",
+          "source_title": "Red Alert",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "DJ Falcon",
+          "source_title": "First",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Rose Royce",
+          "source_title": "Yo Yo",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "title": "Extra Kings",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Enoch Light",
+          "source_title": "Theme From The Sand Pebbles",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    }
+  ]
+}

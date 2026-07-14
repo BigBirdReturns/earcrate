@@ -1,0 +1,1486 @@
+{
+  "schema": "earcrate.agent_handoff/v1",
+  "generated_by": "claude-code (Opus) session on branch claude/code-buddy-communication-bp04lk",
+  "repo": "BigBirdReturns/earcrate",
+  "base_version": "v0.8.27",
+  "design_doc": "docs/FIRST_MINUTE_DESIGN.md",
+  "status": {
+    "strategy_design": "complete",
+    "qa_swarm": "complete",
+    "qa_findings_embedded": true,
+    "note": "All QA blocker/high findings + the desktop render-quality failure (flat render) addressed. Render now has an energy curve AND uses the separated instrumental for beds. Real-GPU WAV confirmation is the desktop's next run."
+  },
+  "live_symptom": "App 'borks' shortly after launch on the desktop. User picked failure mode 'Loads, then errors'. Suspected auto-analyze dying on a config-resolution trap during the Book-a-Set flow.",
+  "root_cause": {
+    "confidence": "high (static analysis, corroborated by MILESTONES.md:46-47)",
+    "primary": "first_run_dead_end",
+    "items": [
+      {
+        "id": "first_run_dead_end",
+        "severity": "blocker",
+        "summary": "boot() defaults to renderPlay() (index.html:146,614). On a fresh box there is no config, so residents()->taste_readiness()->ensure_config() raises 'earcrate is not configured yet' (app.py:970-972). The 'Book a set' button (index.html:249) has NO config guard; clicking it runs one_click_taste_mix -> ensure_config() raises -> caught into status.last_error (app.py:5225-5227) -> user sees red 'not configured' on Activity. This is the borked first minute.",
+        "fix_steps": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "id": "config_trap_A_pointer_mismatch",
+        "severity": "high",
+        "summary": "configure() WRITES the workspace pointer to visible_app_dir() (app.py:539) but load_config_if_present() READS by scanning pointer_search_dirs() (app.py:448-449), which depends on how the process was started (util.py:90-106). When they disagree, setup succeeds but the next launch via a different entry point cannot find the pointer -> config stays None -> all downstream throws 'not configured'. MILESTONES.md:46-47 records this exact defect.",
+        "fix_steps": [
+          4
+        ]
+      },
+      {
+        "id": "config_trap_B_source_existence_gate",
+        "severity": "high",
+        "summary": "_valid_pointer() returns None if master_root does not exist on disk (app.py:470-471). A correctly-persisted config silently fails to load if the music drive is unmounted or the folder renamed; UI then lies 'not configured' instead of 'your music folder moved'.",
+        "fix_steps": [
+          4
+        ]
+      }
+    ]
+  },
+  "key_insight": "'Book a set' (bookSet index.html:280 -> POST /api/one_click_bg server.py:301 -> one_click_taste_mix app.py:3300) is ALREADY the entire pipeline: doctor -> scan -> fail-fast harvest loop (analyze -> extract_loops -> build_ear_crate until taste_readiness().ready, app.py:3336-3363) -> build_compatibility_graph -> propose_taste_mashup -> execute_manifest. The 'JAM button' the owner remembers is this. The vertical-slice engine exists; the work is gating it behind a readiness UI and turning refusals into guidance.",
+  "readiness_ledger_rows": [
+    {
+      "row": 1,
+      "name": "Environment OK",
+      "state_source": "doctor().checks[] app.py:1352-1389",
+      "tag": "EXISTS",
+      "gap": "doctor() opens with ensure_config() app.py:1353 so it cannot report ffmpeg-missing pre-config; split env checks from root checks"
+    },
+    {
+      "row": 2,
+      "name": "Workspace configured",
+      "state_source": "default_paths().configured app.py:556 (null => not configured)",
+      "tag": "EXISTS"
+    },
+    {
+      "row": 3,
+      "name": "Library scanned",
+      "state_source": "scan() {total} app.py:1478 / /api/tracks count",
+      "tag": "GAP",
+      "gap": "no endpoint returns 'N known / N analyzed' as a first-class number"
+    },
+    {
+      "row": 4,
+      "name": "Atoms extracted & approved",
+      "state_source": "taste_readiness() app.py:2815 -> have/need/failures/pool_size",
+      "tag": "EXISTS",
+      "note": "failures[] IS the blocked-reason verbatim"
+    },
+    {
+      "row": 5,
+      "name": "Compatibility graph built",
+      "state_source": "build_compatibility_graph() {edges} app.py:2876 / /api/taste/graph",
+      "tag": "GAP",
+      "gap": "graph computed on demand, not persisted as a ready flag; no staleness marker"
+    },
+    {
+      "row": 6,
+      "name": "Ready to JAM",
+      "state_source": "taste_readiness().ready app.py:2839 AND preflight().ready app.py:3441-3462",
+      "tag": "EXISTS",
+      "note": "two separate calls, never unified"
+    }
+  ],
+  "jam_preconditions": [
+    {
+      "cond": "configured",
+      "source": "default_paths().configured != null (app.py:556)"
+    },
+    {
+      "cond": "environment_ok",
+      "source": "doctor().ok (app.py:1389); ffmpeg/ffprobe present app.py:1355-1356; roots writable"
+    },
+    {
+      "cond": "readiness_met",
+      "source": "taste_readiness().ready == true, failures[] empty (app.py:2839); per-role have>=need from readiness_need() plan/math.py:49"
+    },
+    {
+      "cond": "preflight_passes",
+      "source": "preflight().ready over approved loop pool (app.py:3441); guards 'No approved loops' app.py:3451"
+    }
+  ],
+  "readiness_floors_120s_target": {
+    "foreground": 4,
+    "floor": 6,
+    "bass": 3,
+    "spark": 5,
+    "sources": 5,
+    "source": "plan/math.py:49-64"
+  },
+  "roadmap": [
+    {
+      "step": 1,
+      "title": "Config-optional doctor + GET /api/readiness_ledger",
+      "type": "new",
+      "effort_days": 1,
+      "files": [
+        "earcrate/app.py:1352",
+        "earcrate/ui/server.py"
+      ],
+      "effect": "Unblocks everything; fixes pre-config runDoctor 500",
+      "unblocks_symptom": [
+        "first_run_dead_end"
+      ]
+    },
+    {
+      "step": 2,
+      "title": "First-run routing to Setup + persistent Ledger UI",
+      "type": "cheap",
+      "effort_days": 1,
+      "files": [
+        "earcrate/ui/static/index.html:614",
+        "index.html:359",
+        "index.html:603"
+      ],
+      "effect": "Kills land-on-Play dead end",
+      "unblocks_symptom": [
+        "first_run_dead_end"
+      ]
+    },
+    {
+      "step": 3,
+      "title": "JAM disabled-with-reason bound to ledger",
+      "type": "cheap",
+      "effort_days": 0.5,
+      "files": [
+        "earcrate/ui/static/index.html:280",
+        "index.html:249"
+      ],
+      "effect": "Kills the silent-500 JAM",
+      "unblocks_symptom": [
+        "first_run_dead_end"
+      ]
+    },
+    {
+      "step": 4,
+      "title": "Config-resolution trap fixes (A: write pointer to all read-dirs; B: degraded source_missing state)",
+      "type": "new",
+      "effort_days": 2,
+      "files": [
+        "earcrate/app.py:539",
+        "earcrate/app.py:470-471",
+        "earcrate/core/util.py:90-106"
+      ],
+      "effect": "Durable reliability fix; without it steps 1-3 intermittently report 'not configured'",
+      "unblocks_symptom": [
+        "config_trap_A_pointer_mismatch",
+        "config_trap_B_source_existence_gate"
+      ]
+    },
+    {
+      "step": 5,
+      "title": "3-step Setup Wizard with live validation + workspace_candidates reasons",
+      "type": "new",
+      "effort_days": 2,
+      "files": [
+        "earcrate/ui/static/index.html:549",
+        "earcrate/app.py:607"
+      ],
+      "effect": "The 'walk them through setup' half of the vision"
+    },
+    {
+      "step": 6,
+      "title": "Slice payoff: auto-play first render on one_click success",
+      "type": "cheap",
+      "effort_days": 0.5,
+      "files": [
+        "earcrate/ui/static/index.html:590",
+        "earcrate/app.py:3418"
+      ],
+      "effect": "Completes 'user hears one mashup'"
+    },
+    {
+      "step": 7,
+      "title": "Graph-freshness receipt + surface janitor legacy_workspaces",
+      "type": "new",
+      "effort_days": 1,
+      "files": [
+        "earcrate/app.py:2876",
+        "earcrate/app.py:1433"
+      ],
+      "effect": "Deployment polish; lower urgency"
+    },
+    {
+      "step": 8,
+      "title": "Debug-log Setup toggle + reveal-log button",
+      "type": "cheap",
+      "effort_days": 0.5,
+      "files": [
+        "earcrate/ui/server.py:35-76"
+      ],
+      "effect": "Support story; no engine change"
+    }
+  ],
+  "desktop_verification": {
+    "how": "Run Debug-EarCrate.cmd (sets EARCRATE_DEBUG=<repo>\\earcrate_debug.log, opens app + live-tail monitor window).",
+    "confirm_root_cause": "Reproduce 'Book a set'. Expect 'POST 500 ...ms /api/one_click_bg' and an ERROR block whose traceback contains 'earcrate is not configured yet' -> confirms first_run_dead_end / config trap. If the trace is something else, it is a NEW bug not covered here.",
+    "debug_log_seam": "earcrate/ui/server.py:35-76 (_DebugLog, EARCRATE_DEBUG-gated, token redacted, off by default)."
+  },
+  "already_shipped_this_branch": [
+    {
+      "commit": "add opt-in live backend debug log",
+      "files": [
+        "earcrate/ui/server.py",
+        "Debug-EarCrate.cmd",
+        ".gitignore"
+      ]
+    }
+  ],
+  "qa_findings": [
+    {
+      "surface": "Reorganize / Identify / Deep-clean",
+      "title": "Identify and Deep-clean wedge the engine \"busy\" forever (never reset on success)",
+      "severity": "blocker",
+      "category": "logic-wrong",
+      "where": "earcrate/app.py:5217-5229 (run_background) + identify_tracks (3946-3984) / apply_identities (3993-4089) / deep_clean_scan (3794-3840); routes server.py:311-318",
+      "impact": "/api/identify, /api/identify/apply and /api/deepclean/scan are dispatched through run_background, which sets status busy=True at start and only resets busy=False inside the exception handler. On SUCCESS it never resets busy. Unlike scan/analyze/one_click/manifest (which call set_status(..., busy=False) at their own end \u2014 see 1604, 1802, 3420, 4305), identify_tracks/apply_identities/deep_clean_scan never call set_status at all. So after clicking 'Identify (opt-in)' or Deep-clean 'Scan', the engine is stuck showing ENGINE BUSY permanently. Worse, every subsequent run_background call then raises RuntimeError('EarCrate is already busy') (5219-5220), which the POST handler turns into a 500 (server.py:340-348) that libAction's empty catch(e){} swallows silently. Because the only code that clears busy is other run_background jobs (themselves rejected), the whole app is wedged until a server restart.",
+      "fix": "Have run_background reset busy in a finally/success path (e.g. self.set_status('done', 1, False) after fn() returns unless the fn already set it), or make identify_tracks/apply_identities/deep_clean_scan call set_status(busy=False) on completion. Ideally these read-only assessments should not be backgrounded at all since callers want their return payload.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. run_background (app.py:5221) sets busy=True and only resets busy=False in its except handler (5227); on success (5224 discards fn's return, 5228 returns started) nothing clears busy. deep_clean_scan (3794-3840), identify_tracks (3946-3984) and apply_identities (3993-4089) contain NO set_status call at all (grep of set_status confirms none in that range), unlike scan/analyze/one_click/manifest which each call set_status(...,busy=False) at 1604/1802/3420/4305. So after a successful /api/identify, /api/identify/apply or /api/deepclean/scan the engine stays busy=True permanently, and every later run_background job raises RuntimeError('already busy') (5219-5220) -> POST 500 (server.py:340-348). One correction to the tester's wording: the 500 is NOT fully silent -- post() (index.html:157) toasts '\u2715 EarCrate is already busy' before libAction's empty catch (546) swallows the rethrow. The permanent wedge until server restart is real; blocker stands."
+    },
+    {
+      "surface": "Book a Set / One-Click Mix",
+      "title": "Workbench \"Render \u25b8\" throws away the composed/loaded plan and renders a different, freshly-composed set",
+      "severity": "high",
+      "category": "wrong-behavior",
+      "where": "index.html:429 (renderMix) \u2192 app.py:3387 \u2192 propose_taste_mashup \u2192 compose_taste_arrangement app.py:3020-3023",
+      "impact": "The entire Workbench pipeline (Propose plan \u2192 edit \u2192 Save/Load plan) culminates in the primary \"Render \u25b8\" button, and the rail visualization shows window.__plan as the thing about to be rendered. But renderMix() posts only {taste_profile:S.resident} to /api/one_click_bg, which runs the full cold-start one_click_taste_mix. That calls propose_taste_mashup, which internally calls compose_taste_arrangement with a brand-new seed (next_render_seed, app.py:3020) and composes a completely fresh arrangement from the approved pool \u2014 window.__plan is never sent and never read. The WAV the user gets is NOT the plan they proposed, tuned, saved, or loaded. Preflight/Save/Load are effectively decorative because Render ignores their output. A plan-execute path exists (/api/manifest/execute_bg, produced by propose_taste_mashup['manifest']) but Render does not use it.",
+      "fix": "Make renderMix render the current plan: if window.__plan exists, POST its manifest to /api/manifest/execute_bg (or add a plan-aware render endpoint that takes the arrangement/plan_hash), instead of re-running one_click_taste_mix. Alternatively relabel the button so it doesn't imply it renders the displayed plan.",
+      "verdict": "confirmed",
+      "verify_note": "renderMix (index.html:429) posts only {taste_profile:S.resident} to /api/one_click_bg. server.py:301-302 routes that to run_background(one_click_mix,...) -> one_click_taste_mix (app.py:3300), which runs the full cold-start pipeline and calls propose_taste_mashup (app.py:3387). propose_taste_mashup composes a brand-new arrangement from the approved pool with a fresh seed via next_render_seed (app.py:3020/3023). window.__plan is never in the POST body and never read anywhere server-side. The finding is actually stronger than stated: the Workbench propose route (propose_plan, app.py:4977-4998) explicitly composes WITHOUT writing a manifest (docstring line 4978-4981) and returns only {arrangement,score,taste_gate,seed} -- so window.__plan carries no manifest and there is genuinely no wired path to execute the displayed plan (the /api/manifest/execute_bg route the tester references exists but is never fed the propose output). Propose/Save/Load are decorative w.r.t. Render. Confirmed high."
+    },
+    {
+      "surface": "Demo / Seed / Rollback / Migrate",
+      "title": "\"Migrate legacy\" button only ever runs the dry-run plan \u2014 there is no way to apply a migration from the UI",
+      "severity": "high",
+      "category": "dead-end-flow",
+      "where": "index.html:571 (button -> libAction('/api/migrate/plan',{})); /api/migrate/apply route server.py:323",
+      "impact": "The only migration control in the UI calls /api/migrate/plan, which returns dry_run:true and touches nothing (app.py:892-915). /api/migrate/apply is never called anywhere in index.html (grep confirms it appears only in server.py and CHANGELOG). Because apply_workspace_migration requires the plan's signature (app.py:920-927), and the frontend never captures or resubmits that signature, the entire SIMULATE->APPROVE->APPLY workflow is unreachable. A user who clicks \"Migrate legacy\" can preview forever but can never actually migrate.",
+      "fix": "Add an Apply control that resubmits the signature from the plan response to /api/migrate/apply (mirroring how reorgApply reuses REORG.signature at index.html:520), or relabel the button to make clear it is preview-only.",
+      "verdict": "unverified",
+      "verify_note": ""
+    },
+    {
+      "surface": "Demo / Seed / Rollback / Migrate",
+      "title": "/api/rollback (rollback_outputs) endpoint has no frontend caller \u2014 output rollback is unreachable and no manifest_id is ever passed",
+      "severity": "high",
+      "category": "dead-endpoint",
+      "where": "server.py:335-336; no reference to '/api/rollback' anywhere in index.html",
+      "impact": "The Ingest card advertises output as \"manifest-journaled, rollback-able\" (index.html:483), but grep for '/api/rollback' and 'manifest_id' in the frontend finds zero call sites. rollback_outputs (app.py:4308) is only invocable via raw API/CLI. The task's concern that rollback \"targets a real manifest_id\" cannot even be satisfied from the UI because the UI never sends one. Note the backend treats empty manifest_id as \"roll back every manifest's archive_moves\" (app.py:4321 skips the filter when manifest_id is falsy), so any future UI wiring that forgets to pass a manifest_id would silently roll back ALL outputs.",
+      "fix": "Either add a rollback control that lists manifests and posts a specific manifest_id (with apply confirmation), or drop the \"rollback-able\" claim. If a UI is added, require a non-empty manifest_id so an empty value can't trigger a global rollback.",
+      "verdict": "unverified",
+      "verify_note": ""
+    },
+    {
+      "surface": "Global: api",
+      "title": "500 traceback returned by the backend is fetched but never shown anywhere in the UI",
+      "severity": "high",
+      "category": "error-handling",
+      "where": "index.html:155 (api) vs server.py:236,348",
+      "impact": "The backend deliberately computes and returns {error, trace} on every 500 (server.py:236 GET, server.py:348 POST) and even writes the full traceback to DEBUG_LOG. But api() reads only `j.error` (index.html:155: `throw new Error(j.error||txt)`), and the string 'trace' appears NOWHERE in index.html. The traceback is completely discarded. The best a user ever sees is a single-line str(exc) inside a 6-second toast (only for POST calls). There is no panel, no console surfacing, no persistent error view. This is a central reason the app 'borks silently': the diagnostic the backend went out of its way to send is thrown away by the client.",
+      "fix": "In api(), when !r.ok and j.trace exists, surface it \u2014 e.g. log to console (`console.error(j.trace)`) and/or render it into a dismissable global error panel. At minimum include j.trace in the thrown Error so a caller can display it. Do not rely solely on a 6s toast for a stack trace.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. server.py:236 (GET) and server.py:348 (POST) both return {\"error\": str(exc), \"trace\": traceback.format_exc()} on 500. In index.html, api() at line 155 reads only j.error: `if(!r.ok) throw new Error(j.error||txt)`. A grep for 'trace' in index.html returns ZERO hits, and there are NO console.* calls anywhere in the file \u2014 so j.trace is silently discarded and never logged. post() (line 157) only surfaces e.message via a 6s toast, and that only fires for POST calls; GET failures go through empty `catch(e){}` blocks (see renderSessions:434, renderCrate:289) and show nothing at all. The diagnostic the backend deliberately builds is thrown away by the client. Fix as described (include j.trace in the thrown Error and/or console.error it)."
+    },
+    {
+      "surface": "Global: api",
+      "title": "pollStatus swallows all errors while the status dot defaults to green 'SYSTEM ONLINE' \u2014 the heartbeat lies on failure",
+      "severity": "high",
+      "category": "silent-failure",
+      "where": "index.html:603-610 (pollStatus), initial markup index.html:60",
+      "impact": "pollStatus wraps everything in `try{...}catch(e){}` (index.html:609) with an empty catch. The status bar's initial markup hard-codes a green accent dot and the text 'SYSTEM ONLINE' (index.html:60). If /api/status returns 403 (bad/missing token) or 500, the poll fails silently every 2s (index.html:618) and onlineDot/onlineTxt/engineTxt are never updated \u2014 so the UI keeps displaying a green 'SYSTEM ONLINE' dot forever even though every request is failing. The single liveness indicator actively reports the opposite of the truth. This is the core silent-bork: the user has no signal that the server/engine is unreachable or the token is wrong.",
+      "fix": "In pollStatus's catch, set onlineDot to a fault color and onlineTxt to something like 'CONNECTION LOST' / 'BAD TOKEN' (distinguish 403 from other errors), and update engineTxt to reflect the failure. Never leave the status bar showing the optimistic default after a failed poll.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. pollStatus (index.html:603-610) wraps the whole body in try/catch with an empty catch at line 609. The initial status markup (line 60) hard-codes background:var(--acc) (the accent/green dot) and text 'SYSTEM ONLINE'. On a failed /api/status poll (403 bad token or 500), the catch swallows the error and onlineDot/onlineTxt/engineTxt are never touched, so the optimistic default persists. boot() (line 618) only schedules the first poll at t=2s with no immediate call, so if that first poll fails the green 'SYSTEM ONLINE' dot stays forever. Minor nuance for the report: on a SUCCESSFUL idle poll line 605 sets the dot to var(--faint) (grey), so 'SYSTEM ONLINE' text is shown in both healthy-idle and failure states \u2014 the dot color is the only signal and it never turns fault-colored on error. Core defect (empty catch + no failure state on the single liveness indicator) holds."
+    },
+    {
+      "surface": "Global: api",
+      "title": "Missing/invalid token produces total silent failure with no recovery UI",
+      "severity": "high",
+      "category": "token-flow",
+      "where": "index.html:126 (TOKEN), _check_token server.py:146-152",
+      "impact": "TOKEN falls back to '' when ?token is absent from the URL (index.html:126). The '/' page has no token check (server.py:147-148), so the SPA always loads \u2014 but every subsequent /api call then 403s (server.py:162-163,245-246). This happens on a plain reload if the token got stripped, a bookmark, a shared link, or navigating to the bare host:port. GET-driven views (status poll, sessions, activity) fail silently; the only feedback is a cryptic transient '\u2715 bad token' toast that fires solely when the user triggers a POST action, and only for 6s. There is no global 'your session token is missing or invalid \u2014 reopen EarCrate from the launcher' state, so the app looks loaded-but-inexplicably-empty.",
+      "fix": "On boot, if TOKEN is empty, show a blocking banner explaining the session must be opened via the launcher URL. Additionally, treat a 403 from api() as a distinct condition (not a generic error) and render a persistent 'session invalid/expired' banner rather than a disappearing toast.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. TOKEN falls back to '' when ?token is absent (index.html:126). _check_token (server.py:147-148) returns True for any non-/api path, so '/' always serves the SPA (server.py:159-160) regardless of token. Every /api GET then 403s (server.py:162-163) and every POST 403s (server.py:245-246) with {\"error\":\"bad token\"}. All GET-driven views (status poll:609, sessions:434, crate:289, activity, etc.) swallow that 403 in empty catches, so they render as loaded-but-empty. The only feedback is post()'s transient 6s '\u2715 bad token' toast, which fires solely on a user-triggered POST. There is no boot-time TOKEN==='' check and no persistent/blocking banner anywhere. Matches the finding exactly."
+    },
+    {
+      "surface": "Judge / Render QA",
+      "title": "JUDGE button only appears on renders that already PASSED, so failing gates can never be inspected",
+      "severity": "high",
+      "category": "wrong-logic/UX",
+      "where": "earcrate/ui/static/index.html:437,442 (renderSessions)",
+      "impact": "The JUDGE control is rendered only when playable = s.kind==='render' && s.passed!==false (line 437). A failed/refused render shows 'WHY \u25b8' (which just navigates to the Crate screen), never JUDGE. Consequently judgeRender only ever runs on renders already known to pass, so it will almost always toast 'all gates pass' and the pass/fail-reason feature the surface exists for is unreachable for exactly the renders you'd want to diagnose.",
+      "fix": "Show JUDGE for renders regardless of pass state (keep PLAY gated on pass, but expose JUDGE on failures too), or add a dedicated per-render judge affordance in a renders list.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:437 sets playable = s.kind==='render' && (s.passed!==false). Line 442 renders PLAY/JUDGE/OPEN only inside the `playable` ternary branch; the else branch (any refused render, passed===false) renders only 'WHY \u25b8' which calls go('crate'). There is no JUDGE affordance anywhere for a failed render, so judgeRender can only ever be invoked on renders already flagged as passing. The tester is right that this makes the pass/fail-reason path unreachable for the exact renders you'd want to diagnose. Minor nuance: judge recomputes v1_1_gates fresh, so a render the session marks 'passed' could still surface a fresh gate FAIL \u2014 but that only proves the affordance placement is backwards, not that the finding is wrong. High is fair given the feature's stated purpose is diagnosing failures."
+    },
+    {
+      "surface": "Library / Scan / Analyze",
+      "title": "Ingest module is a dead control \u2014 no way to specify a source folder, so /api/ingest always errors",
+      "severity": "high",
+      "category": "dead-control",
+      "where": "index.html:483 (renderLibrary mods) \u2192 libAction (index.html:546) \u2192 server.py:253-254 \u2192 ingest.py:122-130",
+      "impact": "The 'Ingest' card ('Copy from any drive into the managed library') exposes two buttons, 'Dry-run' and 'Ingest now', wired to libAction('/api/ingest',{apply:false}) and {apply:true}. Neither passes a `sources` field, and there is NO source-folder input anywhere on the Library screen (grep confirms the only 'sources' references in index.html are stat labels, none an input). ingest_sources reads `data.get('sources') or []`, finds it empty, and returns {ok:false,error:'no source folders given'} every time. So the entire advertised primary way to feed the library is non-functional: every click just toasts 'ingest: {\"ok\":false,\"error\":\"no source folders given\"}'.",
+      "fix": "Add a source-folder input (text field and/or /api/browse_dir picker) to the Ingest card and pass its value as `sources:[...]` in the libAction body. Until then the two buttons should be disabled or the card should prompt for a folder first.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:483 wires the Ingest card's two chips to libAction('/api/ingest',{apply:false}) and {apply:true}; neither passes `sources`. Grep confirms there is NO source-folder input on the Library screen \u2014 every 'sources' hit in index.html (lines 226,241,244,272,307,313,319,352,359,392,419,489,557) is a stat label, CSS, or the Setup music-folder field, none an input feeding ingest. Backend ingest_sources (ingest.py:128-130) reads `data.get('sources') or []`, finds it empty, and returns {ok:false,error:'no source folders given'} unconditionally, before touching the DB. libAction (index.html:546) then toasts the raw JSON. The entire Ingest card is non-functional. Note: Scan (read-only source folder from Setup) is a separate working feed path, so this is not the ONLY way to load audio, but the advertised Ingest module is genuinely dead. High confirmed."
+    },
+    {
+      "surface": "Play / Station / Endless Queue",
+      "title": "\"Previous\" transport button skips FORWARD, not back",
+      "severity": "high",
+      "category": "wrong-logic",
+      "where": "earcrate/ui/static/index.html:100 (also 96)",
+      "impact": "The left/back-pointing arrow in the transport (path 'M15 1 L6 6 L15 11', clearly a 'previous' glyph) has onclick=\"endlessSkip()\" and title=\"Next\" \u2014 identical to the right/next arrow on line 96. endlessSkip() only ever calls endlessNext(), which does ENDLESS.i=(ENDLESS.i+1)%len. So pressing 'previous' advances to the NEXT track. There is no way to go back a track at all, and the control's direction is a lie.",
+      "fix": "Add an endlessPrev() that steps ENDLESS.i backward (ENDLESS.i=(ENDLESS.i-1+len)%len) then setPlayer, and wire the left arrow (line 100) to it; fix its title to 'Previous'.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:100 renders a left-pointing glyph: rect at x=1 (bar on left) and path 'M15 1 L6 6 L15 11' (apex at x=6, base at x=15) = an unambiguous previous/\u23ee triangle. Yet onclick=\"endlessSkip()\" and title=\"Next\", identical to the right/next arrow at line 96 (rect x=13, path 'M1 1 L10 6 L1 11' pointing right). endlessSkip() (598) only ever calls endlessNext() (597), which does ENDLESS.i=(ENDLESS.i+1)%len. So the back arrow steps forward, the title lies, and no endlessPrev exists anywhere. Confirmed. I'd keep high given the directional glyph is objectively wrong, though note it only has any effect while Endless mode is on."
+    },
+    {
+      "surface": "Playlist / Rank",
+      "title": "Playlist track count ALWAYS shows \"0 tracks\", even on success",
+      "severity": "high",
+      "category": "shape-mismatch",
+      "where": "index.html:538 (proposePlaylist) vs app.py:2274 (propose_playlist)",
+      "impact": "Backend returns entries as an integer count: `return {\"ok\": True, \"manifest\": manifest, \"entries\": len(entries)}`. The frontend computes `nT=(j.entries&&j.entries.length)||j.count||j.tracks||0`. Calling `.length` on a Number is `undefined`, and `j.count`/`j.tracks` are never returned, so nT collapses to 0 for every response. Both the plOut panel and the toast permanently read \"0 tracks\" regardless of how many tracks were actually selected \u2014 the feature looks completely broken to the user even when it worked.",
+      "fix": "Either treat entries as a number in the frontend (`const nT = (typeof j.entries==='number'? j.entries : (j.entries&&j.entries.length)) || 0;`) or have the backend also return a numeric `count`. Given entries is already an int, just use `j.entries` directly.",
+      "verdict": "confirmed",
+      "verify_note": "CONFIRMED. app.py:2274 returns entries as an int: `{\"ok\": True, \"manifest\": manifest, \"entries\": len(entries)}`. index.html:538 computes `nT=(j.entries&&j.entries.length)||j.count||j.tracks||0`. For a positive int like 5: `5 && (5).length` -> `5 && undefined` -> undefined; `j.count`/`j.tracks` are never returned by the backend; so nT falls through to 0. For 0 entries it is also 0. Result: plOut panel and the toast permanently read \"0 tracks\" for every response. Fix as proposed (use j.entries directly, it is already an int)."
+    },
+    {
+      "surface": "Playlist / Rank",
+      "title": "\"open \u25b8\" playlist link never appears and no playlist file is ever written",
+      "severity": "high",
+      "category": "dead-control",
+      "where": "index.html:538 vs app.py:2244-2274, write_manifest app.py:3681-3688",
+      "impact": "The frontend only renders the 'open \u25b8' folder link when `j.path` exists, but propose_playlist returns `{ok, manifest, entries}` where `manifest` is a JSON manifest-file path string (from write_manifest) \u2014 there is no `path` key, so the link never shows. Worse, propose_playlist only *writes a proposal manifest* describing a `create_playlist` op; nothing ever executes it, so no .m3u8/playlist file is actually produced. The button is labeled \"Build playlist\" and toasts as if a playlist was built, but the user gets no openable output at all.",
+      "fix": "Return the manifest path (or executed playlist path) under a `path` key the UI reads, and either execute the create_playlist op or relabel the control as 'Propose playlist' so it does not promise a built file.",
+      "verdict": "confirmed",
+      "verify_note": "CONFIRMED both parts. (a) index.html:538 renders the open link only when `j.path` is truthy, but propose_playlist returns keys ok/manifest/entries (app.py:2274) with no `path` key \u2014 link never shows. Note the manifest JSON path IS returned under `j.manifest` (write_manifest returns a str path, app.py:3681-3688) but the frontend reads `j.path`, so even that is never surfaced. (b) propose_playlist only calls write_manifest to record a *proposal* describing a create_playlist op; it never executes it. execute_create_playlist (app.py:4384) which actually writes the .m3u8 (returns {path, entries}) is only invoked during manifest execution (app.py:4276-4277), which this endpoint never triggers. So the 'Build playlist' button produces no openable playlist file. Misleading label/toast confirmed."
+    },
+    {
+      "surface": "Readiness / Compatibility Graph",
+      "title": "Preflight button almost always reports \"READY to render\" \u2014 frontend reads j.failures, backend returns j.warnings/j.ready",
+      "severity": "high",
+      "category": "shape-mismatch",
+      "where": "index.html:390 (preflight) vs app.py:3441-3462 (core.preflight) and readiness.py:134-150 (crate_readiness_audit)",
+      "impact": "The Workbench Preflight gate is misleading on the common path. preflight() computes ok = j.ok!==false && !(j.failures && j.failures.length). But core.preflight() always sets audit[\"ok\"]=True (app.py:3459) for any non-empty pool, and crate_readiness_audit NEVER returns a `failures` key \u2014 it returns `warnings` (readiness.py:147) and a boolean `ready` (readiness.py:138). So j.failures is always undefined, the second clause is always true, and ok collapses to j.ok!==false, which is true whenever the pool is non-empty. Result: for a populated-but-not-ready crate (no beds, no foreground, too few sources \u2014 exactly the states crate_readiness_audit flags in `warnings`), the toast says \"Preflight: READY to render\". The frontend never looks at j.ready or j.warnings, so the real veto is silently dropped. Only a completely empty pool (ok:False) shows NOT READY, and even then it can't surface a reason (it looks for j.failures[0]/j.error, but the payload carries `warnings`), so it falls back to the generic 'see crate'.",
+      "fix": "Read the fields the backend actually returns: ok = j.ok!==false && j.ready===true; and surface j.warnings[0] (not j.failures[0]) as the reason. Alternatively, make core.preflight() also emit a `failures` alias and reflect `ready` into `ok`. Either way the frontend must consult `ready`/`warnings`.",
+      "verdict": "confirmed",
+      "verify_note": "Fully verified. Frontend index.html:390 computes `ok = j.ok!==false && !(j.failures && j.failures.length)`. Backend server.py:325-326 routes /api/preflight -> core.preflight(data). preflight (app.py:3448-3462) calls crate_readiness_audit and unconditionally sets audit['ok']=True at line 3459 for any non-empty pool. crate_readiness_audit's return dict (readiness.py:134-150) contains NO `failures` key \u2014 it returns `warnings` (line 147) and boolean `ready` (line 138). So j.failures is always undefined -> `!(undefined && ...)` == true -> ok collapses to `j.ok!==false`, which is true for any non-empty pool. A populated-but-not-ready crate (ready:false, warnings non-empty) still toasts 'READY to render'. Empty pool returns {ok:False, ready:False, warnings:[...]} -> ok=false, but the reason lookup `(j.failures||[])[0]||j.error||'see crate'` never reads `warnings`, so it always falls back to 'see crate'. The frontend never consults j.ready or j.warnings. Every clause of the tester's claim is provable."
+    },
+    {
+      "surface": "Reorganize / Identify / Deep-clean",
+      "title": "Deep-clean and Identify produce NO visible output \u2014 results are computed then discarded",
+      "severity": "high",
+      "category": "shape-mismatch",
+      "where": "server.py:315-318 (run_background) vs app.py:3830-3840 / 3981-3984 return payloads; UI libAction index.html:546, renderActivity/renderStatus index.html:455-469",
+      "impact": "deep_clean_scan returns a rich assessment (junk list, junk_count, real_songs, empty_folders, art_only_folders, images) and identify_tracks returns proposals/identified/unmatched. But run_background discards fn's return value and responds only {ok:true, started:true}. The frontend then does go('activity'), and the Activity view (renderActivity + renderStatus) renders only st.message / progress / last_error / perf stages \u2014 it never displays a junk list or identify proposals. The entire point of Deep-clean (find silence/static/corrupt files, empty/art-only folders) and Identify (propose corrected tags) is invisible in the UI. libAction just toasts 'deepclean/scan: ok'.",
+      "fix": "Return the assessment synchronously (don't background a read-only scan), or persist results and add an Activity/results panel that fetches and renders junk/proposals. deep_clean writes nothing to disk; identify writes identify_proposals.json but nothing in the UI reads it.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. deep_clean_scan returns a rich assessment (junk/junk_count/real_songs/empty_folders/art_only_folders, app.py:3830-3840) and identify_tracks returns proposals/identified/unmatched (3981-3984), but run_background discards fn's return value and responds {ok:true,started:true} (5229). libAction (index.html:546) then does go('activity') for /identify and /deepclean, and Activity (renderActivity 455-461 + renderStatus 462-469) renders only st.message/progress/last_error plus perf stages \u2014 it never renders a junk list or proposals. deep_clean writes nothing to disk; identify writes agent_root/identify_proposals.json (3978) but grep of index.html shows nothing reads identify_proposals/proposals. The assessment is invisible in the UI."
+    },
+    {
+      "surface": "Reorganize / Identify / Deep-clean",
+      "title": "Identify failure (missing AcoustID key, etc.) is swallowed; UI falsely reports 'ok'",
+      "severity": "high",
+      "category": "error-handling",
+      "where": "app.py:3951-3954 (identify_tracks returns {ok:false, error:'AcoustID API key required'}) via run_background server.py:315; libAction toast index.html:546",
+      "impact": "identify_tracks returns {ok:false, error:...} for the common case of no API key (the feature is opt-in/off by default, so this is the DEFAULT first-click experience). That dict is returned from inside the background thread and discarded by run_background (which only catches raised exceptions, not returned error dicts). The HTTP response is {ok:true, started:true}, so libAction's toast reads 'identify: ok' (j.ok !== false) and navigates to Activity \u2014 where nothing appears. The user is told the network identify succeeded when it actually did nothing.",
+      "fix": "Surface backend {ok:false,error} to the client. Since identify's key-check is instant, run it synchronously (or validate the key before backgrounding) and let libAction show the error string it already handles.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed and it is the DEFAULT first-click case (feature off by default). identify_tracks returns {ok:false,error:'AcoustID API key required...'} (app.py:3951-3954) as a RETURNED dict inside the background thread; run_background only catches raised exceptions (5225), not returned error dicts, so the HTTP body is {ok:true,started:true}. libAction's toast (index.html:546) computes (j.ok!==false?'ok':...) -> 'ok' and then go('activity') where nothing appears. The user is told identify succeeded when it did nothing."
+    },
+    {
+      "surface": "Reorganize / Identify / Deep-clean",
+      "title": "No UI path to apply or roll back identities \u2014 Identify is a dead end",
+      "severity": "high",
+      "category": "dead-control",
+      "where": "index.html:486 (Identify card wires only libAction('/api/identify',{})); routes /api/identify/apply, /api/identify/rollback exist server.py:311-314 with backends app.py:3993, 4091",
+      "impact": "The Identify card exposes a single action, 'Identify (opt-in)', which only runs the dry-run proposal. There is no button anywhere that calls /api/identify/apply or /api/identify/rollback (grep for 'identify/apply' / 'identify/rollback' in index.html returns nothing). apply_identities has a full simulate\u2192signature\u2192execute\u2192journal flow and rollback_identities exists, but they are unreachable from the UI. A user who identifies tracks can never apply the corrected tags nor undo them. The card's own note ('feed these into reorganize/retag') is not wired either \u2014 reorganize derives identity from existing tags, not from identify proposals.",
+      "fix": "Add Preview-apply / Apply / Rollback controls for identities (mirroring the reorg Preview\u2192Apply\u2192Rollback triad, including passing the signature apply_identities requires).",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. The Identify card exposes exactly one action: libAction('/api/identify',{}) (index.html:486). grep of index.html for identify/apply, identify/rollback, apply_identities and proposals returns only line 486 \u2014 no button calls /api/identify/apply or /api/identify/rollback. Those routes exist (server.py:311-314) with full backends apply_identities (app.py:3993, simulate->signature->execute->journal) and rollback (rollback_identities). apply_identities also REQUIRES an approved signature (4053-4057) which no UI ever supplies. Identities can be proposed but never applied or undone from the UI."
+    },
+    {
+      "surface": "Reorganize / Identify / Deep-clean",
+      "title": "Partial-failure reorganize is reported as 'refused' and loses the rollback journal",
+      "severity": "high",
+      "category": "logic-wrong",
+      "where": "index.html:520 (reorgApply: if(j.ok){...journal...} else toast(...'apply refused')); backend app.py:442 returns {ok: not errors, moved, journal}",
+      "impact": "reorganize_source returns ok=(not errors): if ANY file move fails, ok is false even though other files WERE moved and a journal WAS written (moved>0, journal set). reorgApply only stores REORG.journal and reports success inside the if(j.ok) branch; on ok:false it toasts 'apply refused (re-preview)' and never captures j.journal. So after a partial-failure reorg, files have actually been relocated in place, the UI tells the user it was 'refused' (implying nothing happened), and REORG.journal is never set \u2014 leaving the user with a half-moved library and NO reachable Rollback for the moves that did occur.",
+      "fix": "Treat a response containing a journal/moved>0 as an applied (possibly partial) reorg: always store j.journal when present, and report moved count plus any errors rather than a flat 'refused'.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. reorganize_source's apply path returns {ok: not errors, moved, errors, journal} (librarian/ingest.py:442): any single failed move makes ok=False even though other files were moved (moved>0) and a real journal path was written (423-436). reorgApply (index.html:520) only stores REORG.journal and reports success inside if(j.ok); on ok:false it toasts j.error||'apply refused (re-preview)' and never captures j.journal. Extra evidence the tester didn't flag: the apply-error response returns key 'errors' (plural array), NOT 'error', so j.error is undefined and the toast ALWAYS reads 'apply refused (re-preview)'. Result: files were relocated, journal exists on disk, but REORG.journal stays null and Rollback is unreachable while the UI implies nothing happened."
+    },
+    {
+      "surface": "Sessions / Activity / Perf",
+      "title": "Perf 'Stages this run' panel is permanently empty \u2014 reads wrong response shape",
+      "severity": "high",
+      "category": "shape-mismatch",
+      "where": "index.html:473 (renderPerfStages) vs app.py:433-438 (last_perf)",
+      "impact": "renderPerfStages does `const p=await api('/api/perf'); const stages=(p&&(p.stages||p.steps))||[];`. But last_perf() returns `{ok, path, ledger:{...}}` and the stage array lives at `ledger.stages` (built in _perf_new_ledger app.py:335, filled by _perf_stage app.py:370-386). Neither `p.stages` nor `p.steps` ever exists at the top level, so `stages` is always [] and the panel always shows 'no completed run yet \u2014 book a set' even after many completed runs. The entire Perf timing feature is dead. Should read `p.ledger && (p.ledger.stages)`.",
+      "fix": "Change to `const L=(p&&p.ledger)||{}; const stages=L.stages||L.steps||[];`. The per-stage fields the code then reads (s.name, s.seconds) do exist on ledger stages (app.py:373,384), so only the top-level access is wrong.",
+      "verdict": "confirmed",
+      "verify_note": "server.py:170 returns core.last_perf(), which (app.py:433-438) yields {ok, path, ledger}. The stage array is at ledger.stages (created app.py:335, appended app.py:385). index.html:473 reads `p.stages||p.steps` at the TOP level \u2014 neither exists there \u2014 so stages is always [] and the panel always renders the 'no completed run yet' empty state (line 474), even after successful runs. The per-stage fields it then reads (s.name line 372, s.seconds line 384) DO exist on ledger stages, so the tester is right that only the top-level access is broken and the fix `p.ledger.stages` is correct. Feature is effectively dead."
+    },
+    {
+      "surface": "Setup / Config / Doctor",
+      "title": "Re-saving the workspace nests it one level deeper each time, orphaning the DB, analysis cache, manifests and judgments",
+      "severity": "high",
+      "category": "config-resolution / data-loss",
+      "where": "index.html:552,560,580 -> server.py:262 -> app.py:761 configure_workspace / app.py:596 derive_workspace_paths",
+      "impact": "This is the config-resolution trap. First save works: configure_workspace(music, workspace) derives working_root=workspace/'work', agent_root=workspace/'agent', etc., and configure() persists them (as_dict has no field for the parent 'workspace' folder). But renderSetup re-populates the 'Workspace' input from cfg.working_root (`const ws=cfg.working_root||d.workspace_folder`, line 552) \u2014 i.e. the .../work SUBDIR, not the folder the user picked. On any return to Setup (or after toggleWorkers, which calls renderSetup) the field shows .../work. Clicking Save again sends workspace_folder=.../work, so derive makes working_root=.../work/work and agent_root=.../work/agent. Path-separation check passes (still outside music), so it succeeds SILENTLY and creates a fresh empty workspace one level deeper. The previous agent_root (SQLite DB, .npz analysis cache, manifests, loop/atom human judgments) is orphaned and the app now points at an empty tree. Every extra Save re-nests: work -> work/work -> work/work/work. The field label 'Workspace - all output lives here' actively misleads, since it is bound to a subdir.",
+      "fix": "Persist and expose the workspace ROOT the user chose (add a workspace_root/base field to Config.as_dict and default_paths), and populate setWs from that, not from working_root. Alternatively, if workspace_folder already ends in /'work' (or already contains agent/ + work/), treat it as an existing workspace root instead of re-deriving under it. At minimum, make configure_workspace idempotent so saving the current config twice is a no-op.",
+      "verdict": "confirmed",
+      "verify_note": "Fully confirmed from code. Config.as_dict() (earcrate/core/config.py:21-33) persists master_root/working_root/agent_root/etc. but has NO field for the parent workspace folder the user picked. default_paths returns configured=as_dict() (app.py:556). renderSetup binds the Workspace input from working_root: `const ws=cfg.working_root||d.workspace_folder||''` (index.html:552), i.e. the .../work SUBDIR. saveWorkspace posts that value as workspace_folder (index.html:580). configure_workspace -> derive_workspace_paths sets working_root=workspace/'work', agent_root=workspace/'agent' (app.py:601-602), so a second save yields .../work/work and .../work/agent. The separation check in configure() only compares master vs working and master vs agent (app.py:522), never working vs its prior location, so it passes and the new tree is created silently while the old agent_root (SQLite DB, .npz cache, manifests, judgments) is orphaned. configure_workspace (app.py:761-773) is not idempotent. The 'Workspace - all output lives here' label (index.html:559) is bound to the subdir. Also note toggleWorkers calls renderSetup() (index.html:581), re-triggering the repopulation. Real high-severity data-orphaning bug."
+    },
+    {
+      "surface": "Workbench / Timeline / Manifest",
+      "title": "Render \u25b8 ignores the proposed/saved/loaded plan and recomposes from scratch",
+      "severity": "high",
+      "category": "wrong-logic",
+      "where": "index.html:429 renderMix(); server.py:301 /api/one_click_bg; app.py:3300 one_click_taste_mix -> 3401 propose_taste_mashup -> 3407 execute",
+      "impact": "The Workbench presents a pipeline 'Propose plan -> inspect three rails -> Save plan -> Render \u25b8', strongly implying Render renders the plan you are looking at. It does not. renderMix() posts /api/one_click_bg with only {taste_profile:S.resident}; one_click_taste_mix recomposes a brand-new arrangement via propose_taste_mashup(params) with a fresh next_render_seed and renders that. window.__plan is never sent, and there is NO endpoint anywhere that renders a saved/loaded plan. Consequence: the seed/BPM/rails/source picks the user reviewed, saved, and loaded are thrown away at render time; saved plans are effectively view-only and can never be reproduced as audio. This is the core promise of the surface being broken.",
+      "fix": "Pass window.__plan (or its plan_hash) to the render path and have one_click_taste_mix accept a supplied arrangement/seed to render deterministically instead of always recomposing. At minimum, wire loadPlan/propose to feed the exact seed into /api/one_click_bg so the rendered output matches the previewed plan.",
+      "verdict": "confirmed",
+      "verify_note": "renderMix() at index.html:429 posts /api/one_click_bg with only {taste_profile:S.resident}. server.py:302 routes it to run_background(one_click_mix,data); one_click_mix (app.py:2349) delegates to one_click_taste_mix (3300), which composes a brand-new arrangement via propose_taste_mashup (3010). Since data carries no seed, propose_taste_mashup line 3019-3020 takes explicit_seed=False and draws a fresh next_render_seed(c.seed). window.__plan is never sent in the body, and grepping every route confirms only /api/timeline/{propose,save,load,list} exist \u2014 none render a stored plan. So the seed/BPM/rails the user reviewed, saved, and loaded are discarded at render time and saved plans cannot be reproduced as audio. The tester's cite of 'one_click_taste_mix' is one indirection off (route calls one_click_mix, a one-line passthrough) but the defect is exactly as described. Keeping high: the surface still produces audio, but its central promise (render the plan you inspected) is broken."
+    },
+    {
+      "surface": "Book a Set / One-Click Mix",
+      "title": "Activity screen never surfaces the finished render \u2014 the whole payoff of \"Book a set\" is invisible where the user is dropped",
+      "severity": "medium",
+      "category": "missing-state",
+      "where": "index.html:283/429 go('activity') \u2192 renderStatus index.html:462-470; backend sets status.last_render_path app.py:3418",
+      "impact": "bookSet and renderMix both navigate to Activity to \"watch\". renderStatus renders only message, progress %, and last_error (grep confirms renderActivity reads no other status field). On success one_click sets status['last_render_path'] and a \"complete\" message, but Activity offers no way to play/open the render and no link to Sessions. The user watches the run finish and then sees an idle screen with no playable result; they must independently discover that the mix lives under Sessions. The core deliverable is produced but not shown at the point of completion.",
+      "fix": "When status.last_render_path is present and busy is false, render a PLAY/OPEN affordance (reuse setPlayer/openFolder) or a \"View in Sessions\" button in renderStatus.",
+      "verdict": "unverified",
+      "verify_note": ""
+    },
+    {
+      "surface": "Book a Set / One-Click Mix",
+      "title": "Structured refusal detail is discarded in background mode \u2014 user only gets a single error string",
+      "severity": "medium",
+      "category": "missing-state",
+      "where": "run_background target app.py:5222-5224 discards fn() return; one_click refusals build rich dicts at app.py:3363 / 3372 / 3427 via _finish_one_click_result",
+      "impact": "When a booked set refuses (readiness short, library exhausted, or post-render rejection), one_click_taste_mix returns a detailed dict \u2014 per-role shortfalls (readiness.failures/have/need), yield projections from _taste_harvest_projection, and the full harvest_log \u2014 via _finish_one_click_result. But because it runs through run_background, target() calls fn and ignores its return value entirely. Only the single set_status(msg,...) string reaches the UI (Activity last_error). All the \"what to feed the crate\" diagnostics the code paid to compute are thrown away; the user just sees one long sentence like \"TasteSpec crate refused theater: ...\".",
+      "fix": "Persist the finish result onto status (e.g. status['last_result']) so Activity/Sessions can render the harvest log, per-role need/have, and yield projections, not just the flattened message.",
+      "verdict": "confirmed",
+      "verify_note": "run_background.target() (app.py:5222-5228) calls fn(*args,**kwargs) and ignores the return value; the rich dicts built by _finish_one_click_result at app.py:3363/3372/3421/3427 (per-role readiness have/need, _taste_harvest_projection yields, full harvest_log) never reach the polled status. Only set_status(msg,...) is surfaced, and Activity renders just that string. One nuance the tester omitted: _finish_one_click_result does persist the full result to disk via _run_bundle_finish (app.py:309), so it is not gone forever -- but nothing on this surface reads the run bundle, so the UI-facing claim holds. Confirmed medium."
+    },
+    {
+      "surface": "Book a Set / One-Click Mix",
+      "title": "\"Book a set\" button ignores the readiness verdict shown right next to it",
+      "severity": "medium",
+      "category": "ux",
+      "where": "index.html:249 (always-enabled glowing button) vs verdictOf index.html:192-196 and readiness_pct display index.html:220,200-201",
+      "impact": "A resident can render as \"WANTS MATERIAL\" (r.ready=false, red verdict) with a low readiness_pct, yet the Book-a-set button is always enabled, glowing, and gives no pre-flight warning or confirm. Clicking it launches the full doctor\u2192scan\u2192harvest pipeline that (for a nonzero-but-short pool) can churn a long time and then refuse. The UI already knows the resident isn't ready (r.ready is present in the same payload) but does not gate, warn, or annotate the button. (This is acceptable and even documented for the pool_size==0 / never_auditioned case via the r.wants copy, but not for the short-pool case.)",
+      "fix": "When activeResident().ready is false and pool_size>0, either disable the button with an inline \"crate short \u2014 will likely refuse\" note, or show a confirm that names the missing roles from r.wants before firing bookSet.",
+      "verdict": "confirmed",
+      "verify_note": "The Book-a-set button (index.html:249) is hardcoded with animation:glowPulse and no disabled attribute or onclick guard -- it is always live regardless of activeResident().ready. verdictOf (index.html:192-196) returns the red \"WANTS MATERIAL\" verdict when r.ready is false, and readiness_pct is displayed (index.html:200-201,220), so the UI already holds the readiness signal but bookSet (index.html:280-284) fires unconditionally with no pre-flight warn/confirm. Confirmed medium."
+    },
+    {
+      "surface": "Demo / Seed / Rollback / Migrate",
+      "title": "migrate/plan response is discarded \u2014 user sees no count, actions, or human summary",
+      "severity": "medium",
+      "category": "shape-mismatch",
+      "where": "index.html:546 (libAction toast) vs app.py:911-915 (plan response)",
+      "impact": "libAction's toast reads only j.dry_run, j.planned, and j.ok. The plan response has no 'planned' field; it returns summary, actions (the full preview list), and a rich 'human' description string. So the toast collapses to \"plan: DRY-RUN \u2014 ok\" regardless of how many items would migrate/quarantine/scrub. The user gets no visibility into what the migration would actually do \u2014 the entire preview payload (its whole reason for existing) is thrown away.",
+      "fix": "Render the plan's human/summary/actions in the Health & migration card (e.g. into doctorOut or a dedicated panel) instead of only firing libAction's generic toast.",
+      "verdict": "confirmed",
+      "verify_note": "Verified. libAction toast (index.html:546) builds its message from only j.dry_run, j.planned, and j.ok. The plan response (app.py:911-915) has NO 'planned' field, so `j.planned!=null` is false and it falls through to the `j.ok!==false ? 'ok'` branch; with dry_run:true and ok:true the toast collapses to 'plan: DRY-RUN \u2014 ok' regardless of scale. The rich payload \u2014 summary (per-op counts + bytes), actions (full preview list, app.py:902-903), and the human sentence (app.py:907-910) describing migrate/quarantine/scrub counts \u2014 is never rendered anywhere. Preview payload is thrown away. Severity medium as stated."
+    },
+    {
+      "surface": "Ear Crate / Atoms / Pairs",
+      "title": "Pairs panel shows the SELECTED atom as its own pairing partner for every edge where it sits on the right side",
+      "severity": "medium",
+      "category": "wrong-data-displayed",
+      "where": "index.html:343 renderCratePairs (esc(p.right_artist+' '+p.right_title||p.right_role)); app.py:5142-5161 compatible_pairs_for_atom",
+      "impact": "compatible_pairs_for_atom fetches edges WHERE e.left_atom_id=? OR e.right_atom_id=?, but the SELECT only returns the RIGHT atom's identity (rt.artist right_artist, rt.title right_title, ra.ear_role right_role) \u2014 it never returns the left atom's artist/title. renderCratePairs always renders p.right_artist/p.right_title as 'the other atom'. The graph is built with left in {foreground,bass,spark} and right in {beds, foreground}, so a bed atom (or any atom on an edge's right side) appears as the right_atom of its own edges. When such an atom is selected, every pair row displays that same atom's name as the partner instead of the vocal/bass/spark it actually pairs with. The relation label (e.g. 'vocal_over_bed') and score are correct, but the named partner is wrong/self-referential. Beds are a whole role category, so the panel is meaningless for them.",
+      "fix": "Have compatible_pairs_for_atom also select the LEFT atom identity (la joins -> left_artist,left_title,left_path) and, in renderCratePairs, pick the side that is NOT the selected atom_id (compare p.left_atom_id/p.right_atom_id to a.atom_id) before rendering the partner name.",
+      "verdict": "confirmed",
+      "verify_note": "CONFIRMED. compatible_pairs_for_atom (app.py:5142-5161) SELECTs only right-atom identity (rf.path right_path, rt.artist right_artist, rt.title right_title) plus la.ear_role left_role / ra.ear_role right_role \u2014 the LEFT atom's artist/title/path are never returned. The WHERE clause is `(e.left_atom_id=? OR e.right_atom_id=?)`, so the selected atom can be the RIGHT side of an edge. renderCratePairs (index.html:343) unconditionally renders `esc((p.right_artist||'')+' '+(p.right_title||p.right_role||''))`, i.e. always the right side. build_compatibility_graph (app.py:2887-2898) builds edges as vocal_over_bed(left=foreground,right=beds), bass_over_drums(left=basses,right=beds), spark_into_phrase(left=sparks,right=beds+foreground[:40]) \u2014 so BED_CHORD/DRUM_BREAK/TEXTURE atoms only ever appear on the right side, meaning a selected bed shows its own name as the partner on every row. Foreground atoms are mixed (correct partner on vocal_over_bed edges, self on spark edges where they land on the right). Severity medium is fair: relation label and score are correct, only the named partner is wrong, and it's total nonsense specifically for the whole beds role category."
+    },
+    {
+      "surface": "Ear Crate / Atoms / Pairs",
+      "title": "Favorite / Lock / Reject buttons give a toast but never refresh the crate, so they appear to do nothing",
+      "severity": "medium",
+      "category": "missing-state-refresh",
+      "where": "index.html:349-353 judgeAtom; index.html:308-316 renderCrateList; ear/readiness.py:258-271 rank_material output",
+      "impact": "judgeAtom posts to /api/ear_atoms/judgment and shows an optimistic toast, but unlike judgePair (which calls renderCratePairs() after) it never re-renders the list or inspector. The crate list is populated from /api/rank -> rank_material, whose per-atom output dict contains no favorite/locked field and only status='approved' atoms are in the pool at all. Consequences: (a) after Reject the atom stays visible in the ranked list until the whole Crate screen is manually re-opened/re-ranked, so the user sees no change and may re-click; (b) Favorite and Lock produce NO persistent visual state anywhere in the crate (no star/lock badge is rendered and the data to render one isn't even fetched). All three atom-judgment controls read as no-ops even though the backend persisted the judgment.",
+      "fix": "After a successful judgeAtom, re-fetch/re-render (call renderCrate or at least drop rejected atoms from DATA.ranked and re-render). Include favorite/locked in rank_material's output and render a badge in renderCrateList so Favorite/Lock have a visible effect.",
+      "verdict": "confirmed",
+      "verify_note": "CONFIRMED. judgeAtom (index.html:349-353) only awaits the POST and calls toast() \u2014 no re-render, in contrast to judgePair (index.html:354) which calls renderCratePairs() after. set_atom_judgment (app.py:5123) does persist ear_atoms.status='rejected', but the crate list comes from /api/rank -> rank_crate -> approved_atom_pool, which filters `a.status='approved'` (app.py:2771), so a rejected atom only disappears on a manual re-rank/re-open of the Crate screen \u2014 it stays visible after Reject. rank_material's per-atom output dict (readiness.py:258-271) contains no favorite/locked/status field, and renderCrateList (index.html:308-316) renders no star/lock badge, so Favorite and Lock produce zero visible state anywhere. All three controls read as no-ops even though the backend persisted the judgment. Severity medium is fair."
+    },
+    {
+      "surface": "Global: Nav / Router / Boot / Skin",
+      "title": "Global QUERY box is a no-op on 6 of the 7 screens",
+      "severity": "medium",
+      "category": "dead-control",
+      "where": "index.html:43 (input oninput=\"onQuery()\") -> index.html:585 (onQuery)",
+      "impact": "The QUERY box lives in the always-visible command strip (with placeholder 'bpm:104-118 role:vox'), implying app-wide search. But onQuery() only does anything when S.mode==='crate' (it calls renderCrateList, which reads el('query').value at index.html:303). On Play, Library, Workbench, Sessions, Activity, and Setup, typing in the box filters nothing and gives no feedback \u2014 a prominent global control that is dead on the majority of screens. There is also no visual cue that the box is crate-only, and the typed query is neither cleared nor surfaced when navigating.",
+      "fix": "Either scope the QUERY box to the Crate screen (hide/disable it elsewhere, or move it into the crate surface), or make onQuery() dispatch to the active screen's list renderer. At minimum, grey/disable the input when S.mode!=='crate' and update the placeholder to say it filters the crate.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. index.html:585 onQuery() = `if(S.mode==='crate') renderCrateList();` \u2014 the only handler wired to the always-visible command-strip input (index.html:43). el('query').value is read solely in renderCrateList (index.html:303); grep shows no other consumer. On Play/Library/Workbench/Sessions/Activity/Setup, typing filters nothing and gives no feedback, and the box is never disabled/greyed or its placeholder changed off-crate. Note the separate Workbench playlist input is #plQuery (line 509), distinct from this global #query. Medium is fair."
+    },
+    {
+      "surface": "Global: Nav / Router / Boot / Skin",
+      "title": "First-boot lands on Play with red 'WANTS MATERIAL' verdicts and no path to Setup",
+      "severity": "medium",
+      "category": "first-boot-flow",
+      "where": "index.html:614 boot -> go('play') -> renderPlay (index.html:207); verdictOf index.html:192; app.py:5030",
+      "impact": "On a fresh install self.config is None. boot() routes straight to Play, which fetches /api/residents. Because taste_readiness raises 'not configured' per profile, each resident entry comes back with only an 'error' field set (app.py:5031) \u2014 no 'ready', no 'never_auditioned'. verdictOf() then falls through to the default branch and paints every resident 'WANTS MATERIAL' in fault red (index.html:196), while updateChrome shows crate-fit '\u2013'. A first-time user sees a fully-chromed, alarming Play screen and is never directed to Setup (nav item #06) to configure a workspace first. The underlying 'not configured yet' error is swallowed and never surfaced.",
+      "fix": "Detect the unconfigured state on boot (e.g. GET /api/defaults returns configured:null at app.py:556) and route first-run users to Setup, or render an explicit 'configure a workspace to begin' empty state on Play instead of red per-resident verdicts derived from a swallowed config error.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed as a deterministic code cascade for the unconfigured state. boot() (index.html:614-621) has no ec_mode persistence, so S.mode defaults to 'play' and go('play')->renderPlay runs. renderPlay calls /api/residents, which routes straight to core.residents() with no ensure_config guard (server.py:186-187). In residents() each profile calls taste_readiness->approved_atom_pool->conn()->connect_db()->ensure_config(), which raises RuntimeError('earcrate is not configured yet') when self.config is None (app.py:970-972). That exception is swallowed into entry['error'] (app.py:5030-5031), so entries carry NO ready/never_auditioned/readiness_pct. verdictOf (index.html:192-197) then falls through to the red 'WANTS MATERIAL' default, and updateChrome shows crate-fit '\u2013' (index.html:200). No routing to Setup on unconfigured boot. Depends only on config being None on a fresh install, which is the documented default of ensure_config."
+    },
+    {
+      "surface": "Global: api",
+      "title": "Audio playback failures (403/404/416 from /api/audio) are completely silent",
+      "severity": "medium",
+      "category": "silent-failure",
+      "where": "index.html:589 (playClip), 590 (setPlayer), audio route server.py:209-231",
+      "impact": "Audio never goes through api(); it is set as `<audio>.src = audioUrl(...)` and started with `a.play().catch(()=>{})` (index.html:589,590). The /api/audio route can return 403 (path outside workspace/library, server.py:224), 404 (file missing, server.py:227), or 416 (bad range, server.py:120). All of these leave the audio element in an error state, and the empty `.catch(()=>{})` swallows the play rejection. The user clicks \u25b6 / Book a set / Play demo and nothing happens, with zero feedback. Note the token IS correctly attached to the audio URL, so this is purely an error-visibility gap, not an auth gap.",
+      "fix": "Attach an 'error' listener to the <audio> element (and inspect a.error) to toast something like 'Audio unavailable (missing file or outside library)'. Replace the empty play().catch with one that surfaces the failure.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. Audio bypasses api(): playClip (index.html:589) and setPlayer (index.html:590) set a.src=audioUrl(...) and call a.play().catch(()=>{}) \u2014 empty rejection handler. togglePlay (591), endlessNext, playDemo all funnel through these. The /api/audio route can return 403 (path outside workspace/library, server.py:224), 404 (missing file, server.py:227), or 416 (bad range, server.py:120), all leaving the <audio> element in an error state. boot() (index.html:616) attaches only 'ended', 'play', and 'pause' listeners \u2014 there is NO 'error' listener and no inspection of a.error anywhere. The token IS correctly attached (audioUrl, line 158, appends &token=), so this is purely an error-visibility gap. User clicks \u25b6 and gets zero feedback. Confirmed."
+    },
+    {
+      "surface": "Global: api",
+      "title": "Error responses render as indistinguishable 'empty' states, masking failures as no-data",
+      "severity": "medium",
+      "category": "ux",
+      "where": "index.html:289 (renderCrate), 316 (empty copy), 434/444 (renderSessions)",
+      "impact": "Several GET/POST-backed views catch the error and then fall through to render an 'empty' fallback identical to a legitimately-empty result. Example: renderCrate does `let ranked=[]; try{...}catch(e){}` (index.html:289) then renders 'crate empty \u2014 build the ear crate in Library first' (index.html:316) \u2014 so a 403/500 on /api/rank is presented to the user as an empty crate, prompting them to redo work that already exists. renderSessions does the same: catch(e){} (index.html:434) then 'no sessions yet' (index.html:444). The user is told the wrong thing (data is missing) when the real problem is the request failed.",
+      "fix": "Distinguish thrown errors from genuinely-empty results: on catch, render an explicit error state (with e.message / e.trace) instead of the neutral empty-state copy, so a failure never masquerades as 'nothing here yet'.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed for both cited views. renderCrate: `let ranked=[]; try{...post('/api/rank'...)...}catch(e){}` (index.html:289), and renderCrateList falls through to '|| crate empty \u2014 build the ear crate in Library first' (index.html:316) \u2014 a 403/500 on /api/rank is presented as an empty crate, telling the user to rebuild work that may already exist. renderSessions: `let items=[]; try{...api('/api/sessions')...}catch(e){}` (index.html:434) then '|| no sessions yet \u2014 book a set from Play' (index.html:444). In both, a failed request is indistinguishable from a genuinely empty result. The pattern (empty accumulator + empty catch + neutral empty-state copy) is exactly as described."
+    },
+    {
+      "surface": "Judge / Render QA",
+      "title": "Reference comparison harness is unreachable \u2014 UI hardcodes ref:'' so judge_audio_file never runs the ref branch",
+      "severity": "medium",
+      "category": "dead-feature/shape",
+      "where": "earcrate/ui/static/index.html:450 -> earcrate/ui/server.py:338 -> earcrate/judge/audio.py:235",
+      "impact": "judgeRender always posts {path, ref:''}. server.py:338 coerces it via str(data.get('ref') or '') or None => None. judge_audio_file therefore always takes ref_path=None and never populates out['reference'] / out['delta_vs_reference'] (audio.py:235-244). The Addendum A0 reference-comparison harness has no UI entry point at all; there is no control to pick a reference file, so 'judging against a ref' cannot happen from the app.",
+      "fix": "Add a reference picker (or drag-target) that passes a real ref path, and render the returned delta_vs_reference; otherwise the ref parameter and its backend branch are dead.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:450 posts {path, ref:''} with a literal empty string. server.py:338 coerces via str(data.get('ref') or '') or None, which collapses '' to None. audio.py:168/235 only enters the reference branch `if ref_path:`, so out['reference'] and out['delta_vs_reference'] (audio.py:236-244) are never populated from the UI. Grepped the whole frontend surface: there is no ref picker, drag target, or any control that would pass a non-empty ref. The backend ref branch and delta_vs_reference are dead code from the app's perspective. Medium is fair."
+    },
+    {
+      "surface": "Judge / Render QA",
+      "title": "Failing-gate 'reason' shown to the user is just raw metric keys with no threshold or direction",
+      "severity": "medium",
+      "category": "ux",
+      "where": "earcrate/ui/static/index.html:450; gates defined earcrate/judge/audio.py:227-232",
+      "impact": "On failure the toast reads e.g. 'FAIL \u2014 rms_std_db, silence_ratio, low200_share'. These are internal metric names; the user gets no measured value, no threshold, and no direction (e.g. rms_std_db must be >=4.5, low200_share >=0.48). The TasteSpec pass/fail 'reason' is technically surfaced but not human-readable, and it is truncated to the first 3 via slice(0,3) with no indication more failed.",
+      "fix": "Map each gate key to a plain-language sentence with the measured value vs threshold (data is in j.render), and indicate when more than 3 gates failed.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:450 builds `failed` from Object.entries(g).filter(v===false).map(([k])=>k) and toasts 'FAIL \u2014 '+failed.slice(0,3).join(', '). g comes from v1_1_gates, whose values are pure booleans (audio.py:227-232), so only internal keys like rms_std_db/silence_ratio/low200_share/distinct_pcs are shown \u2014 no measured value, no threshold, no direction. The actual numbers exist in the response as j.render (audio.py:212-224) but are never used. slice(0,3) truncates without any 'and N more' indicator; note there are only 4 gates total so truncation is at most one hidden key. Confirmed; medium/low is fair."
+    },
+    {
+      "surface": "Judge / Render QA",
+      "title": "judge_render can 500 on a missing/undecodable render; user sees the raw exception string (and trace is leaked in the response)",
+      "severity": "medium",
+      "category": "error-handling",
+      "where": "earcrate/app.py:5213-5215 -> earcrate/judge/audio.py:168-173; server.py:340-348",
+      "impact": "judge_render passes the path straight to judge_audio_file with no existence/format guard; decode_audio (audio.py:172) will raise if the file was deleted after listing or is an unsupported/corrupt format. server.py returns 500 with {'error': str(exc), 'trace': traceback.format_exc()}. post() (index.html:157) surfaces j.error, so the user gets a raw Python exception message instead of a friendly 'render not found / could not decode', and the full traceback is shipped to the client. judgeRender's own empty catch{} adds nothing since post already toasted.",
+      "fix": "In judge_render, validate the path is inside the renders root and exists before decoding, and return a structured error; stop returning the traceback field to the browser.",
+      "verdict": "confirmed",
+      "verify_note": "app.py:5213-5215 judge_render passes render_path straight into judge_audio_file with no existence/inside-root/format guard. audio.py:172 calls decode_audio, which (analyze/decode.py:27-31) raises RuntimeError on ffmpeg non-zero return (missing/corrupt/unsupported file) or zero decoded samples. server.py:337-338 has no try/guard around the judge call, so it hits the generic except at 340-348 returning HTTP 500 {'error': str(exc), 'trace': traceback.format_exc()}. api() (index.html:155) throws new Error(j.error) which post() (157) toasts, so the user gets a raw Python/ffmpeg exception string; the full traceback is shipped to the browser in the response body. judgeRender's empty catch{} adds nothing. Confirmed; medium."
+    },
+    {
+      "surface": "Library / Scan / Analyze",
+      "title": "Loop-review 'Lock' chip is a mislabeled duplicate of 'Approve', and 'Approve' is always shown highlighted regardless of the loop's real status",
+      "severity": "medium",
+      "category": "misleading-control",
+      "where": "index.html:524,531,535 (loopRow / loopSetStatus, rendered inside renderLibrary)",
+      "impact": "loopRow renders three chips: chip('Approve','approved',true), chip('Reject','rejected',false), chip('Lock','approved',false). The 'Lock' chip fires the exact same call as 'Approve' \u2014 loopSetStatus(id,'approved') \u2192 POST /api/loop_status status='approved' \u2014 so 'Lock' does nothing distinct from Approve (set_loop_status already locks on approve). Separately, the Approve chip's highlighted state is hardcoded on=true, so EVERY candidate loop shows Approve lit up as if already approved, giving no visual signal of the loop's actual status.",
+      "fix": "Either remove the redundant 'Lock' chip or point it at a real lock action; drive the chip highlight from l.status (on = (l.status===status)) instead of hardcoded booleans.",
+      "verdict": "confirmed",
+      "verify_note": "loopRow (index.html:524,531) renders chip('Approve','approved',true), chip('Reject','rejected',false), chip('Lock','approved',false). Both Approve and Lock call loopSetStatus(id,'approved') \u2192 POST /api/loop_status (index.html:535). The route (server.py:276) calls set_loop_status(loop_id, status) with no locked arg, so locked defaults to True (app.py:2188) on any approve \u2014 meaning Lock produces the identical DB effect as Approve and is redundant. Separately the Approve chip's `on` flag is hardcoded true, so the highlight is static: every candidate loop renders Approve lit up regardless of its real l.status, giving no visual signal of actual state. Both halves confirmed. Medium confirmed."
+    },
+    {
+      "surface": "Library / Scan / Analyze",
+      "title": "Library screen shows a raw backend exception string when the app is unconfigured, with no path back to Setup",
+      "severity": "medium",
+      "category": "error-state",
+      "where": "loadTracks (index.html:544) and loadLoopReview (index.html:534); backend list_tracks/list_loops \u2192 conn() \u2192 connect_db() \u2192 ensure_config() (app.py:970-972)",
+      "impact": "If Setup was never completed, /api/tracks and /api/loops throw 'earcrate is not configured yet' (500). The frontend catch blocks render esc(e.message) in red directly into the Tracks and Loop-review panels. The user sees the internal error text rather than a 'configure a workspace in Setup first' prompt. The nice empty-state ('no tracks \u2014 Scan a music folder in Setup') only fires on a successful-but-empty response, never on the unconfigured error.",
+      "fix": "Detect the unconfigured/500 case in loadTracks/loadLoopReview and render a friendly 'Set up your workspace in Setup' call-to-action instead of the raw exception message.",
+      "verdict": "confirmed",
+      "verify_note": "Traced the full chain: GET /api/tracks \u2192 list_tracks (app.py:2143) \u2192 conn() (1014) \u2192 connect_db() (996) \u2192 ensure_config() raises RuntimeError('earcrate is not configured yet') (app.py:971-972). Server catches at server.py:233-236 and returns _json(500,{'error':str(exc)}). Frontend api() does `throw new Error(j.error||txt)` (index.html:155), so e.message IS the raw exception. loadTracks catch (index.html:544) renders esc(e.message) in var(--fault) red directly into the panel; loadLoopReview catch (index.html:534) does the same into #loopList plus 'loops unavailable'. The friendly empty-state ('no tracks \u2014 Scan a music folder in Setup', line 543) only appears on a successful-but-empty response, never on the 500. Confirmed. Medium confirmed."
+    },
+    {
+      "surface": "Loop Review",
+      "title": "Per-loop status chips show a hardcoded state, not the loop's real status",
+      "severity": "medium",
+      "category": "wrong-logic/ux",
+      "where": "earcrate/ui/static/index.html:531 (loopRow), chip() defined at :524",
+      "impact": "loopRow renders the three chips with a literal on/off flag: chip('Approve','approved',true) + chip('Reject','rejected',false) + chip('Lock','approved',false). The third arg controls the highlighted (accent-background) styling, so EVERY row always renders 'Approve' as highlighted/active and 'Reject'/'Lock' as inactive, regardless of l.status. Because the list is fetched with ?status=candidate, every visible row is an un-approved candidate, yet each one displays a green 'already approved' badge. The toggle never reflects persisted state, so a reviewer cannot tell approved from rejected from candidate by looking at the chips \u2014 the visual state is meaningless.",
+      "fix": "Drive the third arg from data, e.g. chip('Approve','approved', l.status==='approved'), chip('Reject','rejected', l.status==='rejected'). Since the list only pulls candidates, either also surface approved/rejected rows or drop the fake 'active' styling entirely.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:524 chip=(label,status,on)=> uses `on` only to decide accent styling (var(--accink)/var(--acc) vs dim). Line 531 hardcodes it: chip('Approve','approved',true)+chip('Reject','rejected',false)+chip('Lock','approved',false). The `on` flag is a literal, never derived from l.status, so every row renders 'Approve' highlighted and the others inactive regardless of the loop's actual status. Since loadLoopReview (534) fetches ?status=candidate, every visible row is an un-approved candidate yet shows a green 'approved' badge. The chip highlight carries no real information. Confirmed defect; medium is right (misleading state on the primary review control, but data-mutating clicks still work)."
+    },
+    {
+      "surface": "Loop Review",
+      "title": "Candidate list silently truncated to 100 with no pagination or 'showing X of Y'",
+      "severity": "medium",
+      "category": "missing-pagination/ux",
+      "where": "earcrate/ui/static/index.html:534 (items.slice(0,100)); route earcrate/ui/server.py:178-181; list_loops app.py:2157",
+      "impact": "loadLoopReview renders only items.slice(0,100). list_loops fetches up to limit=1000 (default), and the /api/loops route never passes a limit, so the backend can return up to 1000 rows but the UI shows at most the top-100 by score and drops the rest with no indicator. The counts header still shows the true candidate total (e.g. 'candidates 500'), so a user sees 500 candidates but only 100 rows and no page controls. Candidates ranked #101+ cannot be individually reviewed/approved/rejected at all \u2014 only bulk quota-approve or reject-all can touch them, which defeats the 'human review' purpose for large pools.",
+      "fix": "Add pagination or at least a 'showing 100 of N \u2014 refine or use quota' notice; wire an offset/limit through /api/loops (list_loops already accepts limit) or lazy-load more rows.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:534 renders items.slice(0,100). server.py:180 calls list_loops(status) passing only status, so limit defaults to 1000 (app.py:2157). The counts block (2173-2186) is computed by a separate un-limited GROUP BY, so the header shows the true candidate total while at most 100 rows render. Candidates ranked #101-1000 by score are unreachable for individual approve/reject \u2014 only quota-approve or reject-all can touch them. No pagination, offset, or 'showing 100 of N' notice exists. Confirmed; medium is right for large pools."
+    },
+    {
+      "surface": "Play / Station / Endless Queue",
+      "title": "Transport prev/next arrows are dead outside Endless mode",
+      "severity": "medium",
+      "category": "dead-control",
+      "where": "earcrate/ui/static/index.html:598 (endlessSkip), 96, 100",
+      "impact": "endlessSkip() is a no-op unless ENDLESS.on is true. When the user is auditioning a single atom (playClip) or a booked render loaded via setPlayer without endless engaged, both skip arrows do nothing and give no feedback (no toast). The controls look active (class=\"clk\") but silently do nothing on the most common playback path.",
+      "fix": "Either disable/grey the arrows when !ENDLESS.on, or make them fall back to seeking / a toast explaining Endless must be on.",
+      "verdict": "confirmed",
+      "verify_note": "endlessSkip() at index.html:598 is `if(ENDLESS.on) endlessNext();` \u2014 a pure no-op when ENDLESS.on is false. setPlayer() (590) is used to load single atoms/renders without touching ENDLESS.on, and playDemo only sets it on for the demo path. Both arrows carry class=\"clk\" (look interactive) but do nothing and emit no toast on the single-audition path. Confirmed, medium."
+    },
+    {
+      "surface": "Play / Station / Endless Queue",
+      "title": "STATION \"CUT\" button does not cut or skip the playing track",
+      "severity": "medium",
+      "category": "misleading-control",
+      "where": "earcrate/ui/static/index.html:114 -> station('skip'); app.py:5067-5090",
+      "impact": "The 'CUT' control calls station('skip'), which only POSTs to /api/station/feedback; the backend returns applies:'logged only' and does nothing to playback (no queue advance, no pause). The label 'CUT' and the \u23ed toast imply the current track is dropped/skipped, but audio keeps playing unchanged. Users will expect it to behave like a radio skip.",
+      "fix": "Have the skip signal also call endlessNext() (when endless is on) after the feedback POST, or relabel/clarify that CUT only logs a taste signal.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:114 CUT -> station('skip') (600) which only POSTs /api/station/feedback and toasts '\u23ed logged'. Backend station_feedback (app.py:5067) for signal=='skip' skips the fire/ice bias branches, only bumps receipts/journals, and returns applies:'logged only' (5090). Nothing pauses or advances the <audio>; station() never calls endlessNext(). Label 'CUT' + \u23ed icon imply a radio skip; audio keeps playing. Confirmed, medium."
+    },
+    {
+      "surface": "Play / Station / Endless Queue",
+      "title": "Endless silently excludes renders that lack a current-engine report",
+      "severity": "medium",
+      "category": "shape-mismatch",
+      "where": "earcrate/ui/static/index.html:595 (endlessQueue); app.py:4152-4164",
+      "impact": "endlessQueue() keeps only items where r.current_engine is truthy. current_engine is engine_version==ENGINE_VERSION, and engine_version is null whenever a render has no sidecar .render_report.json (or an older-engine one). Such renders ARE returned by /api/renders and play fine when loaded individually, but Endless treats them as nonexistent \u2014 toggleEndless() shows 'No renders yet' even though renders sit in the folder. A user with real renders whose reports are missing/stale gets a confusing dead Endless button.",
+      "fix": "Relax the filter (e.g. include renders when current_engine is not explicitly false, mirroring the quality_gate_passed!==false pattern), or surface a distinct message like 'renders exist but are from an older engine'.",
+      "verdict": "confirmed",
+      "verify_note": "endlessQueue() (index.html:595) keeps only `r.current_engine && r.quality_gate_passed!==false`. In list_renders (app.py:4142) engine_version is None when the .render_report.json sidecar is missing (4152-4155) or holds an older engine, so current_engine = (engine==ENGINE_VERSION) is False (4164) and the item is dropped. Those same renders ARE returned by /api/renders and load/play fine via setPlayer individually. If all renders lack current reports, toggleEndless (596) hits the empty branch and toasts 'No renders yet' despite renders existing. Note the asymmetry: quality_gate_passed uses a lenient !==false but current_engine uses strict truthiness. Confirmed, medium."
+    },
+    {
+      "surface": "Playlist / Rank",
+      "title": "Query placeholder advertises a syntax the parser ignores",
+      "severity": "medium",
+      "category": "wrong-logic",
+      "where": "index.html:509 (placeholder \"query e.g. bpm:110-124 role:vox\") vs app.py:2247-2259",
+      "impact": "propose_playlist only recognizes: a BPM range matching regex `(\\d{2,3})\\s*[-\u2013]\\s*(\\d{2,3})\\s*bpm` (i.e. \"110-124 bpm\", with the word 'bpm' AFTER the range), and the literal keywords instrumental/low vocal/vocal. The advertised example `bpm:110-124` (colon form, 'bpm' before) does NOT match the regex, and `role:vox` is parsed by nothing. A user copying the placeholder gets a silently unfiltered full-library result (ordered only by energy), with no indication the query was ignored.",
+      "fix": "Make the placeholder match the actual grammar (e.g. \"e.g. 110-124 bpm instrumental\") or extend the parser to handle bpm:/role: tokens.",
+      "verdict": "confirmed",
+      "verify_note": "CONFIRMED. Placeholder at index.html:509 is `query e.g. bpm:110-124 role:vox`. Parser (app.py:2247-2259) lowercases q and only matches BPM via regex `(\\d{2,3})\\s*[-\u2013]\\s*(\\d{2,3})\\s*bpm` \u2014 requires the literal word 'bpm' AFTER the range. On the placeholder string 'bpm:110-124 role:vox' the digits '110-124' are followed by ' role', not 'bpm', so no match. `role:vox` triggers nothing: parser only tests substrings 'instrumental'/'low vocal'/'vocal', and 'vocal' is not a substring of 'role:vox'. A user copying the placeholder gets an unfiltered full-library result ordered by energy, with no signal the query was ignored. Placeholder does not match the real grammar."
+    },
+    {
+      "surface": "Readiness / Compatibility Graph",
+      "title": "Preflight audits a different dataset (legacy loops) than Readiness/Graph (taste atoms) and ignores taste_profile",
+      "severity": "medium",
+      "category": "correctness",
+      "where": "app.py:3449 (preflight -> approved_loop_pool()) vs app.py:2816 (taste_readiness -> approved_atom_pool(taste_profile)) and app.py:2878 (build_compatibility_graph -> approved_atom_pool)",
+      "impact": "The frontend sends {taste_profile:S.resident} to /api/preflight (index.html:390), but core.preflight() never reads data['taste_profile'] and calls self.approved_loop_pool() \u2014 which queries the `loops` table (app.py:2437-2446), a legacy per-loop pool with no taste-profile filter. Meanwhile the Readiness panel and Build-pair-graph both audit approved_atom_pool(taste_profile) (ear atoms). So the Workbench Preflight can report READY/NOT-READY based on a pool that has no relationship to the resident taste profile the rest of the Workbench composes against, producing contradictory verdicts vs the Crate Readiness panel.",
+      "fix": "Make preflight() take and honor taste_profile and audit the same pool the composer uses (approved_atom_pool / the atom-based readiness), or clearly label the Preflight card as auditing the raw loop pool so the two panels aren't confused for each other.",
+      "verdict": "confirmed",
+      "verify_note": "Verified. Frontend posts {taste_profile:S.resident, target_seconds:120} to /api/preflight (index.html:390). core.preflight (app.py:3448-3449) sets params from data but reads `pool = self.approved_loop_pool()` \u2014 never reads data['taste_profile']. approved_loop_pool (app.py:2437-2451) queries the legacy `loops` table with WHERE l.status='approved' and NO taste_profile filter. By contrast taste_readiness (app.py:2816) and build_compatibility_graph (app.py:2878) both call approved_atom_pool(taste_profile), which queries `ear_atoms` filtered by taste_profile. Server route (server.py:296) passes taste_profile only into taste_readiness, confirming preflight silently discards it. So Preflight can report READY/NOT-READY over a pool unrelated to the resident taste profile the rest of the Workbench composes against."
+    },
+    {
+      "surface": "Readiness / Compatibility Graph",
+      "title": "Readiness panel goes stale after judging atoms \u2014 approving/rejecting doesn't refresh have/need",
+      "severity": "medium",
+      "category": "missing-state",
+      "where": "index.html:349-353 (judgeAtom), 291/299 (renderCrate loads DATA.readiness once)",
+      "impact": "DATA.readiness is fetched once when the Crate screen renders (index.html:291) and renderReadiness runs once (299). judgeAtom() approves/rejects an atom (which changes approved_atom_pool and therefore taste_readiness have{}/failures{}) but only toasts \u2014 it does not re-fetch /api/taste/readiness or call renderReadiness/renderCrateList. So the whole point of the readiness panel (judge atoms to clear the shortfalls) gives no live feedback; the bars and the ranked list stay frozen until the user navigates away and back to Crate.",
+      "fix": "After a successful judgeAtom, re-fetch readiness and re-run renderReadiness (and optionally re-rank the list), or invalidate DATA.readiness and re-render.",
+      "verdict": "confirmed",
+      "verify_note": "Verified. renderCrate fetches DATA.readiness once (index.html:291) and calls renderReadiness once (line 299). judgeAtom (index.html:349-353) posts /api/ear_atoms/judgment and only toasts on success \u2014 it does not re-fetch /api/taste/readiness, and does not call renderReadiness, renderCrateList, or renderCrate. Since a judgment changes approved_atom_pool and therefore taste_readiness have{}/failures{}, the readiness bars and the ranked list stay frozen until the user navigates away and back. Confirmed."
+    },
+    {
+      "surface": "Reorganize / Identify / Deep-clean",
+      "title": "reorgApply moves original master files IN PLACE with no confirmation dialog",
+      "severity": "medium",
+      "category": "destructive-no-confirm",
+      "where": "index.html:520 (reorgApply); backend app.py:426-441 (shutil.move on originals)",
+      "impact": "The Apply button physically shutil.move()s the user's ORIGINAL library files (the card even says 'Move the ORIGINAL files in place'). reorgApply fires the destructive POST with no window.confirm \u2014 it relies solely on REORG.signature being set, which the immediately-preceding Preview click auto-satisfies. By contrast reorgRollback (521) and manifest execute (452) both confirm before writing. Apply sits directly beside Preview in the same button row (485), so a mis-click starts an in-place relocation of the entire library with no 'are you sure'.",
+      "fix": "Add a window.confirm to reorgApply summarizing the pending count (e.g. 'Move N original files in place? Reversible via Rollback.') before POSTing apply.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. reorgApply (index.html:520) POSTs /api/reorganize/apply with no window.confirm; it guards only on REORG.signature, which the adjacent Preview button auto-set. Backend shutil.move()s the originals in place (librarian/ingest.py:434; the tester cited app.py:426-441 but reorganize_source lives in librarian/ingest.py and is bound via app.py:5239 \u2014 same code, minor path mislabel). By contrast reorgRollback (521) and execManifest apply (452) both window.confirm first. Apply sits directly beside Preview in the same action row (485)."
+    },
+    {
+      "surface": "Reorganize / Identify / Deep-clean",
+      "title": "Rollback is only reachable within the same browser session (in-memory journal)",
+      "severity": "medium",
+      "category": "state-loss",
+      "where": "index.html:518 (REORG={journal:null}), 520 (REORG.journal=j.journal), 521 (reorgRollback guards on REORG.journal)",
+      "impact": "The reorg journal path is held only in the in-memory REORG.journal JS variable. If the user applies a reorganize and then reloads the page (or navigates away and the SPA re-inits), REORG.journal is null and reorgRollback aborts with 'Nothing to undo \u2014 no applied reorganize this session', even though the journal file still exists on disk under agent_root/reorg_journal. The most likely moment to want a rollback (come back later, realize the tree is wrong) is exactly when it's unreachable.",
+      "fix": "Persist/list recent reorg journals server-side and let the UI discover the latest journal for rollback instead of relying solely on session memory.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. The journal path lives only in the in-memory JS var REORG.journal (index.html:518 init null, 520 set). reorgRollback (521) aborts with 'Nothing to undo \u2014 no applied reorganize this session' when REORG.journal is null, which is the state after any page reload/SPA re-init. The journal file itself persists on disk at agent_root/reorg_journal/reorg-*.jsonl (librarian/ingest.py:423), and grep confirms server.py exposes only reorganize/plan, /apply, /rollback \u2014 no route lists or discovers existing reorg journals, so the UI has no way to recover the path for a later rollback."
+    },
+    {
+      "surface": "Sessions / Activity / Perf",
+      "title": "Perf stages never refresh after a run completes while Activity is open",
+      "severity": "medium",
+      "category": "missing-refresh",
+      "where": "index.html:608 (pollStatus) and 460 (renderActivity)",
+      "impact": "renderPerfStages() is only invoked when pollStatus is called with force=true, which happens once on entering Activity (renderActivity -> pollStatus(true)). The 2s background loop calls pollStatus(false) (boot line 618), so it updates the live status card but never re-fetches /api/perf. If a compile finishes while the user is watching Activity, the stage ledger for that run does not appear until they navigate away and back. (Compounded by the shape bug above, it never appears at all.)",
+      "fix": "Call renderPerfStages() when a run transitions busy->idle (e.g. track previous st.busy and refresh on the falling edge), or refresh perf on each poll while in activity mode.",
+      "verdict": "confirmed",
+      "verify_note": "renderPerfStages() is called only inside `if(force)` in pollStatus (index.html:608). renderActivity passes force=true once (line 460), but the 2s background loop calls pollStatus(false) (line 618), which updates renderStatus but never re-fetches /api/perf. So a run finishing while the user watches Activity does not surface its stage ledger until they re-navigate. Confirmed as a real missing-refresh defect (independent of, and compounded by, Finding 1)."
+    },
+    {
+      "surface": "Setup / Config / Doctor",
+      "title": "Browse button gives no feedback when the OS folder picker is unavailable",
+      "severity": "medium",
+      "category": "missing-error-state",
+      "where": "index.html:578 browseInto -> server.py:266 -> core/util.py:140 choose_directory_dialog",
+      "impact": "On a headless / no-Tk box, choose_directory_dialog returns {ok:false, path:\"\", error:\"folder picker unavailable: ...; paste the path into the box instead\"} \u2014 a deliberately recoverable message. But browseInto only acts on `if(j.ok && j.path)`; when ok is false it does nothing: no toast, no error, no fallback hint. The button looks completely dead and the helpful 'paste the path' guidance is swallowed. (The endpoint itself is correctly wired \u2014 choose_directory_dialog is reachable via the app star-import chain, so no NameError \u2014 and dialog-cancel returning path:'' correctly leaves the field unchanged.)",
+      "fix": "In browseInto, surface the failure: `if(j.ok===false){toast(j.error||'folder picker unavailable \u2014 paste the path');return;} if(j.path) el(id).value=j.path;`.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. choose_directory_dialog returns {ok:false, path:'', error:'folder picker unavailable: ...; paste the path into the box instead'} on no-Tk boxes (earcrate/core/util.py:172,182) with HTTP 200 (server.py:266). Since the response is 200, post()/api() do NOT throw (api throws only on !r.ok, index.html:155), so no toast fires there. browseInto only acts on `if(j.ok&&j.path)` (index.html:578); on ok:false it does nothing and the recoverable 'paste the path' error is swallowed. Endpoint wiring itself is correct (choose_directory_dialog imported/reachable, cancel returns path:'' leaving the field unchanged). Medium missing-error-state."
+    },
+    {
+      "surface": "Setup / Config / Doctor",
+      "title": "Analysis depth is shown as a tunable setting but has no control to change it",
+      "severity": "medium",
+      "category": "dead-control / missing-control",
+      "where": "index.html:553,564-566 (renderSetup Performance card)",
+      "impact": "The Performance card renders 'Analysis depth - seconds/track' with a filled progress bar and '180s' label, reading cfg.analysis_seconds. But there is no input/slider/button to change it anywhere in the UI (grep confirms only the query box uses oninput; no range input, no setDepth). saveWorkspace/config_workspace never send analysis_seconds, and configure_workspace only forwards it when data.analysis_seconds is truthy \u2014 which the UI never provides. So analysis depth is permanently pinned at the default 180s from the UI; the widget looks adjustable but is inert.",
+      "fix": "Add an editable control (range input) that posts analysis_seconds via config_workspace/config, or relabel the bar as read-only/informational so it doesn't imply it can be tuned.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. renderSetup computes depth=cfg.analysis_seconds||180 (index.html:553) and renders a filled bar + '180s' label (index.html:564-566). Grep for analysis_seconds in index.html returns only line 553 (the read); there is no range input, no setDepth, no button that posts analysis_seconds. saveWorkspace sends only {music_folder, workspace_folder} (index.html:580). configure_workspace forwards analysis_seconds only when data.analysis_seconds is truthy (app.py:769), which the UI never provides, so depth is pinned at DEFAULT_ANALYSIS_SECONDS. The widget looks adjustable but is inert."
+    },
+    {
+      "surface": "Setup / Config / Doctor",
+      "title": "Toggling workers before a workspace is saved throws a raw KeyError toast",
+      "severity": "medium",
+      "category": "endpoint-500 / edge-case",
+      "where": "index.html:581 toggleWorkers -> server.py:252 /api/config -> app.py:515 configure",
+      "impact": "If the user clicks 'FULL SEND'/'GENTLE' before saving a workspace, toggleWorkers computes cur=(d.configured||{}).workers (undefined->0), next=4, and posts /api/config with `{...(d.configured||{}), workers:4}` = just {workers:4}. configure() immediately does data['master_root'] which raises KeyError, returning a 500; post() surfaces it as the toast \"X 'master_root'\". Confusing raw error instead of a 'save a workspace first' guard.",
+      "fix": "In toggleWorkers, bail if not configured (toast 'save a workspace first'), or have configure() raise a clear ValueError('master_root is required \u2014 configure a workspace first') instead of a bare KeyError.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. When unconfigured, /api/defaults returns configured:null, so toggleWorkers computes cur=(d.configured||{}).workers||0 -> 0, next=4, and posts /api/config with {...(d.configured||{}), workers:4} == {workers:4} (index.html:581). configure() immediately dereferences data['master_root'] (app.py:515) -> KeyError. The server's except returns 500 with {'error': str(exc)} == \"'master_root'\" (server.py:340,348), api() throws Error(j.error) (index.html:155), post() toasts '\u2715 '+e.message (index.html:157) -> \"\u2715 'master_root'\". Confusing raw error; no 'save a workspace first' guard exists."
+    },
+    {
+      "surface": "Setup / Config / Doctor",
+      "title": "'Migrate legacy' is a dead-end: preview is discarded and there is no way to apply",
+      "severity": "medium",
+      "category": "dead-control",
+      "where": "index.html:571 (button) -> index.html:546 libAction -> server.py:322 /api/migrate/plan -> app.py:892 plan_workspace_migration",
+      "impact": "The button posts /api/migrate/plan, which returns a rich dry-run preview (actions[], summary, human text, signature). But libAction collapses the whole response to a single toast: since the plan has no `planned` field, the user just sees 'plan: DRY-RUN - ok'. The action list, human summary and signature are thrown away, and there is no UI to review the plan or to call /api/migrate/apply (which additionally requires passing that signature). The migration feature is unreachable from the UI. Also, before any workspace is configured the same call raises ValueError('workspace_folder ... is required') -> 500 -> toast.",
+      "fix": "Route migrate/plan to a dedicated renderer that shows homes/actions/human and an Apply button that re-posts /api/migrate/apply with the returned signature; guard the unconfigured case.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. Button posts /api/migrate/plan via libAction (index.html:571). plan_workspace_migration returns {ok, dry_run:true, actions, summary, human, signature, ...} (app.py:911-915) but has NO 'planned' field. libAction collapses it: `j.planned!=null? ... : (j.ok!==false?'ok':...)` -> since planned is undefined, and dry_run true, the toast is exactly 'plan: DRY-RUN \u2014 ok' (index.html:546). actions/human/signature are discarded. Grep confirms index.html never references migrate/apply, so /api/migrate/apply (server.py:323, which additionally requires the signature) is unreachable from the UI. Unconfigured case: _migration_actions raises ValueError('workspace_folder (or music_folder to derive the sibling) is required') (app.py:882-883) -> 500 -> toast. Feature effectively unreachable."
+    },
+    {
+      "surface": "Workbench / Timeline / Manifest",
+      "title": "Returning to Workbench visually erases the current plan while Save/Render still act on it",
+      "severity": "medium",
+      "category": "missing-state",
+      "where": "index.html:370-385 renderWorkbench (sets wbPlan to 'no plan yet', calls renderPre([]) and renderPipe(null)); window.__plan persists in memory",
+      "impact": "renderWorkbench rebuilds the panel to 'no plan yet' and never re-renders the in-memory window.__plan when you navigate away and back. But window.__plan and window.__plans persist, so Save plan still silently saves the old (now-invisible) plan and Render still runs. The user sees 'no plan yet' yet Save succeeds \u2014 confusing and can save/render a stale plan they thought was gone.",
+      "fix": "In renderWorkbench, if window.__plan exists call renderPlanRails(window.__plan) (and restore the meta/pre-gate state) instead of hard-resetting to 'no plan yet'.",
+      "verdict": "confirmed",
+      "verify_note": "go(mode) at index.html:184 calls the mode's render fn on every navigation. renderWorkbench (370-385) rewrites scr.innerHTML with wbPlan='no plan yet' and calls renderPipe(null)/renderPre([]) without ever reading the persisted window.__plan. window.__plan is a window global set by proposePlan/loadPlan, so it survives navigation: savePlan (387) still saves it and renderMix (429) still fires, while the user sees 'no plan yet'. Confirmed missing-state bug. (Note: Render itself ignores window.__plan per F1, so the 'stale save' is the real hazard; the 'stale render' framing is moot but harmless.)"
+    },
+    {
+      "surface": "Book a Set / One-Click Mix",
+      "title": "No busy-guard on Book a set / Render; concurrent click 500s and bookSet strands the user on Play",
+      "severity": "low",
+      "category": "ux",
+      "where": "bookSet index.html:280-284, renderMix index.html:429; run_background raises \"EarCrate is already busy\" app.py:5219-5220",
+      "impact": "If a run is already in progress, clicking Book a set or Render hits run_background, which raises RuntimeError(\"EarCrate is already busy\"). The POST handler turns that into a 500 (app.py:340-348) and post() shows a transient toast \"\u2715 EarCrate is already busy\". For bookSet the throw also skips go('activity') (both are inside the same try, index.html:283), so the user is left on Play with only a 6-second toast and no indication a run is ongoing. The buttons are never disabled while busy despite the app exposing status.busy.",
+      "fix": "Disable/relabel Book a set and Render while status.busy is true, and/or have bookSet navigate to Activity even on the busy error so the user sees the in-progress run.",
+      "verdict": "confirmed",
+      "verify_note": "run_background raises RuntimeError(\"EarCrate is already busy\") when status.busy (app.py:5218-5220). do_POST's except returns _json(500,{error,trace}) (server.py:340-348). api() throws on !r.ok (index.html:155), post() toasts \"\u2715 \"+message then rethrows (index.html:157). In bookSet the throw occurs at the await inside the same try as go('activity') (index.html:283), so go('activity') is skipped and the user is left on Play with only a 6s toast. Neither button consults status.busy to disable itself. Confirmed low."
+    },
+    {
+      "surface": "Book a Set / One-Click Mix",
+      "title": "Synchronous /api/one_click can return a raw 500 with a stack trace",
+      "severity": "low",
+      "category": "error-handling",
+      "where": "server.py:303-304 \u2192 one_click_mix; outer except re-raises app.py:3428-3439",
+      "impact": "one_click_taste_mix's outermost handler re-raises after bookkeeping, so the synchronous /api/one_click route returns HTTP 500 with {error, trace} on any hard failure (e.g. doctor failure raising RuntimeError at app.py:3318). This endpoint is not wired to any button on this surface (bookSet and renderMix both use /api/one_click_bg, which swallows the exception into status), so it is latent, but the naked trace leaks if anything calls the sync route.",
+      "fix": "Have the sync route return the structured refusal dict instead of re-raising, mirroring the _bg path, or wrap it so hard errors become {ok:false,error} rather than a 500+trace.",
+      "verdict": "confirmed",
+      "verify_note": "server.py:303-304 wires /api/one_click straight to one_click_mix (no run_background). one_click_taste_mix's outer handler re-raises after bookkeeping (app.py:3428-3439, bare `raise` at 3439), and hard failures like the doctor RuntimeError (app.py:3318) hit it; do_POST turns that into 500 {error,trace} (server.py:348) leaking the traceback. Confirmed the route is unused by this surface: grep of index.html shows only /api/one_click_bg is called (lines 283,429), never /api/one_click -- so it is latent, not live. Confirmed low."
+    },
+    {
+      "surface": "Demo / Seed / Rollback / Migrate",
+      "title": "playDemo swallows all failure/empty outcomes, leaving a stuck \"Synthesizing\u2026\" toast",
+      "severity": "low",
+      "category": "missing-error-state",
+      "where": "index.html:599 (playDemo)",
+      "impact": "playDemo fires a \"Synthesizing a warm-up demo set\u2026\" toast, then does everything inside a try/catch(e){} with no else/failure branch. If /api/demo/seed 500s (this surface calls numpy/soundfile at app.py:3726-3740, which can raise), or if endlessQueue returns 0 items (e.g. seed was skipped because real renders exist AND those renders were all filtered out by the current_engine/quality_gate check), the function silently exits with the optimistic \"Synthesizing\u2026\" toast still on screen and nothing playing. The user has no signal that anything failed.",
+      "fix": "Add an else branch when items.length is 0 and surface caught errors, e.g. toast('Could not seed demo \u2014 '+ (e.message||'no playable renders')).",
+      "verdict": "confirmed",
+      "verify_note": "Partially confirmed with an important correction to the reasoning. CORRECT: playDemo (index.html:599) fires the optimistic 'Synthesizing\u2026' toast, then wraps everything in try/catch(e){} with an `if(items.length){...}` and NO else \u2014 so when endlessQueue() returns 0 items (seed skipped because real renders exist per app.py:3711-3716, AND those renders are all filtered out by endlessQueue's `r.current_engine && r.quality_gate_passed!==false` check at index.html:595), the function exits silently with the stale toast and nothing playing. That missing empty-state is real. REFUTED PART: the tester claims a /api/demo/seed 500 also gives 'no signal.' It does give a signal \u2014 post() (index.html:157) calls api(), which throws on !r.ok (index.html:155), and post()'s catch fires `toast('\u2715 '+e.message)` before rethrowing into playDemo's empty catch. So server errors ARE surfaced by post()'s own toast; only the empty-queue edge is truly swallowed. Because the sole unhandled path is a narrow edge case and errors are already toasted, I'd assign low rather than medium."
+    },
+    {
+      "surface": "Demo / Seed / Rollback / Migrate",
+      "title": "Demo seed count is hardcoded to 8 with no seed-count input",
+      "severity": "low",
+      "category": "missing-control",
+      "where": "index.html:95 (DEMO onclick=playDemo) and index.html:599 (post {count:8})",
+      "impact": "There is no seed-count input anywhere; the DEMO control always requests count:8. The backend accepts and clamps count (app.py:3747, max 1..len(progs)=10), so the plumbing supports a variable count, but the UI never exposes it. Minor \u2014 the fixed 8 is a reasonable default \u2014 but worth noting the count parameter is effectively vestigial from the UI's perspective.",
+      "fix": "Optional: expose a small count selector, or leave as-is and document that demo count is fixed.",
+      "verdict": "confirmed",
+      "verify_note": "Verified. DEMO control (index.html:95) calls playDemo(); playDemo posts {count:8} (index.html:599) with no UI input anywhere. Backend does honor a variable count: seed_demo_renders clamps `n = max(1, min(len(progs), int(count)))` at app.py:3747, and progs (app.py:3721-3723) has exactly 10 entries, so the effective range is 1..10 \u2014 the count param is real plumbing but vestigial from the UI's perspective. Correctly rated low; 8 is a reasonable fixed default."
+    },
+    {
+      "surface": "Ear Crate / Atoms / Pairs",
+      "title": "Forced ear-crate rebuild would silently drop non-locked approve/reject judgments (persisted row is never re-applied)",
+      "severity": "low",
+      "category": "persistence-edge-case",
+      "where": "app.py:2603-2633 _upsert_atom (only locked_ids preserve status); app.py:5119-5123 set_atom_judgment writes atom_judgments AND ear_atoms.status",
+      "impact": "build_ear_crate with force=True re-measures in place and, via ON CONFLICT DO UPDATE SET status=excluded.status, overwrites ear_atoms.status with a freshly classify_atom_status()-computed value. Only atoms in locked_ids (locked=1) keep their human status/role; a plain Reject or Approve (locked=0) is reclassified and the persisted atom_judgments.status is never re-applied to ear_atoms. list_ear_atoms/approved_atom_pool/rank read ear_atoms.status, not atom_judgments, so a forced rebuild resurrects rejected atoms. Note: NOT reachable from this surface's UI \u2014 the Build button posts force:false (index.html:495), and the incremental path skips loops already in ear_atoms (app.py:2542), so under the UI's own flow reject/approve DO survive rebuild. Flagged because the code comment claims judgments survive 'every rebuild', which is only true for locked ones.",
+      "fix": "On rebuild, after upsert, re-apply persisted atom_judgments.status/ear_role for the profile (not just locked=1), or have the read path COALESCE ear_atoms.status with atom_judgments.status.",
+      "verdict": "confirmed",
+      "verify_note": "CONFIRMED as a code fact, and the finding correctly scopes it. On force=True, build_ear_crate re-measures in place and _upsert_atom (app.py:2603-2627) writes status via ON CONFLICT DO UPDATE SET status=excluded.status. Only atoms in locked_ids (locked=1) preserve their prior ear_role/status (app.py:2608-2610); a plain non-locked Reject/Approve gets overwritten by the freshly classify_atom_status-computed value, and atom_judgments.status is never re-applied to ear_atoms. Read paths (approved_atom_pool, app.py:2771) read ear_atoms.status, so a forced rebuild resurrects a rejected atom. As the tester notes, this is NOT reachable from this surface: the Build button posts force:false (index.html:495 -> server.py:282), and the code comment at app.py:2540-2541/2891-2895 claiming judgments 'survive every rebuild' is only true for locked ones. Low severity is fair \u2014 a real doc/behavior mismatch but not triggerable from the crate UI's own flow."
+    },
+    {
+      "surface": "Global: Nav / Router / Boot / Skin",
+      "title": "Header skin badge is hardcoded '//LATTICE' and never follows the active skin",
+      "severity": "low",
+      "category": "consistency",
+      "where": "index.html:37",
+      "impact": "The command-strip badge next to the EARCRATE wordmark is a literal '//LATTICE' string. applySkin() only rewrites #app's CSS vars and the #skinStrip buttons (index.html:169) \u2014 it never touches this badge. Selecting SIGNAL, TERMINAL, or PAPER recolors the UI and highlights the correct SKIN button, but the header still reads '//LATTICE', contradicting the active theme.",
+      "fix": "Give the badge an id and set its text to SKINS[S.skin].name inside applySkin(), or remove the hardcoded skin name.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. index.html:37 is a literal '//LATTICE' span with no id. applySkin() (index.html:166-173) only rewrites #app's inline style vars and rebuilds #skinStrip buttons; it never touches this badge. Selecting SIGNAL/TERMINAL/PAPER recolors the UI and highlights the right SKIN button but the wordmark badge still reads '//LATTICE'. Cosmetic \u2014 low is right."
+    },
+    {
+      "surface": "Global: Nav / Router / Boot / Skin",
+      "title": "Top chrome (NOW / crate-fit / seed) only refreshes when the Play screen renders",
+      "severity": "low",
+      "category": "stale-ui",
+      "where": "index.html:198 updateChrome (called only from renderPlay index.html:213)",
+      "impact": "updateChrome() populates fitPct/fitBar/nowTxt/seedTxt and is invoked only inside renderPlay. pollStatus (2s) updates onlineDot/onlineTxt/engineTxt but not these fields. So after navigating away from Play, the NOW resident and crate-fit percentage in the global command strip freeze at whatever the last Play render produced, even if the active resident or readiness changes (e.g. after a compile completes). Cosmetic but the strip is presented as a live readout.",
+      "fix": "Call updateChrome() from pollStatus (or on resident changes) so the global strip stays current regardless of the active screen.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. grep shows updateChrome is defined at index.html:198 and called only once, from renderPlay at index.html:213. pollStatus (2s, index.html:603-610) updates onlineDot/onlineTxt/engineTxt but never fitPct/fitBar/nowTxt/seedTxt. After navigating off Play these strip fields freeze at the last Play render even if readiness/active resident changes. Cosmetic stale-readout \u2014 low."
+    },
+    {
+      "surface": "Global: Nav / Router / Boot / Skin",
+      "title": "A stale/unknown stored skin leaves S.skin invalid with no active highlight",
+      "severity": "low",
+      "category": "robustness",
+      "where": "index.html:146 (read ec_skin) and index.html:166-172 applySkin",
+      "impact": "S.skin is taken verbatim from localStorage without validating against SKINS. If a persisted value no longer exists (e.g. a skin renamed across versions), applySkin falls back to SKINS.lattice for the CSS vars but the #skinStrip highlight loop (on = k===S.skin, index.html:170) matches nothing, so no button appears selected while the app renders in lattice \u2014 a confusing mismatch, and S.skin stays the invalid string until the user clicks a swatch.",
+      "fix": "Normalize on read: if !SKINS[stored] fall back to 'lattice' and rewrite localStorage, so S.skin always names a real skin.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. index.html:146 sets S.skin = localStorage.getItem('ec_skin')||'lattice' with no validation against SKINS. applySkin uses `SKINS[S.skin]||SKINS.lattice` for CSS vars (index.html:167) but the #skinStrip highlight uses `on = k===S.skin` (index.html:170), so an unknown persisted value renders lattice colors while NO swatch shows selected, and S.skin stays the invalid string until a click. Real but only reachable if a persisted skin name is later removed/renamed across versions \u2014 robustness edge, low."
+    },
+    {
+      "surface": "Global: api",
+      "title": "api() can throw an empty error message on an empty or bodyless error response",
+      "severity": "low",
+      "category": "error-handling",
+      "where": "index.html:154-155 (api)",
+      "impact": "On an error response whose body is empty or non-JSON, JSON.parse('') throws and j becomes {raw:''}; then `j.error||txt` evaluates to '' (index.html:155), so `throw new Error('')`. post() then toasts just '\u2715 ' with no message (index.html:157), giving the user a blank error. Edge case (most backend errors carry a JSON body), but produces a meaningless toast when it does occur.",
+      "fix": "Fall back to a status-based message when both j.error and txt are empty, e.g. `throw new Error(j.error || txt || (r.status+' '+r.statusText))`.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed at code level. index.html:154 does `let txt=await r.text(); let j; try{j=JSON.parse(txt)}catch(e){j={raw:txt}}` then line 155 `throw new Error(j.error||txt)`. For an empty body: txt='', JSON.parse('') throws, j={raw:''}, j.error is undefined, so j.error||txt === '' \u2192 `throw new Error('')`. post() (line 157) then toasts '\u2715 ' with no message. Reachability caveat: every backend error via _json() carries a JSON body, and the http.server default send_error path returns a non-empty HTML body (which would yield a non-blank raw error), so the truly-blank case is an edge condition \u2014 matching the tester's own 'edge case' framing and low severity. The code logic producing the blank toast is unambiguously present."
+    },
+    {
+      "surface": "Library / Scan / Analyze",
+      "title": "apply=true Ingest/Organize results are toasted as 'N planned', reading like a dry-run even though files were written",
+      "severity": "low",
+      "category": "confusing-feedback",
+      "where": "libAction (index.html:546); ingest.py:190-193 and ingest.py:315-319",
+      "impact": "libAction's toast is (j.dry_run?'DRY-RUN \u2014 ':'')+(j.planned!=null?j.planned+' planned':...). Both ingest_sources and organize_and_retag return `planned:len(ops)` on the apply=true path too, so a real, executed organize/ingest toasts e.g. 'organize: 12 planned'. The only distinguishing signal is the ABSENCE of the 'DRY-RUN \u2014' prefix; the word 'planned' still implies nothing was written.",
+      "fix": "On the apply path report the executed count (e.g. result.done length) with wording like 'N copied/organized', reserving 'planned' for dry-runs.",
+      "verdict": "confirmed",
+      "verify_note": "libAction toast (index.html:546) = (j.dry_run?'DRY-RUN \u2014 ':'')+(j.planned!=null?j.planned+' planned':...). On the apply path ingest_sources returns planned:len(ops) with dry_run:not apply=False (ingest.py:190,193) and organize_and_retag returns planned:len(ops) with dry_run:False (ingest.py:315,319). So a real executed organize toasts e.g. 'organize: 12 planned' \u2014 the only distinguishing signal from a dry-run is the absence of the 'DRY-RUN \u2014' prefix, while the word 'planned' still implies nothing was written. Confirmed. Low confirmed."
+    },
+    {
+      "surface": "Loop Review",
+      "title": "'Approve' and 'Lock' chips are the identical action (both approve+lock)",
+      "severity": "low",
+      "category": "redundant-control/ux",
+      "where": "earcrate/ui/static/index.html:531 & loopSetStatus :535; backend set_loop_status app.py:2188-2218",
+      "impact": "Both 'Approve' and 'Lock' chips call loopSetStatus(id,'approved'). loopSetStatus posts /api/loop_status with only {loop_id,status}; set_loop_status defaults locked=True, so status='approved' always sets locked=1. The two chips therefore do exactly the same thing and both fire the same toast ('approved + locked (survives quota)'). 'Lock' presents itself as a distinct capability but is a duplicate button \u2014 there is no UI path to approve-without-lock, which is the only thing 'Lock' vs 'Approve' could meaningfully distinguish.",
+      "fix": "Remove the redundant 'Lock' chip, or make the two paths differ (e.g. plain approve vs explicit lock) by threading a locked flag through loopSetStatus/the endpoint.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:531 \u2014 both chip('Approve','approved',...) and chip('Lock','approved',...) call loopSetStatus(id,'approved'). loopSetStatus (535) posts {loop_id,status} only. server.py:276 calls set_loop_status(loop_id,status) with no locked arg, so app.py:2188 locked defaults True and status=='approved' sets locked=1 (2213-2214). Both chips therefore do byte-identical work and fire the same 'approved + locked' toast. No UI path exists to approve-without-lock, so 'Lock' is a pure duplicate. Confirmed; low is appropriate (redundant, not broken)."
+    },
+    {
+      "surface": "Loop Review",
+      "title": "Quota-approve toast/count overcounts by re-counting already-locked approvals",
+      "severity": "low",
+      "category": "shape/count-accuracy",
+      "where": "earcrate/app.py:2388,2422-2435 (auto_approve_quota); consumed by quotaApprove index.html:537",
+      "impact": "chosen is seeded with locked_rows (loops already status='approved', locked=1), and ids = list(chosen.keys())[:max_loops] therefore includes those locked loops, which executemany re-sets to 'approved'. The returned approved=len(ids) counts these pre-existing approvals as if newly promoted, and the UI toast reports 'Quota approved N loops -> hot pool' using j.approved. With locked approvals present, N overstates how many loops actually changed to approved.",
+      "fix": "Return the count of loops that actually transitioned to approved (exclude already-approved locked ids), or label the number as 'hot pool size' rather than 'approved'.",
+      "verdict": "confirmed",
+      "verify_note": "app.py:2388 seeds chosen with locked_rows, whose query (2381) selects status='approved' AND locked=1 \u2014 loops already approved. ids=list(chosen.keys())[:max_loops] (2422) thus includes them, and executemany re-sets them to 'approved' (2424, a no-op transition). The return approved=len(ids) (2435) counts these pre-existing locked approvals, and index.html:537 shows them via j.approved in 'Quota approved N loops'. When prior human-locked approvals exist, N overstates loops that actually changed to approved (it is really hot-pool size). Confirmed; low."
+    },
+    {
+      "surface": "Play / Station / Endless Queue",
+      "title": "Volume indicator shows 85% while actual volume is 100%",
+      "severity": "low",
+      "category": "state-mismatch",
+      "where": "earcrate/ui/static/index.html:117 (volBar width:85%) vs 593 (setVol)",
+      "impact": "The volume bar is hardcoded to 85% width at load, but the <audio> element's default volume is 1.0 (100%) and setVol() is only invoked on click. Until the user touches the volume control, the displayed level (85%) does not match the audible level (100%).",
+      "fix": "On boot, set AP().volume to 0.85 to match the bar (or set the bar width from AP().volume).",
+      "verdict": "confirmed",
+      "verify_note": "index.html:117 hardcodes volBar width:85%. Grep for '.volume' shows setVol (593) is the ONLY writer of AP().volume and it fires only on click \u2014 no boot code initializes volume, so the <audio> keeps its default 1.0. Until the user clicks the strip, bar (85%) mismatches audible level (100%). Confirmed, low."
+    },
+    {
+      "surface": "Play / Station / Endless Queue",
+      "title": "Malformed Range header can 500 the audio endpoint",
+      "severity": "low",
+      "category": "can-throw",
+      "where": "earcrate/ui/server.py:114-117",
+      "impact": "In _send_file, a Range like 'bytes=abc-' or 'bytes=-xyz' reaches int(a)/int(b) and raises ValueError, which propagates to the do_GET except handler and returns a 500 with a full traceback instead of a 416/200. Edge case (well-behaved browsers send valid ranges), but a malformed/hand-crafted request breaks playback with a server error.",
+      "fix": "Wrap the range-spec parse in try/except and fall back to a full 200 response (or 416) on parse failure.",
+      "verdict": "confirmed",
+      "verify_note": "server.py:114-117 does int(a)/int(b) with no guard. A Range like 'bytes=abc-' passes startswith('bytes=') (110), spec='abc-', '-' in spec, a='abc' truthy -> int('abc') raises ValueError. _send_file is called at do_GET line 230 inside the try, and the parse happens before any send_response, so the exception propagates cleanly to the except at 233 and returns _json(500, {error, trace}) with a full traceback (236) instead of 416/200. Confirmed, low (only hand-crafted/malformed ranges; browsers send valid ones)."
+    },
+    {
+      "surface": "Readiness / Compatibility Graph",
+      "title": "Readiness panel never surfaces the backend's explanatory failures[] strings",
+      "severity": "low",
+      "category": "missing-state",
+      "where": "index.html:355-367 (renderReadiness) vs app.py:2831-2834,2839 (taste_readiness failures[])",
+      "impact": "taste_readiness builds human-readable failure strings like \"foreground atoms short: have 3, need 8\" and returns them in `failures` (and `ready`). renderReadiness ignores both `rd.failures` and `rd.ready`; it only re-derives per-row ok from have/need and colors the bar. The per-role have/need bars do convey WHICH role is short, so it isn't a fully dead state, but the ready/not-ready verdict and the composed failure copy the backend produced are dropped. This is the exact 'failures[] not explained' concern in the report \u2014 the strings exist server-side but the UI never shows them.",
+      "fix": "Render rd.failures (and an overall rd.ready badge) in the readiness card, e.g. a small list under the bars when !rd.ready.",
+      "verdict": "confirmed",
+      "verify_note": "Verified. taste_readiness builds human-readable strings like 'foreground atoms short: have X, need Y' into `failures` and returns both `failures` and `ready` (app.py:2831-2834, 2839). renderReadiness (index.html:355-367) reads only rd.have, rd.need, and rd.endless; it re-derives per-row ok from have/need and never references rd.failures or rd.ready. The per-role have/need bars do show which role is short, so it is not fully dead, but the composed failure copy and the overall ready verdict are dropped. Matches the code exactly."
+    },
+    {
+      "surface": "Readiness / Compatibility Graph",
+      "title": "Readiness have{} double-counts multi-role atoms, so 'ready' can overstate real inventory",
+      "severity": "low",
+      "category": "correctness",
+      "where": "app.py:2825-2828 (have buckets)",
+      "impact": "The same ear atom is counted into multiple buckets: RIFF_ID counts toward both foreground and floor; TEXTURE toward both floor and spark; VOX_SHOUT toward both foreground and spark. A crate composed mostly of, say, TEXTURE atoms can satisfy both the floor and spark needs simultaneously from one physical set of atoms, so readiness can report ready/no failures while the composer cannot actually staff floor and spark concurrently. This may be intentional (an atom can play multiple roles), but combined with the readiness panel being the user's 'am I ready' signal it can green-light a pool that the arranger can't realize.",
+      "fix": "If atoms truly can't serve two rails at once in a given section, count each atom toward one bucket (or track distinct-atom budgets), or document that buckets are non-exclusive so the readiness verdict isn't read as guaranteed simultaneous coverage.",
+      "verdict": "confirmed",
+      "verify_note": "The double-counting is provable from app.py:2825-2828: RIFF_ID is summed into both `foreground` and `floor`; TEXTURE into both `floor` and `spark`; VOX_SHOUT into both `foreground` and `spark`. The buckets are demonstrably non-exclusive \u2014 one physical atom is counted toward multiple role needs, and `ready` (line 2839) is derived from these buckets vs need. The mechanical defect (non-exclusive counting) is confirmed. The downstream impact ('the arranger cannot staff floor and spark concurrently') depends on whether an atom may serve two rails in a section, which is a runtime/design question not settleable from this method alone \u2014 but that nuance does not change the confirmed miscount. Severity low is appropriate."
+    },
+    {
+      "surface": "Readiness / Compatibility Graph",
+      "title": "Build-pair-graph '0 edges' success gives no guidance",
+      "severity": "low",
+      "category": "ux",
+      "where": "index.html:428 (buildGraph) vs app.py:2905-2916",
+      "impact": "build_compatibility_graph returns {ok:True, edges:0} when every candidate pair scores below min_edge_score (0.54). buildGraph then toasts 'Graph: 0 edges' \u2014 a success-styled message with no explanation that nothing passed the compatibility threshold, and no next step. The empty-pool case is handled (ok:False -> j.error), but the 'built, but nothing qualified' case reads as success.",
+      "fix": "Special-case edges===0 in buildGraph with an explanatory toast (e.g. 'no pairs cleared min_edge_score \u2014 crate atoms are keys/tempos apart or same-source').",
+      "verdict": "confirmed",
+      "verify_note": "Verified. build_compatibility_graph returns {ok:True, ..., edges:made} where `made` starts at 0 and only increments when a pair scores >= min_edge_score (default 0.54, app.py:2905). A non-empty pool where nothing clears the threshold returns {ok:True, edges:0}. buildGraph (index.html:428) does `toast(j.ok?('Graph: '+j.edges+' edges'):(j.error||'graph failed'))`, so edges:0 renders as the success-path toast 'Graph: 0 edges' with no explanation or next step. The empty-pool case is separately handled via ok:False -> error (app.py:2879-2880). Confirmed as a UX gap."
+    },
+    {
+      "surface": "Sessions / Activity / Perf",
+      "title": "Status poll and most Sessions/Activity actions swallow all errors silently",
+      "severity": "low",
+      "category": "error-handling",
+      "where": "index.html:603-610 (pollStatus), 434, 450, 451",
+      "impact": "pollStatus's catch{} is empty, so a persistent 500/403 on /api/status leaves the header dot/text frozen at their last value with no indication anything is wrong \u2014 it does NOT wedge the loop (good: setInterval keeps firing and there is no backoff needed), but it also never surfaces the failure. Similarly renderSessions (line 434) catches and leaves items=[] silently, and judgeRender/execManifest swallow errors. Not a crash, but a stuck status indicator is misleading.",
+      "fix": "In pollStatus catch, degrade the indicator (e.g. set onlineTxt to 'CONNECTION LOST' / grey dot) so a dead server is visible.",
+      "verdict": "confirmed",
+      "verify_note": "pollStatus has an empty `catch(e){}` (index.html:609); on a persistent 500/403 from /api/status the header dot and onlineTxt stay frozen at their last value with no failure indication. setInterval keeps firing so the loop is not wedged (tester's nuance is accurate). renderSessions (434), judgeRender (450), and execManifest (452) likewise `catch(e){}` with no user-visible degrade. Provable and correct, though low severity \u2014 a stuck-but-not-crashed indicator."
+    },
+    {
+      "surface": "Setup / Config / Doctor",
+      "title": "Doctor drops stem-capability note and per-check detail",
+      "severity": "low",
+      "category": "lost-info / polish",
+      "where": "index.html:582 runDoctor -> app.py:1352 doctor",
+      "impact": "doctor() returns {checks:[{name,ok,detail}], config, stem_capability:{...,note}} but runDoctor renders only 'name' with a check/cross. The per-check `detail` (actual paths, 'not writable: ...' reasons, sqlite error text) and the honest stem_capability note ('stem separation OFF - needs torch+demucs...') are never shown, so a failing check gives no diagnostic context. (The core shape does match \u2014 j.checks + c.ok + c.name \u2014 so the panel itself works.)",
+      "fix": "Append esc(c.detail) after the name on failing checks, and render stem_capability.note as an informational line.",
+      "verdict": "confirmed",
+      "verify_note": "Confirmed. doctor() returns {checks:[{name,ok,detail}], config, stem_capability:{...,note}} with rich detail on every check (paths, 'not writable: <exc>', sqlite error text) and an honest note ('stem separation OFF \u2014 needs torch+demucs...') (app.py:1356-1389). runDoctor renders only `esc(c.name||c.detail||'')` with a check/cross (index.html:582); since name is always truthy, detail is never shown, and stem_capability.note is never rendered at all. A failing check gives no diagnostic context. Core shape (j.checks + c.ok + c.name) matches, so the panel renders; this is lost-info/polish, low severity."
+    },
+    {
+      "surface": "Workbench / Timeline / Manifest",
+      "title": "Manifest op-count never displays (field name mismatch ops vs operations)",
+      "severity": "low",
+      "category": "shape-mismatch",
+      "where": "index.html:451 loadManifests reads m.ops; app.py:3696 list_manifests returns key 'operations'",
+      "impact": "The manifest row builds its meta line with (m.ops!=null?m.ops+' ops \u00b7 ':''). The backend returns the count under 'operations', never 'ops', so m.ops is always undefined and the '<N> ops \u00b7' prefix never renders. Users never see how many operations a manifest contains before previewing/executing it.",
+      "fix": "Read m.operations (or add an 'ops' alias in list_manifests) in loadManifests.",
+      "verdict": "confirmed",
+      "verify_note": "loadManifests at index.html:451 builds the meta line with (m.ops!=null?m.ops+' ops \u00b7 ':''). list_manifests at app.py:3696 emits the count under key 'operations' (len of data.get('operations')), never 'ops'. m.ops is therefore always undefined and the '<N> ops \u00b7' prefix never renders. Confirmed shape mismatch. Downgrading to low: it only suppresses an informational prefix on a meta line; core preview/execute still work."
+    },
+    {
+      "surface": "Workbench / Timeline / Manifest",
+      "title": "Manifest human summary is dropped; every manifest labeled by raw filename",
+      "severity": "low",
+      "category": "shape-mismatch",
+      "where": "index.html:451 loadManifests reads m.label||m.type||m.name; app.py:3696 list_manifests returns 'summary' and 'manifest_id'",
+      "impact": "The row title falls back through m.label/m.type/m.name \u2014 none of which list_manifests emits \u2014 to p.split('/').pop() (the filename). The informative 'summary' the backend actually provides is never shown, so all manifests are identified only by their opaque JSON filenames.",
+      "fix": "Include m.summary (and/or m.manifest_id) in the label fallback chain, or rename the backend field to one the frontend reads.",
+      "verdict": "confirmed",
+      "verify_note": "loadManifests (index.html:451) labels each row with m.label||m.type||m.name||p.split(/[\\/]/).pop(). list_manifests (app.py:3696) returns only path, manifest_id, summary, created_at, operations \u2014 it emits none of label/type/name, so the chain always falls through to the filename. The 'summary' the backend provides is never displayed. Confirmed."
+    },
+    {
+      "surface": "Workbench / Timeline / Manifest",
+      "title": "Re-saving a loaded plan under a different resident forks a duplicate instead of updating",
+      "severity": "low",
+      "category": "wrong-logic",
+      "where": "app.py:5197-5202 save_plan; index.html:387 savePlan passes taste_profile:S.resident",
+      "impact": "save_plan overwrites plan['tastespec'] with load_tastespec(taste_profile) then recomputes arrangement_sha. If you loadPlan a plan saved under profile A while S.resident is now B, savePlan rewrites the tastespec to B, changing the plan_hash, so INSERT OR REPLACE keyed on plan_hash creates a NEW row rather than updating the existing plan. Silent duplication / hash drift on round-trip re-save across residents.",
+      "fix": "Preserve the plan's embedded tastespec on save (only inject when absent), or derive taste_profile from the plan itself rather than the current UI resident.",
+      "verdict": "confirmed",
+      "verify_note": "save_plan (app.py:5197-5202) overwrites plan['tastespec'] with load_tastespec(taste_profile)'s {id,version,hash} then computes ph=arrangement_sha(plan). arrangement_sha (core/util.py:234-235) is sha256 over json_dumps of the ENTIRE dict, so the embedded tastespec is part of the hash. savePlan (index.html:387) always passes taste_profile:S.resident. Loading a plan saved under profile A while S.resident=B rewrites tastespec to B, producing a new plan_hash; the INSERT OR REPLACE COALESCE((SELECT id FROM saved_plans WHERE plan_hash=?)) subquery finds no row at the new hash, so a fresh id is inserted, leaving the original A row intact. Confirmed silent duplication/hash-drift on cross-resident re-save."
+    },
+    {
+      "surface": "Ear Crate / Atoms / Pairs",
+      "title": "Backend list/profile endpoints for this surface are dead relative to the crate UI",
+      "severity": "polish",
+      "category": "dead-endpoint",
+      "where": "server.py:182 /api/ear_atoms (GET); server.py:195 /api/taste/profile (GET); app.py:2726 list_ear_atoms, app.py:5099 taste_profile_receipt",
+      "impact": "The crate surface populates its list from POST /api/rank and its readiness from POST /api/taste/readiness. GET /api/ear_atoms and GET /api/taste/profile are never called anywhere in index.html for this surface (only POST /api/ear_atoms/judgment is used). Not a defect, but the list/counts/profile-receipt shapes those endpoints return are unused here, so field-shape drift in them would go unnoticed.",
+      "fix": "None required; note for coverage. If the counts/receipt data is desired in the UI, wire it in; otherwise it is harmless.",
+      "verdict": "confirmed",
+      "verify_note": "CONFIRMED. GET /api/ear_atoms (server.py:182 -> list_ear_atoms) and GET /api/taste/profile (server.py:195 -> taste_profile_receipt) are never called from index.html; the only /api/ear_atoms reference in the UI is the POST /api/ear_atoms/judgment (index.html:351). The crate list uses POST /api/rank and readiness uses POST /api/taste/readiness. Not a defect \u2014 just unused shapes on this surface whose field drift would go unnoticed. Polish is fair."
+    },
+    {
+      "surface": "Library / Scan / Analyze",
+      "title": "'Organize' (apply) action is styled identically to its 'Preview' dry-run, unlike Ingest's primary-styled 'Ingest now'",
+      "severity": "polish",
+      "category": "ux-affordance",
+      "where": "index.html:484 (Organize + retag mod actions)",
+      "impact": "Ingest marks its real action with the primary flag (['Ingest now',...,1]) but Organize marks both Preview and the real Organize with 0, so the destructive/writing action has no visual emphasis and looks the same as the safe preview. Inconsistent with the Ingest card and easy to click by accident.",
+      "fix": "Give the real 'Organize' action the primary (a[2]=1) styling, matching 'Ingest now'.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:484 defines Organize actions as [['Preview',...,0],['Organize',...,0]] \u2014 both flag 0. index.html:483 defines Ingest as [['Dry-run',...,0],['Ingest now',...,1]] \u2014 the writing action flag 1. The a[2] flag drives primary styling in the mods.map render (line 498: accink/acc vs dim/panel2). So the writing 'Organize' action has no visual emphasis and looks identical to its safe Preview, inconsistent with Ingest. Confirmed. Polish confirmed."
+    },
+    {
+      "surface": "Loop Review",
+      "title": "Loop review list has no column headers",
+      "severity": "polish",
+      "category": "ux/cosmetic",
+      "where": "earcrate/ui/static/index.html:525-532 (loopRow) vs Tracks header at :514",
+      "impact": "Each loop row renders title / artist / role / bpm / score columns, but unlike the Tracks table (which has an explicit header row) the loop list has no header. The bare numeric columns (rounded bpm, 2-decimal score) are unlabeled, so a reviewer must guess what the two right-side numbers mean.",
+      "fix": "Add a header row above #loopList mirroring the Tracks table header (Title / Artist / Role / BPM / Score).",
+      "verdict": "confirmed",
+      "verify_note": "The Tracks table has an explicit header row at index.html:514 (Title/Artist/BPM/Key/Vocal/Loops). The loop list container #loopList (506) has none, yet loopRow (525-531) emits role, rounded bpm (529), and 2-decimal score (530) as bare unlabeled columns. Reviewer must guess what the two right-side numbers mean. Confirmed; polish."
+    },
+    {
+      "surface": "Sessions / Activity / Perf",
+      "title": "Perf stage duration bar is a fixed 100%-width fill \u2014 conveys no timing",
+      "severity": "polish",
+      "category": "ux",
+      "where": "index.html:475",
+      "impact": "Each stage row renders a 180px bar with `width:100%` hard-coded regardless of the stage's seconds. The numeric 'Ns' label carries all the information; the bar is decorative and misleadingly implies every stage took the same time. A relative bar (seconds / max-seconds) would make the slow stage obvious, which is the stated purpose of the ledger (app.py:391 already computes top stages by seconds).",
+      "fix": "Scale bar width to `s.seconds / maxSeconds * 100`% after computing the max across stages.",
+      "verdict": "confirmed",
+      "verify_note": "index.html:475 renders each stage bar as `<i style=\"...width:100%...\">` inside a 180px track, hard-coded regardless of s.seconds \u2014 the numeric 'Ns' label carries all timing info and the bar misleadingly implies equal durations. app.py:391 already sorts stages by seconds, so a relative (seconds/max) bar is feasible. Cosmetic; confirmed as polish. Note: this is currently moot in practice because Finding 1 keeps the panel empty."
+    },
+    {
+      "surface": "Workbench / Timeline / Manifest",
+      "title": "A gate-REFUSED plan can still be saved with no guard",
+      "severity": "polish",
+      "category": "bad-ux",
+      "where": "index.html:404-410 proposePlan (sets window.__plan even when fails.length), 387 savePlan",
+      "impact": "proposePlan sets window.__plan and renders the rails even when the taste gate REFUSES (meta shows 'REFUSED'), and Save plan has no check for failures. A user can save a plan the engine has declared unrenderable, storing something Render would still ignore anyway.",
+      "fix": "Either warn on Save when the last proposal was REFUSED, or make clear saved plans are drafts only.",
+      "verdict": "confirmed",
+      "verify_note": "propose_plan (app.py:4977-4998) returns {ok:True, taste_gate:...} even when the gate fails (it does not raise; it just reports gate). proposePlan (index.html:404-411) sets window.__plan=j.arrangement whenever j.ok, then labels meta 'REFUSED' if fails.length but keeps the plan. savePlan (387) has no failure check, so a REFUSED plan is fully saveable. Confirmed; polish is appropriate since Render ignores saved plans anyway and this only stores a draft."
+    }
+  ],
+  "qa_synthesis_doc": "docs/QA_ROADMAP.md",
+  "qa_summary": {
+    "agents": 31,
+    "surfaces_audited": 15,
+    "findings_surviving": 78,
+    "verdicts": "75 confirmed, 3 unverified, 3 refuted(dropped)",
+    "by_severity": {
+      "blocker": 1,
+      "high": 19,
+      "medium": 31,
+      "low": 22,
+      "polish": 5
+    },
+    "top_blocker": "Identify/Deep-clean wedge engine busy forever (app.py:5217-5229 run_background never resets on success)",
+    "silent_failure_cluster": "500 tracebacks never shown (index.html:155); pollStatus swallows errors + heartbeat shows green on failure (index.html:603-610); dead controls: Ingest, Identify apply/rollback, /api/rollback, Migrate apply"
+  },
+  "fixes_applied": [
+    {
+      "batch": "tier1-reliability-spine",
+      "commit": "pending",
+      "fixes": [
+        {
+          "finding": "Identify/Deep-clean wedge engine busy forever",
+          "where": "app.py run_background",
+          "change": "target() now finalizes status on success (resets busy, progress=1.0) only if the job did not already, and reports {ok:false} payloads as errors instead of silent success"
+        },
+        {
+          "finding": "config trap A (pointer write/read mismatch)",
+          "where": "app.py configure()",
+          "change": "pointer now written to every dir in pointer_search_dirs(), so a different entry point resolves the same workspace"
+        },
+        {
+          "finding": "re-save nests workspace, orphans DB",
+          "where": "app.py configure_workspace() + default_paths() + index.html renderSetup",
+          "change": "configure_workspace un-nests a /work path with sibling agent/; default_paths exposes configured_workspace (working_root.parent); Setup field binds to that root not the /work subdir"
+        },
+        {
+          "finding": "first-run dead-end (land on Play, JAM 500s silently)",
+          "where": "index.html boot()",
+          "change": "unconfigured box routes to Setup with a welcome nudge"
+        },
+        {
+          "finding": "500 tracebacks / api() rejections never shown; pollStatus lies green",
+          "where": "index.html boot()+pollStatus",
+          "change": "global unhandledrejection toast; header dot goes red on last_error instead of staying SYSTEM ONLINE"
+        },
+        {
+          "finding": "Preflight always READY (frontend read phantom j.failures)",
+          "where": "index.html preflight()",
+          "change": "reads j.ready + j.warnings (backend crate_readiness_audit shape); verified against live preflight output"
+        },
+        {
+          "finding": "Perf 'Stages this run' always empty",
+          "where": "index.html renderPerfStages()",
+          "change": "reads p.ledger.stages (last_perf returns {ok,path,ledger}); verified stages=[{name,ok,seconds,...}]"
+        },
+        {
+          "finding": "Playlist always '0 tracks'",
+          "where": "index.html proposePlaylist()",
+          "change": "entries is an int count (not .length); shows 'N tracks proposed' + manifest link; verified entries==int over the wire"
+        }
+      ]
+    },
+    {
+      "batch": "tier2-dead-controls-and-transport",
+      "fixes": [
+        {
+          "finding": "Ingest dead control (no source folder -> always errored)",
+          "where": "index.html renderLibrary + ingestRun()",
+          "change": "added a source-folder input + Browse; posts {sources:[dir],apply}; VERIFIED over HTTP: dry-run plans 2 files, apply copies them"
+        },
+        {
+          "finding": "Migrate apply unreachable (only ran dry-run plan)",
+          "where": "index.html Setup + migratePreview/migrateApply()",
+          "change": "preview->apply mirroring reorg, remembers signature; VERIFIED preview returns a usable signature"
+        },
+        {
+          "finding": "Identify apply/rollback dead-end",
+          "where": "index.html + identifyRun/identifyApply()",
+          "change": "wired Identify (dry-run proposals) -> Apply (uses saved proposals, tag rewrite >=0.85); errors now surface via run_background fix. ROLLBACK intentionally NOT wired blind"
+        },
+        {
+          "finding": "Previous transport button skipped forward",
+          "where": "index.html transport + endlessPrev()",
+          "change": "added endlessPrev(); left button now steps back in the endless queue; glyphs corrected; VERIFIED wired in DOM"
+        },
+        {
+          "finding": "Judge button only on PASSED renders",
+          "where": "index.html renderSessions",
+          "change": "a refused render with a quarantined wav now shows JUDGE so failing gates can be inspected"
+        }
+      ]
+    },
+    {
+      "batch": "tier3-finish",
+      "fixes": [
+        {
+          "finding": "Identify ROLLBACK unreachable (no way to locate the per-run journal)",
+          "where": "app.py identify_journals() + GET /api/identify/journals + index.html identifyRollback()",
+          "change": "added journal-listing method+endpoint; rollback_identities defaults to newest journal; UI 'Undo' does dry-run->confirm->apply. VERIFIED full round-trip on real FLAC files (tags rewritten then restored)"
+        },
+        {
+          "finding": "Identify APPLY was wired without the required signature handshake",
+          "where": "server.py /api/identify/apply + index.html identifyApply()",
+          "change": "dry-run is now synchronous (returns signature), apply is backgrounded and echoes the signature. VERIFIED two-phase apply retags files"
+        },
+        {
+          "finding": "Workbench 'Render' recomposed a fresh set instead of rendering the shown plan",
+          "where": "app.py render_plan() + POST /api/render_plan + index.html renderMix()",
+          "change": "renders the EXACT shown/loaded arrangement (registers a mashup row from it, executes its render_mashup manifest) with the same pre-render gates; falls back to one_click only when no plan is loaded. VERIFIED error/refusal paths (happy render needs real music)"
+        }
+      ]
+    },
+    {
+      "batch": "tier4-render-quality (the tunes)",
+      "fixes": [
+        {
+          "finding": "Flat render fails post-render quality gate (rms_std_db 0.72 'effectively flat')",
+          "where": "app.py compose_taste_arrangement section loop",
+          "change": "added a macro-dynamics ENERGY CURVE (sparse intro 0.32 / sustain 0.74 / build 0.66 / drop 1.0 / periodic breakdown 0.44) that trims each section's gain and sheds bass/spark in quiet sections. VERIFIED live: 7.7 dB section-loudness spread (was ~0); gate test_arrangement_has_macro_dynamics locks it"
+        },
+        {
+          "finding": "Instrumental never separated \u2014 bed layers used song B's FULL MIX (vocals bleed) instead of a clean instrumental; only the vocal stem was ever lifted",
+          "where": "app.py render_section_deck + separated_stem_source; providers/stems.py DemucsStemProvider",
+          "change": "provider now produces a 'no_vocals' instrumental (sum of drums+bass+other); renderer requests 'vocals' for vocal layers and 'no_vocals' for bed layers -> acapella-over-clean-instrumental (the point of separation). Noop default still falls back to mix byte-identically. VERIFIED via updated test_render_consults_stem_seam (requests both roles, correct source routing, graceful fallback)"
+        }
+      ]
+    }
+  ],
+  "fixes_remaining_high": [],
+  "verification": {
+    "environment": "cloud container with audio stack installed (numpy 2.0.2 / numba 0.60.0 / librosa 0.10.2) + ffmpeg + Chromium",
+    "note": "Desktop uses spawn workers; this Linux box needs serial (fork+BLAS segfaults, per deps.py). A successful full RENDER needs real music with vocals/drums and must be confirmed on desktop; synthetic tones correctly REFUSE (no VOX/DRUM atoms).",
+    "harnesses": {
+      "tests/test_first_minute_fixes.py": "6 hermetic gate tests (in run_gates.py); all pass",
+      "tests/manual/verify_http_live.py": "live server over HTTP: first-run signal, config save+no-nesting, token 403, doctor, preflight/playlist shapes \u2014 all pass",
+      "tests/manual/verify_dom_browser.py": "real Chromium DOM: first-run->Setup, save workspace, field binds to root (no /work nest), heartbeat red on last_error, failed request toasts \u2014 all pass",
+      "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
+      "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
+    },
+    "gate_result": "77/77 gates pass",
+    "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
+  },
+  "fixes_remaining_notes": [
+    "Real DEMUCS instrumental audio + the WAV passing the quality gate must be confirmed on the desktop GPU box (this container has no torch/CUDA; noop path verified).",
+    "Mix balance (low200_share 0.66, high3000 0.025) is a post-render WARNING, not the gate failure \u2014 the dynamics + instrumental-bed changes should reduce the low-end wall; a presence/high-pass pass is a possible follow-up.",
+    "Config-status DISPLAY inconsistency (desktop finding #2): /api/status can show configured:null even when self.config is live and the render pipeline works \u2014 status reads a different source than the engine holds. Follow-up: have status reflect live self.config."
+  ],
+  "creative_engine": {
+    "persona_bakeoff": {
+      "what": "Render the SAME library through multiple personas (girl_talk collage / troubadour medley / notorious one-voice-over-beds) for A/B/C \u2014 proves the personas are genuinely distinct tastes, not one engine with labels.",
+      "endpoint": "POST /api/bakeoff {personas?, target_seconds?, recognizability_bias?, plan_only?}",
+      "plan_only": "synchronous fast preview: composes+gates+scores each persona, no WAV. Full call renders one gate-passing WAV per persona in the background.",
+      "core": "EarcrateCore.bakeoff (app.py); per-persona clean skip when a crate is not ready (never a crash).",
+      "verified": "test_bakeoff_resolves_personas_cleanly (3 personas resolve ok/skip cleanly)"
+    },
+    "recognizability_bias": {
+      "what": "params['recognizability_bias'] (0-100) now REALLY biases atom selection toward the persona's high-recognizability hooks (readiness.rank_material formula added as a picker term). Was previously stored-but-inert.",
+      "neutral": "<=55 -> weight 0.0 -> selection byte-identical to before (no regression). 'max' maps to 92.",
+      "verified": "test_recognizability_bias_prefers_hooks (cranked run mean chosen-hook 0.72 vs neutral 0.41)"
+    },
+    "persona_differentiation": {
+      "bug": "Desktop bake-off proof: all 3 personas produced byte-identical arrangements (score 43.87, 27 voice / 23 bed / 18 sources); only the per-persona GATE threshold differed, so girl_talk passed and troubadour/notorious failed on foreground coverage. compose ignored the persona contract.",
+      "fix": "compose_taste_arrangement now derives source-HOLD duration (floor+foreground) from the persona's source_turnover (max_source_run_s / source_seconds) and caps simultaneous layers by density_model.max_layers. girl_talk rotates fast + layers dense; troubadour holds one bed with minimal layering; notorious rides one foreground voice for whole verses.",
+      "verified": "same pool -> girl_talk avg_layers 3.47 / distinct_fg 12 / fg_run 1; troubadour 2.0 / 5 / 3; notorious 2.8 / 3 / 5. Gate test_personas_produce_divergent_arrangements locks it. 70/70 gates.",
+      "note": "Also raises foreground coverage for troubadour/notorious (held voice present more), which should let them clear their own fg_cov gates (0.75/0.8) that the old shared arrangement failed at 0.61 \u2014 desktop to confirm on real audio.",
+      "desktop_confirmed": "02f4397: personas now DISTINCT (girl_talk 43.87/23beds PASS; troubadour 38.39/5beds; notorious 38.63/17beds; before: all 43.87/23). Logic fixed. troubadour/notorious still miss their coverage gates -> material-depth (96-file pool too thin for sparse voice-forward styles), analyze a bigger/more diverse slice."
+    },
+    "persona_coverage_fix": {
+      "root_cause": "Two defects in compose_taste_arrangement: (1) FLOOR STARVATION \u2014 the floor rail admitted TEXTURE atoms, which taste_arrangement_gate does NOT credit to floor_coverage; a texture-floor section = 0 floor bars, dropping held-bed personas below threshold (troubadour needs 0.95). NOT the density cap. (2) fixed-cadence dynamics (drop every 4 / breakdown every 8) starved short sets of arc.",
+      "fix": "floor rail excludes TEXTURE (fallback only if zero structural beds); drop/breakdown COUNT scales to total_bars (evenly spaced). Verified: all 3 personas PASS their taste gates on a feasible pool (troubadour floor 1.00/need 0.95, fg 1.00/need 0.75; notorious passes; girl_talk still dense+passing). Desktop 'material-depth' hypothesis: partially true (feasibility) but the coverage shortfall was a real texture-wins-floor LOGIC bug.",
+      "followup": "actual rendered rms_std_db clearing 3.0 needs a real decodable WAV crate on the desktop (enriched test pool uses /fake/ paths); arc is verified at the energy-curve level."
+    },
+    "bakeoff_persistence": "Backgrounded /api/bakeoff now persists its per-persona summary to agent_root/bakeoff_last.json AND status['last_bakeoff'], so results survive run_background (which discards return values).",
+    "hook_detection_recurrence": {
+      "answer_to_'what makes a juicy bit'": "REPETITION, deterministically. A hook is the maximally-RECURRING segment of a track (the chorus returns, the phrase you can't forget is heard 3-4x). Not lyrics, not chords \u2014 recurrence. The old hook_score had zero repetition signal (only local cleanliness).",
+      "impl": "analyze/features.py song_recurrence_curve(y,sr): beat-synchronous chroma cosine self-similarity matrix, zero the ~2s diagonal band, off-diagonal row-sum = per-segment recurrence in [0,1] (per-song relative). Bounded O(1500^2) via beat-grid subsampling; computed ONCE per file. segment_recurrence() maps it to each loop's window. Folded into hook_score = (1-0.28)*local_hook + 0.28*recurrence, so a genuinely repeated segment outranks an equally-clean unique one.",
+      "verified": "synthetic known-hook signal: recurrence ranks the 4x-repeated segment strictly highest (0.944 vs 0.056, margin 0.889); hook_score margin 0.249; bit-identical across runs (deterministic). Won a bake-off vs a recurrence/lag-matrix approach (margin 0.249 vs 0.027).",
+      "why_it_matters": "more/better foreground+floor atoms per file -> attacks the material-depth wall the sparse personas (troubadour/notorious) keep hitting, without analyzing all 15k files.",
+      "followup": "recurrence is per-song relative; a through-composed track still yields one ~1.0 column. If false-positive hooks on non-repetitive tracks appear, gate the term by an absolute repetition-confidence factor."
+    }
+  },
+  "performance": {
+    "demucs_model_cache": {
+      "symptom": "'full send' used ~10% CPU / ~30% GPU during compose->render",
+      "root_cause": "_run_demucs reloaded the htdemucs model + moved it to GPU on EVERY separate() call (~40 loads per render) -> GPU idle during each load; render mix itself is single-threaded (the ~10% CPU).",
+      "fix": "module-level model cache keyed by (model_version, device) in providers/stems.py \u2014 model loads once, reused across all separations (this render, subsequent renders, and later bake-off personas via the content-addressed L3 cache).",
+      "unverified_here": "no torch/CUDA in this env; the utilization improvement is a desktop-GPU confirmation.",
+      "further_throughput_todo": [
+        "Pre-separate the render's unique (pcm_sha, role) stems BEFORE the single-threaded mix loop so the GPU is fed continuously instead of lazily one file at a time.",
+        "Parallelize per-layer librosa transforms (time-stretch/pitch) across cores to lift render-phase CPU from ~1 core."
+      ]
+    },
+    "cache_root_nvme": {
+      "what": "Hot regenerable cache (L3 separated stems + transform clips) now follows EARCRATE_CACHE_ROOT, so it can live on a fast NVMe scratch INDEPENDENT of where masters/workspace live. Defaults to agent_root/cache when unset (no regression).",
+      "seam": "EARCRATE_CACHE_ROOT env (same pattern as EARCRATE_HOME/L3/STEMS); _cache_root() drives _export_l3_root + transform_cache_dir.",
+      "verified": "test_cache_root_redirects_to_fast_disk (redirects to NVMe; defaults to workspace)"
+    },
+    "capability_awareness": {
+      "what": "machine_capabilities() probes THIS box (cores, RAM, CUDA GPU+VRAM, stem capability, cache disk fsync latency) and derives scaled, graceful recommendations (workers, stem_provider, analysis_seconds, tier) \u2014 never hardcoded to one rig; degrades to noop stems with no GPU.",
+      "endpoint": "GET /api/capabilities",
+      "verified": "test_machine_capabilities_probe_and_degrade (probed 4 cores here; no GPU -> noop; recommendation follows the probed GPU)",
+      "next": "wire recommendations into config defaults on first-run (auto-pick workers/stem_provider/analysis depth by tier), and let the Setup wizard show 'what your box can deliver'."
+    },
+    "visible_only_defaults": {
+      "principle": "Never default to AppData or temp; everything the app writes lives in visible, app-adjacent locations. AppData is touched ONLY read-only to adopt legacy installs.",
+      "fixes": [
+        "Trap-A pointer mirror no longer writes into the home root or any temp dir (was littering ~/earcrate_workspace.json); it writes only to visible, app-adjacent dirs. Setting EARCRATE_HOME makes it a single deterministic location.",
+        "_cache_root() unconfigured fallback: visible_app_dir()/cache (was system temp).",
+        "ArtifactStore (L3) unconfigured fallback: visible_app_dir()/cache/L3, honoring EARCRATE_CACHE_ROOT (was a random mkdtemp temp dir)."
+      ],
+      "verified": "no home-root litter on configure; cache + L3 fall back under the visible app dir, never temp; 67/67 gates"
+    },
+    "honest_perf_finding": {
+      "question": "did the model-cache / scaling perf commits speed up renders?",
+      "answer": "NO measured render speedup. Desktop measured: a cold render is demucs-separation-bound (~6s x N cache-misses). Proof the model wasn't reloaded per separation: a 21-sep cold render took 115s, not the ~300s real per-call reloads would cost.",
+      "what_actually_holds": "The CONTENT cache (stems reused by pcm_sha) is the real lever: cold ~170s -> warm ~48s ~= 3.5x, and it pre-dates these commits. The commits' real contribution is PLACEMENT (1.7GB cache now on S: NVMe, not C:) + no C: litter + a marginal cross-render model skip in a long-lived server.",
+      "to_speed_cold_render": "attack the demucs separation itself (smaller/faster model, GPU batching), not caching."
+    },
+    "m_dash_seed_fix": {
+      "bug": "machine_defaults.json was resolved via visible_app_dir() only, which under `python -m earcrate` is the package dir, not the repo root -> preset never found, so `-m` still booted unconfigured.",
+      "fix": "_seed_from_machine_defaults now searches EARCRATE_DEFAULTS + explicit cwd + __main__ dir + visible_app_dir + pointer_search_dirs. Verified it resolves a cwd preset even with EARCRATE_HOME set."
+    },
+    "demucs_speed_knob": {
+      "fix": "EARCRATE_DEMUCS_MODEL env (lighter/faster released model, own cache+provenance) + two-stems fast path (emit only vocals + summed instrumental when that's all the renderer needs, skipping WAV-encode of drums/bass/other). Default byte-identical to htdemucs 4-stem. Static-correct; actual speedup needs a desktop GPU receipt."
+    },
+    "status_configured_truth": "Added core.status_snapshot() (served by GET /api/status) that derives 'configured' + resolved roots from live self.config, so a configured app never reports configured:null. Fixes the desktop display bug."
+  },
+  "machine": {
+    "BAM_Desktop": {
+      "drive_rule": "C: never used. D: (DataArray, 16TB) for everything persistent; S: (Dev-NVMe, 238GB) for the hot regenerable cache.",
+      "master_root": "D:\\BonkyJones Backups\\Music Library",
+      "workspace": "D:\\BonkyJones Backups\\EarCrate-Workspace",
+      "cache_root": "S:\\earcrate_cache (EARCRATE_CACHE_ROOT)",
+      "stem_provider": "demucs",
+      "preset": "machine_defaults.json (repo root) auto-configures on first launch via EarcrateCore._seed_from_machine_defaults; safe no-op when the D: library isn't mounted.",
+      "relocation": "POST /api/relocate_workspace {old:'C:\\\\Users\\\\BAM-Desktop\\\\EarCrate-Workspace', new:'D:\\\\BonkyJones Backups\\\\EarCrate-Workspace', apply:true} \u2014 run ONCE to move the existing C: workspace (DB/atoms/judgments/renders) onto D: with no re-analyze; regenerable cache is left to rebuild on S:."
+    }
+  },
+  "reliability": {
+    "stale_crate_guard": {
+      "trap": "After a git pull that changes the analyzer/composer, cached ear_atoms were stale but still used -> wrong coverage (real box: girl_talk falsely FAILED 0.47 until force-rebuild).",
+      "fix": "stamp_crate_versions() stamps the crate with ENGINE_VERSION/ANALYZER_VERSION at build_ear_crate end; crate_staleness() flags a mismatch (stamp OR any approved atom on an old features.analyzer_version). crate_stale + rebuild reason now surface in taste_readiness() and status_snapshot(); propose_taste_mashup() refuses (loud 'STALE CRATE' error, unless allow_stale_crate) so stale atoms can never silently produce wrong coverage.",
+      "followup": "optional: auto-trigger force rebuild on detection instead of only refusing; per-atom engine-version column for mixed-version crates."
+    }
+  },
+  "reference_ground_truth": {
+    "purpose": "Documented mashup catalogs turned into the engine answer key. earcrate/study/reference.py reads a reference JSON, measures the persona fingerprint (density, source-run length, simultaneous layers), enumerates PROVEN compatibility edges (overlapping same-track samples), and computes how those measured numbers would recalibrate a persona profile WITHOUT mutating the shipped JSON. Reachable via EarcrateCore.study_reference(path, taste_profile) and POST /api/study/reference.",
+    "datasets": {
+      "girltalk_samples.json": {
+        "album": "All Day",
+        "artist": "Girl Talk",
+        "maps_to_persona": "girl_talk_v1",
+        "tracks": 12,
+        "samples": 346,
+        "all_timed": true,
+        "proven_overlap_edges": 621,
+        "source": "adereth AllDaySamplesWithSets.json (interactive-breakdown data file) + Last.fm durations"
+      },
+      "notorious_xx_samples.json": {
+        "album": "The Notorious xx",
+        "artist": "Wait What",
+        "maps_to_persona": "notorious_v1",
+        "tracks": 11,
+        "samples": 22,
+        "all_timed": false,
+        "note": "Biggie acapella x The xx instrumental per track; per-sample timing undocumented (null) so density-only"
+      },
+      "troubadour_patandsean_samples.json": {
+        "artist": "Pat & Sean Kelly",
+        "maps_to_persona": "troubadour_v1",
+        "tracks": 28,
+        "samples": 53,
+        "all_timed": false,
+        "density_spm": 1.53,
+        "note": "YouTube/site medleys; per-sample timing undocumented so density-only. 18/28 tracks have documented ordered song lists; 10 vague medleys left with empty samples[] rather than fabricated."
+      }
+    },
+    "key_finding": "The hand-tuned girl_talk_v1 badly underestimated source hold. Measured on real All Day: source_seconds 11.5->30.68 (Girl Talk holds a source ~2.7x LONGER than the persona assumed), max_source_run_s 16->149 (a single source can run ~2.5 min, e.g. War Pigs), sources_per_minute 5.5->4.86, seconds_per_event 11->12.36, mean_layers 2.61 (fits min2/max4 band). Notorious xx density 1.5->0.52 spm (one voice over one foreign bed = very sparse).",
+    "calibration_is_a_diff_not_a_mutation": "calibrate_profile returns {profile, diff}; the shipped profiles/*.json are never rewritten. Applying the calibration is a deliberate future step, not automatic.",
+    "gates": "84/84 (added 7 reference-study gates on a synthetic fixture with hand-computed expected numbers)",
+    "pending": "none \u2014 all four reference targets resolved (Girl Talk, Notorious xx, Pat & Sean; Branchez ruled out with rationale).",
+    "branchez_verdict": "Branchez does NOT map to a persona. He is a NYC melodic-trap producer whose \"bootlegs\" are single-source REMIXES (one vocal, e.g. Rihanna \"Stay\", rebuilt over his OWN original instrumental) plus fully original productions. No track combines two identifiable songs, so there are no A/B pairings and no sample corpus to catalog. Closest FORM is notorious_v1 (keep a foreground vocal, swap the bed) but it is a remix, not a mashup \u2014 no reference dataset written (would require fabricating data)."
+  },
+  "gate_recalibration_2026-07-14": {
+    "trigger": "Desktop measured 24 real Girl Talk tracks (DESKTOP_VERIFICATION_RESULTS.md): the quality gate was 3-10x too lenient AND inverted on the low end.",
+    "real_gt_distribution": {
+      "rms_std_db": "mean 5.31 [3.23-7.62]",
+      "low200_share": "mean 0.20 [0.07-0.31]",
+      "high3000_share": "mean 0.31 [0.19-0.53]"
+    },
+    "earcrate_render_measured": {
+      "rms_std_db": 3.19,
+      "low200_share": 0.59,
+      "high3000_share": 0.031,
+      "note": "a low-end mud wall with 10x-too-dark presence that the OLD gate passed"
+    },
+    "changes": [
+      "drydeck_quality_gate: low200 is now a CEILING (fail>0.45, warn>0.34) not a floor -- the old gate REQUIRED low200>=0.38, i.e. it rewarded the bass mud.",
+      "high3000 floor raised from 0.030 to real-GT-calibrated (fail<0.09, warn<0.15, target 0.30).",
+      "rms_std warn floor 3.0->3.5 (target 5.0). Fail bands set OUTSIDE the observed real-GT range so a genuine GT render never false-fails.",
+      "GT_SPECTRAL_PROFILE constants block in earcrate/judge/audio.py holds every threshold with its provenance.",
+      "stable_presence_restore strengthened ~5x: firm low-shelf (<250Hz taming) + high-shelf presence lift (>3kHz x2.2), blend 50/50 -> 85/15 corrected. Verified on synthetic signals with earcrate drydeck_metrics: low200 down >0.10, high3000 up >2x per pass."
+    ],
+    "IMPORTANT_finding_for_desktop": "A FIXED final-master EQ CANNOT fully rescue a render that is 10x too dark -- 2.2x of near-zero high-frequency energy is still near-zero. Measured: from earcrate-like 0.59/0.031, one corrective pass reaches only ~0.47/0.05, still short of GT. The REAL lever is UPSTREAM: high-pass the instrumental beds at the point they are summed (so the sub-200 mud never accumulates) and ensure presence-carrying layers are not buried. That change lives in the render/layer-mix loop and CANNOT be verified without the real library -- please implement/verify it on the box against real audio and tighten the FAIL thresholds toward the GT range once real renders land in it.",
+    "gates": "89/89 (added 5: mud-cave fails, bottom-of-GT-range passes, fail-bands-outside-range self-consistency, low200-is-a-ceiling regression guard, corrective-moves-toward-GT).",
+    "verifiable_here_vs_not": "Verified in cloud: gate logic + corrective direction/magnitude on synthetic signals via earcrate own metrics. NOT verifiable in cloud (needs real box): whether a real render now lands in the GT spectral range."
+  },
+  "transition_engine_roadmap": {
+    "reframe": "A transition is a controlled transfer of musical roles (pulse, low-end, harmony, foreground, structure, attention) between two time-varying recordings -- NOT two timestamps on a beat grid. beats[idx+bars*4] is one coordinate in that control problem.",
+    "step1_DONE": {
+      "module": "earcrate/plan/transitions.py (pure, deterministic, gated: test_transitions, 8 gates)",
+      "what": "ANCHORS -> TECHNIQUE TEMPLATE -> technique-DERIVED duration + scored plan. Anchors (clean_in/out, section_in, drop_in, outro_in, cadence, break_out) from existing downbeats+sections+hook-recurrence. Technique library (hard_cut, echo_out, long_blend, bass_swap, double_drop) with real preconditions, octave-folded tempo-warp, multi-factor technique-conditioned score. Uncertainty rule: low bpm_confidence fails long_blend/double_drop preconditions -> abstains to robust cut/echo.",
+      "status": "ADDITIVE module, NOT yet wired into the live render path. Fixed [8,4,2,1] ladder + plan_transition rule-tree still drive real renders."
+    },
+    "step2_NEEDS_NEW_FEATURES (desktop/analysis)": "Per-beat ACTIVITY curves (kick/snare/percussion/bass/vocal/lead/fx), local chord distributions, groove/microtiming (swing, syncopation, halftime prob), section-boundary probabilities, event-novelty curve. These unlock the disabled stem techniques (true stem bass_swap, spectrally-safe double_drop), phrase-aware vocal handling, and per-beat role-collision scoring C_s(c). Requires new analysis (determinism: must be the sole analyzer for a library or crates go inconsistent).",
+    "step3_NEEDS_REAL_AUDIO (desktop)": "Rendered-preview scoring: sum the actual signal at a candidate, check clipping/low-end overload/limiter-duck, predict post-EQ sub energy + short-term loudness. Wire transitions.best_transition into the composer, hear it, tune weights.",
+    "step4_RESEARCH": "Learn technique selection + control curves (EQ/fader/filter/effect envelopes) from aligned expert mixes; set-level beam search over SetState; online crowd/venue adaptation.",
+    "immediate_next": "Wire generate_transition_candidates into the composer behind a flag + a /api route so the desktop can run it on REAL track pairs and A/B it against the current rule-tree, WITHOUT disrupting the default render path. Then Step 2 features.",
+    "two_measured_but_unused_signals_this_closes": "bpm_confidence (computed, never consulted in composition -- now the abstention driver) and section labels (estimate_sections, never used in selection -- now anchor kinds)."
+  },
+  "patch2_material_regions": {
+    "why": "Review verdict: extract_loops_one [8,4,2,1] at downbeats[::bars] is the information bottleneck -- everything downstream reasons over a fixed candidate set.",
+    "DONE_representation": "earcrate/materials/regions.py: MaterialRegion (variable-length, anchor-started, independently-proposed ends, role CAPABILITIES not one label, measured loopability/salience/confidence) + propose_regions(). Old fixed-bar extractor preserved behind baseline=True as baseline_v1. Gated on candidate RECALL (test_materials, 7 gates): the new path surfaces a planted drop/vocal-phrase/outro-tail the baseline cannot. Deterministic, audio-free, ADDITIVE (not yet in the live pipeline).",
+    "concrete_bugs_fixed_from_review": [
+      "judge contradiction (dry-deck low200 ceiling vs v1_1 floor) -- both now GT-calibrated ceilings",
+      "atom_edge_score harmonic OR bug -- now requires the PAIR to agree, not either-atom-vs-target"
+    ],
+    "NEXT_to_make_it_live (needs the box)": [
+      "Compute Step-2 beat_state (analyze/beat_features) DURING analysis and store it (compact blob per file), so propose_regions + the transition collision model have real per-beat activity.",
+      "Remove the 180s analysis bound (or add a second low-res full-track pass) so long tracks contribute their real outro/tail regions -- the review notes the renderer has the full source but the representation is truncated.",
+      "Wire propose_regions into atom/crate construction behind a flag (baseline_v1 vs regions_v2); measure candidate recall on REAL tracks with known intros/outros/drops.",
+      "Then Patch 3: technique templates emit full TransitionPlans (per-stem gain/EQ/filter/effect curves) executed by the renderer; Patch 4: real candidate competition (render short previews, score summed audio); Patch 5: set-level beam search + learned technique selection."
+    ],
+    "still_open_from_review (not yet done, higher blast radius)": [
+      "taste_arrangement_gate coverage double-counts overlapping layers (can exceed 1.0) -> interval-union + longest-contiguous-run",
+      "preflight() reads approved_loop_pool not the persona approved_atom_pool",
+      "split judge into hard-fail integrity vs rank/warn taste",
+      "reference edges are weak supervision (co-occurrence != universal compatibility) -> treat as prior with uncertainty, not ground truth",
+      "machine_defaults.json left as-is per owner (private repo, may never release)"
+    ],
+    "gates": "125/125",
+    "LIVE_NOW": "beat_state computed during real analysis (compute_pcm_features + analyze_one), stored in the per-file npz (ANALYZER_VERSION 0.7.0-beatstate -> re-analyze repopulates), read via load_beat_state(), regions via material_regions(file_id, baseline)/POST /api/materials/regions. Verified end-to-end: 6x more regions than baseline incl. natural_tail/section. Still additive -- does NOT drive composition until a regions_v2 crate builder is flipped on."
+  },
+  "compute_gpu_roadmap": {
+    "DONE_cloud_verifiable": [
+      "Companion vocal-pair caching: one Demucs inference materializes BOTH vocals+no_vocals (gated: separate(vocals) then separate(no_vocals) == 1 forward pass).",
+      "StemRecipe + recipe-aware L3 artifact key (model/segment/overlap/shifts/precision) so recipes never collide; env-overridable EARCRATE_DEMUCS_SEGMENT_S/OVERLAP/SHIFTS/PRECISION.",
+      "_run_demucs inference contract (pragma no cover): CPU-resident full-track mixture + apply_model(split=True, segment<=7.8, overlap, shifts); inference_mode with no_grad fallback; optional AMP behind recipe."
+    ],
+    "BOX_ONLY_next (torch+GPU+browser, cannot verify in cloud)": [
+      "Patch A: split control plane from compute plane -- persistent GPU child process (one per GPU, one resident model), UI server stays Torch-free/normal-priority; ComputeJob envelope + real priority queue (playback 0 > user render 10 > preview 20 > candidate stems 40 > warm 70 > full-library 90). Windows PROCESS_MODE_BACKGROUND_BEGIN on maintenance workers.",
+      "Patch B: responsiveness governor -- browser heartbeat (rAF interval, long tasks, status RTT, interaction lease ~750ms) drives a token-bucket GPU duty target (Focus 0.65 / Balanced 0.88 / Idle 0.95) via Demucs per-segment callback (cooperative preemption at segment boundary, cancellation). Show mode/throttle reason in UI.",
+      "Patch C: VRAM headroom -- set_per_process_memory_fraction with reserve=max(1.25GB, 15% VRAM); segment auto-calibration (start 6.0s, grow 0.5s while reserve holds, OOM -> shrink+retry once); model idle-unload grace; no empty_cache per track.",
+      "Patch D (biggest first-render latency win): plan-scoped WINDOWED separation -- separate only the exact source intervals the accepted plan needs (+/-10s model context, merged), cache lookup order full->window->schedule->fallback; move stem materialization AHEAD of rendering so render never launches Demucs.",
+      "Patch E: pipeline decode/inference/encode (depth<=2), pinned-memory non_blocking transfers, then benchmark AMP/torch.compile behind flags.",
+      "Warm-priority upgrade: rank by expected reuse (source_in_accepted_plan 100 > top_candidate_plan_count 40 > favorite 20 > station 10 > graph_degree 5 > best_atom_score 4 > atom_count 2 - separation_cost).",
+      "Stem-necessity planner: classify each layer (vocal-over-bed needs vocal+dest-instrumental; full-mix cut needs none; one-shot needs none) so full-model passes are only run where they change the result.",
+      "Hardware soak suite: GPU util, high-water VRAM, RTF, browser frame p95<32ms, /api/status p95<100ms, audio seek p95<100ms, 0 underruns, preemption <=1 segment, 0 OOM after calibration."
+    ],
+    "governing_objective": "Maximize completed musical work per minute SUBJECT TO a hard responsiveness budget (browser frames, audio, mouse). 88% GPU with stable latency beats nominal saturation that drops UI frames."
+  },
+  "remix_persona_program": {
+    "what": "REMIX personas: one foreground element over a bed REBUILT in a DJ/producer style (distinct from the mashup personas). Per-persona SPECTRAL GATE (each TasteSpec spectral_target, merged over GT) so each is judged on its own aesthetic.",
+    "built": [
+      "remix_branchez_v1 (melodic chill-trap, bright/808/130-145bpm)",
+      "remix_prettylights_v1 (chopped soul, warm/vinyl/90-100bpm)"
+    ],
+    "builder": "earcrate/tastespec/remix_builder.build_remix_persona(spec) -> schema-valid TasteSpec from a compact style fingerprint; canonical transform budgets + weights-sum-to-1 enforced so a roster fan-out only supplies style numbers. Gated (test_remix_builder).",
+    "roster_in_progress": "Scouting the most-broken-down producers of the last ~2 decades (J Dilla/Madlib/RJD2/Avalanches/Flying Lotus/Kaytranada/DJ Shadow/Danger Mouse-tier) -> fingerprint each -> build_remix_persona -> profiles/*.json (auto-register + auto-embed).",
+    "still_todo": "The EXTERNAL-TARGET remix path: intake a fresh out-of-library track (analyze + separate its vocal), then compose a style-bed under it. Owner will provide test tracks. The personas define the bed STYLE; the target-vocal-as-foreground injection is the remaining composition wiring."
+  },
+  "morphing_roadmap (owner fun-thought)": {
+    "idea": "Use the GPU for MORPHING, not just separation: voice conversion, genre/timbre transfer, lyric/melody morph, lo-fi degradation. Flagship use case: chill lullaby cuts made from pop + classical songs, RENDERED ON BABY TOYS (toy piano / music box / speak-n-spell timbre).",
+    "shape": "A new TRANSFORM PROVIDER seam (mirror the StemProvider): morph(pcm, recipe) -> new artifact, content-addressed in L3, GPU-scheduled behind the same one-worker governor. Never source-of-truth.",
+    "candidate_models (box, unverifiable in cloud)": [
+      "voice conversion: RVC / so-vits-svc (sing/speak timbre swap)",
+      "timbre transfer: DDSP / neural instrument morph (-> toy-piano/music-box)",
+      "lo-fi render: neural codec bottleneck / bitcrush+wow-flutter+tape as a deterministic DSP first pass",
+      "style/genre morph: latent-space interpolation or a trained remix-transition ranker"
+    ],
+    "first_cheap_step (cloud-doable)": "A DETERMINISTIC lo-fi/toy-render DSP (bitcrush, sample-rate reduction, wow/flutter, band-limit to a music-box-ish partial set, gentle detune) as a transform provider -- provable here on synthetic audio, no models. The neural morphs (voice/timbre) layer on top as GPU providers.",
+    "status": "logged, NOT built. Exploratory; needs owner priority vs the remix roster + the transition Patches 2-5 + the mix bed-high-pass fix."
+  },
+  "answer_key_recall_benchmark": {
+    "idea": "The masters DOCUMENTED sample choices are a ground-truth answer key of good discoveries. Run OUR library through the engine and measure how many our system rediscovers ON ITS OWN. The gap = what it SHOULD discover but does not.",
+    "how": "EarcrateCore.reference_recall(path, taste_profile) / POST /api/study/recall. Matches reference sources to library tracks (normalized artist|title), then compares the reference PROVEN pairings (reference_edges) to the engine OWN compatibility graph. Reports: sources_in_library, recoverable (own both sources), recovered (engine linked them), recall, and missed[] (recoverable-but-not-recovered = the discovery gap, ranked by the masters overlap time).",
+    "run_it (box)": "reference_recall(\"earcrate/reference/girltalk_samples.json\", \"girl_talk_v1\") after analyze+crate+graph. 621 proven Girl Talk edges are the first answer key; sources_in_library tells us coverage, recall tells us discovery quality, missed[] is the punch-list.",
+    "extends_to_roster": "Any producer with documented per-track sample sources (WhoSampled/Tracklib) can be turned into a *_samples.json answer key the same way, so each of the 22 remix personas gets a recall score against how the real producer paired sources.",
+    "gated": "test_reference_recall (pure recall math + seeded-DB end-to-end); 143/143."
+  }
+}

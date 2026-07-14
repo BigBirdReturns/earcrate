@@ -93,11 +93,11 @@ button{font-family:inherit}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:540px;margin:0 auto">
       <div style="display:flex;align-items:center;gap:22px">
         <span class="clk" onclick="playDemo()" title="Synthesize a warm-up demo set" style="font:600 9px/1 var(--mono);color:var(--dim)">DEMO</span>
-        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="13" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M1 1 L10 6 L1 11 Z" fill="var(--dim)"></path></svg>
+        <svg class="clk" onclick="endlessPrev()" width="16" height="12" viewBox="0 0 16 12" title="Previous"><rect x="1" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M15 1 L6 6 L15 11 Z" fill="var(--dim)"></path></svg>
         <span onclick="togglePlay()" class="clk" style="width:40px;height:40px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px var(--accGlow)">
           <span id="playGlyph"><svg width="12" height="13" viewBox="0 0 12 13"><path d="M1 1 L11 6.5 L1 12 Z" fill="var(--accink)"></path></svg></span>
         </span>
-        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="1" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M15 1 L6 6 L15 11 Z" fill="var(--dim)"></path></svg>
+        <svg class="clk" onclick="endlessSkip()" width="16" height="12" viewBox="0 0 16 12" title="Next"><rect x="13" y="1" width="2" height="10" fill="var(--dim)"></rect><path d="M1 1 L10 6 L1 11 Z" fill="var(--dim)"></path></svg>
         <span id="endlessBtn" class="clk" onclick="toggleEndless()" title="Endless radio" style="font:600 15px/1 var(--mono);color:var(--acc)">∞</span>
       </div>
       <div style="display:flex;align-items:center;gap:11px;width:100%">
@@ -386,8 +386,8 @@ async function renderWorkbench(){
 }
 async function savePlan(){ if(!window.__plan){toast('Propose a plan first');return;} const name=prompt('Save plan as:','set '+new Date().toISOString().slice(0,10)); if(!name)return; try{ const j=await post('/api/timeline/save',{name, plan:window.__plan, taste_profile:S.resident}); toast(j.ok!==false?('Saved "'+name+'" · '+String(j.plan_hash||'').slice(0,8)):(j.error||'save failed')); loadPlans(); }catch(e){} }
 async function loadPlans(){ const host=el('wbPlans'); if(!host)return; try{ const j=await api('/api/timeline/list'); window.__plans=j.items||[]; host.innerHTML=window.__plans.length? window.__plans.map((p,i)=>'<span class="btn clk" onclick="loadPlan('+i+')">'+esc(p.name||'plan')+' ·'+String(p.plan_hash||'').slice(0,6)+'</span>').join('') : '<span style="font:500 9px/1 var(--mono);color:var(--faint)">no saved plans yet</span>'; }catch(e){ host.innerHTML='<span style="font:500 9px/1 var(--mono);color:var(--faint)">plans unavailable</span>'; } }
-async function loadPlan(i){ const p=(window.__plans||[])[i]; if(!p)return; try{ const j=await post('/api/timeline/load',{plan_hash:p.plan_hash}); if(j.ok!==false){ window.__plan=j.plan||j.arrangement; renderPlanRails(window.__plan); el('wbPlanMeta').textContent='loaded "'+esc(j.name||p.name||'')+'"'; toast('Loaded plan "'+(j.name||p.name||'')+'"'); } else toast(j.error||'load failed'); }catch(e){} }
-async function preflight(){ toast('Preflight…'); try{ const j=await post('/api/preflight',{taste_profile:S.resident, target_seconds:120}); const ok=j.ok!==false && !(j.failures&&j.failures.length); toast('Preflight: '+(ok?'READY to render':('NOT READY — '+((j.failures||[])[0]||j.error||'see crate')))); }catch(e){} }
+async function loadPlan(i){ const p=(window.__plans||[])[i]; if(!p)return; try{ const j=await post('/api/timeline/load',{plan_hash:p.plan_hash}); if(j.ok!==false){ window.__plan=j.plan||j.arrangement; window.__planSeed=(window.__plan&&window.__plan.params&&window.__plan.params.seed)||j.seed; window.__planFailed=false; renderPlanRails(window.__plan); el('wbPlanMeta').textContent='loaded "'+esc(j.name||p.name||'')+'" — Render to compile it'; toast('Loaded plan "'+(j.name||p.name||'')+'"'); } else toast(j.error||'load failed'); }catch(e){} }
+async function preflight(){ toast('Preflight…'); try{ const j=await post('/api/preflight',{taste_profile:S.resident, target_seconds:120}); const ok=j.ok!==false && j.ready!==false; const why=(j.warnings&&j.warnings[0])||j.error||'crate not ready'; toast('Preflight: '+(ok?('READY to render'+(j.pool_size!=null?(' · '+j.pool_size+' loops'):'')):('NOT READY — '+why))); }catch(e){} }
 function renderPipe(active){
   const steps=[['Scan','sources'],['Analyze','bpm · key · downbeats'],['Extract','loops ≤12/track'],['Ear crate','auditioned atoms'],['Graph','typed edges'],['Choose deck','feasible sources'],['Compose rails','floor · fgnd · spark'],['Pre-gates','must pass'],['Render','write wav'],['Post-gate','audible truth']];
   el('wbPipe').innerHTML=steps.map((s,i)=>{
@@ -405,7 +405,7 @@ async function proposePlan(){
   el('wbPlanMeta').textContent='composing…';
   try{ const j=await post('/api/timeline/propose',{target_seconds:120, taste_profile:S.resident});
     if(!j.ok){ el('wbPlanMeta').textContent=j.error||'refused'; el('wbPlan').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(j.error||'refused')+'</div>'; return; }
-    window.__plan=j.arrangement; const fails=((j.taste_gate||{}).failures)||[];
+    window.__plan=j.arrangement; window.__planSeed=j.seed; window.__planFailed=(((j.taste_gate||{}).failures)||[]).length>0; const fails=((j.taste_gate||{}).failures)||[];
     el('wbPlanMeta').textContent=(j.seed!=null?'seed '+j.seed:'')+' · '+(j.arrangement.bpm||0).toFixed(1)+' BPM · '+(fails.length?'REFUSED':'PASSES');
     renderPlanRails(j.arrangement); renderPre(fails); renderPipe(6);
   }catch(e){ el('wbPlanMeta').textContent='error'; }
@@ -426,7 +426,18 @@ function renderPlanRails(arr){
     +railRow('Floor','floor')+railRow('Fgnd','fgnd')+railRow('Spark','spark');
 }
 async function buildGraph(){ toast('Building pair graph…'); try{ const j=await post('/api/taste/graph',{taste_profile:S.resident}); toast(j.ok?('Graph: '+j.edges+' edges'):(j.error||'graph failed')); }catch(e){} }
-async function renderMix(){ toast('Rendering — watch Activity…'); try{ await post('/api/one_click_bg',{taste_profile:S.resident}); go('activity'); }catch(e){} }
+async function renderMix(){
+  // Render the EXACT plan shown in the Workbench when there is one; only fall back
+  // to a fresh auto-compose (one_click) when nothing is loaded.
+  if(window.__plan && window.__plan.sections){
+    if(window.__planFailed){ toast('This plan was REFUSED by the taste gate — propose again or adjust the crate'); return; }
+    toast('Rendering the shown plan — watch Activity…');
+    try{ await post('/api/render_plan',{arrangement:window.__plan, seed:window.__planSeed, taste_profile:S.resident}); go('activity'); }catch(e){}
+    return;
+  }
+  toast('Composing + rendering a fresh set — watch Activity…');
+  try{ await post('/api/one_click_bg',{taste_profile:S.resident}); go('activity'); }catch(e){}
+}
 
 /* ---------- SESSIONS ---------- */
 async function renderSessions(){
@@ -435,11 +446,12 @@ async function renderSessions(){
   const rows = items.length ? items.map(s=>{
       const pass=s.passed!==false; const ink=pass?'var(--dim)':'var(--fault)'; const accent=pass?'var(--edge2)':'var(--fault)';
       const playable=s.kind==='render'&&pass;
+      const canJudge=s.kind==='render'&&s.path;  // a refusal with a quarantined wav can still be judged to see WHICH gates failed
       return '<div style="display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--edge);border-left:3px solid '+accent+';padding:12px 15px">'
         +'<span style="flex:0 0 auto;width:34px;height:34px;background:var(--panel2);border:1px solid var(--edge2);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--mono);color:var(--dim)">'+(pass?'♪':'⊘')+'</span>'
         +'<div style="min-width:0;flex:1"><div style="font-family:var(--disp);font-weight:600;font-size:16px;letter-spacing:.03em;color:var(--ink);text-transform:uppercase">'+esc(s.name||'')+'</div><div style="font:500 9.5px/1.3 var(--mono);color:var(--faint);margin-top:2px">'+esc((s.meta||'')+' · '+(s.mtime||''))+'</div><div style="font:500 9px/1.3 var(--mono);color:'+ink+'">'+esc(s.receipts||'')+'</div></div>'
         +'<span style="font:600 8.5px/1 var(--mono);letter-spacing:.1em;color:'+ink+'">'+(pass?'PASS':'REFUSED')+'</span>'
-        +(playable?('<span onclick=\'setPlayer('+JSON.stringify(s.path)+')\' class="btn clk">PLAY ▸</span><span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span><span onclick=\'openFolder('+JSON.stringify(s.path)+')\' class="btn clk">OPEN</span>'):('<span onclick="go(\'crate\')" class="btn clk">WHY ▸</span>'))
+        +(playable?('<span onclick=\'setPlayer('+JSON.stringify(s.path)+')\' class="btn clk">PLAY ▸</span><span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span><span onclick=\'openFolder('+JSON.stringify(s.path)+')\' class="btn clk">OPEN</span>'):((canJudge?'<span onclick=\'judgeRender('+JSON.stringify(s.path)+')\' class="btn clk">JUDGE</span>':'')+'<span onclick="go(\'crate\')" class="btn clk">WHY ▸</span>'))
         +'</div>';
     }).join('') : '<div class="lbl" style="color:var(--faint)">no sessions yet — book a set from Play</div>';
   scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Sessions</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">every render AND every refusal · a refusal is a session too</span></div>'
@@ -470,7 +482,7 @@ function renderStatus(st){
 }
 async function renderPerfStages(){
   const host=el('actStages'); if(!host) return;
-  try{ const p=await api('/api/perf'); const stages=(p&&(p.stages||p.steps))||[];
+  try{ const p=await api('/api/perf'); const L=(p&&p.ledger)||p||{}; const stages=(L.stages||L.steps)||[];
     if(!stages.length){ host.innerHTML='<div class="lbl" style="color:var(--faint)">no completed run yet — book a set</div>'; return; }
     host.innerHTML=stages.map((s,i)=>'<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--panel);border:1px solid var(--edge);margin-bottom:5px"><span style="font:600 9px/1 var(--mono);color:var(--faint);width:20px">'+String(i+1).padStart(2,'0')+'</span><span style="flex:1;font:600 11px/1 var(--mono);color:var(--dim)">'+esc(s.name||s.stage||s.label||'stage')+'</span><div style="width:180px;height:4px;background:var(--panel2);overflow:hidden"><i style="display:block;height:100%;width:100%;background:var(--dim)"></i></div><span style="font:500 9.5px/1 var(--mono);color:var(--dim);width:60px;text-align:right">'+esc(s.seconds!=null?(Number(s.seconds).toFixed(1)+'s'):(s.t||s.duration||''))+'</span></div>').join('');
   }catch(e){ host.innerHTML='<div class="lbl" style="color:var(--faint)">perf ledger unavailable</div>'; }
@@ -480,10 +492,10 @@ async function renderPerfStages(){
 async function renderLibrary(){
   const scr=el('scr_library');
   const mods=[
-    {name:'Ingest', top:'var(--acc)', desc:'Copy from any drive into the managed library. Content-hash deduped, manifest-journaled, rollback-able.', actions:[['Dry-run',"libAction('/api/ingest',{apply:false})",0],['Ingest now',"libAction('/api/ingest',{apply:true})",1]]},
+    {name:'Ingest', top:'var(--acc)', desc:'Copy from any drive into the managed library. Content-hash deduped, manifest-journaled, rollback-able.', extra:'<div style="display:flex;gap:6px"><input id="ingestSrc" placeholder="source folder to copy from" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 9.5px/1 var(--mono);color:var(--ink)"><button class="btn" onclick="browseInto(\'ingestSrc\')">Browse…</button></div>', actions:[['Dry-run',"ingestRun(false)",0],['Ingest now',"ingestRun(true)",1]]},
     {name:'Organize + retag', top:'var(--edge2)', desc:'Build the Artist/Album/NN Title tree with amended tags — copies only, masters untouched.', actions:[['Preview',"libAction('/api/organize',{apply:false})",0],['Organize',"libAction('/api/organize',{apply:true})",0]]},
     {name:'Reorganize', top:'var(--edge2)', desc:'Move the ORIGINAL files in place into a clean tree. Reversible; unidentifiable → _unsorted/. Preview → Apply → Rollback.', actions:[['Preview',"reorgPreview()",0],['Apply',"reorgApply()",0],['Rollback',"reorgRollback()",0]]},
-    {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default, dry-run proposals.', actions:[['Identify (opt-in)',"libAction('/api/identify',{})",0]]},
+    {name:'Identify', top:'var(--fault)', desc:'AcoustID/MusicBrainz fingerprint lookup. Network — opt-in, off by default. Step 1: Identify writes dry-run proposals. Step 2: Apply rewrites tags on ≥0.85 matches.', actions:[['1 · Identify (opt-in)',"identifyRun()",0],['2 · Apply saved',"identifyApply()",0],['Undo',"identifyRollback()",0]]},
     {name:'Deep clean', top:'var(--edge2)', desc:'Listen to each file: real songs vs silence/static/corrupt; find empty + art-only folders.', actions:[['Scan',"libAction('/api/deepclean/scan',{})",0]]},
   ];
   scr.innerHTML='<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Library</span><span style="font:500 10px/1 var(--mono);color:var(--faint)">feed &amp; clean · sources copied, never mutated · journaled &amp; reversible</span></div>'
@@ -495,7 +507,7 @@ async function renderLibrary(){
     +'<button class="btn primary" onclick="post(\'/api/ear_crate/build\',{taste_profile:S.resident,force:false}).then(j=>toast(\'Ear crate: \'+(j.inserted||0)+\' new, \'+(j.adopted||0)+\' adopted\'))">Build ear crate</button>'
     +'</div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">'
-    +mods.map(m=>'<div style="background:var(--panel);border:1px solid var(--edge);border-top:2px solid '+m.top+';padding:13px 14px;display:flex;flex-direction:column;gap:8px"><div style="font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.04em;color:var(--ink);text-transform:uppercase">'+m.name+'</div><div style="font:400 10px/1.5 var(--mono);color:var(--dim);flex:1">'+m.desc+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'+m.actions.map(a=>'<span onclick="'+a[1]+'" class="clk" style="font:600 8.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:'+(a[2]?'var(--accink)':'var(--dim)')+';background:'+(a[2]?'var(--acc)':'var(--panel2)')+';border:1px solid '+(a[2]?'var(--acc)':'var(--edge2)')+';padding:8px 11px">'+a[0]+'</span>').join('')+'</div></div>').join('')
+    +mods.map(m=>'<div style="background:var(--panel);border:1px solid var(--edge);border-top:2px solid '+m.top+';padding:13px 14px;display:flex;flex-direction:column;gap:8px"><div style="font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.04em;color:var(--ink);text-transform:uppercase">'+m.name+'</div><div style="font:400 10px/1.5 var(--mono);color:var(--dim);flex:1">'+m.desc+'</div>'+(m.extra||'')+'<div style="display:flex;gap:7px;flex-wrap:wrap">'+m.actions.map(a=>'<span onclick="'+a[1]+'" class="clk" style="font:600 8.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:'+(a[2]?'var(--accink)':'var(--dim)')+';background:'+(a[2]?'var(--acc)':'var(--panel2)')+';border:1px solid '+(a[2]?'var(--acc)':'var(--edge2)')+';padding:8px 11px">'+a[0]+'</span>').join('')+'</div></div>').join('')
     +'</div>'
     +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
     +'<div class="card" style="flex:1;min-width:320px"><div class="lbl" style="margin-bottom:10px">[ Loop review // quota approval ]</div>'
@@ -535,7 +547,7 @@ async function loadLoopReview(){ const h=el('loopCounts'); if(!h)return; try{ co
 async function loopSetStatus(id,status){ try{ await post('/api/loop_status',{loop_id:id,status:status}); toast(status==='approved'?'Loop approved + locked (survives quota)':'Loop '+status); loadLoopReview(); }catch(e){} }
 async function loopRejectAll(){ if(!window.confirm('Reject ALL candidate loops? Human-approved (locked) loops are untouched.'))return; try{ const j=await post('/api/loops/bulk_status',{status:'rejected',from_status:'candidate'}); toast('Rejected '+(j.updated||0)+' candidate loops'); loadLoopReview(); }catch(e){} }
 async function quotaApprove(){ const n=parseInt(el('quotaN').value)||60; try{ const j=await post('/api/loops/auto_approve_quota',{max_loops:n}); toast('Quota approved '+(j.approved||j.promoted||j.count||0)+' loops → hot pool'); loadLoopReview(); }catch(e){} }
-async function proposePlaylist(){ const name=el('plName').value||'playlist', q=el('plQuery').value||'', mins=parseInt(el('plMin').value)||60; toast('Building playlist…'); try{ const j=await post('/api/playlist/propose',{name, query:q, target_minutes:mins}); const nT=(j.entries&&j.entries.length)||j.count||j.tracks||0; el('plOut').innerHTML=(j.path?('<span class="clk" style="color:var(--acc)" onclick=\'openFolder('+JSON.stringify(j.path)+')\'>open ▸</span> '+esc(j.path)+' · '):'')+nT+' tracks'; toast('Playlist "'+name+'": '+nT+' tracks'); }catch(e){} }
+async function proposePlaylist(){ const name=el('plName').value||'playlist', q=el('plQuery').value||'', mins=parseInt(el('plMin').value)||60; toast('Building playlist…'); try{ const j=await post('/api/playlist/propose',{name, query:q, target_minutes:mins}); const nT=(typeof j.entries==='number'?j.entries:((j.entries&&j.entries.length)||j.count||j.tracks||0)); el('plOut').innerHTML=nT+' tracks proposed'+(j.manifest?(' · <span class="clk" style="color:var(--acc)" onclick=\'openFolder('+JSON.stringify(j.manifest)+')\'>manifest ▸</span>'):''); toast('Playlist "'+name+'": '+nT+' tracks proposed'); }catch(e){} }
 async function openFolder(path){ if(!path){toast('No path');return;} try{ const j=await post('/api/open_folder',{path}); if(j&&j.ok===false) toast(j.error||'open failed'); }catch(e){} }
 async function loadTracks(){
   try{ const j=await api('/api/tracks'); const items=j.items||[];
@@ -543,13 +555,20 @@ async function loadTracks(){
     el('libTracks').innerHTML=items.slice(0,200).map(t=>'<div style="display:flex;font:500 10.5px/1 var(--mono);color:var(--dim);padding:9px 0;border-bottom:1px solid var(--edge)"><span style="flex:2;color:var(--ink)">'+esc(t.title||(t.path?t.path.split(/[\\/]/).pop():'—'))+'</span><span style="flex:1.4">'+esc(t.artist||'—')+'</span><span style="width:60px">'+(t.bpm!=null?Math.round(t.bpm):'–')+'</span><span style="width:50px">'+keyName(t.key_root,t.key_mode)+'</span><span style="width:60px">'+(t.vocal_likelihood!=null?Number(t.vocal_likelihood).toFixed(2):'–')+'</span><span style="width:60px">'+(t.loop_count!=null?t.loop_count:0)+'</span></div>').join('') || '<div class="lbl" style="color:var(--faint);padding-top:10px">no tracks — Scan a music folder in Setup</div>';
   }catch(e){ el('libTracks').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; }
 }
+async function ingestRun(apply){ const src=((el('ingestSrc')&&el('ingestSrc').value)||'').trim(); if(!src){ toast('Pick a source folder to ingest from'); return; } toast(apply?'Ingesting…':'Ingest dry-run…'); try{ const j=await post('/api/ingest',{sources:[src],apply}); if(j.ok===false){ toast(j.error||'ingest failed'); return; } const n=(j.planned!=null?j.planned:(j.copied||0)); toast('Ingest '+(apply?'':'dry-run · ')+n+' file(s)'+(apply?' copied':' to copy')+(j.skipped_duplicates?(' · '+j.skipped_duplicates+' dupes skipped'):'')); if(apply) loadTracks(); }catch(e){} }
+let MIGRATE={signature:null};
+async function migratePreview(){ toast('Migration preview…'); try{ const j=await post('/api/migrate/plan',{}); if(j.ok===false){ toast(j.error||'preview failed'); return; } MIGRATE.signature=j.signature||j.expected_signature||null; toast('DRY-RUN: '+(j.planned!=null?j.planned+' item(s) to migrate':'previewed')+(MIGRATE.signature?' — press Apply':' (nothing to migrate)')); }catch(e){} }
+async function migrateApply(){ if(!MIGRATE.signature){ toast('Preview first (dry-run before migrating)'); return; } if(!window.confirm('Migrate the legacy workspace now? Additive + journaled; nothing is deleted.')) return; try{ const j=await post('/api/migrate/apply',{signature:MIGRATE.signature}); toast(j.ok!==false?'Migration running — watch Activity':(j.error||'migrate refused (re-preview)')); if(j.ok!==false) go('activity'); }catch(e){} }
+async function identifyRun(){ toast('Identify (network · dry-run proposals)…'); try{ const j=await post('/api/identify',{}); toast(j.ok!==false?'Identify running — watch Activity, then Apply':(j.error||'identify failed')); go('activity'); }catch(e){} }
+async function identifyApply(){ let dry; try{ dry=await post('/api/identify/apply',{apply:false}); }catch(e){ return; } if(dry.ok===false){ toast(dry.error||'run Identify first'); return; } const sig=dry.signature; const n=dry.would_retag!=null?dry.would_retag:0; if(!n){ toast('No proposals to apply — run Identify first'); return; } if(!window.confirm('Apply AcoustID identities? Rewrites tags on '+n+' file(s) (score ≥ 0.85). Reversible via Undo.'))return; try{ const j=await post('/api/identify/apply',{apply:true, signature:sig}); toast(j.ok!==false?'Applying identities — watch Activity':(j.error||'apply failed')); go('activity'); }catch(e){} }
+async function identifyRollback(){ let js; try{ js=await api('/api/identify/journals'); }catch(e){ return; } const items=(js&&js.items)||[]; if(!items.length){ toast('No Identify run to undo'); return; } const jp=items[0].path; try{ const dry=await post('/api/identify/rollback',{journal:jp,apply:false}); const n=dry.would_restore!=null?dry.would_restore:(dry.restored||0); if(!window.confirm('Undo the most recent Identify? Restores original tags on '+n+' file(s).'))return; const j=await post('/api/identify/rollback',{journal:jp,apply:true}); toast(j.ok!==false?('Identify undone: '+(j.restored||0)+' file(s) restored'):(j.error||'undo failed')); loadTracks(); }catch(e){} }
 async function libAction(path,body){ toast('Running '+path.split('/').pop()+'…'); try{ const j=await post(path,body); toast(path.split('/').pop()+': '+(j.dry_run?'DRY-RUN — ':'')+(j.planned!=null?j.planned+' planned':(j.ok!==false?'ok':JSON.stringify(j).slice(0,120)))); if(/scan|identify|deepclean/.test(path)) go('activity'); }catch(e){} }
 
 /* ---------- SETUP ---------- */
 async function renderSetup(){
   const scr=el('scr_setup'); scr.innerHTML='<div class="h1">Setup <span style="color:var(--acc)">// system</span></div><div class="lbl">loading…</div>';
   let d={}; try{ d=await api('/api/defaults'); }catch(e){}
-  const cfg=d.configured||{}; const music=cfg.master_root||d.music_folder||''; const ws=cfg.working_root||d.workspace_folder||'';
+  const cfg=d.configured||{}; const music=cfg.master_root||d.music_folder||''; const ws=d.configured_workspace||d.workspace_folder||'';
   const workers=cfg.workers; const depth=cfg.analysis_seconds||180;
   scr.innerHTML='<div class="h1">Setup <span style="color:var(--acc)">// system</span></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1100px">'
@@ -568,7 +587,7 @@ async function renderSetup(){
       +'<div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font:600 11px/1.2 var(--mono);color:var(--ink)">AcoustID identify</div><div style="font:400 9px/1.4 var(--mono);color:var(--faint);margin-top:3px">off by default · the core never touches the network</div></div><span style="font:600 9px/1 var(--mono);letter-spacing:.1em;color:var(--fault);border:1px solid var(--fault);padding:8px 12px">OFF</span></div>'
       +'<div style="font:500 9px/1 var(--mono);color:var(--faint);margin-top:12px">key · <span style="color:var(--dim)">EARCRATE_ACOUSTID_KEY</span> — free from acoustid.org</div></div>'
     +'<div class="card"><div class="lbl" style="margin-bottom:11px">[ Health &amp; migration ]</div>'
-      +'<div style="display:flex;gap:7px;margin-bottom:11px"><button class="btn" onclick="runDoctor()">Run doctor</button><button class="btn" onclick="libAction(\'/api/migrate/plan\',{})">Migrate legacy</button></div>'
+      +'<div style="display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap"><button class="btn" onclick="runDoctor()">Run doctor</button><button class="btn" onclick="migratePreview()">Migrate: preview</button><button class="btn" onclick="migrateApply()">Migrate: apply</button></div>'
       +'<div id="doctorOut" style="font:500 9.5px/1.6 var(--mono);color:var(--faint)">doctor not run yet</div></div>'
     +'</div>'
     +'<div class="card" style="max-width:1100px"><div class="lbl" style="margin-bottom:11px">[ Skin ]</div><div style="display:flex;gap:10px;flex-wrap:wrap">'
@@ -595,6 +614,7 @@ function ecShuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.ran
 async function endlessQueue(){ const j=await api('/api/renders'); return (j.items||[]).filter(r=>r.current_engine && r.quality_gate_passed!==false).map(r=>r.path); }
 async function toggleEndless(){ if(ENDLESS.on){ ENDLESS.on=false; AP().pause(); el('endlessBtn').style.color='var(--dim)'; return; } const items=await endlessQueue(); if(!items.length){ toast('No renders yet — Play demo or Book a set'); return; } ENDLESS.on=true; ENDLESS.queue=ecShuffle(items.slice()); ENDLESS.i=-1; el('endlessBtn').style.color='var(--acc)'; endlessNext(); }
 function endlessNext(){ if(!ENDLESS.on)return; ENDLESS.i=(ENDLESS.i+1)%ENDLESS.queue.length; setPlayer(ENDLESS.queue[ENDLESS.i]); }
+function endlessPrev(){ if(!ENDLESS.on||!ENDLESS.queue.length){ const a=AP(); if(a.src) a.currentTime=0; return; } ENDLESS.i=(ENDLESS.i-1+ENDLESS.queue.length)%ENDLESS.queue.length; setPlayer(ENDLESS.queue[ENDLESS.i]); }
 function endlessSkip(){ if(ENDLESS.on) endlessNext(); }
 async function playDemo(){ toast('Synthesizing a warm-up demo set…'); try{ await post('/api/demo/seed',{count:8}); const items=await endlessQueue(); if(items.length){ ENDLESS.on=true; ENDLESS.queue=ecShuffle(items.slice()); ENDLESS.i=-1; el('endlessBtn').style.color='var(--acc)'; endlessNext(); toast('Demo set playing endlessly. Book a set to compile YOUR library.'); } }catch(e){} }
 async function station(sig){ try{ await post('/api/station/feedback',{signal:sig}); toast(sig==='fire'?'🔥 hotter — biases the next compile':sig==='ice'?'🧊 cooler — biases the next compile':'⏭ logged'); }catch(e){} }
@@ -602,20 +622,28 @@ async function station(sig){ try{ await post('/api/station/feedback',{signal:sig
 /* ---------- polling ---------- */
 async function pollStatus(force){
   try{ const st=await api('/api/status');
-    const busy=!!st.busy; el('onlineDot').style.background=busy?'var(--acc)':'var(--faint)';
-    el('onlineTxt').textContent=busy?'ENGINE BUSY':'SYSTEM ONLINE';
-    el('engineTxt').textContent=busy?(String(st.message||'working').slice(0,60)):'idle';
+    const busy=!!st.busy; const err=(!busy&&st.last_error)?String(st.last_error):'';
+    el('onlineDot').style.background=busy?'var(--acc)':(err?'var(--fault)':'var(--faint)');
+    el('onlineTxt').textContent=busy?'ENGINE BUSY':(err?'ERROR':'SYSTEM ONLINE');
+    el('engineTxt').textContent=busy?(String(st.message||'working').slice(0,60)):(err?err.slice(0,60):'idle');
     if(S.mode==='activity'){ renderStatus(st); if(force) renderPerfStages(); }
   }catch(e){}
 }
 function tickTransport(){ const a=AP(); const cur=a.currentTime||0, dur=a.duration||0; el('tElapsed').textContent=mmss(cur); el('tDur').textContent=dur?mmss(dur):'0:00'; el('tBar').style.width=(dur?(cur/dur*100):0)+'%'; syncPlay(); }
 
 /* ---------- boot ---------- */
-function boot(){
+async function boot(){
   applySkin(); renderNav();
+  // Surface any otherwise-swallowed request failure (bare api() GETs reject with
+  // no catch) instead of the view silently breaking.
+  window.addEventListener('unhandledrejection',ev=>{ const m=(ev.reason&&ev.reason.message)||ev.reason||'request failed'; toast('✕ '+m); });
   const a=AP(); a.addEventListener('ended',()=>{ if(ENDLESS.on) endlessNext(); }); a.addEventListener('play',syncPlay); a.addEventListener('pause',syncPlay);
   setInterval(tickTransport,500);
   setInterval(()=>pollStatus(false),2000);
+  // First-run routing: an unconfigured box has nothing to Play. Land the user on
+  // Setup with a nudge instead of a dead Play screen + a JAM button that 500s.
+  let configured=null; try{ const d=await api('/api/defaults'); configured=d.configured; }catch(e){}
+  if(!configured && S.mode==='play'){ S.mode='setup'; toast('Welcome — point EarCrate at your music folder to begin'); }
   go(S.mode);
 }
 boot();

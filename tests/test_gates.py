@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Executable gates (rebuild plan §5). Run: python tests/run_gates.py"""
-import sys, random
+import os, sys, random, tempfile
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
+# Same sandbox as run_gates.py, for direct pytest invocation: gates that build
+# EarcrateCore() must never write the user's real repo-root workspace pointer.
+os.environ.setdefault("EARCRATE_HOME", tempfile.mkdtemp(prefix="earcrate_gates_home_"))
 from earcrate.deck.transform import plan_varispeed_transform
 from earcrate.deck.lattice import score_bpm_lattice
 from earcrate.ear.readiness import crate_readiness_audit, girl_talk_targets, endless_sustain
@@ -1022,6 +1025,82 @@ def test_saved_plan_renders_identically():
         else: os.environ.pop("EARCRATE_HOME", None)
 
 
+def test_execute_manifest_surfaces_rejected_render(tmp_path):
+    """Contract gate (F3): a render REFUSED by the post-render quality gate must
+    NOT return from the manifest-execution boundary as a plain success. The
+    render still executes, the rejected report is still written to disk, and the
+    canonical render_rejected receipt still lands in done[]; but the result the
+    caller receives (used by taste mashup, album, and the external remix route)
+    must be non-ok, carry rejected=True, and carry the gate's failure reason.
+    Without this, a rejected render reads as 'success + no audio + no reason'."""
+    import os, json, copy, tempfile
+    from pathlib import Path
+    from unittest.mock import patch
+    from earcrate.app import EarcrateCore, ENGINE_VERSION
+    from earcrate.core.util import arrangement_sha, ulidish, now_utc
+    with patch.dict(os.environ, {"EARCRATE_HOME": str(tmp_path), "HOME": str(tmp_path)}):
+        for d in ("music", "work", "agent"):
+            (tmp_path / d).mkdir(exist_ok=True)
+        bpm = 120.0
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                        "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+        db = core.conn()
+        pool = _v3_build_render_pool(core, db, tmp_path, bpm=bpm)
+        params = {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": bpm, "quality_mode": "stable_deck"}
+        arr = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
+        assert arr.get("sections"), "composer produced an empty arrangement"
+        # Keep the render cheap (one bar / two layers) but declare a >=60s target
+        # so the post-render quality-gate branch is armed under the fixture.
+        arr["sections"] = arr["sections"][:1]
+        arr["sections"][0]["bars"] = 1
+        arr["sections"][0]["layers"] = arr["sections"][0].get("layers", [])[:2]
+        arr.setdefault("params", {})
+        arr["params"]["target_seconds"] = 60
+        arr["params"]["post_render_gate"] = True
+        arr_sha = arrangement_sha(arr)
+
+        mid = ulidish()
+        db.execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
+                   (mid, "m", arr.get("seed"), json.dumps(arr.get("params") or {}),
+                    json.dumps(arr), None, now_utc(), ENGINE_VERSION, arr_sha))
+        db.commit()
+
+        dst = tmp_path / "work" / "renders" / "rejected_out.wav"
+        manifest_path = core.write_manifest("gate", 11, "F3 rejected render", [
+            {"op_id": ulidish(), "type": "render_mashup",
+             "args": {"mashup_id": mid, "dst": str(dst)},
+             "preconditions": {"dst_absent": True}}])
+
+        forced_gate = {"passed": False, "failures": ["forced post-render gate failure for F3 gate"],
+                       "warnings": [], "metrics": {}}
+        with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+             patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
+             patch("earcrate.app.drydeck_metrics", return_value={}), \
+             patch("earcrate.app.drydeck_quality_gate", return_value=copy.deepcopy(forced_gate)):
+            result = core.execute_manifest(manifest_path, apply=True)
+
+        # The render_rejected receipt is still produced and recorded in done[].
+        rejected_items = [i for i in result.get("done", []) if isinstance(i, dict) and i.get("type") == "render_rejected"]
+        assert rejected_items, f"execute_manifest did not record a render_rejected receipt: {result}"
+        assert rejected_items[0].get("path") is None and rejected_items[0].get("presented") is False
+
+        # THE CONTRACT: a rejected render is never a plain success at this boundary.
+        assert result.get("ok") is False, f"a rejected render was reported as ok: {result}"
+        assert result.get("rejected") is True, f"result did not carry rejected=True: {result}"
+        reason = str(result.get("rejection_reason") or "") + " " + str(result.get("error") or "")
+        assert "forced post-render gate failure for F3 gate" in reason, \
+            f"result did not carry the gate's failure reason: {result}"
+        assert "forced post-render gate failure for F3 gate" in (result.get("failures") or []), \
+            f"result did not carry the gate failures list: {result}"
+
+        # The on-disk rejected report is intact and no WAV was published.
+        assert not dst.exists(), "a gate-rejected render still published a WAV"
+        assert result.get("rejected_reports"), f"rejected report path was not surfaced: {result}"
+        rej_report = Path(result["rejected_reports"][0])
+        assert rej_report.is_file(), f"rejected report was not written to disk: {rej_report}"
+
+
 def test_measurements_persona_free():
     """v3 §5.3 L1 (persona-free measurements): a file's measurement is stored ONCE
     per (file, analyzer_version) and SHARED across personas — not re-measured per
@@ -1778,17 +1857,32 @@ def test_render_consults_stem_seam():
         assert P.default_name("stems") == "fake"
         res_vox, rep_vox = _render("fake")
 
-        # (b1) the seam was consulted with the RIGHT pcm_sha, ONLY for vocals.
-        assert _FakeStems.calls, "render never CONSULTED the StemProvider seam for a vocal layer (RED)"
-        assert all(c["roles"] == ("vocals",) for c in _FakeStems.calls), \
-            "render must request the 'vocals' stem from the seam"
-        assert all(c["pcm_sha"] in vocal_shas for c in _FakeStems.calls), \
-            "seam consulted with a non-vocal pcm_sha (should only run for vocal layers)"
+        # (b1) the seam was consulted with the RIGHT pcm_sha and the RIGHT role per
+        # layer: "vocals" (the acapella) for vocal layers, "no_vocals" (the clean
+        # instrumental bed) for the drums/bass/harmony layers. Requesting the
+        # instrumental is the point of separation — an acapella over a clean bed,
+        # not over another song's full mix.
+        assert _FakeStems.calls, "render never CONSULTED the StemProvider seam (RED)"
+        assert all(c["roles"] in (("vocals",), ("no_vocals",)) for c in _FakeStems.calls), \
+            "render must request either the 'vocals' (acapella) or 'no_vocals' (instrumental) stem"
+        vocal_calls = [c for c in _FakeStems.calls if c["roles"] == ("vocals",)]
+        inst_calls = [c for c in _FakeStems.calls if c["roles"] == ("no_vocals",)]
+        assert vocal_calls, "render must request the 'vocals' stem for vocal layers"
+        assert inst_calls, "render must request the 'no_vocals' (instrumental) stem for bed layers"
+        assert all(c["pcm_sha"] in vocal_shas for c in vocal_calls), \
+            "the vocals stem was requested for a non-vocal source"
+        assert all(c["pcm_sha"] not in vocal_shas for c in inst_calls), \
+            "the instrumental stem should be requested for bed (non-vocal) layers"
 
-        # (b2) the returned stem actually FED the render (recorded + audible).
+        # (b2) the returned stem actually FED the render (recorded + audible). The
+        # fake provider only serves a vocals stem, so vocal layers ride it and the
+        # bed layers gracefully fall back to the full mix (no no_vocals produced).
         vocal_layers_vox = [ly for ly in rep_vox["layers"] if ly.get("role") == "vocal"]
         assert vocal_layers_vox and all(ly.get("stem_source") == "vocals" for ly in vocal_layers_vox), \
             "a consulted, available vocals stem was not recorded as the layer source"
+        bed_layers_vox = [ly for ly in rep_vox["layers"] if ly.get("role") != "vocal"]
+        assert all(ly.get("stem_source") == "mix" for ly in bed_layers_vox), \
+            "bed layers must fall back to mix when the provider serves no instrumental stem"
         y_vox, _ = sf.read(str(res_vox["path"]))
         assert not (y_mix.shape == y_vox.shape and np.array_equal(y_mix, y_vox)), \
             "the vocals stem was consulted but never changed the audio (seam not fed through)"
@@ -2622,6 +2716,123 @@ def test_demucs_uses_released_model_id():
     assert seen == ["htdemucs"], f"invalid Demucs model requested: {seen}"
 
 
+def test_demucs_fast_path_and_model_knob():
+    """v3 §5.2 COLD-render speedups on the GUARDED Demucs path (no torch/GPU here):
+
+      (1) EARCRATE_DEMUCS_MODEL opt-in — unset keeps htdemucs (byte-identical
+          default); set, it becomes the model passed to get_model AND the model that
+          keys the L3 artifact + provenance (via _effective_model_version), so a
+          swapped model never collides with / mislabels htdemucs artifacts.
+      (2) TWO-STEMS FAST PATH — when the renderer asks only for {vocals, no_vocals}
+          the producer emits EXACTLY those two stems (demucs --two-stems=vocals
+          equivalent) instead of encoding all four sources then discarding
+          drums/bass/other; a request that includes a real 4-stem role still gets
+          every requested source.
+
+    Driven with a fully FAKE demucs/torch stack (a 4-source model), so it proves the
+    STATIC wiring only. The real separation stays UNVERIFIED pending a GPU receipt."""
+    import sys as _sys
+    import os as _os
+    import types, contextlib
+    import numpy as _np
+    from unittest.mock import patch
+    from earcrate.providers.stems import DemucsStemProvider
+    from earcrate.providers import stems as _stems_mod
+
+    # --- (1) model knob is honest even without any torch import ---------------
+    prov = DemucsStemProvider()
+    prev = _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+    try:
+        assert prov._effective_model_version() == "htdemucs"
+        key_default = prov._artifact_key("sha_x", "vocals")
+        _os.environ["EARCRATE_DEMUCS_MODEL"] = "mdx_extra_q"
+        assert prov._effective_model_version() == "mdx_extra_q"
+        key_swapped = prov._artifact_key("sha_x", "vocals")
+        assert key_swapped != key_default, \
+            "a swapped model must key a DISTINCT artifact (no cross-model cache collision)"
+    finally:
+        if prev is None:
+            _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+        else:
+            _os.environ["EARCRATE_DEMUCS_MODEL"] = prev
+
+    # --- fake demucs stack: a 4-source model whose apply_model returns tensors --
+    class _Src:  # minimal torch-tensor stand-in over numpy
+        def __init__(self, a): self.a = _np.asarray(a, dtype=float)
+        def __mul__(self, o): return _Src(self.a * o)
+        __rmul__ = __mul__
+        def __add__(self, o): return _Src(self.a + (o.a if isinstance(o, _Src) else o))
+        __radd__ = __add__
+        def __getitem__(self, i): return _Src(self.a[i])
+        def cpu(self): return self
+        def numpy(self): return self.a
+
+    class _Arr(_np.ndarray):
+        def to(self, *a, **k): return self  # numpy stand-in for tensor.to(device)
+
+    names = ["drums", "bass", "other", "vocals"]
+    seen = []
+
+    class _Model:
+        samplerate = 44100
+        audio_channels = 2
+        sources = names
+        def to(self, *a, **k): return self
+        def eval(self): return self
+
+    def _get_model(name):
+        seen.append(name)
+        return _Model()
+
+    class _AudioFile:
+        def __init__(self, path): pass
+        def read(self, streams=0, samplerate=None, channels=None):
+            return _np.zeros((int(channels), 200)).view(_Arr)
+
+    # each of the 4 sources gets a distinct constant so mixing is observable
+    _four = _Src(_np.stack([_np.full((2, 200), float(i + 1)) for i in range(4)]))
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.cuda = types.SimpleNamespace(is_available=lambda: False)
+    torch_mod.no_grad = lambda: contextlib.nullcontext()
+    demucs_pkg = types.ModuleType("demucs"); demucs_pkg.__path__ = []
+    separate_mod = types.ModuleType("demucs.separate")
+    pretrained_mod = types.ModuleType("demucs.pretrained"); pretrained_mod.get_model = _get_model
+    apply_mod = types.ModuleType("demucs.apply"); apply_mod.apply_model = lambda *a, **k: [_four]
+    audio_mod = types.ModuleType("demucs.audio"); audio_mod.AudioFile = _AudioFile
+    modules = {
+        "torch": torch_mod, "demucs": demucs_pkg, "demucs.separate": separate_mod,
+        "demucs.pretrained": pretrained_mod, "demucs.apply": apply_mod, "demucs.audio": audio_mod,
+    }
+
+    prev = _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+    try:
+        with patch.dict(_sys.modules, modules):
+            # (2) two-stems fast path emits EXACTLY {vocals, no_vocals}, nothing else.
+            out = DemucsStemProvider()._run_demucs("unused.wav", ["vocals", "no_vocals"])
+            assert set(out) == {"vocals", "no_vocals"}, \
+                "two-stems fast path must emit only the vocal + instrumental: %r" % (sorted(out),)
+            assert all(isinstance(v, (bytes, bytearray)) and v for v in out.values())
+            # a request that includes a real 4-stem role takes the full path.
+            out2 = DemucsStemProvider()._run_demucs("unused.wav", ["vocals", "drums"])
+            assert set(out2) == {"vocals", "drums"}, sorted(out2)
+            # (1) default model selection unchanged when env is unset.
+            assert seen and all(n == "htdemucs" for n in seen), seen
+            # env override actually reaches get_model.
+            _os.environ["EARCRATE_DEMUCS_MODEL"] = "mdx_extra_q"
+            seen.clear()
+            DemucsStemProvider()._run_demucs("unused.wav", ["vocals"])
+            assert seen == ["mdx_extra_q"], seen
+    finally:
+        # the resident-model cache is module-global; drop the FAKE models this gate
+        # inserted so a later gate re-loads through get_model (sentinel) as expected.
+        _stems_mod._MODEL_CACHE.clear()
+        if prev is None:
+            _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+        else:
+            _os.environ["EARCRATE_DEMUCS_MODEL"] = prev
+
+
 def test_pcm_identity_covers_full_track_not_analysis_prefix():
     """Tracks sharing an analyzed prefix but differing later need distinct stem keys."""
     import tempfile
@@ -3141,3 +3352,612 @@ def test_post_render_gate_rejects_before_wav_write():
 if __name__ == "__main__":
     from run_gates import main as _run_all_gates
     raise SystemExit(_run_all_gates())
+
+
+def test_arrangement_has_macro_dynamics(tmp_path):
+    """The composer must give the track an ENERGY CURVE (sparse intro, builds,
+    drops, breakdowns) rather than parking every 4-bar section at the same
+    loudness. Flat, equal-energy sections were the real desktop failure: the
+    post-render quality gate rejected the render with 'rms_std_db catastrophically
+    low; render is effectively flat'. This locks in per-section loudness variance."""
+    import math, statistics as st
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    pool = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    arr = core.compose_taste_arrangement(list(pool),
+            {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": 120.0, "quality_mode": "stable_deck"}, seed=7)
+    secs = arr.get("sections") or []
+    assert secs, "composer produced no sections"
+    energies = [round(float(s.get("energy_level") or 0), 2) for s in secs]
+    # The opening section eases in (was a flat 0.7); this is the tell the curve is live.
+    assert abs(energies[0] - 0.32) < 0.01, f"intro must ease in at 0.32, got {energies[0]}"
+
+    def sec_db(s):
+        amp = sum(10 ** (float(ly.get("gain_db", 0)) / 20.0) for ly in s.get("layers") or []) or 1e-6
+        return 20 * math.log10(amp)
+    dbs = [sec_db(s) for s in secs]
+    # Real loudness variance across sections — the opposite of "effectively flat".
+    assert (max(dbs) - min(dbs)) >= 1.5, f"section loudness must vary; spread was only {max(dbs)-min(dbs):.1f} dB"
+
+
+def test_recognizability_bias_prefers_hooks(tmp_path):
+    """params['recognizability_bias'] must actually bias SELECTION toward the
+    persona's high-recognizability hooks (readiness.rank_material formula), not sit
+    inert in params. Cranked runs reach for the 'oh, THAT song' payoff."""
+    import copy
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    pool = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    proto = [a for a in pool if a.get("ear_role") == "VOX_HOOK"][0]
+    for i in range(8):
+        a = copy.deepcopy(proto)
+        a["id"] = f"hk{i}"; a["atom_id"] = f"hk{i}"; a["source_track_key"] = f"hooksrc{i}"
+        a["hook_score"] = round(0.15 + 0.8 * (i / 7), 3); a["score"] = 0.6
+        pool.append(a)
+
+    def mean_hook(bias):
+        arr = core.compose_taste_arrangement(list(pool), {"taste_profile": "girl_talk_v1", "target_seconds": 48,
+              "bpm": 120.0, "quality_mode": "stable_deck", "recognizability_bias": bias}, seed=5)
+        hk = []
+        for s in arr["sections"]:
+            for ly in s["layers"]:
+                if ly.get("role") == "vocal" or str(ly.get("ear_role")).startswith("VOX"):
+                    m = [a for a in pool if (a.get("atom_id") or a.get("id")) == ly.get("atom_id")]
+                    if m:
+                        hk.append(float(m[0].get("hook_score") or 0))
+        return sum(hk) / len(hk) if hk else 0.0
+
+    neutral, cranked = mean_hook(0), mean_hook(92)
+    assert cranked > neutral, f"recognizability crank must raise chosen-hook strength ({cranked:.3f} !> {neutral:.3f})"
+
+
+def test_bakeoff_resolves_personas_cleanly(tmp_path):
+    """The persona bake-off composes the SAME material through several personas and
+    each resolves to ok / clean-skip (never a crash), so you can A/B/C how each
+    taste reinterprets the library."""
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    bo = core.bakeoff({"plan_only": True, "recognizability_bias": "max", "target_seconds": 16,
+                       "personas": ["girl_talk_v1", "troubadour_v1", "notorious_v1"]})
+    assert len(bo["bakeoff"]) == 3
+    assert bo["recognizability_bias"] == 92, "max crank must map to a concrete bias value"
+    for r in bo["bakeoff"]:
+        assert "taste_profile" in r and "contract" in r and "ok" in r, f"malformed bakeoff entry: {r}"
+        # every persona must be either a real compose (ok) or a clean skip — never a crash/traceback
+        assert r["ok"] is True or r.get("skipped") is True or r.get("error"), f"persona neither ran nor skipped cleanly: {r}"
+
+
+def test_personas_produce_divergent_arrangements(tmp_path):
+    """The three personas must produce STRUCTURALLY different arrangements from the
+    same pool — not one arrangement judged by three gate thresholds. girl_talk =
+    dense + fast source turnover; troubadour = minimal layering + held sources;
+    notorious = one foreground voice held for long runs. Driven by each persona's
+    source_turnover/density contract."""
+    import copy, statistics as st
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    base = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    pool = []
+    for m in range(6):
+        for a in base:
+            b = copy.deepcopy(a); uid = f"{a['id']}_{m}"
+            b["id"] = uid; b["atom_id"] = uid; b["source_track_key"] = f"src_{uid}"
+            b["path"] = f"/fake/{uid}.wav"; b["title"] = f"Track {uid}"
+            pool.append(b)
+
+    def shape(pid):
+        arr = core.compose_taste_arrangement(list(pool), {"taste_profile": pid, "target_seconds": 120,
+              "bpm": 120.0, "quality_mode": "stable_deck"}, seed=5)
+        secs = arr["sections"]
+        lp = [len(s["layers"]) for s in secs]
+        fg = [([l for l in s["layers"] if l.get("role") == "vocal"] or [{}])[0].get("source_track_key") for s in secs]
+        runs = []; cur = None; n = 0
+        for k in fg:
+            if k == cur and k:
+                n += 1
+            else:
+                if cur:
+                    runs.append(n)
+                cur = k; n = 1 if k else 0
+        if cur:
+            runs.append(n)
+        return {"avg_layers": st.mean(lp), "avg_fg_run": st.mean(runs) if runs else 0}
+
+    gt, tr, no = shape("girl_talk_v1"), shape("troubadour_v1"), shape("notorious_v1")
+    assert gt["avg_layers"] > tr["avg_layers"], f"girl_talk must layer denser than troubadour ({gt['avg_layers']} !> {tr['avg_layers']})"
+    assert no["avg_fg_run"] > gt["avg_fg_run"], f"notorious must hold a voice longer than girl_talk ({no['avg_fg_run']} !> {gt['avg_fg_run']})"
+
+
+def test_personas_meet_taste_coverage(tmp_path):
+    """Every resident persona must PASS its OWN taste_arrangement_gate on a
+    realistic (source-enriched) pool — not just girl_talk. The failure this locks
+    out: the persona-shape logic (held bed + density cap) letting a TEXTURE atom
+    win the floor rail, which the gate does not credit as floor, silently starving
+    a held-bed persona below its floor_coverage obligation (troubadour needs 0.95,
+    notorious 0.90). A held-bed / voice-forward persona must meet the coverage its
+    identity demands, and girl_talk must still clear its own (lower) thresholds."""
+    import copy
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    base = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    pool = []
+    for m in range(6):
+        for a in base:
+            b = copy.deepcopy(a); uid = f"{a['id']}_{m}"
+            b["id"] = uid; b["atom_id"] = uid; b["source_track_key"] = f"src_{uid}"
+            b["path"] = f"/fake/{uid}.wav"; b["title"] = f"Track {uid}"
+            pool.append(b)
+    from earcrate.app import TASTE_PROFILES
+    for pid in ("girl_talk_v1", "troubadour_v1", "notorious_v1"):
+        arr = core.compose_taste_arrangement(list(pool), {"taste_profile": pid, "target_seconds": 120,
+              "bpm": 120.0, "quality_mode": "stable_deck"}, seed=5)
+        gate = core.taste_arrangement_gate(arr)
+        prof = TASTE_PROFILES[pid]
+        m = gate["metrics"]
+        assert gate["passed"], f"{pid} taste gate failed: {gate['failures']} metrics={m}"
+        # And prove the coverage obligation is actually met (not passed on a technicality).
+        assert m["floor_coverage"] >= prof["floor_coverage"], f"{pid} floor {m['floor_coverage']} < {prof['floor_coverage']}"
+        assert m["foreground_coverage"] >= prof["foreground_coverage"], f"{pid} fg {m['foreground_coverage']} < {prof['foreground_coverage']}"
+
+
+def test_short_set_has_length_adaptive_energy_arc(tmp_path):
+    """A short (~120s) set must complete the SAME multi-level energy arc a long set
+    gets. A fixed 'drop every 4th section' cadence starved short renders of
+    excursions so their rendered rms_std_db landed ~2.8 (a below-target warning)
+    while longer sets cleared 3.0. The cadence is now scaled to total_bars: a ~120s
+    arrangement must ease in, hit multiple full drops AND breakdowns, span several
+    distinct energy levels, and — the tell rendered dynamics are real — swing the
+    per-section loudness proxy well past the flat-render floor."""
+    import math, copy, statistics as st
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    base = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    pool = []  # enrich so a full ~120s set is source-feasible (needs 11+ sources)
+    for m in range(6):
+        for a in base:
+            b = copy.deepcopy(a); uid = f"{a['id']}_{m}"
+            b["id"] = uid; b["atom_id"] = uid; b["source_track_key"] = f"src_{uid}"
+            b["path"] = f"/fake/{uid}.wav"; b["title"] = f"Track {uid}"
+            pool.append(b)
+    arr = core.compose_taste_arrangement(list(pool),
+            {"taste_profile": "girl_talk_v1", "target_seconds": 120, "bpm": 120.0, "quality_mode": "stable_deck"}, seed=7)
+    secs = arr.get("sections") or []
+    assert len(secs) >= 10, f"~120s should be many sections, got {len(secs)}"
+    energies = [round(float(s.get("energy_level") or 0), 2) for s in secs]
+    assert abs(energies[0] - 0.32) < 0.01, f"intro must ease in at 0.32, got {energies[0]}"
+    # Proportional arc: a short set must still land multiple drops AND breakdowns.
+    n_drop = sum(1 for e in energies if e >= 0.99)
+    n_break = sum(1 for e in energies if e <= 0.5 and e > 0.33)  # breakdown dips, not the intro
+    assert n_drop >= 2, f"short set needs multiple full drops for a real arc, got {n_drop}: {energies}"
+    assert n_break >= 1, f"short set needs at least one breakdown, got {n_break}: {energies}"
+    # Multi-level, not two-state: eased intro, sustain, build, drop, breakdown.
+    assert len(set(energies)) >= 4, f"energy must span multiple levels, saw {sorted(set(energies))}"
+    # The variance is the point: a ~120s arc must clearly beat the flat-render floor.
+    assert st.pstdev(energies) >= 0.16, f"energy variance too flat for a real arc: {st.pstdev(energies):.3f}"
+
+    def sec_db(s):
+        amp = sum(10 ** (float(ly.get("gain_db", 0)) / 20.0) for ly in s.get("layers") or []) or 1e-6
+        return 20 * math.log10(amp)
+    dbs = [sec_db(s) for s in secs]
+    assert (max(dbs) - min(dbs)) >= 4.0, f"section loudness swing too small for a live arc: {max(dbs)-min(dbs):.1f} dB"
+
+
+def test_status_snapshot_reports_live_configured():
+    """/api/status must tell the truth about whether the engine is configured.
+
+    Regression: status reported configured:null even for a correctly-configured
+    engine because the stored self.status dict never carried the configured state.
+    status_snapshot() (what the server returns for GET /api/status) derives it
+    from the live self.config, so a configured core reports configured:true and an
+    unconfigured one reports false — without dropping busy/message/progress/last_error.
+    """
+    import os, tempfile
+    from pathlib import Path
+
+    d = Path(tempfile.mkdtemp(prefix="earcrate-status-"))
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(d); os.environ["EARCRATE_HOME"] = str(d)
+    try:
+        for x in ("m", "w", "a"):
+            (d / x).mkdir()
+        core = EarcrateCore()
+
+        # Unconfigured: honest false, and the run-status fields are still present.
+        snap = core.status_snapshot()
+        assert snap["configured"] is False, snap
+        assert snap["master_root"] is None and snap["working_root"] is None, snap
+        for k in ("busy", "message", "progress", "last_error"):
+            assert k in snap, f"status lost {k}: {snap}"
+
+        # Configured: honest true, with the resolved roots exposed.
+        core.configure({"master_root": str(d / "m"), "working_root": str(d / "w"),
+                        "agent_root": str(d / "a")})
+        assert core.config is not None
+        snap = core.status_snapshot()
+        assert snap["configured"] is True, snap
+        assert snap["master_root"] == str(core.config.master_root), snap
+        assert snap["working_root"] == str(core.config.working_root), snap
+        for k in ("busy", "message", "progress", "last_error"):
+            assert k in snap, f"status lost {k}: {snap}"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_recurrence_hook_ranks_repeated_segment():
+    """Recurrence-based hook detection (Bartsch-Wakefield / Cooper-Foote).
+
+    Build a track where one distinct chroma pattern RECURS 4x while every other
+    segment is unique-once, then assert:
+      1. the song-level recurrence curve ranks the repeated segment strictly
+         highest (its off-diagonal chroma self-similarity is real recurrence);
+      2. hook_score for the repeated segment beats an equally-clean UNIQUE segment
+         (same local audio, so identical local cleanliness -> the win is purely the
+         folded-in recurrence term).
+    Deterministic: fixed synthesis, no RNG in the signal.
+    """
+    import numpy as np
+    from earcrate.analyze.features import song_recurrence_curve, segment_recurrence
+
+    SR = 22050
+    SEGDUR = 4.0
+    NOTE = {n: 440.0 * 2 ** ((m - 9) / 12.0) for n, m in {
+        "C": 0, "Cs": 1, "D": 2, "Ds": 3, "E": 4, "F": 5, "Fs": 6,
+        "G": 7, "Gs": 8, "A": 9, "As": 10, "B": 11}.items()}
+
+    def chord(notes, dur=SEGDUR):
+        t = np.arange(int(dur * SR)) / SR
+        y = np.zeros_like(t)
+        for n in notes:
+            y += np.sin(2 * np.pi * NOTE[n] * t)
+        y *= (0.6 + 0.4 * np.abs(np.sin(2 * np.pi * 2.0 * t)))  # tremolo -> onsets
+        return (y / (np.max(np.abs(y)) + 1e-9) * 0.5).astype(np.float32)
+
+    P = chord(["C", "E", "G"])       # the hook: a distinct chroma pattern, repeats
+    U1 = chord(["D", "Fs", "A"])     # unique-once segments, each a different chroma
+    U2 = chord(["F", "A", "C"])
+    U3 = chord(["Ds", "G", "As"])
+    U4 = chord(["E", "Gs", "B"])
+    seq = [("U1", U1), ("P", P), ("U2", U2), ("P", P),
+           ("U3", U3), ("P", P), ("U4", U4), ("P", P)]  # P appears 4x
+    y = np.concatenate([s for _, s in seq])
+
+    spans, t = [], 0.0
+    for name, _ in seq:
+        spans.append((name, t, t + SEGDUR))
+        t += SEGDUR
+
+    cs, ce, rc = song_recurrence_curve(y, SR)
+    assert rc.size >= 4, f"empty recurrence curve: {rc.size}"
+
+    per = {}
+    for name, a, b in spans:
+        per.setdefault(name, []).append(segment_recurrence(cs, ce, rc, a, b))
+    agg = {k: float(np.mean(v)) for k, v in per.items()}
+    p_rec = agg["P"]
+    other_rec = max(v for k, v in agg.items() if k != "P")
+    rec_margin = p_rec - other_rec
+    assert p_rec > other_rec, f"repeated segment not highest recurrence: {agg}"
+    assert rec_margin > 0.30, f"recurrence margin too small: {rec_margin:.3f} ({agg})"
+
+    # Equal-cleanliness control: SAME audio, so identical local features; the only
+    # difference fed to the scorer is the recurrence value. The repeated segment
+    # (high recurrence) must beat the unique one (low recurrence).
+    seg = P
+    m_hook = EarcrateCore.ear_atom_metrics(None, seg, SR, 4, 0.0, "full", p_rec)
+    m_unique = EarcrateCore.ear_atom_metrics(None, seg, SR, 4, 0.0, "full", other_rec)
+    hook_margin = m_hook["hook_score"] - m_unique["hook_score"]
+    assert m_hook["hook_score"] > m_unique["hook_score"], (
+        f"recurrence did not raise hook_score: {m_hook['hook_score']} vs {m_unique['hook_score']}")
+    assert abs(m_hook["recurrence"] - p_rec) < 1e-6, m_hook
+    # weighted contributor: gap == HOOK_RECUR_W * (p_rec - other_rec) within clamp
+    assert hook_margin > 0.08, f"hook margin too small: {hook_margin:.3f}"
+
+    # Determinism: same PCM -> same numbers.
+    cs2, ce2, rc2 = song_recurrence_curve(y, SR)
+    assert np.array_equal(rc, rc2), "recurrence curve not deterministic"
+
+
+# ---------------------------------------------------------------------------
+# Ground-truth spectral calibration (desktop measured 24 real Girl Talk tracks:
+# rms_std_db ~5.31 [3.23-7.62], low200_share ~0.20 [0.07-0.31], high3000_share
+# ~0.31 [0.19-0.53]). The pre-ground-truth gate was inverted on the low end and
+# floored presence 10x too low, so a mud-cave render "passed". These gates lock
+# in the corrected calibration.
+# ---------------------------------------------------------------------------
+def _coverage_ok_metrics(**spectral):
+    """A metrics dict whose coverage/timing fields all clear the gate, so only the
+    spectral/dynamics values under test decide pass/fail (target_seconds=120)."""
+    base = {
+        "peak": 0.6, "audible_seconds": 118.0, "active_coverage_ratio": 0.92,
+        "silence_ratio": 0.08, "first_audible_s": 1.0, "largest_silence_gap_s": 4.0,
+        "rms_std_db": 5.0, "low200_share": 0.20, "high3000_share": 0.31,
+    }
+    base.update(spectral)
+    return base
+
+
+def test_gate_fails_the_measured_earcrate_mud_cave():
+    """The exact render the desktop measured -- low200 0.59 (bass mud wall),
+    high3000 0.031 (10x too dark), rms_std 3.19 -- MUST now fail. Under the old
+    gate it passed (it even rewarded the bass)."""
+    from earcrate.judge.audio import drydeck_quality_gate
+    m = _coverage_ok_metrics(low200_share=0.59, high3000_share=0.031, rms_std_db=3.19)
+    g = drydeck_quality_gate(m, 120.0)
+    assert not g["passed"], f"mud-cave render must fail, got {g}"
+    joined = " ".join(g["failures"])
+    assert "mud wall" in joined, joined
+    assert "presence is dead" in joined, joined
+
+
+def test_gate_passes_a_render_at_the_bottom_of_the_real_gt_range():
+    """A render sitting at the LOW edge of the real Girl Talk distribution
+    (low200 0.31, high3000 0.19, rms 3.6) must pass -- the FAIL bands sit outside
+    the observed range, so a render that resembles GT is never false-failed."""
+    from earcrate.judge.audio import drydeck_quality_gate
+    m = _coverage_ok_metrics(low200_share=0.31, high3000_share=0.19, rms_std_db=3.6)
+    g = drydeck_quality_gate(m, 120.0)
+    assert g["passed"], f"a real-GT-range render must pass, got {g}"
+
+
+def test_gate_fail_bands_sit_outside_the_observed_real_gt_range():
+    """Self-consistency: no fail threshold may fall inside the measured real-GT
+    range, or a genuine Girl Talk render would be rejected."""
+    from earcrate.judge.audio import GT_SPECTRAL_PROFILE as P
+    assert P["low200_share"]["ceiling_fail"] > 0.31, "low200 fail must exceed real-GT max 0.31"
+    assert P["high3000_share"]["floor_fail"] < 0.19, "high3000 fail must fall below real-GT min 0.19"
+    assert P["rms_std_db"]["floor"] <= 3.5, "rms floor must not exceed the real-GT lower quartile"
+
+
+def test_low200_is_a_ceiling_not_a_floor():
+    """Regression guard for the inversion bug: a low-bass render must NOT fail for
+    being 'below a bass floor' -- the old gate required low200 >= 0.38."""
+    from earcrate.judge.audio import drydeck_quality_gate
+    m = _coverage_ok_metrics(low200_share=0.12, high3000_share=0.31, rms_std_db=5.0)
+    g = drydeck_quality_gate(m, 120.0)
+    assert g["passed"], f"a clean low-bass render must pass, got {g}"
+    assert not any("floor authority missing" in f for f in g["failures"])
+
+
+def test_presence_corrective_moves_signal_toward_gt_balance():
+    """The strengthened corrective must measurably tame the low end and lift
+    presence, measured with earcrate's OWN drydeck_metrics -- direction and a
+    real magnitude, not a token nudge. (A fixed shelf cannot fully rescue a
+    render that is 10x too dark; that is an upstream-mix lever. This proves the
+    in-path corrective is genuinely effective, not cosmetic.)"""
+    import numpy as np
+    from earcrate.judge.audio import stable_presence_restore, drydeck_metrics
+    sr = 22050
+    N = int(sr * 10.0)
+    rng = np.random.default_rng(7)
+    spec = np.fft.rfft(rng.standard_normal(N))
+    f = np.fft.rfftfreq(N, 1 / sr)
+    shape = np.ones_like(f)
+    shape[f < 200] *= 3.2          # bass-heavy
+    shape[f >= 3000] *= 0.30       # presence-starved
+    y = np.fft.irfft(spec * shape, n=N).astype(np.float32)
+    y /= max(1e-9, float(np.max(np.abs(y))))
+    before = drydeck_metrics(y, sr)
+    after = drydeck_metrics(stable_presence_restore(y, sr), sr)
+    assert after["low200_share"] < before["low200_share"] - 0.10, (before, after)
+    assert after["high3000_share"] > before["high3000_share"] * 2.0, (before, after)
+
+
+def test_atom_edge_harmonic_requires_pair_agreement_not_either_or():
+    """Regression: two atoms play SIMULTANEOUSLY, so harmonic credit must reflect
+    their relation to EACH OTHER. The old rule gave harmonic=1.0 when either atom
+    alone fit the target key, so an atom in C layered with one in F# (a tritone)
+    scored a perfect 1.0. The pair must agree first."""
+    core = EarcrateCore()
+    L = {"key_root": 0, "bpm": 120, "role": "vocal", "low_share": 0.2, "mid_share": 0.3,
+         "intelligibility": 0.7, "bed_score": 0.5, "floor_score": 0.5,
+         "id": "L", "source_track_key": "sL", "artist": "A", "title": "l"}
+    def R(kr, sid):
+        return {"key_root": kr, "bpm": 120, "role": "harmony", "low_share": 0.2, "mid_share": 0.3,
+                "bed_score": 0.5, "floor_score": 0.5, "id": sid, "source_track_key": sid,
+                "artist": "B", "title": sid}
+    # generous transform budgets so nothing is rejected for a varispeed violation;
+    # a 1-semitone (chromatic) clash needs only a tiny shift, isolating the
+    # harmonic formula from the transform gate.
+    _, good = core.atom_edge_score(L, R(0, "same"), "vocal_over_bed", 120.0, 0, 1.0, 12)
+    _, clash = core.atom_edge_score(L, R(1, "chromatic"), "vocal_over_bed", 120.0, 0, 1.0, 12)
+    assert good["harmonic"] == 1.0, good
+    assert clash["harmonic"] < 1.0, "C layered with a chromatic clash must not score a perfect harmonic"
+    assert clash["harmonic"] <= good["harmonic"]
+
+
+def test_judge_contracts_agree_on_low200_direction():
+    """The dry-deck gate treats low200 as a mud CEILING (real Girl Talk ~0.20); the
+    legacy v1_1 judge must not simultaneously demand low200 be HIGH. Both now use
+    the same ceiling, so a real-GT-like render passes both and a mud wall fails
+    both -- no render is caught in a contradiction."""
+    from earcrate.judge.audio import GT_SPECTRAL_PROFILE, drydeck_quality_gate
+    ceiling = GT_SPECTRAL_PROFILE["low200_share"]["ceiling_fail"]
+    # v1_1 low200 gate is now `low200 <= ceiling`; check it agrees with dry-deck.
+    for low200, expect_ok in ((0.20, True), (0.60, False)):
+        v1_1_ok = low200 <= ceiling
+        m = {"peak": 0.6, "audible_seconds": 118.0, "active_coverage_ratio": 0.92,
+             "silence_ratio": 0.08, "first_audible_s": 1.0, "largest_silence_gap_s": 4.0,
+             "rms_std_db": 5.0, "low200_share": low200, "high3000_share": 0.31}
+        dry = drydeck_quality_gate(m, 120.0)
+        dry_low200_ok = not any("mud wall" in f for f in dry["failures"])
+        assert v1_1_ok == expect_ok
+        assert dry_low200_ok == expect_ok, (low200, dry["failures"])
+
+
+def test_remix_personas_exist_with_distinct_spectral_targets():
+    """Branchez (bright/808/fast) and Pretty Lights (warm/vinyl/slow) are distinct
+    remix personas with their OWN spectral gate targets."""
+    from earcrate.tastespec.profiles import load_tastespec, available_profiles
+    assert {"remix_branchez_v1", "remix_prettylights_v1"} <= set(available_profiles())
+    br = load_tastespec("remix_branchez_v1")
+    pl = load_tastespec("remix_prettylights_v1")
+    assert br.get("mode") == "remix" and pl.get("mode") == "remix"
+    # Pretty Lights is deliberately darker: lower high3000 target + floor than Branchez.
+    assert pl["spectral_target"]["high3000_share"]["target"] < br["spectral_target"]["high3000_share"]["target"]
+    assert pl["spectral_target"]["high3000_share"]["floor_fail"] < br["spectral_target"]["high3000_share"]["floor_fail"]
+    # And both tolerate a warmer top than Girl Talk's bright reference.
+    from earcrate.judge.audio import GT_SPECTRAL_PROFILE
+    assert pl["spectral_target"]["high3000_share"]["floor_fail"] < GT_SPECTRAL_PROFILE["high3000_share"]["floor_fail"]
+
+
+def test_per_persona_gate_judges_a_warm_remix_on_its_own_aesthetic():
+    """A vinyl-warm render (high3000 0.05) that FAILS the bright Girl Talk presence
+    floor must PASS under the Pretty Lights profile -- judged on its own aesthetic,
+    not a foreign one. Coverage/timing stay persona-independent."""
+    core = EarcrateCore()
+    from earcrate.judge.audio import drydeck_quality_gate
+    warm = {"peak": 0.6, "audible_seconds": 118.0, "active_coverage_ratio": 0.92,
+            "silence_ratio": 0.08, "first_audible_s": 1.0, "largest_silence_gap_s": 4.0,
+            "rms_std_db": 4.0, "low200_share": 0.30, "high3000_share": 0.05}
+    gt = drydeck_quality_gate(warm, 120.0)                       # default GT profile
+    pl_prof = core._persona_spectral_profile("remix_prettylights_v1")
+    pl = drydeck_quality_gate(warm, 120.0, pl_prof)
+    assert not gt["passed"] and any("dark" in f for f in gt["failures"])
+    assert pl["passed"], f"warm render must pass on Pretty Lights' own target: {pl['failures']}"
+
+
+def test_freshness_harvest_folds_new_tracks_into_ready_crate():
+    """A ready crate still digests one bounded batch of never-analyzed tracks.
+
+    Readiness gates ENTRY to the fail-fast harvest, but nothing gated GROWTH:
+    tracks added after the crate first satisfied the contract were scanned yet
+    never analyzed via one-click, so every set recycled the same sources —
+    against the profile's own turnover contract. The freshness pass is the
+    growth gate: analyze at most one batch, extract, re-crate, recompute
+    readiness, and account for it in the harvest log.
+    """
+    from earcrate.app import EarcrateCore
+
+    core = EarcrateCore.__new__(EarcrateCore)
+    calls = []
+    core._perf_stage = lambda ledger, name, fn, *a, **k: fn(*a, **k)
+    core.set_status = lambda *a, **k: None
+    core.analyze = lambda limit=0, force=False: (calls.append(("analyze", limit, force)), {"analyzed": 3, "failed": []})[1]
+    core.extract_loops = lambda limit=0, auto_approve=False, force=False: (calls.append(("extract_loops", auto_approve)), {"inserted": 7})[1]
+    core.build_ear_crate = lambda **k: (calls.append(("ear_crate", k["taste_profile"])), {"ok": True})[1]
+    core.taste_readiness = lambda p, t: (calls.append(("readiness",)), {"ready": True, "have": {"sources": 9}, "need": {"sources": 6}})[1]
+    core._trusted_analyzed_count = lambda: 25
+
+    analyze_result = {"analyzed": 4, "failed": []}
+    loop_result = {"inserted": 19}
+    log = []
+    readiness = core._freshness_harvest({}, 96, "girl_talk_v1", 60.0, analyze_result, loop_result, log)
+
+    assert readiness is not None and readiness["ready"] is True
+    assert [c[0] for c in calls] == ["analyze", "extract_loops", "ear_crate", "readiness"]
+    assert calls[0][1] == 96 and calls[0][2] is False  # bounded batch, never a force re-analyze
+    assert calls[1][1] is False  # new loops stay candidates: quota/human review still owns approval
+    assert calls[2][1] == "girl_talk_v1"
+    assert analyze_result["analyzed"] == 7 and loop_result["inserted"] == 26
+    assert log and log[0]["batch"] == "freshness" and log[0]["tracks_analyzed"] == 25 and log[0]["ready"] is True
+
+
+def test_freshness_harvest_costs_nothing_on_stable_library():
+    """No never-analyzed tracks -> one cheap select, zero downstream work."""
+    from earcrate.app import EarcrateCore
+
+    core = EarcrateCore.__new__(EarcrateCore)
+    calls = []
+    core._perf_stage = lambda ledger, name, fn, *a, **k: fn(*a, **k)
+    core.set_status = lambda *a, **k: None
+    core.analyze = lambda limit=0, force=False: (calls.append("analyze"), {"analyzed": 0, "failed": []})[1]
+    core.extract_loops = lambda **k: (_ for _ in ()).throw(AssertionError("extract_loops must not run"))
+    core.build_ear_crate = lambda **k: (_ for _ in ()).throw(AssertionError("build_ear_crate must not run"))
+    core.taste_readiness = lambda p, t: (_ for _ in ()).throw(AssertionError("readiness must not be recomputed"))
+
+    analyze_result = {"analyzed": 4, "failed": []}
+    loop_result = {"inserted": 19}
+    log = []
+    assert core._freshness_harvest({}, 96, "girl_talk_v1", 60.0, analyze_result, loop_result, log) is None
+    assert calls == ["analyze"]
+    assert analyze_result["analyzed"] == 4 and loop_result["inserted"] == 19 and log == []
+
+
+def test_one_click_runs_freshness_pass_between_readiness_and_graph():
+    """Wiring gate: a ready crate reaches the freshness pass BEFORE graph build,
+    and skip_freshness opts out. Sentinel-stops at build_compatibility_graph so
+    no plan/render machinery runs."""
+    from earcrate.app import EarcrateCore
+
+    class _Stop(Exception):
+        pass
+
+    def _make_core(calls):
+        core = EarcrateCore.__new__(EarcrateCore)
+        core.ensure_config = lambda: None
+        core.outcome_params = lambda data: {"target_seconds": 60}
+        core._perf_new_ledger = lambda *a, **k: {"run_id": "r1"}
+        core._perf_stage = lambda ledger, name, fn, *a, **k: fn(*a, **k)
+        core._perf_publish = lambda *a, **k: {"summary": None}
+        core._run_bundle_set_plan = lambda *a, **k: None
+        core._run_bundle_finish = lambda *a, **k: None
+        core.set_status = lambda *a, **k: None
+        core.doctor = lambda: {"ok": True}
+        core.scan = lambda: {"ok": True, "total": 9}
+        core._trusted_analyzed_count = lambda: 9
+        core.taste_readiness = lambda p, t: {"ready": True, "have": {}, "need": {}, "failures": []}
+        core._freshness_harvest = lambda *a, **k: (calls.append("freshness"), None)[1]
+        core.build_compatibility_graph = lambda *a, **k: (calls.append("graph"), (_ for _ in ()).throw(_Stop()))[1]
+        return core
+
+    calls = []
+    try:
+        _make_core(calls).one_click_taste_mix({"target_seconds": 60})
+    except _Stop:
+        pass
+    else:
+        raise AssertionError("sentinel did not stop the run at graph build")
+    assert calls == ["freshness", "graph"]
+
+    calls = []
+    try:
+        _make_core(calls).one_click_taste_mix({"target_seconds": 60, "skip_freshness": True})
+    except _Stop:
+        pass
+    else:
+        raise AssertionError("sentinel did not stop the run at graph build")
+    assert calls == ["graph"]
+
+
+def test_gate_suite_sandboxes_the_workspace_pointer():
+    """The suite must never write the user's real workspace pointer.
+
+    Every gate that constructs EarcrateCore() writes the app-global pointer
+    via visible_app_dir(); unsandboxed, that is the REPO ROOT — so running the
+    shipped test suite re-pointed a real workspace at a deleted temp fixture.
+    This gate pins the contract: inside the suite, EARCRATE_HOME is always a
+    sandbox, and pointer writes resolve inside it, never beside the package.
+    """
+    import os as _os
+    from pathlib import Path as _Path
+    from earcrate.core.util import visible_app_dir, pointer_search_dirs
+
+    home = _os.environ.get("EARCRATE_HOME")
+    assert home, "gate suite must run with EARCRATE_HOME sandboxed"
+    repo_root = _Path(__file__).resolve().parent.parent
+    resolved = visible_app_dir().resolve()
+    assert resolved == _Path(home).expanduser().resolve()
+    assert resolved != repo_root, "pointer writes would land in the real repo root"
+    # EARCRATE_HOME is an override, not a hint: no fallback dir may leak in.
+    assert [d.resolve() for d in pointer_search_dirs()] == [resolved]

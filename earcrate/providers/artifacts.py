@@ -1,5 +1,5 @@
 from earcrate.core.deps import *
-from earcrate.core.util import now_utc, json_dumps
+from earcrate.core.util import now_utc, json_dumps, visible_app_dir
 from earcrate.providers import register
 """EARCRATE v3 §5.3 (L3) — the ArtifactStore.
 
@@ -32,12 +32,15 @@ class ArtifactStore:
             # makes BOTH the provider's store and the renderer's get("artifacts")
             # resolve to the SAME on-disk root, so a materialized stem key
             # actually resolves. With NO workspace configured we fall back to a
-            # private mkdtemp (unshared) so nothing leaks between processes.
+            # VISIBLE, app-adjacent cache dir (never a temp dir) so stems land
+            # somewhere the user can actually find — EARCRATE_CACHE_ROOT overrides.
             env_root = os.environ.get("EARCRATE_L3_ROOT")
             if env_root:
                 root = Path(env_root)
             else:
-                root = Path(tempfile.mkdtemp(prefix="earcrate_l3_"))
+                cache_root = os.environ.get("EARCRATE_CACHE_ROOT")
+                base = Path(cache_root).expanduser() if cache_root else (visible_app_dir() / "cache")
+                root = base / "L3"
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
 

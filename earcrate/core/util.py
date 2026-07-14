@@ -16,6 +16,21 @@ def safe_name(s: str, fallback: str = "untitled") -> str:
     return s[:120] or fallback
 
 
+def render_output_name(name: str, taste_profile: str, engine_version: str,
+                       arr_sha: str, seed: int) -> str:
+    """Canonical render filename: <set>-<persona>-<engine>-<arr_sha8>-<seed>.wav.
+
+    The PERSONA is part of the identity, not decoration: the same set rendered
+    under girl_talk vs notorious is a different mashup, and on disk you must be
+    able to tell a dense collage from an album-marriage at a glance. Every
+    component is safe_name'd; the arrangement-sha prefix keeps two renders of the
+    same set+persona distinct when their arrangement differs."""
+    return "-".join([
+        safe_name(str(name)), safe_name(str(taste_profile)),
+        safe_name(str(engine_version)), str(arr_sha)[:8], str(int(seed)),
+    ]) + ".wav"
+
+
 def app_state_dir() -> Path:
     if os.name == "nt":
         root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or str(Path.home())

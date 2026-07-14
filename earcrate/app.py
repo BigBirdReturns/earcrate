@@ -5,8 +5,53 @@ from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_like
 from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio, decoded_audio_sha256
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
+from earcrate.study.reference import load_reference, reference_fingerprint, reference_edges, calibrate_profile, source_key, recall_report, sample_cut_list, artist_key
+from earcrate.materials.regions import propose_regions
+from earcrate.remix.external import remix_anchor, external_foreground_atom, external_vocal_window, external_remix_feasibility, fit_external_clip, external_edge_fades
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
+
+# Byte ceiling for the L3 stem cache on the NVMe. The 4060's separations are the
+# expensive, REUSABLE unit (one source's stems serve every mashup that touches
+# it), so the background warmer pre-banks them into this cache and renders become
+# cache-hits instead of blocking on the GPU. EARCRATE_CACHE_BUDGET_GB overrides.
+DEFAULT_STEM_CACHE_BUDGET_GB = 60.0
+
+
+def album_readme_markdown(made: List[Dict[str, Any]], skipped: List[Dict[str, Any]],
+                          params: Dict[str, Any], album_dir: str) -> str:
+    """Render an album's playlist README (pure/deterministic -- no clock, no I/O).
+    Lists every kept track with its persona, seed, score, and gate verdict so the
+    listener knows which are gate-clean vs. flagged (e.g. presence-dark), plus a
+    compact tally of what was skipped and why."""
+    def _verdict(g: Dict[str, Any]) -> str:
+        if not g:
+            return "no-gate"
+        if g.get("passed"):
+            return "PASS" + (" (warn)" if g.get("warnings") else "")
+        return "FLAGGED: " + "; ".join((g.get("failures") or [])[:2])
+    lines = ["# EarCrate album", "",
+             "%d track(s), personas=%s, target=%ss, recognizability_bias=%s." % (
+                 len(made), ",".join(params.get("personas") or []),
+                 params.get("target_seconds"), params.get("recognizability_bias")),
+             "", "Play the WAVs in this folder in order. Gate verdicts are advisory —",
+             "a FLAGGED track (often presence-dark until the bed high-pass lands) is",
+             "still worth an ear; that's the point of an audition album.", "",
+             "| # | persona | seed | score | gate | file |", "|--:|---|--:|--:|---|---|"]
+    for t in made:
+        lines.append("| %d | %s | %s | %s | %s | `%s` |" % (
+            t.get("track"), t.get("taste_profile"), t.get("seed"), t.get("score"),
+            _verdict(t.get("gate") or {}), t.get("wav")))
+    if skipped:
+        from collections import Counter
+        tally = Counter(s.get("taste_profile", "?") for s in skipped)
+        lines += ["", "## Skipped", "",
+                  ", ".join("%s×%d" % (k, v) for k, v in sorted(tally.items())),
+                  "", "First reasons:"]
+        for s in skipped[:8]:
+            lines.append("- **%s**: %s" % (s.get("taste_profile"), s.get("reason")))
+    lines += ["", "_Folder: `%s`_" % album_dir, ""]
+    return "\n".join(lines)
 
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -20,12 +65,19 @@ def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:
         out["error"] = str(exc)[:300]
         return out
+    # Song-level recurrence, computed ONCE per file: the hook is the part the track
+    # repeats, so every loop of this file is scored against the same self-similarity.
+    try:
+        _rc_start, _rc_end, _rc_val = song_recurrence_curve(y, sr)
+    except Exception:
+        _rc_start = _rc_end = _rc_val = np.zeros(0, dtype=np.float32)
     for lp in job["loops"]:
         try:
             a = max(0, int(float(lp["start_s"]) * sr))
             b = min(y.size, int(float(lp["end_s"]) * sr))
             seg = y[a:b].astype(np.float32, copy=False)
-            metrics = EarcrateCore.ear_atom_metrics(None, seg, sr, int(lp["bars"] or 1), float(lp["vocal_likelihood"] or 0.0), str(lp["role"] or "full"))
+            recurrence = segment_recurrence(_rc_start, _rc_end, _rc_val, float(lp["start_s"]), float(lp["end_s"]))
+            metrics = EarcrateCore.ear_atom_metrics(None, seg, sr, int(lp["bars"] or 1), float(lp["vocal_likelihood"] or 0.0), str(lp["role"] or "full"), recurrence)
             ear_role = EarcrateCore.ear_role_from_metrics(None, str(lp["role"] or "full"), int(lp["bars"] or 1), metrics)
             render_role = EAR_TO_RENDER_ROLE.get(ear_role, str(lp["role"] or "full"))
             status = classify_atom_status(ear_role, metrics)
@@ -169,6 +221,43 @@ class EarcrateCore:
             elif busy is False and progress is not None and float(progress) >= 1.0:
                 # Successful completions clear the last-error line; rejected completions pass error explicitly.
                 self.status["last_error"] = None
+
+    def status_snapshot(self) -> Dict[str, Any]:
+        """Status payload for /api/status, with the live configured state merged in.
+
+        The stored self.status dict tracks run progress (busy/message/progress/
+        last_error/...) but says nothing about whether a workspace is configured.
+        `configured` (and the resolved roots) are derived from self.config at read
+        time so a correctly-configured engine never reports configured:null.
+        """
+        with self.status_lock:
+            snap = dict(self.status)
+        c = self.config
+        snap["configured"] = c is not None
+        snap["master_root"] = str(c.master_root) if c is not None else None
+        snap["working_root"] = str(c.working_root) if c is not None else None
+        # Loudly and deterministically flag a crate built by a different engine/
+        # analyzer version, so a stale crate never silently drives coverage.
+        snap["crate_stale"] = False
+        snap["crate_stale_reason"] = ""
+        snap["crate_stale_profiles"] = []
+        if c is not None:
+            try:
+                db = self.conn()
+                profiles = [r["taste_profile"] for r in db.execute(
+                    "SELECT DISTINCT taste_profile FROM ear_atoms WHERE status='approved'").fetchall()]
+                reasons = []
+                for pid in profiles:
+                    st = self.crate_staleness(pid)
+                    if st["crate_stale"]:
+                        snap["crate_stale_profiles"].append(pid)
+                        reasons.append(f"{pid}: {st['reason']}")
+                if reasons:
+                    snap["crate_stale"] = True
+                    snap["crate_stale_reason"] = " | ".join(reasons)
+            except Exception:
+                pass
+        return snap
 
     def _run_bundle_path(self, run_id: str, artifact: Optional[str] = None) -> Path:
         """Resolve a run-bundle path under the configured agent root, never elsewhere."""
@@ -490,6 +579,7 @@ class EarcrateCore:
                         self.pointer_path.write_text(self.legacy_pointer_path.read_text(encoding="utf-8"), encoding="utf-8")
                         pointer = self.pointer_path
             if pointer is None or cfg is None:
+                self._seed_from_machine_defaults()
                 return
             self.pointer_resolved_from = pointer
             self.config = Config(
@@ -510,6 +600,74 @@ class EarcrateCore:
         except Exception:
             self.config = None
             self.db = None
+
+    def _seed_from_machine_defaults(self) -> None:
+        """First-run auto-config from a committed machine preset, so a known box
+        'just works' on the RIGHT visible drives with no manual POST /api/config.
+        Source: EARCRATE_DEFAULTS env > machine_defaults.json beside the app. Only
+        fires when unconfigured AND the master library actually exists (never
+        configures against a missing drive), so it is a safe no-op everywhere else."""
+        if self.config is not None:
+            return
+        try:
+            # Resolve the preset across entry points: EARCRATE_DEFAULTS first, then
+            # machine_defaults.json in every dir the pointer search covers (cwd,
+            # the launcher/-m dir, the package/dist dir, visible_app_dir). This is
+            # the -m-vs-dist gap the desktop hit: visible_app_dir() alone isn't the
+            # repo root under `python -m earcrate`, so the preset was never found.
+            cand: Optional[Path] = None
+            src = os.environ.get("EARCRATE_DEFAULTS")
+            search: List[Path] = []
+            if src:
+                search.append(Path(src).expanduser())
+            # Every entry-point-visible location, checked EXPLICITLY (not only via
+            # pointer_search_dirs, which collapses to a single dir when EARCRATE_HOME
+            # is set): the launcher/-m dir, the current working dir (repo root under
+            # `python -m earcrate`), the package/dist dir, and visible_app_dir.
+            roots: List[Path] = [visible_app_dir(), Path.cwd()]
+            main = sys.modules.get("__main__")
+            mf = getattr(main, "__file__", None) if main is not None else None
+            if mf:
+                roots.append(Path(mf).resolve().parent)
+            roots.extend(pointer_search_dirs())
+            for _d in roots:
+                search.append(_d / "machine_defaults.json")
+            for c in search:
+                with contextlib.suppress(Exception):
+                    if c.exists():
+                        cand = c
+                        break
+            if cand is None:
+                return
+            d = json.loads(cand.read_text(encoding="utf-8"))
+            master = str(d.get("master_root") or "").strip()
+            workspace = str(d.get("workspace_folder") or d.get("workspace_root") or "").strip()
+            if not master or not Path(master).expanduser().exists():
+                return  # never auto-configure against a library that isn't mounted
+            # Route the hot cache to the configured fast disk (the NVMe) and the
+            # stem provider, BEFORE configure() so _export_l3_root lands on it.
+            if d.get("cache_root"):
+                os.environ.setdefault("EARCRATE_CACHE_ROOT", str(Path(str(d["cache_root"])).expanduser()))
+            if d.get("stem_provider"):
+                os.environ.setdefault("EARCRATE_STEMS", str(d["stem_provider"]))
+            # One-time relocation: if the target workspace doesn't exist yet but a
+            # prior one does (e.g. moving off C: onto D:), move it FIRST so the
+            # analyzed DB / atoms / judgments / renders come along — no re-analyze.
+            # Journaled; the regenerable cache rebuilds on the fast disk. Idempotent
+            # (after the first launch the target exists, so this is skipped).
+            reloc = str(d.get("relocate_from") or "").strip()
+            if workspace and reloc:
+                with contextlib.suppress(Exception):
+                    if not Path(workspace).expanduser().exists() and Path(reloc).expanduser().exists():
+                        self.relocate_workspace({"old": reloc, "new": workspace, "apply": True})
+            payload: Dict[str, Any] = {"music_folder": master, "workspace_folder": workspace}
+            if d.get("workers") is not None:
+                payload["workers"] = int(d["workers"])
+            if d.get("analysis_seconds"):
+                payload["analysis_seconds"] = int(d["analysis_seconds"])
+            self.configure_workspace(payload)
+        except Exception:
+            self.config = None  # a bad preset must never wedge startup
 
     def configure(self, data: Dict[str, Any]) -> Dict[str, Any]:
         master = Path(data["master_root"]).expanduser().resolve()
@@ -536,7 +694,26 @@ class EarcrateCore:
         cfg_path.write_text(json.dumps(self.config.as_dict(), indent=2), encoding="utf-8")
         self.write_toml_config()
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.pointer_path.write_text(json.dumps({"config_json": str(cfg_path)}, indent=2), encoding="utf-8")
+        pointer_body = json.dumps({"config_json": str(cfg_path)}, indent=2)
+        self.pointer_path.write_text(pointer_body, encoding="utf-8")
+        # Trap A fix, kept VISIBLE: load_config_if_present READS by scanning
+        # pointer_search_dirs() (which vary by entry point — `python -m earcrate` vs
+        # the launcher). Mirror the pointer to those read locations so a different
+        # entry point still resolves the workspace — but ONLY to visible, app-adjacent
+        # dirs. Never litter the user's home ROOT or a temp dir with a stray pointer
+        # (setting EARCRATE_HOME makes this a single, deterministic location).
+        _home = Path.home().resolve()
+        _tmp = Path(tempfile.gettempdir()).resolve()
+        for d in pointer_search_dirs():
+            with contextlib.suppress(Exception):
+                dr = d.resolve()
+                if dr == _home or dr == _tmp or _tmp in dr.parents:
+                    continue  # visible-only: no home-root / temp litter
+                target = d / self.pointer_path.name
+                if os.path.normcase(str(target.resolve())) == os.path.normcase(str(self.pointer_path.resolve())):
+                    continue
+                d.mkdir(parents=True, exist_ok=True)
+                target.write_text(pointer_body, encoding="utf-8")
         self.connect_db()
         return {"ok": True, "config": self.config.as_dict()}
 
@@ -549,9 +726,14 @@ class EarcrateCore:
         # open, not a hidden AppData nest. Must not sit inside the music folder
         # (INV-1 path separation), so use a sibling under the profile.
         workspace = Path(sibling_workspace(str(music)))
+        # When configured, the workspace ROOT the user picked is the parent of
+        # working_root (derive appends "work"). The Setup field must bind to THIS,
+        # not to working_root itself, or every re-save nests one level deeper.
+        configured_workspace = str(Path(self.config.working_root).parent) if self.config else None
         return {
             "music_folder": str(music),
             "workspace_folder": str(workspace),
+            "configured_workspace": configured_workspace,
             "derived": self.derive_workspace_paths(str(music), str(workspace)),
             "configured": self.config.as_dict() if self.config else None,
         }
@@ -765,12 +947,68 @@ class EarcrateCore:
             raise ValueError("music_folder is required")
         if not workspace:
             workspace = sibling_workspace(music)
+        # Idempotency guard against the re-save nesting bug: derive_workspace_paths
+        # appends "work"/"agent"/... UNDER the given folder. If the caller hands us a
+        # path that is already a derived subdir (basename "work" with a sibling
+        # "agent"), treat its PARENT as the workspace root so a second save resolves
+        # the SAME paths instead of creating .../work/work and orphaning the DB.
+        wpath = Path(workspace).expanduser()
+        if wpath.name == "work" and (wpath.parent / "agent").is_dir():
+            workspace = str(wpath.parent)
         paths = self.derive_workspace_paths(music, workspace)
         if data.get("analysis_seconds"):
             paths["analysis_seconds"] = int(data["analysis_seconds"])
         if data.get("workers") is not None:
             paths["workers"] = int(data["workers"])
         return self.configure(paths)
+
+    def relocate_workspace(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Move an existing workspace to a new home (e.g. off C: onto the D: array),
+        preserving the analyzed DB, atoms, judgments, and renders so nothing is
+        re-analyzed. Dry-run by default. The regenerable cache (L3 stems +
+        transforms) is deliberately NOT moved — it rebuilds under the NVMe
+        EARCRATE_CACHE_ROOT. Stale config/pointer in the moved tree is dropped so
+        the machine preset reconfigures the workspace at its new location."""
+        old = Path(str(data.get("old") or "")).expanduser()
+        new = Path(str(data.get("new") or "")).expanduser()
+        apply = bool(data.get("apply"))
+        if not old.exists() or not old.is_dir():
+            return {"ok": False, "error": f"old workspace not found: {old}"}
+        if new.exists() and old.resolve() == new.resolve():
+            return {"ok": False, "error": "old and new are the same path"}
+        # Move the durable subtrees; skip the regenerable cache dir.
+        subs = [s for s in ("agent", "work", "playlists", "stems") if (old / s).exists()]
+        moves = [(old / s, new / s) for s in subs]
+        if not apply:
+            return {"ok": True, "dry_run": True, "old": str(old), "new": str(new),
+                    "planned": [{"from": str(a), "to": str(b)} for a, b in moves],
+                    "note": "regenerable cache (agent/cache) is NOT moved — it rebuilds under EARCRATE_CACHE_ROOT (the NVMe). Run with apply:true to move for real."}
+        for _a, b in moves:
+            if b.exists():
+                return {"ok": False, "error": f"refusing to overwrite existing {b}; move it aside first"}
+        new.mkdir(parents=True, exist_ok=True)
+        moved: List[Dict[str, str]] = []
+        for a, b in moves:
+            b.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(a), str(b))
+            moved.append({"from": str(a), "to": str(b)})
+        # Drop the moved tree's stale config + any old cache so nothing points back
+        # at the old drive; the machine preset reconfigures to `new`.
+        with contextlib.suppress(Exception):
+            (new / "agent" / "config.json").unlink()
+        with contextlib.suppress(Exception):
+            (new / "agent" / "config.toml").unlink()
+        with contextlib.suppress(Exception):
+            shutil.rmtree(new / "agent" / "cache", ignore_errors=True)  # regenerates on the NVMe
+        journal = None
+        with contextlib.suppress(Exception):
+            jdir = new / "agent"
+            jdir.mkdir(parents=True, exist_ok=True)
+            journal = jdir / "relocate_journal.json"
+            journal.write_text(json.dumps({"old": str(old), "new": str(new), "moved": moved, "at": now_utc()}, indent=2), encoding="utf-8")
+        return {"ok": True, "old": str(old), "new": str(new), "moved": moved,
+                "journal": str(journal) if journal else None,
+                "note": "Workspace relocated. Launch normally — the machine preset will configure the new location; the DB/atoms/judgments/renders came with it, so no re-analyze. Cache rebuilds on the NVMe."}
 
     def write_toml_config(self) -> None:
         assert self.config
@@ -977,21 +1215,229 @@ class EarcrateCore:
         for p in [c.working_root, c.working_root / "organized", c.working_root / "renders", c.working_root / "edited", c.stems_root, c.playlists_root, c.agent_root, c.agent_root / "manifests", c.agent_root / "archive", c.agent_root / "cache" / "analysis", c.agent_root / "cache" / "transforms", c.agent_root / "cache" / "L3", c.agent_root / "logs"]:
             p.mkdir(parents=True, exist_ok=True)
 
+    def _cache_root(self) -> Path:
+        """Where the HOT, regenerable cache lives (L3 separated stems + transform
+        clips). Order: EARCRATE_CACHE_ROOT (point this at a fast NVMe scratch,
+        independent of where masters/workspace live) > agent_root/cache >
+        a temp dir when unconfigured. Everything here is content-addressed and
+        evictable, so a fast, even small, disk is ideal — nothing here is a source
+        of truth. Defaulting to agent_root/cache keeps the pre-existing behavior."""
+        env = os.environ.get("EARCRATE_CACHE_ROOT")
+        if env:
+            try:
+                p = Path(env).expanduser()
+                p.mkdir(parents=True, exist_ok=True)
+                return p
+            except Exception:
+                pass
+        if self.config is not None:
+            return self.config.agent_root / "cache"
+        # Pre-config fallback stays VISIBLE and app-adjacent — never a temp dir.
+        return visible_app_dir() / "cache"
+
     def _export_l3_root(self) -> None:
-        """Point the L3 ArtifactStore default at a STABLE workspace path so the
+        """Point the L3 ArtifactStore default at a STABLE cache path so the
         StemProvider's store and the renderer's get("artifacts") resolve to the
         SAME on-disk root (a produced stem key actually resolves). Without this a
         default ArtifactStore() lands in a private mkdtemp and the two halves of
         the stem path never meet."""
-        c = self.config
-        if not c:
+        if self.config is None:
             return
-        l3 = c.agent_root / "cache" / "L3"
+        l3 = self._cache_root() / "L3"
         try:
             l3.mkdir(parents=True, exist_ok=True)
         except Exception:
             pass
         os.environ["EARCRATE_L3_ROOT"] = str(l3)
+
+    def machine_capabilities(self) -> Dict[str, Any]:
+        """Probe THIS box once and report what it can deliver, plus the settings
+        that scale to it — so the app is capability-aware and degrades gracefully
+        instead of assuming any one machine. Config-optional (useful pre-setup).
+        Nothing here is hardcoded to a specific rig: everything derives from probes.
+        """
+        cores = int(os.cpu_count() or 2)
+        ram_gb: Optional[float] = None
+        try:
+            if hasattr(os, "sysconf") and "SC_PHYS_PAGES" in os.sysconf_names and "SC_PAGE_SIZE" in os.sysconf_names:
+                ram_gb = round(os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / (1024 ** 3), 1)
+        except Exception:
+            ram_gb = None
+        gpu: Dict[str, Any] = {"cuda": False, "name": None, "vram_gb": None}
+        try:
+            import torch  # type: ignore
+            if torch.cuda.is_available():
+                gpu["cuda"] = True
+                gpu["name"] = torch.cuda.get_device_name(0)
+                gpu["vram_gb"] = round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 1)
+        except Exception:
+            pass
+        stems = stem_capability()
+        cache_root = self._cache_root()
+        cache_source = "EARCRATE_CACHE_ROOT" if os.environ.get("EARCRATE_CACHE_ROOT") else ("workspace" if self.config is not None else "temp")
+        # Cheap fsync latency probe of the cache disk (is that NVMe actually fast?).
+        cache_write_ms: Optional[float] = None
+        try:
+            cache_root.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=str(cache_root), prefix=".cache_probe_", delete=True) as fh:
+                t0 = time.perf_counter()
+                fh.write(b"0" * (1024 * 256)); fh.flush(); os.fsync(fh.fileno())
+                cache_write_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        except Exception:
+            cache_write_ms = None
+        # Graceful, probe-derived recommendations — deliver to the ceiling, degrade cleanly.
+        gpu_on = bool(gpu["cuda"])
+        if gpu_on and cores >= 12:
+            tier = "workstation"
+        elif gpu_on:
+            tier = "gpu_laptop"
+        elif cores >= 8:
+            tier = "cpu_strong"
+        else:
+            tier = "modest"
+        recommended = {
+            "workers": max(1, cores - 2),
+            "stem_provider": "demucs" if gpu_on else "noop",
+            "stem_separation": "vocals+instrumental" if gpu_on else "off (full-mix beds; no CPU-melt separation)",
+            "analysis_seconds": 180 if (ram_gb is None or ram_gb >= 8) else 120,
+            "cache_root": str(cache_root),
+            "tier": tier,
+        }
+        return {"ok": True, "cpu_cores": cores, "ram_gb": ram_gb, "gpu": gpu,
+                "stem_capability": stems, "cache_root": str(cache_root),
+                "cache_root_source": cache_source, "cache_write_ms": cache_write_ms,
+                "recommended": recommended}
+
+    # ------------------------------------------------------------------ #
+    # Background stem-warming: put the idle GPU to work banking the        #
+    # expensive, reusable unit (demucs stems) into the NVMe cache AHEAD of #
+    # render time, so composing/rendering is a cache-hit and never blocks  #
+    # on separation. Renders already consult cache-before-separate, so a   #
+    # warm cache needs ZERO render-path change. Capability-aware: no GPU   #
+    # -> the warmer is an honest no-op that reports why.                   #
+    # ------------------------------------------------------------------ #
+    def _cache_byte_budget(self) -> int:
+        """Byte ceiling for the L3 stem cache. EARCRATE_CACHE_BUDGET_GB overrides;
+        else DEFAULT_STEM_CACHE_BUDGET_GB. The warmer stops filling at this ceiling
+        and never writes work it would immediately have to evict; the ArtifactStore
+        evict(budget) sheds ephemeral-first under other pressure."""
+        env = os.environ.get("EARCRATE_CACHE_BUDGET_GB")
+        try:
+            gb = float(env) if env else DEFAULT_STEM_CACHE_BUDGET_GB
+        except ValueError:
+            gb = DEFAULT_STEM_CACHE_BUDGET_GB
+        return int(max(1.0, gb) * (1024 ** 3))
+
+    def _resolve_stem_provider(self):
+        """Resolve the stem provider with the SAME precedence the render path uses
+        (EARCRATE_STEMS > config.stem_provider > registered default), so the warmer
+        fills exactly the keys a render will look up. Returns (provider, name)."""
+        c = self.config
+        selected = os.environ.get("EARCRATE_STEMS") or (getattr(c, "stem_provider", None) if c else None) or "noop"
+        try:
+            prov = get("stems") if selected == "noop" else get("stems", selected)
+        except Exception:
+            prov, selected = get("stems"), "noop"
+        return prov, selected
+
+    def stem_warm_candidates(self, taste_profile: str = "girl_talk_v1",
+                             limit: int = 0) -> List[Dict[str, Any]]:
+        """The priority queue of SOURCES to pre-separate for a persona: distinct
+        source files backing that persona's approved atoms, each with its pcm
+        identity + path, ranked by the best atom score that draws on it (then by
+        how many atoms it feeds). One separation per SOURCE serves every atom cut
+        from it, so we dedup by file and warm the highest-value sources first."""
+        rows = self.conn().execute(
+            """SELECT f.id file_id, f.path path, f.audio_sha256 pcm_sha,
+                      MAX(a.score) best_score, COUNT(*) atom_count
+               FROM ear_atoms a JOIN files f ON f.id=a.file_id
+               WHERE a.taste_profile=? AND a.status='approved'
+                 AND COALESCE(f.present,1)=1
+                 AND f.audio_sha256_scope='full' AND f.audio_sha256 IS NOT NULL
+               GROUP BY f.id
+               ORDER BY best_score DESC, atom_count DESC, f.id ASC""",
+            (taste_profile,),
+        ).fetchall()
+        out = [dict(r) for r in rows if r["pcm_sha"] and r["path"]]
+        if limit and limit > 0:
+            out = out[:limit]
+        return out
+
+    def stem_warm_status(self, taste_profile: str = "girl_talk_v1",
+                         roles: Any = ("vocals", "no_vocals")) -> Dict[str, Any]:
+        """How render-ready the persona is: of the sources its atoms need, how many
+        already have their stems in the cache. Pure cache lookups (has_stems) — no
+        GPU, no separation — so it is safe to poll."""
+        role_list = list(roles)
+        cands = self.stem_warm_candidates(taste_profile)
+        prov, name = self._resolve_stem_provider()
+        warm = sum(1 for c in cands if prov.has_stems(str(c["pcm_sha"]), role_list))
+        total = len(cands)
+        store = get("artifacts")
+        return {
+            "taste_profile": taste_profile, "provider": name,
+            "total_sources": total, "warm": warm, "cold": total - warm,
+            "pct_warm": round(100.0 * warm / max(1, total), 1),
+            "cache_bytes": int(store.total_bytes()), "budget_bytes": self._cache_byte_budget(),
+            "capability": stem_capability(), "roles": role_list,
+        }
+
+    def warm_stems(self, taste_profile: str = "girl_talk_v1", max_items: int = 0,
+                   roles: Any = ("vocals", "no_vocals")) -> Dict[str, Any]:
+        """Pre-separate the persona's cold sources into the NVMe cache using the
+        GPU, in priority order, until the queue drains, ``max_items`` is hit, or the
+        cache budget is reached. Skips sources already warm (no GPU) and, when the
+        cache is full, STOPS rather than evicting its own fresh work. Delegates the
+        actual separation to the SELECTED provider (the desktop-verified Demucs seam
+        on a real box); on a box without a ready GPU it is an honest no-op."""
+        cap = stem_capability()
+        prov, name = self._resolve_stem_provider()
+        if name == "noop" or not cap.get("ready"):
+            return {"available": False, "provider": name, "capability": cap,
+                    "reason": "no ready GPU stem provider on this box; nothing to warm "
+                              "(default NoopStemProvider). Renders fall back to full-mix beds.",
+                    "separated": 0, "skipped": 0, "candidates": 0}
+        role_list = list(roles)
+        store = get("artifacts")
+        budget = self._cache_byte_budget()
+        cands = self.stem_warm_candidates(taste_profile)
+        separated = 0
+        skipped = 0
+        errors: List[Dict[str, Any]] = []
+        stopped_reason = "queue drained"
+        total = len(cands)
+        for i, cand in enumerate(cands):
+            if max_items and separated >= max_items:
+                stopped_reason = "max_items reached"
+                break
+            pcm = str(cand["pcm_sha"])
+            path = str(cand["path"])
+            if prov.has_stems(pcm, role_list):
+                skipped += 1
+                continue
+            if store.total_bytes() >= budget:
+                stopped_reason = "cache budget reached"
+                break
+            if not os.path.exists(path):
+                errors.append({"pcm_sha": pcm[:12], "error": "source file missing"})
+                continue
+            try:
+                sep = prov.separate(pcm, path, role_list)
+                if sep and sep.get("available"):
+                    separated += 1
+                else:
+                    errors.append({"pcm_sha": pcm[:12], "error": str((sep or {}).get("reason") or "provider produced no stems")})
+            except Exception as exc:
+                errors.append({"pcm_sha": pcm[:12], "error": str(exc)[:200]})
+            self.set_status(
+                "warming stems %d/%d (%d cached)" % (separated + skipped, total, skipped),
+                (i + 1) / max(1, total), True)
+        return {
+            "available": True, "provider": name, "taste_profile": taste_profile,
+            "candidates": total, "separated": separated, "skipped": skipped,
+            "stopped_reason": stopped_reason, "errors": errors[:20],
+            "cache_bytes": int(store.total_bytes()), "budget_bytes": budget,
+        }
 
     def connect_db(self) -> None:
         c = self.ensure_config()
@@ -1005,6 +1451,11 @@ class EarcrateCore:
         self.db = sqlite3.connect(str(_db_path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
+        # WAL + synchronous=NORMAL: fsync only at checkpoint, not every commit. Durable
+        # across app crashes (only an OS/power crash can lose the last commits). On a
+        # DB that lives on a slower array (D:), FULL fsync-per-commit serializes writes
+        # -> analyze/extract crawl and the box lags on input despite idle CPU/GPU/disk.
+        self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.execute("PRAGMA foreign_keys=ON")
         self.create_schema()
         self.migrate_ear_atoms_per_profile()
@@ -1314,6 +1765,84 @@ class EarcrateCore:
     def kv_set_int(self, key: str, value: int) -> None:
         self.conn().execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)", (key, str(int(value))))
         self.conn().commit()
+
+    def kv_get_json(self, key: str) -> Optional[Dict[str, Any]]:
+        row = self.conn().execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        if not row:
+            return None
+        try:
+            v = json.loads(row["value"])
+            return v if isinstance(v, dict) else None
+        except Exception:
+            return None
+
+    def kv_set_json(self, key: str, value: Dict[str, Any]) -> None:
+        self.conn().execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)",
+                            (key, json.dumps(value, ensure_ascii=False, sort_keys=True)))
+        self.conn().commit()
+
+    def _crate_stamp_key(self, taste_profile: str) -> str:
+        return f"crate_stamp:{taste_profile}"
+
+    def stamp_crate_versions(self, taste_profile: str) -> None:
+        """Record the engine/analyzer version that built this profile's ear crate.
+
+        Written at the end of every build_ear_crate so a later `git pull` that
+        bumps ENGINE_VERSION/ANALYZER_VERSION becomes detectable: the stored
+        stamp no longer matches the running constants and the crate reads stale.
+        """
+        self.kv_set_json(self._crate_stamp_key(taste_profile), {
+            "engine_version": ENGINE_VERSION,
+            "analyzer_version": ANALYZER_VERSION,
+            "stamped_at": now_utc(),
+        })
+
+    def crate_staleness(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """Detect a crate built by a DIFFERENT engine/analyzer than the running one.
+
+        Two independent, deterministic signals:
+          * the ear-crate build stamp (kv) carries the engine+analyzer version
+            that last built this profile's atoms;
+          * every features row carries the analyzer_version that produced it, so
+            approved atoms resting on features from an old analyzer are stale even
+            if no stamp exists (e.g. a crate that predates the stamp).
+        A stale crate must never silently drive coverage — the girl_talk 0.47
+        false-FAIL came from exactly this: stale atoms + a current engine.
+        """
+        db = self.conn()
+        reasons: List[str] = []
+        stamp = self.kv_get_json(self._crate_stamp_key(taste_profile))
+        if stamp:
+            se = str(stamp.get("engine_version") or "")
+            sa = str(stamp.get("analyzer_version") or "")
+            if se and se != ENGINE_VERSION:
+                reasons.append(f"ear crate built by engine {se} (running {ENGINE_VERSION})")
+            if sa and sa != ANALYZER_VERSION:
+                reasons.append(f"ear crate built by analyzer {sa} (running {ANALYZER_VERSION})")
+        try:
+            row = db.execute(
+                """SELECT COUNT(*) n, MIN(ft.analyzer_version) av FROM ear_atoms a
+                     JOIN features ft ON ft.file_id=a.file_id
+                    WHERE a.taste_profile=? AND a.status='approved'
+                      AND ft.analyzer_version IS NOT NULL
+                      AND ft.analyzer_version!=?""",
+                (taste_profile, ANALYZER_VERSION)).fetchone()
+        except Exception:
+            row = None
+        stale_feat = int(row["n"]) if row and row["n"] else 0
+        if stale_feat:
+            reasons.append(f"{stale_feat} approved atoms analyzed by {row['av']} (running {ANALYZER_VERSION})")
+        stale = bool(reasons)
+        reason = ""
+        if stale:
+            reason = "; ".join(reasons) + " — your crate is stale; rebuild it (ear_crate/build?force=1 then taste/graph) before trusting coverage"
+        return {
+            "crate_stale": stale,
+            "reason": reason,
+            "engine_version": ENGINE_VERSION,
+            "analyzer_version": ANALYZER_VERSION,
+            "crate_stamp": stamp,
+        }
 
     def next_render_seed(self, base_seed: int) -> int:
         counter = self.kv_get_int("render_counter", 0) + 1
@@ -1906,12 +2435,68 @@ class EarcrateCore:
             vocal_like = self.vocal_likelihood(y, c.sample_rate)
             sections = self.estimate_sections(y, c.sample_rate, beat_times, downbeats)
             beats = beat_times
+        # Step-2 per-beat state, guarded (never fail analysis over it); stored in the
+        # npz cache only, not the DB, so 15k tracks don't bloat SQLite.
+        beat_state: Dict[str, Any] = {}
+        if beats.size:
+            with contextlib.suppress(Exception):
+                beat_state = beat_state_features(y, c.sample_rate, beats, downbeats)
         np.savez_compressed(
             cache_path,
-            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like), pcm_sha=pcm, pcm_scope=np.asarray("full")
+            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), beat_state_json=json.dumps(beat_state, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like), pcm_sha=pcm, pcm_scope=np.asarray("full")
         )
         self.store_features(row["id"], bpm, bpm_conf, key_root, key_mode, key_conf, loudness, energy, beats, downbeats, sections, vocal_like)
         self._set_pcm(row["id"], pcm)
+
+    def load_beat_state(self, file_id: str) -> Dict[str, Any]:
+        """Read a file's Step-2 per-beat state from its analysis npz (where it is
+        stored to keep 15k tracks out of SQLite). Returns {} when absent, so callers
+        degrade to grid-only anchors instead of failing."""
+        c = self.ensure_config()
+        row = self.conn().execute("SELECT sha256 FROM files WHERE id=?", (file_id,)).fetchone()
+        if not row or not row["sha256"]:
+            return {}
+        p = c.agent_root / "cache" / "analysis" / f"{row['sha256']}-{ANALYZER_VERSION}.npz"
+        if not p.exists():
+            return {}
+        try:
+            data = np.load(p, allow_pickle=False)
+            bs = json.loads(str(data["beat_state_json"])) if "beat_state_json" in data.files else {}
+            data.close()
+            return bs or {}
+        except Exception:
+            return {}
+
+    def material_regions(self, file_id: str, baseline: bool = False) -> Dict[str, Any]:
+        """LIVE Patch-2 region proposal for one analyzed file: assemble the analysis
+        dict from its features row + the npz beat_state, then propose variable-length
+        MaterialRegions (or the frozen [8,4,2,1] baseline when baseline=True). This is
+        the seam a regions_v2 crate builder consumes; it does not touch the current
+        atom pool, so composition is unchanged until the flip is made deliberately."""
+        row = self.conn().execute(
+            "SELECT f.duration_s, ft.bpm, ft.bpm_confidence, ft.beat_grid, ft.downbeats, "
+            "ft.sections, ft.key_root, ft.key_mode FROM files f JOIN features ft ON ft.file_id=f.id "
+            "WHERE f.id=?", (file_id,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "no analyzed features for file", "file_id": file_id}
+        beats = blob_to_array(row["beat_grid"])
+        downbeats = blob_to_array(row["downbeats"])
+        try:
+            sections = json.loads(row["sections"]) if row["sections"] else []
+        except Exception:
+            sections = []
+        analysis = {
+            "id": file_id, "bpm": float(row["bpm"] or 0.0),
+            "bpm_confidence": float(row["bpm_confidence"] or 0.0),
+            "key_root": int(row["key_root"] or 0), "key_mode": int(row["key_mode"] or 1),
+            "beats": [float(x) for x in beats], "downbeats": [float(x) for x in downbeats],
+            "sections": sections, "duration_s": float(row["duration_s"] or 0.0),
+        }
+        beat_state = {} if baseline else self.load_beat_state(file_id)
+        regions = propose_regions(analysis, beat_state or None, baseline=baseline)
+        return {"ok": True, "file_id": file_id, "baseline": bool(baseline),
+                "has_beat_state": bool(beat_state), "count": len(regions),
+                "regions": [r.as_dict() for r in regions]}
 
     def estimate_downbeats(self, y: np.ndarray, sr: int, beat_frames: np.ndarray) -> np.ndarray:
         return _estimate_downbeats(y, sr, beat_frames)
@@ -2481,9 +3066,10 @@ class EarcrateCore:
             return "BED_CHORD"
         return "TEXTURE"
 
-    def ear_atom_metrics(self, seg: np.ndarray, sr: int, bars: int, track_vocal_like: float, base_role: str = "full") -> Dict[str, float]:
+    def ear_atom_metrics(self, seg: np.ndarray, sr: int, bars: int, track_vocal_like: float, base_role: str = "full", recurrence: float = 0.0) -> Dict[str, float]:
+        recurrence = 0.0 if recurrence is None else float(max(0.0, min(1.0, recurrence)))
         if seg.size < 512 or float(np.max(np.abs(seg))) < 1e-6:
-            return {"score": 0.0, "hook_score": 0.0, "bed_score": 0.0, "floor_score": 0.0, "bass_score": 0.0, "spark_score": 0.0, "intelligibility": 0.0, "low_share": 0.0, "mid_share": 0.0, "high_share": 0.0, "loopability": 0.0, "transient_density": 0.0}
+            return {"score": 0.0, "hook_score": 0.0, "bed_score": 0.0, "floor_score": 0.0, "bass_score": 0.0, "spark_score": 0.0, "intelligibility": 0.0, "low_share": 0.0, "mid_share": 0.0, "high_share": 0.0, "loopability": 0.0, "transient_density": 0.0, "recurrence": recurrence}
         seg = seg.astype(np.float32, copy=False)
         rms = rms_value(seg)
         peak = float(np.max(np.abs(seg))) + 1e-9
@@ -2515,7 +3101,14 @@ class EarcrateCore:
         percussive_ratio = float(np.sum(np.abs(percussive)) / hp_total)
         energy_score = float(min(1.0, rms / 0.11))
         intelligibility = float(max(0.0, min(1.0, 0.40 * min(1.0, mid_share / 0.42) + 0.28 * min(1.0, presence_share / 0.24) + 0.22 * float(track_vocal_like or 0.0) + 0.10 * (1.0 - min(1.0, low_share / 0.42)))))
-        hook_score = float(max(0.0, min(1.0, 0.32 * intelligibility + 0.20 * min(1.0, presence_share / 0.22) + 0.16 * transient_density + 0.16 * energy_score + 0.10 * min(1.0, crest / 5.5) + 0.06 * (1.0 if bars in (2, 4) else 0.4))))
+        local_hook = 0.32 * intelligibility + 0.20 * min(1.0, presence_share / 0.22) + 0.16 * transient_density + 0.16 * energy_score + 0.10 * min(1.0, crest / 5.5) + 0.06 * (1.0 if bars in (2, 4) else 0.4)
+        # A hook is, deterministically, the part the song REPEATS. Fold the
+        # song-level recurrence of this segment into hook_score as a real weighted
+        # contributor so a genuinely repeated segment outranks an equally-clean but
+        # unique one; recurrence==0 (no curve / no repetition) preserves the pure
+        # local formula's ordering.
+        HOOK_RECUR_W = 0.28
+        hook_score = float(max(0.0, min(1.0, (1.0 - HOOK_RECUR_W) * local_hook + HOOK_RECUR_W * recurrence)))
         floor_score = float(max(0.0, min(1.0, 0.34 * percussive_ratio + 0.24 * transient_density + 0.18 * loopability + 0.14 * energy_score + 0.10 * (1.0 - min(1.0, mid_share / 0.75)))))
         bass_score = float(max(0.0, min(1.0, 0.48 * min(1.0, low_share / 0.34) + 0.22 * min(1.0, sub_share / 0.18) + 0.16 * loopability + 0.14 * energy_score)))
         bed_score = float(max(0.0, min(1.0, 0.32 * harmonic_ratio + 0.24 * loopability + 0.18 * min(1.0, (lowmid_share + mid_share) / 0.62) + 0.14 * energy_score + 0.12 * (1.0 - min(1.0, intelligibility / 0.88)))))
@@ -2524,7 +3117,7 @@ class EarcrateCore:
         score = float(max(hook_score, floor_score, bass_score, bed_score, spark_score, base_bias) * 0.72 + loopability * 0.16 + energy_score * 0.12)
         if rms < 1e-4:
             score *= 0.1
-        return {"score": score, "hook_score": hook_score, "bed_score": bed_score, "floor_score": floor_score, "bass_score": bass_score, "spark_score": spark_score, "intelligibility": intelligibility, "low_share": low_share, "mid_share": mid_share, "high_share": high_share, "loopability": loopability, "transient_density": transient_density, "rms": rms, "crest": crest, "harmonic_ratio": harmonic_ratio, "percussive_ratio": percussive_ratio, "flatness": flat}
+        return {"score": score, "hook_score": hook_score, "bed_score": bed_score, "floor_score": floor_score, "bass_score": bass_score, "spark_score": spark_score, "intelligibility": intelligibility, "low_share": low_share, "mid_share": mid_share, "high_share": high_share, "loopability": loopability, "transient_density": transient_density, "rms": rms, "crest": crest, "harmonic_ratio": harmonic_ratio, "percussive_ratio": percussive_ratio, "flatness": flat, "recurrence": recurrence}
 
     def build_ear_crate(self, limit: int = 0, force: bool = False, taste_profile: str = "girl_talk_v1", write_previews: bool = False) -> Dict[str, Any]:
         """Turn loop candidates into deterministic, auditionable phrase atoms.
@@ -2720,6 +3313,9 @@ class EarcrateCore:
                       OR (l.source_audio_sha256 IS NULL AND COALESCE(f.audio_generation,0)=0))""",
             (taste_profile,),
         ).fetchone()["n"]
+        # Stamp the crate with the engine/analyzer that just built it, so a later
+        # version bump makes this profile's atoms detectably stale (crate_staleness).
+        self.stamp_crate_versions(taste_profile)
         self.set_status(f"TasteSpec ear crate complete: {approved} approved atoms", 1.0, False)
         return {"ok": True, "taste_profile": taste_profile, "scanned_loops": len(rows), "inserted": inserted, "updated": updated, "adopted": adopted, "parallel_files": len(jobs), "approved": int(approved), "role_counts": counts, "rejected": rejected, "failed": failed[:50]}
 
@@ -2836,7 +3432,9 @@ class EarcrateCore:
         # reads as a rerun; a source contributes at most ~3 fresh foreground moments.
         atom_event_capacity = min(len(pool) * 2, len(source_keys) * 3)
         endless = endless_sustain(atom_event_capacity, len(source_keys), profile)
-        return {"ok": True, "ready": not failures, "taste_profile": taste_profile, "profile": profile, "have": have, "need": need, "role_counts": by_role, "source_tracks": len(source_keys), "pool_size": len(pool), "failures": failures, "endless": endless}
+        stale = self.crate_staleness(taste_profile)
+        return {"ok": True, "ready": not failures, "taste_profile": taste_profile, "profile": profile, "have": have, "need": need, "role_counts": by_role, "source_tracks": len(source_keys), "pool_size": len(pool), "failures": failures, "endless": endless,
+                "crate_stale": stale["crate_stale"], "crate_stale_reason": stale["reason"], "crate_stamp": stale["crate_stamp"]}
 
     def atom_edge_score(self, left: Dict[str, Any], right: Dict[str, Any], relation: str, render_bpm: float, target_key: int, stretch_budget: float, pitch_budget: int) -> Tuple[float, Dict[str, Any]]:
         def key_of(x: Dict[str, Any]) -> int:
@@ -2848,7 +3446,23 @@ class EarcrateCore:
         lk = key_of(left); rk = key_of(right)
         lrel = harmonic_relation_name(lk, target_key)
         rrel = harmonic_relation_name(rk, target_key)
-        harmonic = 1.0 if lk == rk or lrel in {"same_key","dominant","subdominant","relative_or_parallel"} or rrel in {"same_key","dominant","subdominant","relative_or_parallel"} else 0.42
+        # The two atoms play SIMULTANEOUSLY, so their compatibility is governed by
+        # the relation between EACH OTHER, not by "either one fits the target key".
+        # The old expression awarded harmonic=1.0 when either atom alone related to
+        # the target, so an atom in C layered with one in F# (a tritone -- maximally
+        # dissonant with each other) scored a perfect 1.0. Require the PAIR to agree
+        # first; fit-to-target is a secondary bonus.
+        _COMPAT = {"same_key", "dominant", "subdominant", "relative_or_parallel"}
+        pair_ok = (lk == rk) or (harmonic_relation_name(lk, rk) in _COMPAT)
+        targ_ok = (lrel in _COMPAT) and (rrel in _COMPAT)
+        if pair_ok and targ_ok:
+            harmonic = 1.0
+        elif pair_ok:
+            harmonic = 0.75          # layers agree with each other but drift from target key
+        elif (lrel in _COMPAT) and (rrel in _COMPAT):
+            harmonic = 0.55          # both fit target yet clash with each other -> risky
+        else:
+            harmonic = 0.3
         try:
             lt = plan_varispeed_transform(str(left.get("role") or "full"), bpm_of(left), render_bpm, lk, target_key, stretch_budget, pitch_budget)
             rt = plan_varispeed_transform(str(right.get("role") or "full"), bpm_of(right), render_bpm, rk, target_key, stretch_budget, pitch_budget)
@@ -2962,6 +3576,21 @@ class EarcrateCore:
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         target_seconds = float(params.get("target_seconds") or 120.0)
         needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
+        # HARD PIN (external-target remix): the deck is dictated by the dropped vocal,
+        # not searched. When pin_bpm/pin_key are set, skip lattice selection entirely and
+        # return the single feasible deck at the anchor — the library bed must bend to the
+        # target's own tempo & key, never the reverse. Absent the pins this is a no-op and
+        # the normal max-playable search runs byte-identically.
+        pin_bpm = float(params.get("pin_bpm") or 0.0) or None
+        pin_key = params.get("pin_key")
+        if pin_bpm and pin_key is not None:
+            key = int(pin_key) % 12
+            feasible, diag = self.taste_feasible_pool(pool, float(pin_bpm), key, params)
+            diag["deck_score"] = None
+            diag["needed_sources"] = needed_sources
+            diag["pinned"] = True
+            return {"pool": feasible, "render_bpm": float(pin_bpm), "target_key": key,
+                    "lattice": {"best": diag, "lattice": [diag]}, "diagnostics": diag}
         keys = sorted({int(x.get("key_root") or 0) % 12 for x in pool}) or [0]
         weighted_keys = []
         for k in keys:
@@ -3012,6 +3641,8 @@ class EarcrateCore:
         taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
         target_seconds = float(params.get("target_seconds") or 120)
         readiness = self.taste_readiness(taste_profile, target_seconds)
+        if readiness.get("crate_stale") and not params.get("allow_stale_crate"):
+            raise RuntimeError("STALE CRATE: " + str(readiness.get("crate_stale_reason") or "engine/analyzer version bumped since this crate was built"))
         if not readiness.get("ready"):
             raise RuntimeError("TasteSpec crate is not ready: " + "; ".join(readiness.get("failures") or []))
         pool = self.approved_atom_pool(taste_profile)
@@ -3029,7 +3660,10 @@ class EarcrateCore:
             failures = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
             raise PlanRejectedError("TasteSpec pre-render gate refused theater: " + "; ".join(failures), arrangement, arr_sha)
         mashup_id = ulidish()
-        render_name = f"{safe_name(name)}-{ENGINE_VERSION}-{arr_sha[:8]}-{seed}.wav"
+        # Persona belongs in the filename: the same set rendered under different
+        # TasteSpecs is a DIFFERENT mashup, and on disk you must be able to tell a
+        # girl_talk collage from a notorious album-marriage at a glance.
+        render_name = render_output_name(name, taste_profile, ENGINE_VERSION, arr_sha, seed)
         dst = c.working_root / "renders" / render_name
         self.conn().execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
         self.conn().commit()
@@ -3037,6 +3671,97 @@ class EarcrateCore:
         manifest = self.write_manifest("tastespec", seed, f"Render TasteSpec mashup '{name}'", [op])
         return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement, "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
             "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "readiness": readiness}
+
+    @_durable_compile_attempt
+    def propose_external_remix(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Remix a DROPPED, out-of-library vocal in a persona's style over a library bed.
+
+        The inversion of every other path: instead of choosing the tempo/key with the
+        most playable crate material, we PIN the render to the target vocal's own tempo
+        and key and rebuild the bed under it. The vocal is never transformed (identity
+        anchor); only the library bed bends. This is the external-target remix the 22
+        remix personas were built for.
+
+        Hard arbiter is ``external_remix_feasibility`` at the anchor (is there a bed at
+        all?), not the full-crate turnover contract (which assumes a rotating collage —
+        wrong shape for a single held vocal). The persona's own taste gate is attached as
+        an advisory, not a veto."""
+        c = self.ensure_config()
+        taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
+        if taste_profile not in TASTE_PROFILES:
+            raise RuntimeError(f"unknown taste profile '{taste_profile}'")
+        target_path = str(params.get("target_path") or params.get("target") or "").strip()
+        if not target_path:
+            raise RuntimeError("external remix needs a target_path (the dropped vocal file)")
+        tp = Path(target_path)
+        if not tp.exists():
+            raise RuntimeError(f"target vocal not found: {target_path}")
+        # Analyze the dropped vocal: features on a bounded window (tempo/key), but the
+        # FULL duration for windowing so the whole take rides the arrangement.
+        sr = int(c.sample_rate)
+        y_full = decode_audio(tp, sr)
+        duration_s = float(y_full.size) / float(sr) if y_full.size else 0.0
+        y_feat = y_full[: sr * MAX_ANALYSIS_SECONDS] if y_full.size > sr * MAX_ANALYSIS_SECONDS else y_full
+        feats = compute_pcm_features(y_feat, sr)
+        # The library supplies ONLY the bed. Fetch it BEFORE anchoring so the bed's own
+        # tempos/keys can disambiguate the acapella's octave-error-prone estimates: a
+        # doubled vocal read folds to where the crate actually lives, and a guessed key
+        # (low confidence) defers to the bed's dominant key instead of transposing it.
+        pool = self.approved_atom_pool(taste_profile)
+        bed_tempos = [float(x["bpm"]) for x in pool if x.get("bpm")]
+        bed_keys = [(int(x["key_root"]), float(x.get("score") or 0.0)) for x in pool if x.get("key_root") is not None]
+        anchor = remix_anchor(feats, bed_tempos=bed_tempos, bed_keys=bed_keys)
+        pcm_sha = decoded_audio_sha256(tp, sr, duration_s)
+        title = safe_name(str(params.get("name") or tp.stem or "target"), "target")
+        ext_atom = external_foreground_atom(title, anchor, duration_s, pcm_sha, str(tp))
+        profile = TASTE_PROFILES[taste_profile]
+        target_seconds = float(params.get("target_seconds") or min(duration_s or 120.0, 240.0))
+        needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
+        # The full-set turnover count assumes a rotating FOREGROUND too; here one held
+        # vocal replaces that whole rail, so the bed alone needs only enough distinct
+        # sources to rotate under it — a third of the set contract, floor 2. Demanding
+        # the full count re-imposed the exact requirement the composer waives for
+        # external mode and refused perfectly buildable remixes.
+        needed_bed_sources = max(2, needed_sources // 3)
+        _feasible, diag = self.taste_feasible_pool(pool, float(anchor["bpm"]), int(anchor["key_root"]), params)
+        feasibility = external_remix_feasibility(diag, needed_bed_sources)
+        if not feasibility.get("buildable"):
+            raise RuntimeError("external remix infeasible at target anchor ("
+                               f"{anchor['bpm']} BPM, key {anchor['key_root']}): "
+                               + "; ".join(feasibility.get("reasons") or ["no bed"]))
+        explicit_seed = params.get("seed") not in (None, "", 0, "0")
+        seed = int(params.get("seed")) if explicit_seed else self.next_render_seed(c.seed)
+        params = dict(params)
+        params.update({"seed": seed, "taste_profile": taste_profile, "quality_mode": "external_remix",
+                       "post_render_gate": True, "mix_mode": "tastespec_graph",
+                       "pin_bpm": float(anchor["bpm"]), "pin_key": int(anchor["key_root"]),
+                       "external_foreground": ext_atom, "target_seconds": target_seconds})
+        arrangement = self.compose_taste_arrangement(pool, params, seed)
+        arrangement["external_target"] = {"title": title, "path": str(tp), "pcm_sha": pcm_sha,
+            "duration_s": round(duration_s, 3), "anchor": anchor, "feasibility": feasibility}
+        preflight = self.arrangement_preflight_gate(arrangement)
+        taste_gate = self.taste_arrangement_gate(arrangement)  # advisory for external remix
+        arr_sha = arrangement_sha(arrangement)
+        arrangement["candidate_search"] = {"count": 1, "selected_seed": seed, "mode": "external_remix",
+            "selected_preflight": preflight, "taste_gate": taste_gate, "external_feasibility": feasibility,
+            "render_policy": "external-target remix: hard gate = bed feasibility at the pinned anchor; persona taste gate is advisory (single held vocal is not a rotating collage)"}
+        # Preflight (structural sanity) is still a hard veto — empty sections, illegal
+        # transforms, no floor coverage are real render failures regardless of mode.
+        if not preflight.get("passed"):
+            raise PlanRejectedError("external remix preflight refused theater: "
+                                    + "; ".join(preflight.get("failures") or []), arrangement, arr_sha)
+        name = title
+        mashup_id = ulidish()
+        render_name = render_output_name(f"{name}-remix", taste_profile, ENGINE_VERSION, arr_sha, seed)
+        dst = c.working_root / "renders" / render_name
+        self.conn().execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
+        self.conn().commit()
+        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
+        manifest = self.write_manifest("external_remix", seed, f"Render external remix of '{title}' in {taste_profile} style", [op])
+        return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement,
+                "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
+                "anchor": anchor, "feasibility": feasibility, "taste_gate": taste_gate,
+                "tastespec": profile_summary(taste_profile)}
 
     def compose_taste_arrangement(self, pool: List[Dict[str, Any]], params: Dict[str, Any], seed: int) -> Dict[str, Any]:
         rng = random.Random(seed)
@@ -3048,7 +3773,11 @@ class EarcrateCore:
         profile0 = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         need_sources0 = sources_needed(target_seconds, float(profile0.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         deck_sources = int(((deck.get("diagnostics") or {}).get("have") or {}).get("sources", 0))
-        if deck_sources and deck_sources < need_sources0:
+        # External remix relaxes the full-crate turnover contract: the foreground is
+        # ONE fixed dropped vocal that never rotates, so the bed alone need not supply
+        # a whole set's worth of distinct sources. external_remix_feasibility (enforced
+        # up in propose_external_remix, at the same anchor) is the arbiter there.
+        if deck_sources and deck_sources < need_sources0 and not params.get("external_foreground"):
             diag = deck.get("diagnostics") or {}
             raise RuntimeError(
                 f"TasteSpec deck infeasible: best deck ({diag.get('render_bpm')} BPM, key {diag.get('target_key')}) keeps {deck_sources}/{need_sources0} distinct playable sources; the crate needs more sources that survive transform at a common tempo")
@@ -3080,11 +3809,39 @@ class EarcrateCore:
         if vetoed_atoms:
             pool = [x for x in pool if str(x.get("atom_id")) not in vetoed_atoms]
         foreground = [x for x in pool if x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}]
-        floors = [x for x in pool if x.get("ear_role") in {"DRUM_BREAK","BED_CHORD","RIFF_ID","TEXTURE"}]
+        # External-target remix: the dropped vocal REPLACES the library foreground rail
+        # outright (it's the whole point — a foreign vocal over a library bed), so no
+        # in-crate vox can substitute for it. It rides the entire track (held below), and
+        # the library pool supplies only the bed rails (floor/bass/spark).
+        external_fg = params.get("external_foreground")
+        if external_fg:
+            foreground = [dict(external_fg)]
+        # The floor rail must be a STRUCTURAL bed the taste gate recognizes as floor
+        # (DRUM_BREAK/BED_CHORD/RIFF_ID -> role drum_anchor/harmony/full). TEXTURE reads
+        # as atmosphere/spark, not a bed: taste_arrangement_gate does NOT credit it to
+        # floor_coverage, so letting TEXTURE win the floor rail silently starved a
+        # section's floor bars — enough to drop a held-bed persona under its obligation
+        # (troubadour floor_coverage 0.95). Keep TEXTURE on the spark rail; fall back to
+        # it as a floor only if the crate ships no structural bed at all (that is a
+        # genuine material shortfall, not a composition gap).
+        floors = [x for x in pool if x.get("ear_role") in {"DRUM_BREAK","BED_CHORD","RIFF_ID"}]
+        if not floors:
+            floors = [x for x in pool if x.get("ear_role") == "TEXTURE"]
         basses = [x for x in pool if x.get("ear_role") == "BASS_RIFF"]
         sparks = [x for x in pool if x.get("ear_role") in {"PICKUP_FILL","DROP_HIT","TRANSITION_TAIL","TEXTURE","VOX_SHOUT"}]
         for xs in (foreground, floors, basses, sparks):
             xs.sort(key=lambda x: (float(x.get("score") or 0.0), float(x.get("hook_score") or 0.0), str(x.get("id"))), reverse=True)
+        # Recognizability bias (params["recognizability_bias"], 0-100): above the
+        # neutral band it adds the persona's OWN recognizability score — hooks/riffs
+        # are the "oh, THAT song" payoff, using readiness.rank_material's formula —
+        # as an extra picker term, so a cranked run reaches for the most instantly-
+        # known material. Neutral/absent -> recog_w 0.0 -> selection byte-identical.
+        _recog_bias = float(params.get("recognizability_bias") or 0.0)
+        recog_w = max(0.0, (_recog_bias - 55.0) / 45.0) * 0.5
+        _VOX_RECOG = {"VOX_HOOK", "VOX_VERSE", "VOX_SHOUT"}
+        def _recog_score(x: Dict[str, Any]) -> float:
+            hook = float(x.get("hook_score") or 0.0); sc = float(x.get("score") or 0.0)
+            return (0.7 * hook + 0.3 * sc) if str(x.get("ear_role")) in _VOX_RECOG else (0.35 * hook + 0.25 * sc)
         recent_sources: List[str] = []
         recent_loop_ids: List[str] = []
         prev_sec: Optional[Dict[str, Any]] = None
@@ -3159,7 +3916,7 @@ class EarcrateCore:
                     reasons = dict(reasons); reasons["human_verdict"] = "approved"
                 balance = -0.18 * source_use.get(src, 0)
                 jitter = rng.random() * 0.01
-                scored.append((float(x.get("score") or 0.0) * 0.44 + edge * 0.38 + novelty + balance - penalty + jitter, x, edge, reasons))
+                scored.append((float(x.get("score") or 0.0) * 0.44 + edge * 0.38 + recog_w * _recog_score(x) + novelty + balance - penalty + jitter, x, edge, reasons))
             if not scored:
                 return None
             # Hard rotation (v0.6.4): while the turnover target is unmet, unused
@@ -3177,43 +3934,139 @@ class EarcrateCore:
             tf = playable(item, role)
             if tf is None:
                 return False
-            layers.append({"loop_id": item["id"], "atom_id": item.get("atom_id"), "ear_role": item.get("ear_role"), "role": role, "pitch_shift": float(tf.get("synthetic_pitch_shift") or 0.0), "bar_offset": int(off), "bar_len": int(blen), "gain_db": gain_db, "world": "taste", "source_track_key": source_of(item), "dry_high3000_share": float(item.get("high_share") or 0.0), "dry_quality_score": float(item.get("score") or 0.0), "transform_mode": tf.get("transform_mode") or tf.get("mode"), "source_bpm_raw": tf.get("source_bpm_raw"), "source_bpm_folded": tf.get("source_bpm_folded"), "tempo_octave_multiplier": tf.get("tempo_octave_multiplier"), "speed_ratio": tf.get("speed_ratio"), "varispeed_pct": tf.get("varispeed_pct"), "natural_pitch_shift": tf.get("natural_pitch_shift"), "desired_key_shift": tf.get("desired_key_shift"), "residual_pitch_shift": tf.get("residual_pitch_shift"), "artifact_risk": tf.get("artifact_risk")})
+            layers.append({"loop_id": item["id"], "atom_id": item.get("atom_id"), "ear_role": item.get("ear_role"), "role": role, "external_ref": item.get("external_ref"), "pitch_shift": float(tf.get("synthetic_pitch_shift") or 0.0), "bar_offset": int(off), "bar_len": int(blen), "gain_db": gain_db, "world": "taste", "source_track_key": source_of(item), "dry_high3000_share": float(item.get("high_share") or 0.0), "dry_quality_score": float(item.get("score") or 0.0), "transform_mode": tf.get("transform_mode") or tf.get("mode"), "source_bpm_raw": tf.get("source_bpm_raw"), "source_bpm_folded": tf.get("source_bpm_folded"), "tempo_octave_multiplier": tf.get("tempo_octave_multiplier"), "speed_ratio": tf.get("speed_ratio"), "varispeed_pct": tf.get("varispeed_pct"), "natural_pitch_shift": tf.get("natural_pitch_shift"), "desired_key_shift": tf.get("desired_key_shift"), "residual_pitch_shift": tf.get("residual_pitch_shift"), "artifact_risk": tf.get("artifact_risk")})
             recent_loop_ids.append(str(item["id"]))
             recent_sources.append(source_of(item))
             source_use[source_of(item)] = source_use.get(source_of(item), 0) + 1
             del recent_loop_ids[:-32]
             del recent_sources[:-32]
             return True
+        # --- PERSONA SHAPE: what actually makes the personas diverge instead of
+        # producing one identical arrangement. Derived from the persona contract
+        # (source_turnover + density_model), never hardcoded per persona:
+        #   * how long a bed / voice is HELD before rotating (girl_talk turns over
+        #     fast; troubadour holds one persistent bed; notorious rides a single
+        #     foreground voice for whole verses), and
+        #   * the simultaneous-layer budget (troubadour = minimal layering; girl_talk
+        #     = dense collage).
+        _sec_seconds = section_bars * 4 * 60.0 / max(1e-6, render_bpm)
+        floor_hold = max(1, int(round(float(profile.get("max_source_run_s") or 16.0) / max(1e-6, _sec_seconds))))
+        fg_hold = max(1, int(round(float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS) / max(1e-6, _sec_seconds))))
+        # A dropped vocal is one continuous performance — it must never rotate. Hold it
+        # for the whole track so the same external take rides every section (each section
+        # draws its OWN window of that take; see external_vocal_window stamping below).
+        if external_fg:
+            fg_hold = total_bars + section_bars
+        max_layers_persona = max(2, int(profile.get("max_layers") or 4))
+        held_floor: Optional[Dict[str, Any]] = None; held_floor_left = 0
+        held_fg: Optional[Dict[str, Any]] = None; held_fg_left = 0
+        # Macro-dynamics: an energy curve so the track BREATHES — sparse intro,
+        # builds, full drops, and periodic breakdowns — instead of every 4-bar
+        # section sitting at identical loudness. Flat, equal-energy sections were the
+        # post-render quality-gate failure (rms_std_db ~0, "effectively flat").
+        # The cadence is LENGTH-ADAPTIVE: a fixed "drop every 4th section" starves a
+        # short (~120s) set of excursions, so its rendered rms_std_db lands ~2.8 —
+        # below the 3.0 target — while a longer (178s) set that accumulates more
+        # drops/breakdowns clears it. Scaling the drop/breakdown COUNT to total_bars
+        # and spacing them evenly gives a short set the SAME build/drop/breakdown arc
+        # a long one gets. Only per-section loudness (etrim) and bass/spark shedding
+        # move; the floor and foreground rails are placed every section regardless, so
+        # floor/foreground bar-coverage (and the taste gate) is untouched.
+        n_sec = max(1, int(math.ceil(total_bars / float(section_bars))))
+        n_drops = max(2, int(round(n_sec / 3.5))) if n_sec >= 4 else (1 if n_sec >= 2 else 0)
+        n_breaks = max(1, int(round(n_sec / 5.0))) if n_sec >= 5 else 0
+        drop_ids = set(int(round((k + 1) * n_sec / (n_drops + 1))) for k in range(n_drops)) if n_drops else set()
+        drop_ids.discard(0)
+        break_ids: set = set()
+        for _k in range(n_breaks):
+            pos = int(round((_k + 0.5) * n_sec / max(1, n_breaks)))
+            _tries = 0
+            while (pos in drop_ids or (pos + 1) in drop_ids or pos == 0) and _tries < n_sec:
+                pos = (pos + 1) % n_sec; _tries += 1
+            if pos != 0 and pos not in drop_ids:
+                break_ids.add(pos)
         while bar < total_bars:
             bars = min(section_bars, total_bars - bar)
-            sec_type = "drop" if idx % 4 == 0 and idx > 0 else ("build" if idx % 4 == 3 else "sustain")
-            floor = pick(floors, None, "floor") or (floors[idx % len(floors)] if floors else None)
-            fg = pick(foreground, floor, "vocal_over_bed", role="vocal") if foreground and floor else (pick(foreground, None, "foreground", role="vocal") if foreground else None)
+            # `etrim` moves each section's loudness in dB; quiet sections also shed
+            # bass/spark so the low-end wall opens up and the mix gains spectral
+            # variety, not just level.
+            if idx == 0:
+                sec_type, energy = "sustain", 0.32     # sparse open — ease in, don't slam
+            elif idx in drop_ids:
+                sec_type, energy = "drop", 1.0          # full hit
+            elif (idx + 1) in drop_ids:
+                sec_type, energy = "build", 0.66        # rising into the drop
+            elif idx in break_ids:
+                sec_type, energy = "breakdown", 0.44    # periodic breakdown — pull back
+            else:
+                sec_type, energy = "sustain", 0.74
+            etrim = round((energy - 0.74) * 12.0, 1)   # ~ -5dB (intro) .. 0 .. +3.1dB (drop)
+            low_energy = energy < 0.5
+            # HOLD the bed/voice for the persona's run length before rotating.
+            if held_floor is not None and held_floor_left > 0 and playable(held_floor, "floor") is not None:
+                floor = held_floor; held_floor_left -= 1
+            else:
+                floor = pick(floors, None, "floor") or (floors[idx % len(floors)] if floors else None)
+                held_floor, held_floor_left = floor, (floor_hold - 1)
+            if held_fg is not None and held_fg_left > 0 and playable(held_fg, "vocal") is not None:
+                fg = held_fg; held_fg_left -= 1
+            elif foreground:
+                fg = pick(foreground, floor, "vocal_over_bed", role="vocal") if floor else pick(foreground, None, "foreground", role="vocal")
+                held_fg, held_fg_left = fg, (fg_hold - 1)
+            else:
+                fg = None
             bass = None
-            if basses and floor and str(floor.get("ear_role")) != "BASS_RIFF" and float(floor.get("low_share") or 0.0) < 0.34:
+            if basses and floor and not low_energy and str(floor.get("ear_role")) != "BASS_RIFF" and float(floor.get("low_share") or 0.0) < 0.34:
                 bass = pick(basses, floor, "bass_over_drums", role="bass")
-            spark = pick(sparks, floor or fg, "spark_into_phrase") if sparks and (idx % 2 == 1 or sec_type == "drop") else None
+            spark = pick(sparks, floor or fg, "spark_into_phrase") if sparks and (sec_type == "drop" or (idx % 2 == 1 and not low_energy)) else None
             layers: List[Dict[str, Any]] = []
             if floor:
-                add_layer(layers, floor, str(floor.get("role") or "harmony"), -8.5 if sec_type != "drop" else -7.0, 0, bars)
+                add_layer(layers, floor, str(floor.get("role") or "harmony"), (-8.5 if sec_type != "drop" else -7.0) + etrim, 0, bars)
             if bass and not any(x.get("role") == "bass" for x in layers):
-                add_layer(layers, bass, "bass", -7.5, 0, bars)
+                add_layer(layers, bass, "bass", -7.5 + etrim, 0, bars)
             if fg:
                 fg_len = min(bars, 4 if str(fg.get("ear_role")) != "VOX_SHOUT" else 1)
                 fg_off = 0 if idx == 0 else (0 if fg_len >= bars else rng.choice([0, max(0,bars-fg_len)]))
-                add_layer(layers, fg, "vocal" if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(fg.get("role") or "harmony"), -6.5 if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else -10.5, fg_off, fg_len)
+                # The vocal carries breakdowns — keep it up-front even when quiet, so
+                # a breakdown is "acapella-forward", not just "everything quieter".
+                fg_trim = etrim if not low_energy else max(etrim, -2.0)
+                add_layer(layers, fg, "vocal" if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(fg.get("role") or "harmony"), (-6.5 if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else -10.5) + fg_trim, fg_off, fg_len)
             if spark:
                 slen = 1 if bars <= 4 else 2
-                add_layer(layers, spark, str(spark.get("role") or "texture"), -16.0, max(0, bars - slen), slen)
+                add_layer(layers, spark, str(spark.get("role") or "texture"), -16.0 + etrim, max(0, bars - slen), slen)
             if not any(x.get("role") in {"drum_anchor","bass","harmony","full"} for x in layers) and floors:
                 for cand in floors:
-                    if add_layer(layers, cand, str(cand.get("role") or "harmony"), -8.5, 0, bars):
+                    if add_layer(layers, cand, str(cand.get("role") or "harmony"), -8.5 + etrim, 0, bars):
                         break
             if idx == 0 and not any(x.get("role") == "vocal" or x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"} for x in layers) and foreground:
                 intro_fg = pick(foreground, floor, "vocal_over_bed", role="vocal") or foreground[0]
-                add_layer(layers, intro_fg, "vocal" if str(intro_fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(intro_fg.get("role") or "harmony"), -6.5, 0, min(bars, 4))
+                add_layer(layers, intro_fg, "vocal" if str(intro_fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(intro_fg.get("role") or "harmony"), -6.5 + etrim, 0, min(bars, 4))
+            # Persona layer budget: trim the stack to the persona's density (troubadour
+            # minimal layering -> bed + voice only; girl_talk dense). Keep the vocal and
+            # a floor; shed spark first, then bass.
+            if len(layers) > max_layers_persona:
+                _pri = {"vocal": 0, "drum_anchor": 1, "harmony": 1, "full": 1, "bass": 2}
+                layers = sorted(layers, key=lambda l: _pri.get(str(l.get("role")), 3))[:max_layers_persona]
             transition = self.plan_transition(prev_sec, sec_type, int(prev_sec.get("target_key") or target_key) if prev_sec else None, target_key, bar, bars, layers, int(params.get("chaos") or 72), int(params.get("drama") or 82), rng)
-            sec = {"bar_start": bar, "bars": bars, "type": sec_type, "energy_level": 0.9 if sec_type == "drop" else 0.7, "target_key": target_key, "transition_in": transition, "layers": layers}
+            sec = {"bar_start": bar, "bars": bars, "type": sec_type, "energy_level": round(energy, 2), "target_key": target_key, "transition_in": transition, "layers": layers}
+            # Stamp each external-vocal layer with ITS window of the dropped take, so the
+            # continuous performance plays front-to-back across the arrangement (section
+            # at absolute bar `bar` -> the matching slice of the vocal). A section past the
+            # end of the vocal drops the layer: the bed plays on instrumental.
+            if external_fg:
+                ext_dur = float((external_fg.get("external_ref") or {}).get("duration_s") or 0.0)
+                keep: List[Dict[str, Any]] = []
+                for L in layers:
+                    er = L.get("external_ref")
+                    if not er:
+                        keep.append(L); continue
+                    win = external_vocal_window(bar, int(L.get("bar_len") or bars), render_bpm, ext_dur)
+                    if win is None:
+                        continue  # vocal spent — bed carries this section alone
+                    L["external_ref"] = {**er, "start_s": win[0], "len_s": win[1]}
+                    keep.append(L)
+                layers = keep
+                sec["layers"] = layers
             sections.append(sec)
             prev_sec = sec
             bar += bars
@@ -3297,6 +4150,41 @@ class EarcrateCore:
         ).fetchone()
         return int(row["n"] or 0)
 
+    def _freshness_harvest(self, ledger: Dict[str, Any], batch: int, taste_profile: str,
+                           target_seconds: float, analyze_result: Dict[str, Any],
+                           loop_result: Dict[str, Any], harvest_log: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Bounded turnover pass: a ready crate must not go stale.
+
+        The fail-fast harvest gates ENTRY (stop analyzing the moment the
+        contract is satisfied) but nothing gated GROWTH: tracks added after the
+        crate first became ready were scanned yet never analyzed by the
+        one-click path, so every set recycled the same sources — against the
+        profile's own turnover contract. This pass digests at most ONE batch of
+        never-analyzed tracks per run: bounded cost, monotone progress toward
+        the profile's endless target, and zero work when the library is stable
+        (the analyze select returns nothing new). It only ADDS approved
+        material; it never touches readiness thresholds or gates.
+
+        Returns the recomputed readiness when fresh material entered the crate,
+        else None. Mutates analyze_result / loop_result / harvest_log in place,
+        matching the harvest-loop accounting.
+        """
+        step = self._perf_stage(ledger, "freshness_analyze", self.analyze, limit=batch, force=False)
+        newly = int(step.get("analyzed") or 0)
+        if newly <= 0:
+            return None
+        self.set_status(f"TasteSpec: freshness pass folded {newly} new track(s) into the crate", 0.72, True, None)
+        analyze_result["analyzed"] = int(analyze_result.get("analyzed") or 0) + newly
+        analyze_result["failed"] = (analyze_result.get("failed") or []) + list(step.get("failed") or [])
+        lstep = self._perf_stage(ledger, "freshness_extract_loops", self.extract_loops, limit=0, auto_approve=False, force=False)
+        loop_result["inserted"] = int(loop_result.get("inserted") or 0) + int(lstep.get("inserted") or 0)
+        self._perf_stage(ledger, "freshness_ear_crate", self.build_ear_crate, limit=0, force=False, taste_profile=taste_profile, write_previews=False)
+        readiness = self._perf_stage(ledger, "freshness_readiness", self.taste_readiness, taste_profile, target_seconds)
+        harvest_log.append({"batch": "freshness", "tracks_analyzed": self._trusted_analyzed_count(),
+                            "have": dict(readiness.get("have") or {}), "need": dict(readiness.get("need") or {}),
+                            "ready": bool(readiness.get("ready"))})
+        return readiness
+
     def one_click_taste_mix(self, data: Dict[str, Any]) -> Dict[str, Any]:
         c = self.ensure_config()
         taste_profile = str(data.get("taste_profile") or "girl_talk_v1")
@@ -3370,6 +4258,11 @@ class EarcrateCore:
                 final_perf = self._perf_publish(ledger, ok=False, in_progress=False)
                 self.set_status(msg, 1, False, msg)
                 return self._finish_one_click_result(ledger, {"ok": False, "error": msg, "harvest": harvest_log, "scan": scan_result, "analyze": analyze_result, "loops": loop_result, "crate": crate_result, "readiness": readiness, "perf": final_perf.get("summary")})
+
+            if not bool(data.get("skip_freshness", False)):
+                fresh_readiness = self._freshness_harvest(ledger, batch, taste_profile, target_seconds, analyze_result, loop_result, harvest_log)
+                if fresh_readiness is not None:
+                    readiness = fresh_readiness
 
             self.set_status("TasteSpec: building compatibility graph", 0.76, True, None)
             graph = self._perf_stage(ledger, "build_compatibility_graph", self.build_compatibility_graph, taste_profile, target_seconds, float(data.get("bpm") or 0.0))
@@ -4088,8 +4981,31 @@ class EarcrateCore:
         return {"ok": not errors, "retagged": retagged, "errors": errors, "journal": str(journal),
                 "db_unresolved": unresolved, "note": note}
 
+    def identify_journals(self) -> Dict[str, Any]:
+        """List identify-rollback journals (newest first) so the UI can undo the most
+        recent tag rewrite. Each apply_identities run writes exactly one
+        agent_root/identify_journal/retag-<ulid>.jsonl."""
+        c = self.ensure_config()
+        d = c.agent_root / "identify_journal"
+        items: List[Dict[str, Any]] = []
+        if d.exists():
+            for p in sorted(d.glob("retag-*.jsonl"), key=lambda x: x.stat().st_mtime, reverse=True):
+                try:
+                    n = sum(1 for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip())
+                except Exception:
+                    n = 0
+                items.append({"path": str(p), "count": n,
+                              "mtime": _dt.datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="seconds")})
+        return {"ok": True, "items": items}
+
     def rollback_identities(self, data: Dict[str, Any]) -> Dict[str, Any]:
         journal = Path(str(data.get("journal") or ""))
+        # Default to the most recent journal so the UI can offer a one-click undo
+        # without threading the per-run path through a background apply.
+        if not str(data.get("journal") or "").strip():
+            js = self.identify_journals().get("items") or []
+            if js:
+                journal = Path(js[0]["path"])
         if not journal.exists():
             return {"ok": False, "error": "identify journal not found"}
         apply = bool(data.get("apply"))
@@ -4302,6 +5218,25 @@ class EarcrateCore:
         with self.status_lock:
             if last_render:
                 self.status["last_render_path"] = last_render
+        # A render can execute cleanly yet be REFUSED by the post-render quality
+        # gate (or render-integrity gate). render_mashup returns a canonical
+        # render_rejected receipt with path=null/presented=false in that case.
+        # Surface it as a non-ok result so a rejected render can never be
+        # mistaken for a plain success at the manifest-execution boundary; the
+        # on-disk rejected report and gate decision are left untouched.
+        rejected = [item for item in done if isinstance(item, dict) and item.get("type") == "render_rejected"]
+        if rejected:
+            failures: List[str] = []
+            for item in rejected:
+                gate = item.get("quality_gate") or {}
+                failures.extend(str(f) for f in (gate.get("failures") or []))
+            reason = "; ".join(failures) or "; ".join(str(item.get("failure_kind") or "render_rejected") for item in rejected)
+            self.set_status("manifest render rejected by quality gate", 1, False, reason)
+            return {"ok": False, "rejected": True, "dry_run": False, "manifest_id": manifest.get("manifest_id"),
+                    "error": "render rejected by post-render quality gate: " + reason,
+                    "rejection_reason": reason, "failures": failures,
+                    "rejected_reports": [item.get("report") for item in rejected if item.get("report")],
+                    "done": done, "plan": plan}
         self.set_status("manifest executed", 1, False)
         return {"ok": True, "dry_run": False, "manifest_id": manifest.get("manifest_id"), "done": done, "plan": plan}
 
@@ -4487,8 +5422,9 @@ class EarcrateCore:
         total_len = int(math.ceil(total_bars * 4 * 60.0 / bpm * sr))
         mix = np.zeros(total_len, dtype=np.float32)
         audio_cache: Dict[str, np.ndarray] = {}
+        external_identity_cache: Dict[str, str] = {}
         transform_cache: Dict[str, np.ndarray] = {}
-        transform_cache_dir = c.agent_root / "cache" / "transforms" / ENGINE_VERSION
+        transform_cache_dir = self._cache_root() / "transforms" / ENGINE_VERSION
         transform_cache_dir.mkdir(parents=True, exist_ok=True)
         max_tail_decks = max(1, min(6, int((arrangement.get("params") or {}).get("max_aux_decks") or 3)))
         report: Dict[str, Any] = {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "bpm": bpm, "render_timestamp": now_utc(), "dj_compiler": arrangement.get("dj_compiler") or {}, "world_model": arrangement.get("world_model") or {}, "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "candidate_search": arrangement.get("candidate_search") or {}, "deck_model": {"version": "v0.5.17", "model": "varispeed_lattice_dry_multideck_tail_overlay", "max_aux_decks": max_tail_decks, "rule": "incoming downbeat stays on grid; only dry, role-approved outgoing decks overhang into the transition window"}, "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0}, "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0}
@@ -4633,9 +5569,11 @@ class EarcrateCore:
 
         _VOCAL_EAR_ROLES = ("VOX_HOOK", "VOX_VERSE", "VOX_SHOUT")
 
-        def separated_vocal_source(pcm_sha: str, src_path: str) -> Tuple[Optional[np.ndarray], Optional[str], Optional[str]]:
+        def separated_stem_source(pcm_sha: str, src_path: str, stem_role: str = "vocals") -> Tuple[Optional[np.ndarray], Optional[str], Optional[str]]:
             """v3 §5.2 StemProvider seam: consult the SELECTED provider for a real
-            vocals stem so a GPU box gets vocal-on-instrumental. Selection is
+            stem (``stem_role`` = "vocals" for the acapella, "no_vocals" for the
+            clean instrumental bed) so a GPU box gets acapella-on-instrumental —
+            the whole point of the separation. Selection is
             ``EARCRATE_STEMS`` (env) > ``config.stem_provider`` > the registered
             default; the shipped "noop" value maps to ``get("stems")`` (the
             registered default), which reports stems unavailable and yields None
@@ -4649,14 +5587,14 @@ class EarcrateCore:
             selected = os.environ.get("EARCRATE_STEMS") or getattr(c, "stem_provider", None) or "noop"
             try:
                 prov = get("stems") if selected == "noop" else get("stems", selected)
-                sep = prov.separate(str(pcm_sha), str(src_path), ["vocals"])
+                sep = prov.separate(str(pcm_sha), str(src_path), [stem_role])
             except Exception as exc:
                 return None, "stem provider %r error: %s" % (selected, exc), None
             if not sep or not sep.get("available"):
                 return None, str((sep or {}).get("reason") or "stems unavailable"), None
-            ref = (sep.get("stems") or {}).get("vocals")
+            ref = (sep.get("stems") or {}).get(stem_role)
             if not ref:
-                return None, "provider %r reported available but produced no vocals stem" % (selected,), None
+                return None, "provider %r reported available but produced no %s stem" % (selected, stem_role), None
             identity_data = {
                 "provider": str(sep.get("provider") or selected),
                 "model_version": sep.get("model_version"),
@@ -4698,8 +5636,69 @@ class EarcrateCore:
             tail_parts: Dict[str, np.ndarray] = {}
             for layer in sec.get("layers", []):
                 lid = layer.get("loop_id")
-                info = loops.get(lid)
                 drop_base = {"section_index": sidx, "loop_id": lid, "role": layer.get("role")}
+                # EXTERNAL VOCAL: a dropped, out-of-library take. It is the render ANCHOR
+                # (render_bpm == the vocal's own tempo, target_key == its own key), so it
+                # plays at IDENTITY — no time-stretch, no pitch-shift, no transform mud.
+                # We slice the section's window straight out of the file and place it.
+                ext_ref = layer.get("external_ref")
+                if ext_ref:
+                    try:
+                        epath = str(ext_ref.get("path") or "")
+                        # Verify the dropped file still IS the take that was proposed —
+                        # a library source is identity-checked twice before render, and
+                        # the external target deserves the same honesty: a file swapped
+                        # between propose and render must not ship under the old receipt.
+                        expected_pcm = str(ext_ref.get("pcm_sha") or "")
+                        if expected_pcm and epath not in external_identity_cache:
+                            try:
+                                external_identity_cache[epath] = decoded_audio_sha256(
+                                    Path(epath), sr, float(ext_ref.get("duration_s") or 0.0))
+                            except Exception as exc:
+                                external_identity_cache[epath] = f"unreadable:{exc}"
+                        if expected_pcm and external_identity_cache.get(epath) != expected_pcm:
+                            report["drops"].append({**drop_base, "reason": "external target changed since propose; re-propose the remix"}); continue
+                        if epath not in audio_cache:
+                            audio_cache[epath] = decode_audio(Path(epath), sr)
+                        esrc = audio_cache[epath]
+                        wa = max(0, int(float(ext_ref.get("start_s") or 0.0) * sr))
+                        wlen = ext_ref.get("len_s")
+                        wb = esrc.size if wlen is None else min(esrc.size, wa + int(float(wlen) * sr))
+                        clip = esrc[wa:wb].astype(np.float32, copy=True)
+                        if clip.size < 256:
+                            report["drops"].append({**drop_base, "reason": "external vocal window empty"}); continue
+                        role_name = "vocal"
+                        layer_bar_offset = max(0, int(layer.get("bar_offset") or 0))
+                        active_bars = min(max(1, int(layer.get("bar_len") or sec["bars"])), int(sec["bars"]) - layer_bar_offset)
+                        if layer_bar_offset >= int(sec["bars"]):
+                            report["drops"].append({**drop_base, "reason": "bar_offset outside section"}); continue
+                        active_start = int(round(layer_bar_offset * 4 * 60.0 / bpm * sr))
+                        active_len = max(512, int(round(active_bars * 4 * 60.0 / bpm * sr)))
+                        # Fit the take's window to the grid WITHOUT tiling (a short final
+                        # window must NOT stutter-echo the last words — the bed carries
+                        # the rest), then the same band filter + RMS match a library
+                        # vocal gets. Fades only at the take's true edges, never at
+                        # interior section seams (a 14ms dip in a held word every 4 bars).
+                        clip = fit_external_clip(clip, active_len)
+                        clip = simple_fft_filter(clip, sr, role_name, vocal_present, section_has_bass)
+                        clip = normalize_layer_rms(clip, role_name)
+                        _fi, _fo = external_edge_fades(active_start, sidx,
+                                                       float(ext_ref.get("start_s") or 0.0),
+                                                       float(ext_ref.get("len_s") or 0.0),
+                                                       float(ext_ref.get("duration_s") or 0.0))
+                        clip = apply_edge_fades(clip, sr, fade_in=_fi, fade_out=_fo, fade_ms=14)
+                        layer_gain_db = cap_overlay_gain_db(float(layer.get("gain_db", -6.5)), role_name, active_bars)
+                        gain = 10 ** (layer_gain_db / 20.0)
+                        active_end = min(deck_len, active_start + clip.size)
+                        if active_end > active_start:
+                            section_deck[active_start:active_end] += clip[: active_end - active_start] * gain
+                            report["layers"].append({**drop_base, "stretch_rate": 1.0, "stretch_pct": 0.0, "pitch_shift": 0.0, "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": "vocal", "world": "external", "source_track_key": "external", "stem_source": "external_target", "stem_identity": ext_ref.get("pcm_sha"), "transform_mode": "identity_anchor", "external_window_s": [ext_ref.get("start_s"), ext_ref.get("len_s")]})
+                        else:
+                            report["drops"].append({**drop_base, "reason": "external render window is empty"})
+                    except Exception as exc:
+                        report["drops"].append({**drop_base, "reason": f"external vocal render error: {exc}"})
+                    continue
+                info = loops.get(lid)
                 if not info:
                     report["drops"].append({**drop_base, "reason": "loop metadata missing"}); continue
                 file_generation = int(info.get("audio_generation") or 0)
@@ -4726,7 +5725,7 @@ class EarcrateCore:
                     if _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
                         pcm_sha = info.get("audio_sha256")
                         if pcm_sha:
-                            stem_arr, stem_reason, stem_identity = separated_vocal_source(str(pcm_sha), path)
+                            stem_arr, stem_reason, stem_identity = separated_stem_source(str(pcm_sha), path, "vocals")
                             if stem_arr is not None:
                                 source = stem_arr
                                 stem_source = "vocals"
@@ -4738,6 +5737,23 @@ class EarcrateCore:
                         else:
                             stem_reason = "verified full-track audio identity missing; run Analyze before stem separation"
                             report["stem_reason"] = stem_reason
+                    else:
+                        # Bed layers (drums/bass/harmony) ride the INSTRUMENTAL stem
+                        # (demucs no_vocals) when a provider can produce one, so a
+                        # foreign acapella sits over a CLEAN instrumental instead of
+                        # song B's FULL MIX — which still carries B's own vocals and
+                        # muddies the bed. The no-op default returns None here, so a
+                        # non-GPU box FALLS BACK to the full-mix decode below,
+                        # byte-identical to the pre-seam path.
+                        pcm_sha = info.get("audio_sha256")
+                        if pcm_sha:
+                            stem_arr, inst_reason, inst_identity = separated_stem_source(str(pcm_sha), path, "no_vocals")
+                            if stem_arr is not None:
+                                source = stem_arr
+                                stem_source = "instrumental"
+                                stem_identity = inst_identity
+                            else:
+                                report.setdefault("stem_reason_instrumental", inst_reason)
                     if source is None:
                         if path not in audio_cache:
                             audio_cache[path] = decode_audio(Path(path), sr)
@@ -4885,7 +5901,8 @@ class EarcrateCore:
             mix = stable_presence_restore(mix, sr)
         mix = integrated_lufs_normalize(mix, sr, -14.0)
         target_seconds = float((arrangement.get("params") or {}).get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
-        report["quality_gate"] = drydeck_quality_gate(drydeck_metrics(mix, sr), target_seconds)
+        prof_spec = self._persona_spectral_profile(str((arrangement.get("params") or {}).get("taste_profile") or ""))
+        report["quality_gate"] = drydeck_quality_gate(drydeck_metrics(mix, sr), target_seconds, prof_spec)
         selected_layers = sum(len(sec.get("layers", [])) for sec in sections)
         report["drop_count"] = len(report["drops"])
         report["selected_layer_count"] = selected_layers
@@ -4997,6 +6014,258 @@ class EarcrateCore:
         gate = self.taste_arrangement_gate(arrangement)
         return {"ok": True, "arrangement": arrangement, "score": score, "taste_gate": gate, "seed": seed}
 
+    def render_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Render the EXACT arrangement the Workbench is showing — not a fresh
+        compose. propose_plan produced this arrangement for the timeline surface;
+        rendering it directly (register a mashup row from the arrangement, then
+        execute its render_mashup manifest) guarantees the WAV IS the plan you saw,
+        with no re-harvest and no seed/param-parity guesswork. The same pre-render
+        gates as propose_taste_mashup apply, so a refused plan never writes theater."""
+        c = self.ensure_config()
+        arrangement = data.get("arrangement")
+        if not arrangement or not arrangement.get("sections"):
+            return {"ok": False, "error": "no arrangement to render — propose or load a plan first"}
+        preflight = self.arrangement_preflight_gate(arrangement)
+        taste_gate = self.taste_arrangement_gate(arrangement)
+        if not preflight.get("passed") or not taste_gate.get("passed"):
+            fails = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
+            return {"ok": False, "error": "plan failed the pre-render gate: " + "; ".join(fails)}
+        params = arrangement.get("params") or {}
+        seed = int(params.get("seed") or data.get("seed") or c.seed)
+        name = safe_name(str(data.get("name") or params.get("name") or "EarCrate Set"), "EarCrate Set")
+        arr_sha = arrangement_sha(arrangement)
+        mashup_id = ulidish()
+        render_name = f"{name}-{ENGINE_VERSION}-{arr_sha[:8]}-{seed}.wav"
+        dst = c.working_root / "renders" / render_name
+        self.conn().execute(
+            "INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
+            (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
+        self.conn().commit()
+        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
+        manifest = self.write_manifest("tastespec", seed, f"Render Workbench plan '{name}'", [op])
+        result = self.execute_manifest(manifest, apply=True)
+        return {"ok": result.get("ok", True) if isinstance(result, dict) else True,
+                "manifest": manifest, "arrangement_sha": arr_sha, "render": result}
+
+    def render_album(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Autonomous 'drop an album' run: compose + render MANY mashups across
+        personas and seeds, dedupe by arrangement, and collect them into ONE album
+        folder with a playlist to audition. Every rendered track is KEPT with its
+        gate verdict noted (a treble-dark render is still worth hearing while the
+        mix is iterated), so the album shows what the box can make right now.
+        Fire-and-forget safe: per-track failures are recorded as skips, never
+        crash the run."""
+        personas = list(data.get("personas") or ["girl_talk_v1", "troubadour_v1", "notorious_v1"])
+        tracks = max(1, int(data.get("tracks") or 10))
+        target_seconds = float(data.get("target_seconds") or 150)
+        raw_bias = data.get("recognizability_bias", "max")
+        bias: Optional[int] = None
+        if raw_bias not in (None, "", "none", "None"):
+            bias = 92 if str(raw_bias).lower() in ("max", "maximize", "high", "1", "true") else int(raw_bias)
+        c = self.ensure_config()
+        stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        album_dir = c.working_root / "renders" / ("album_" + stamp)
+        album_dir.mkdir(parents=True, exist_ok=True)
+        made: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+        seen_sha: set = set()
+        attempts = 0
+        max_attempts = tracks * 6
+        while len(made) < tracks and attempts < max_attempts:
+            progressed = False
+            for pid in personas:
+                if len(made) >= tracks:
+                    break
+                attempts += 1
+                if TASTE_PROFILES.get(pid) is None:
+                    continue
+                try:
+                    if not self.approved_atom_pool(pid):
+                        skipped.append({"taste_profile": pid, "reason": "no approved atoms"}); continue
+                    rd = self.taste_readiness(pid, target_seconds)
+                    if not rd.get("ready"):
+                        skipped.append({"taste_profile": pid, "reason": "crate not ready: " + "; ".join(rd.get("failures") or [])}); continue
+                    seed = self.next_render_seed(c.seed)
+                    params: Dict[str, Any] = {"taste_profile": pid, "target_seconds": target_seconds,
+                                              "seed": seed, "quality_mode": "stable_deck",
+                                              "mix_mode": "tastespec_graph", "post_render_gate": True}
+                    if bias is not None:
+                        params["recognizability_bias"] = bias
+                    proposal = self.propose_taste_mashup(params)
+                    arr_sha = str(proposal.get("arrangement_sha") or "")
+                    if arr_sha and arr_sha in seen_sha:
+                        continue  # identical arrangement -> not a new track
+                    seen_sha.add(arr_sha)
+                    rendered = self.execute_manifest(proposal["manifest"], apply=True)
+                    if not rendered.get("ok", True):
+                        # A gate-rejected render must never appear on the tracklist as a
+                        # phantom WAV (the file was never written). Same F3 contract as
+                        # the manifest boundary: rejection is a visible skip with reason.
+                        skipped.append({"taste_profile": pid, "seed": seed,
+                                        "reason": str(rendered.get("rejection_reason") or rendered.get("error") or "render rejected")[:180]})
+                        # NOT progress: if every seed of every persona rejects, the album
+                        # is unrenderable and the no-progress break must fire, not spin.
+                        continue
+                    dst = Path(proposal["dst"])
+                    gate = self._album_gate_of(dst)
+                    made.append({"track": len(made) + 1, "taste_profile": pid, "seed": seed,
+                                 "arrangement_sha": arr_sha[:12], "wav": dst.name,
+                                 "score": round(float((self.score_arrangement(proposal["arrangement"]) or {}).get("total", 0.0)), 4),
+                                 "gate": gate})
+                    progressed = True
+                    self.set_status("album: %d/%d rendered (%s)" % (len(made), tracks, pid),
+                                    len(made) / max(1, tracks), True)
+                except PlanRejectedError as exc:
+                    skipped.append({"taste_profile": pid, "reason": "pre-render gate: " + str(exc)[:140]})
+                except Exception as exc:
+                    skipped.append({"taste_profile": pid, "reason": str(exc)[:180]})
+            if not progressed:
+                break  # nothing more is renderable with the current material
+        params_used = {"personas": personas, "target_seconds": target_seconds,
+                       "recognizability_bias": bias, "tracks_requested": tracks}
+        manifest = {"created": now_utc(), "engine_version": ENGINE_VERSION, "album_dir": str(album_dir),
+                    "params": params_used, "made": len(made), "tracks": made, "skipped": skipped[:60]}
+        (album_dir / "album_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        readme = album_readme_markdown(made, skipped, params_used, str(album_dir))
+        (album_dir / "README.md").write_text(readme, encoding="utf-8")
+        # A committable report at the repo-facing agent_root, so the box can push a
+        # trace of the run back to the branch without the (large) WAVs.
+        with contextlib.suppress(Exception):
+            (c.agent_root / "ALBUM_REPORT.md").write_text(readme, encoding="utf-8")
+        return {"ok": bool(made), "album_dir": str(album_dir), "made": len(made),
+                "tracks": made, "skipped": skipped, "readme": str(album_dir / "README.md")}
+
+    def _album_gate_of(self, dst: Path) -> Dict[str, Any]:
+        """Read the post-render quality gate for a rendered WAV from its sidecar
+        report; returns {} if not found. Never raises."""
+        for cand in (dst.parent / (dst.stem + ".render_report.json"),
+                     dst.with_suffix(".render_report.json")):
+            try:
+                if cand.exists():
+                    rep = json.loads(cand.read_text(encoding="utf-8"))
+                    qg = rep.get("quality_gate") or {}
+                    return {"passed": bool(qg.get("passed")), "failures": qg.get("failures") or [],
+                            "warnings": qg.get("warnings") or []}
+            except Exception:
+                continue
+        return {}
+
+    def _persona_spectral_profile(self, taste_profile: str) -> Optional[Dict[str, Any]]:
+        """A persona's own spectral gate target (a ``spectral_target`` block in its
+        TasteSpec), merged over the default GT profile so a persona may override
+        just one band (e.g. a Pretty Lights remix lowering the high3000 floor for
+        its vinyl-rolled-off top) and inherit the rest. Returns None -> the caller
+        uses the default GT profile. Never raises."""
+        if not taste_profile:
+            return None
+        try:
+            spec = (load_tastespec(taste_profile) or {}).get("spectral_target")
+        except Exception:
+            return None
+        if not isinstance(spec, dict) or not spec:
+            return None
+        merged = {k: dict(v) for k, v in GT_SPECTRAL_PROFILE.items()}
+        for band, over in spec.items():
+            if band in merged and isinstance(over, dict):
+                merged[band].update(over)
+            elif isinstance(over, dict):
+                merged[band] = dict(over)
+        return merged
+
+    def bakeoff(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Persona bake-off: render the SAME library through several personas so you
+        HEAR how each taste reinterprets it — girl_talk's dense collage vs
+        troubadour's key-matched medley vs notorious's one-voice-over-foreign-beds.
+        Each persona composes from its own approved pool with an optional
+        recognizability crank. plan_only=True returns the composed arrangements +
+        gate + score WITHOUT rendering (fast A/B/C preview); otherwise it renders a
+        gate-passing WAV per persona. Personas whose crate is not ready are reported
+        as a clean skip, never a crash — the bake-off shows what each taste CAN do
+        with the material you have."""
+        personas = list(data.get("personas") or ["girl_talk_v1", "troubadour_v1", "notorious_v1"])
+        target_seconds = float(data.get("target_seconds") or 120)
+        plan_only = bool(data.get("plan_only"))
+        raw_bias = data.get("recognizability_bias")
+        bias: Optional[int] = None
+        if raw_bias is not None and str(raw_bias) != "":
+            bias = 92 if str(raw_bias).lower() in ("max", "maximize", "high", "1", "true") else int(raw_bias)
+        results: List[Dict[str, Any]] = []
+        for pid in personas:
+            entry: Dict[str, Any] = {"taste_profile": pid}
+            prof = TASTE_PROFILES.get(pid)
+            if prof is None:
+                entry.update(ok=False, error="unknown persona"); results.append(entry); continue
+            entry["contract"] = prof.get("contract") or prof.get("name") or pid
+            try:
+                pool = self.approved_atom_pool(pid)
+                if not pool:
+                    entry.update(ok=False, skipped=True, error="no approved atoms for this persona yet"); results.append(entry); continue
+                rd = self.taste_readiness(pid, target_seconds)
+                if not rd.get("ready"):
+                    entry.update(ok=False, skipped=True, error="crate not ready: " + "; ".join(rd.get("failures") or []),
+                                 have=rd.get("have"), need=rd.get("need")); results.append(entry); continue
+                seed = self.next_render_seed(self.ensure_config().seed)
+                params: Dict[str, Any] = {"taste_profile": pid, "target_seconds": target_seconds, "seed": seed,
+                                          "quality_mode": "stable_deck", "mix_mode": "tastespec_graph"}
+                if bias is not None:
+                    params["recognizability_bias"] = bias
+                if plan_only:
+                    arr = self.compose_taste_arrangement(pool, dict(params), seed)
+                    gate = self.taste_arrangement_gate(arr)
+                    entry.update(ok=bool(gate.get("passed")), seed=seed, bpm=arr.get("bpm"),
+                                 sections=len(arr.get("sections") or []), score=self.score_arrangement(arr),
+                                 taste_gate={"passed": gate.get("passed"), "failures": gate.get("failures") or []})
+                else:
+                    params["post_render_gate"] = True
+                    proposal = self.propose_taste_mashup(params)  # composes, gates, registers a mashup + manifest
+                    render = self.execute_manifest(proposal["manifest"], apply=True)
+                    ok = render.get("ok", True) if isinstance(render, dict) else True
+                    entry.update(ok=ok, seed=seed, render=render, arrangement_sha=proposal.get("arrangement_sha"),
+                                 score=self.score_arrangement(proposal["arrangement"]))
+            except Exception as exc:
+                entry.update(ok=False, error=str(exc))
+            results.append(entry)
+        summary = {"ok": any(r.get("ok") for r in results), "recognizability_bias": bias,
+                   "target_seconds": target_seconds, "plan_only": plan_only, "bakeoff": results}
+        # A rendering bake-off is dispatched through run_background, which returns
+        # {started:true} and DISCARDS this per-persona summary — so without a durable
+        # trace the caller could never see which personas rendered / skipped / failed.
+        # Persist it (artifact + status field) so the outcome survives a backgrounded
+        # or looped run; the synchronous return (plan_only preview) is unchanged.
+        self._persist_bakeoff_summary(summary)
+        return summary
+
+    def _persist_bakeoff_summary(self, summary: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist a bake-off's per-persona outcome so it is retrievable after the
+        run_background dispatch has thrown the return value away: the FULL summary
+        lands in a discoverable artifact (``agent_root/bakeoff_last.json``) and a
+        compact copy in ``status['last_bakeoff']`` (served by GET /api/status)."""
+        results = summary.get("bakeoff") or []
+        record: Dict[str, Any] = {
+            "at": now_utc(),
+            "ok": summary.get("ok"),
+            "plan_only": summary.get("plan_only"),
+            "recognizability_bias": summary.get("recognizability_bias"),
+            "target_seconds": summary.get("target_seconds"),
+            "personas": [{"taste_profile": r.get("taste_profile"),
+                          "ok": bool(r.get("ok")),
+                          "skipped": bool(r.get("skipped")),
+                          "error": r.get("error"),
+                          "score": r.get("score"),
+                          "seed": r.get("seed"),
+                          "taste_gate": r.get("taste_gate"),
+                          "arrangement_sha": r.get("arrangement_sha")} for r in results],
+        }
+        with contextlib.suppress(Exception):
+            c = self.ensure_config()
+            path = c.agent_root / "bakeoff_last.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({**record, "bakeoff": results}, ensure_ascii=False, indent=2), encoding="utf-8")
+            record["path"] = str(path)
+        with self.status_lock:
+            self.status["last_bakeoff"] = record
+        return record
+
     def list_plans(self) -> Dict[str, Any]:
         rows = self.conn().execute("SELECT id,name,taste_profile,plan_hash,created_at FROM saved_plans ORDER BY created_at DESC LIMIT 100").fetchall()
         return {"ok": True, "items": [dict(r) for r in rows]}
@@ -5098,6 +6367,117 @@ class EarcrateCore:
 
     def taste_profile_receipt(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
         return profile_summary(taste_profile)
+
+    def study_reference(self, path: str, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """Turn a documented Girl Talk sample dataset into engine ground truth.
+
+        Reads the reference JSON at ``path``, measures the persona fingerprint,
+        counts the Girl-Talk-PROVEN overlap edges, and computes how the measured
+        numbers would recalibrate ``taste_profile`` — WITHOUT touching the shipped
+        JSON. Heavy logic lives in earcrate/study/reference.py; this is thin
+        wiring so the capability is reachable from the CLI and the HTTP layer.
+        """
+        dataset = load_reference(path)
+        fingerprint = reference_fingerprint(dataset)
+        edges = reference_edges(dataset)
+        base = load_tastespec(taste_profile)
+        calibration = calibrate_profile(fingerprint, base)
+        return {
+            "taste_profile": taste_profile,
+            "fingerprint": fingerprint,
+            "edges_count": len(edges),
+            "calibration_diff": calibration["diff"],
+        }
+
+    def reference_recall(self, path: str, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """THE ANSWER-KEY BENCHMARK: run OUR library against a master's DOCUMENTED
+        pairings and measure how many our engine independently rediscovers.
+
+        A proven pairing is only 'recoverable' when we own BOTH its source tracks;
+        of those, 'recovered' when the engine's OWN compatibility graph links atoms
+        of the two sources. The reported recall + the ``missed`` list answer the
+        owner's exact question -- what SHOULD the system discover on its own, and
+        where is the gap. Reads only; heavy logic lives in study/reference.py."""
+        db = self.conn()
+        # what we own: normalized source keys of every present library track
+        present = set()
+        for r in db.execute(
+                "SELECT t.artist artist, t.title title FROM tracks t "
+                "JOIN files f ON f.id=t.file_id WHERE COALESCE(f.present,1)=1"):
+            present.add(source_key(r["artist"], r["title"]))
+        # file_id -> source key (to translate engine edges into source pairs)
+        fkey: Dict[str, str] = {}
+        for r in db.execute("SELECT file_id fid, artist, title FROM tracks"):
+            fkey[str(r["fid"])] = source_key(r["artist"], r["title"])
+        # what the engine independently linked: compatibility edges -> source pairs
+        recovered = set()
+        for r in db.execute(
+                "SELECT la.file_id lf, ra.file_id rf FROM compatibility_edges e "
+                "JOIN ear_atoms la ON la.id=e.left_atom_id "
+                "JOIN ear_atoms ra ON ra.id=e.right_atom_id WHERE e.taste_profile=?",
+                (taste_profile,)):
+            ka, kb = fkey.get(str(r["lf"])), fkey.get(str(r["rf"]))
+            if ka and kb and ka != kb:
+                recovered.add(frozenset((ka, kb)))
+        report = recall_report(path, present, recovered)
+        report["taste_profile"] = taste_profile
+        report["engine_edges"] = len(recovered)
+        report["path"] = str(path)
+        return report
+
+    def export_library_manifest(self, path: str = "") -> Dict[str, Any]:
+        """Export a PUBLIC-SAFE catalog of the library -- artist/title/album/year/
+        genre for every present track, with NO file paths or machine identifiers --
+        so it can be committed and cross-referenced (off the box) against the
+        documented producer sample sources that grade the engine's discovery.
+        Read-only. Writes to ``path`` or <agent_root>/library_manifest.json."""
+        c = self.ensure_config()
+        rows = self.conn().execute(
+            "SELECT t.artist artist, t.title title, t.album album, t.year year, "
+            "(SELECT value FROM tags WHERE file_id=f.id AND key='genre' LIMIT 1) genre "
+            "FROM tracks t JOIN files f ON f.id=t.file_id "
+            "WHERE COALESCE(f.present,1)=1 AND t.title IS NOT NULL "
+            "ORDER BY t.artist, t.title").fetchall()
+        items = [{"artist": r["artist"] or "", "title": r["title"] or "",
+                  "album": r["album"] or "", "year": r["year"], "genre": r["genre"] or ""}
+                 for r in rows]
+        dst = Path(path) if path else (c.agent_root / "library_manifest.json")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(json.dumps({"created": now_utc(), "count": len(items), "tracks": items},
+                                  ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"ok": True, "count": len(items), "path": str(dst)}
+
+    def plan_reference_extraction(self, path: str) -> Dict[str, Any]:
+        """Since we OWN the master's albums, plan extracting his DOCUMENTED samples
+        from HIS OWN audio: which timed cuts are makeable (we own that master track)
+        vs which master tracks we're missing. Read-only, exact. The actual WAV
+        slicing (decode + cut [start,end]) is a box step over the makeable cuts."""
+        import re as _re
+        def _tkey(s: Any) -> str:
+            return _re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+        ds = load_reference(path)
+        cuts = sample_cut_list(ds)
+        master = artist_key(ds["artist"])
+        owned: Dict[str, str] = {}
+        for r in self.conn().execute(
+                "SELECT t.artist artist, t.title title, f.id fid FROM tracks t "
+                "JOIN files f ON f.id=t.file_id WHERE COALESCE(f.present,1)=1 AND t.title IS NOT NULL"):
+            if artist_key(r["artist"]) == master:
+                owned.setdefault(_tkey(r["title"]), str(r["fid"]))
+        makeable = 0
+        missing: set = set()
+        for c in cuts:
+            if owned.get(_tkey(c["master_track_title"])):
+                makeable += 1
+            else:
+                missing.add(c["master_track_title"])
+        return {
+            "ok": True, "master": ds["artist"], "album": ds["album"],
+            "timed_cuts_total": len(cuts), "makeable": makeable,
+            "master_tracks_owned": len(owned), "missing_master_tracks": sorted(missing)[:30],
+            "note": "makeable cuts slice from owned master audio on the box; untimed "
+                    "datasets (0 cuts) need audio fingerprinting (AcoustID) instead",
+        }
 
     def set_atom_judgment(self, atom_id: str, taste_profile: str, status: str, relabel_role: str = "", favorite: bool = False, locked: bool = False, reason: str = "") -> Dict[str, Any]:
         if status not in {"approved", "rejected", "candidate"}:
@@ -5221,7 +6601,25 @@ class EarcrateCore:
             self.status.update({"busy": True, "message": "starting", "progress": 0, "last_error": None})
         def target():
             try:
-                fn(*args, **kwargs)
+                result = fn(*args, **kwargs)
+                # Many jobs (scan/analyze) clear busy themselves at completion; only
+                # finalize when they did NOT, so we never wedge "busy" forever
+                # (identify/deep-clean/one_click previously never reset on success)
+                # and never clobber a job's own final message.
+                with self.status_lock:
+                    still_busy = bool(self.status.get("busy"))
+                if still_busy:
+                    if isinstance(result, dict) and result.get("ok") is False:
+                        # A job that returns {ok:false} FAILED without raising
+                        # (e.g. "AcoustID API key required"): report it, don't
+                        # silently claim success.
+                        msg = str(result.get("error") or "operation failed")
+                        self.set_status(f"error: {msg}", busy=False, error=msg)
+                    else:
+                        done_msg = "done"
+                        if isinstance(result, dict):
+                            done_msg = str(result.get("message") or result.get("summary") or "done")
+                        self.set_status(done_msg, progress=1.0, busy=False)
             except Exception as exc:
                 traceback.print_exc()
                 self.set_status(f"error: {exc}", busy=False, error=str(exc))

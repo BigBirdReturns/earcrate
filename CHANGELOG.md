@@ -1,5 +1,43 @@
 # EarCrate — CHANGELOG
 
+## v0.8.30 — the performance chapter + the GPU multi-tool seam + the treble fix
+- Rebuilds the perf campaign from the hot-path audit's verified findings (the
+  original implementation died unpushed with its session container):
+  - analyze runs ONE full-track decode, hashing the decoder's own byte stream
+    (digest proven byte-identical to the old separate ffmpeg hash pass, so every
+    banked pcm_sha and L3 stem key stays valid — zero cache invalidation) while
+    keeping only the bounded feature window in RAM.
+  - local_harmony builds one whole-track chromagram and slices windows instead
+    of ~59 per-window chroma_cqt builds (measured 36% of per-track analyze
+    cost); onset_strength is computed once and shared instead of 3x; the crate
+    pass reads harmonic/percussive ratios off the spectrogram it already has
+    instead of a second STFT + two iSTFTs per clip.
+  - plan_varispeed_transform is memoized (pure; ~4.4M repeated calls per
+    propose, previously computed twice); ArtifactStore.has() answers existence
+    without reading ~48MB blobs; renders decode each stem ONCE per
+    (pcm_sha, role) instead of per-layer-per-section; /api/status polls read
+    through a second read-only WAL connection so UI input never queues behind a
+    background writer.
+- Fixes the treble-dead render chain (the box-named sole blocker for audible
+  external-remix output): the finishing EQ is now MEASURED and target-directed
+  (reads low200/high3000 with the gate's own spectral ruler, solves the shelf
+  gains to reach the real-GT targets, iterates, bounded to +/-14 dB) and runs on
+  EVERY gated render — the external_remix mode previously received no tonal
+  correction at all. Dynamics are untouched by construction.
+- GPU work queue seam (earcrate/providers/workqueue.py): declared job kinds
+  with honest capability probes (stems live; beats/embed/transcribe declared,
+  reporting exactly what an install would unlock), interactive lane over warm
+  lane, batch-by-kind draining (one model resident — the 8GB VRAM policy),
+  content-addressed dedup and done-once skip via each kind's has-probe. The
+  demucs stem-warmer is tenant #1: it now draws its work through the queue and
+  its existing gates pass unmodified — that is the proof of the seam. doctor()
+  surfaces the per-kind report.
+- remix_anchor records fold provenance (bpm_fold_tested / bpm_fold_choice /
+  bed_median_bpm) so the box can tell a deliberate fold-to-crate outcome from a
+  fold that never ran (v0.8.29 re-verification request).
+- Gates: 181/181 (new workqueue suite + presence-restore gate + streaming-digest
+  equality pinned inside the pcm-identity gate).
+
 ## v0.8.29 — PR-27 review fixes: anti-aliased resampler, external-vocal integrity, dist import guard
 - FIX **render brightness at the source**: `resample_or_fit` was `np.interp` —
   linear interpolation, a first-order-hold low-pass sitting in the render hot

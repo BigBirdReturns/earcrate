@@ -10,6 +10,7 @@ from earcrate.materials.regions import propose_regions
 from earcrate.remix.external import remix_anchor, external_foreground_atom, external_vocal_window, external_remix_feasibility, fit_external_clip, external_edge_fades
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
+from earcrate.providers.workqueue import GpuWorkQueue, kind_capabilities
 
 # Byte ceiling for the L3 stem cache on the NVMe. The 4060's separations are the
 # expensive, REUSABLE unit (one source's stems serve every mashup that touches
@@ -1404,34 +1405,51 @@ class EarcrateCore:
         store = get("artifacts")
         budget = self._cache_byte_budget()
         cands = self.stem_warm_candidates(taste_profile)
+        # TENANT #1 of the GPU work queue: the warmer's priority list becomes
+        # queued `stems` jobs (warm lane) and the loop below drains them in the
+        # queue's policy order — which, for a single kind in one lane, is exactly
+        # the enqueue (priority) order, so behavior is unchanged and the existing
+        # warmer gates prove the seam. The queue supplies content-addressed dedup
+        # and a receipts ledger; the warmer keeps its own budget/skip accounting.
+        q = GpuWorkQueue()
+        for i, cand in enumerate(cands):
+            q.enqueue("stems", identity=str(cand["pcm_sha"]), lane="warm",
+                      payload={"path": str(cand["path"]), "roles": role_list, "index": i})
         separated = 0
         skipped = 0
         errors: List[Dict[str, Any]] = []
         stopped_reason = "queue drained"
         total = len(cands)
-        for i, cand in enumerate(cands):
+        for job in q.ordered_jobs():
+            i = int(job["payload"]["index"])
             if max_items and separated >= max_items:
                 stopped_reason = "max_items reached"
                 break
-            pcm = str(cand["pcm_sha"])
-            path = str(cand["path"])
+            pcm = str(job["identity"])
+            path = str(job["payload"]["path"])
             if prov.has_stems(pcm, role_list):
                 skipped += 1
+                q.record(job, "cached")
                 continue
             if store.total_bytes() >= budget:
                 stopped_reason = "cache budget reached"
                 break
             if not os.path.exists(path):
                 errors.append({"pcm_sha": pcm[:12], "error": "source file missing"})
+                q.record(job, "error", {"error": "source file missing"})
                 continue
             try:
                 sep = prov.separate(pcm, path, role_list)
                 if sep and sep.get("available"):
                     separated += 1
+                    q.record(job, "done", {"cached": bool(sep.get("cached"))})
                 else:
-                    errors.append({"pcm_sha": pcm[:12], "error": str((sep or {}).get("reason") or "provider produced no stems")})
+                    err = str((sep or {}).get("reason") or "provider produced no stems")
+                    errors.append({"pcm_sha": pcm[:12], "error": err})
+                    q.record(job, "error", {"error": err})
             except Exception as exc:
                 errors.append({"pcm_sha": pcm[:12], "error": str(exc)[:200]})
+                q.record(job, "error", {"error": str(exc)[:200]})
             self.set_status(
                 "warming stems %d/%d (%d cached)" % (separated + skipped, total, skipped),
                 (i + 1) / max(1, total), True)
@@ -1950,7 +1968,13 @@ class EarcrateCore:
         cap["note"] = ("stem separation ready" if cap.get("ready")
                        else "stem separation OFF — needs torch+demucs on a CUDA box; "
                             "default NoopStemProvider in use")
-        return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict(), "stem_capability": cap}
+        # The GPU work queue's per-kind capability report: what this box COULD
+        # run and exactly what is missing for the rest (informational).
+        gpu_kinds = {}
+        with contextlib.suppress(Exception):
+            gpu_kinds = kind_capabilities()
+        return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict(),
+                "stem_capability": cap, "gpu_work_kinds": gpu_kinds}
 
     def startup_janitor(self) -> Dict[str, Any]:
         """Launch-time cleanup of everything old versions are known to leave behind.

@@ -198,3 +198,27 @@ Moved `EarCrate-Workspace` off C: → `D:\BonkyJones Backups\EarCrate-Workspace`
 resolved via `visible_app_dir()`, which for `-m` isn't the repo root (same `-m`-vs-dist gap as the
 config-pointer trap). So "git pull + run just works" holds for the **dist launcher** only; the `-m` path
 needs the seed to key off `EARCRATE_DEFAULTS`/CWD, not `visible_app_dir()`.
+
+---
+
+## VERIFY `32aa81f` + `c711c52` on real box (clean `-m` launch, D: workspace)
+- **Config-trap FIXED (`32aa81f`) + status-truth FIXED (`c711c52`):** a CLEAN `python -m earcrate --serve`
+  (no `EARCRATE_DEFAULTS`, no manual `/api/config`) now auto-configures to the D: workspace and
+  `/api/status` reports `configured: True`, `master_root: D:\…\Music Library`. "git pull + run just
+  works" now holds on the `-m` path.
+- **Persona coverage (`c711c52`) — partial:** after force-rebuilding crates+graphs with the new code,
+  plan_only bake-off:
+  | persona | gate | bed_layers | failure |
+  |---|---|---|---|
+  | girl_talk_v1 | ✅ PASS | 23 | — |
+  | troubadour_v1 | ✗ | 8 | floor 0.50 + foreground 0.56 too low |
+  | notorious_v1 | ✗ | 19 | foreground 0.61 too low |
+  girl_talk passes; troubadour/notorious still miss coverage on the **96-file / 1152-loop pool**. Their
+  sparse/voice-forward styles need more foreground+floor material than 96 files provide — **material-
+  depth, confirmed** (analyze a bigger/broader slice). The coverage change helped but didn't clear them
+  at this pool size.
+- **Workflow finding:** a `git pull` that changes the composer requires **rebuilding crates+graphs**
+  (`/api/ear_crate/build?force` + `/api/taste/graph`). On stale atoms, girl_talk falsely FAILED coverage
+  (0.47); after rebuild it PASSED. Consider a stale-crate warning / auto-rebuild on engine-version bump.
+- Not exercised here (plan_only = no render): the demucs speed knob and bake-off persistence from
+  `c711c52` — need a real render / non-plan_only bake-off to verify.

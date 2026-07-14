@@ -6,6 +6,7 @@ from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio, decoded_audio_sha256
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
 from earcrate.study.reference import load_reference, reference_fingerprint, reference_edges, calibrate_profile
+from earcrate.remix.external import remix_anchor, external_foreground_atom, external_vocal_window, external_remix_feasibility
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
 
@@ -3570,6 +3571,21 @@ class EarcrateCore:
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         target_seconds = float(params.get("target_seconds") or 120.0)
         needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
+        # HARD PIN (external-target remix): the deck is dictated by the dropped vocal,
+        # not searched. When pin_bpm/pin_key are set, skip lattice selection entirely and
+        # return the single feasible deck at the anchor — the library bed must bend to the
+        # target's own tempo & key, never the reverse. Absent the pins this is a no-op and
+        # the normal max-playable search runs byte-identically.
+        pin_bpm = float(params.get("pin_bpm") or 0.0) or None
+        pin_key = params.get("pin_key")
+        if pin_bpm and pin_key is not None:
+            key = int(pin_key) % 12
+            feasible, diag = self.taste_feasible_pool(pool, float(pin_bpm), key, params)
+            diag["deck_score"] = None
+            diag["needed_sources"] = needed_sources
+            diag["pinned"] = True
+            return {"pool": feasible, "render_bpm": float(pin_bpm), "target_key": key,
+                    "lattice": {"best": diag, "lattice": [diag]}, "diagnostics": diag}
         keys = sorted({int(x.get("key_root") or 0) % 12 for x in pool}) or [0]
         weighted_keys = []
         for k in keys:
@@ -3651,6 +3667,86 @@ class EarcrateCore:
         return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement, "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
             "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "readiness": readiness}
 
+    @_durable_compile_attempt
+    def propose_external_remix(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Remix a DROPPED, out-of-library vocal in a persona's style over a library bed.
+
+        The inversion of every other path: instead of choosing the tempo/key with the
+        most playable crate material, we PIN the render to the target vocal's own tempo
+        and key and rebuild the bed under it. The vocal is never transformed (identity
+        anchor); only the library bed bends. This is the external-target remix the 22
+        remix personas were built for.
+
+        Hard arbiter is ``external_remix_feasibility`` at the anchor (is there a bed at
+        all?), not the full-crate turnover contract (which assumes a rotating collage —
+        wrong shape for a single held vocal). The persona's own taste gate is attached as
+        an advisory, not a veto."""
+        c = self.ensure_config()
+        taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
+        if taste_profile not in TASTE_PROFILES:
+            raise RuntimeError(f"unknown taste profile '{taste_profile}'")
+        target_path = str(params.get("target_path") or params.get("target") or "").strip()
+        if not target_path:
+            raise RuntimeError("external remix needs a target_path (the dropped vocal file)")
+        tp = Path(target_path)
+        if not tp.exists():
+            raise RuntimeError(f"target vocal not found: {target_path}")
+        # Analyze the dropped vocal: features on a bounded window (tempo/key), but the
+        # FULL duration for windowing so the whole take rides the arrangement.
+        sr = int(c.sample_rate)
+        y_full = decode_audio(tp, sr)
+        duration_s = float(y_full.size) / float(sr) if y_full.size else 0.0
+        y_feat = y_full[: sr * MAX_ANALYSIS_SECONDS] if y_full.size > sr * MAX_ANALYSIS_SECONDS else y_full
+        feats = compute_pcm_features(y_feat, sr)
+        anchor = remix_anchor(feats)
+        pcm_sha = decoded_audio_sha256(tp, sr, duration_s)
+        title = safe_name(str(params.get("name") or tp.stem or "target"), "target")
+        ext_atom = external_foreground_atom(title, anchor, duration_s, pcm_sha, str(tp))
+        # The library supplies ONLY the bed. Feasibility is judged at the anchor.
+        pool = self.approved_atom_pool(taste_profile)
+        profile = TASTE_PROFILES[taste_profile]
+        target_seconds = float(params.get("target_seconds") or min(duration_s or 120.0, 240.0))
+        needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
+        _feasible, diag = self.taste_feasible_pool(pool, float(anchor["bpm"]), int(anchor["key_root"]), params)
+        feasibility = external_remix_feasibility(diag, needed_sources)
+        if not feasibility.get("buildable"):
+            raise RuntimeError("external remix infeasible at target anchor ("
+                               f"{anchor['bpm']} BPM, key {anchor['key_root']}): "
+                               + "; ".join(feasibility.get("reasons") or ["no bed"]))
+        explicit_seed = params.get("seed") not in (None, "", 0, "0")
+        seed = int(params.get("seed")) if explicit_seed else self.next_render_seed(c.seed)
+        params = dict(params)
+        params.update({"seed": seed, "taste_profile": taste_profile, "quality_mode": "external_remix",
+                       "post_render_gate": True, "mix_mode": "tastespec_graph",
+                       "pin_bpm": float(anchor["bpm"]), "pin_key": int(anchor["key_root"]),
+                       "external_foreground": ext_atom, "target_seconds": target_seconds})
+        arrangement = self.compose_taste_arrangement(pool, params, seed)
+        arrangement["external_target"] = {"title": title, "path": str(tp), "pcm_sha": pcm_sha,
+            "duration_s": round(duration_s, 3), "anchor": anchor, "feasibility": feasibility}
+        preflight = self.arrangement_preflight_gate(arrangement)
+        taste_gate = self.taste_arrangement_gate(arrangement)  # advisory for external remix
+        arr_sha = arrangement_sha(arrangement)
+        arrangement["candidate_search"] = {"count": 1, "selected_seed": seed, "mode": "external_remix",
+            "selected_preflight": preflight, "taste_gate": taste_gate, "external_feasibility": feasibility,
+            "render_policy": "external-target remix: hard gate = bed feasibility at the pinned anchor; persona taste gate is advisory (single held vocal is not a rotating collage)"}
+        # Preflight (structural sanity) is still a hard veto — empty sections, illegal
+        # transforms, no floor coverage are real render failures regardless of mode.
+        if not preflight.get("passed"):
+            raise PlanRejectedError("external remix preflight refused theater: "
+                                    + "; ".join(preflight.get("failures") or []), arrangement, arr_sha)
+        name = title
+        mashup_id = ulidish()
+        render_name = render_output_name(f"{name}-remix", taste_profile, ENGINE_VERSION, arr_sha, seed)
+        dst = c.working_root / "renders" / render_name
+        self.conn().execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
+        self.conn().commit()
+        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
+        manifest = self.write_manifest("external_remix", seed, f"Render external remix of '{title}' in {taste_profile} style", [op])
+        return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement,
+                "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
+                "anchor": anchor, "feasibility": feasibility, "taste_gate": taste_gate,
+                "tastespec": profile_summary(taste_profile)}
+
     def compose_taste_arrangement(self, pool: List[Dict[str, Any]], params: Dict[str, Any], seed: int) -> Dict[str, Any]:
         rng = random.Random(seed)
         target_seconds = float(params.get("target_seconds") or 120)
@@ -3661,7 +3757,11 @@ class EarcrateCore:
         profile0 = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         need_sources0 = sources_needed(target_seconds, float(profile0.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         deck_sources = int(((deck.get("diagnostics") or {}).get("have") or {}).get("sources", 0))
-        if deck_sources and deck_sources < need_sources0:
+        # External remix relaxes the full-crate turnover contract: the foreground is
+        # ONE fixed dropped vocal that never rotates, so the bed alone need not supply
+        # a whole set's worth of distinct sources. external_remix_feasibility (enforced
+        # up in propose_external_remix, at the same anchor) is the arbiter there.
+        if deck_sources and deck_sources < need_sources0 and not params.get("external_foreground"):
             diag = deck.get("diagnostics") or {}
             raise RuntimeError(
                 f"TasteSpec deck infeasible: best deck ({diag.get('render_bpm')} BPM, key {diag.get('target_key')}) keeps {deck_sources}/{need_sources0} distinct playable sources; the crate needs more sources that survive transform at a common tempo")
@@ -3693,6 +3793,13 @@ class EarcrateCore:
         if vetoed_atoms:
             pool = [x for x in pool if str(x.get("atom_id")) not in vetoed_atoms]
         foreground = [x for x in pool if x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}]
+        # External-target remix: the dropped vocal REPLACES the library foreground rail
+        # outright (it's the whole point — a foreign vocal over a library bed), so no
+        # in-crate vox can substitute for it. It rides the entire track (held below), and
+        # the library pool supplies only the bed rails (floor/bass/spark).
+        external_fg = params.get("external_foreground")
+        if external_fg:
+            foreground = [dict(external_fg)]
         # The floor rail must be a STRUCTURAL bed the taste gate recognizes as floor
         # (DRUM_BREAK/BED_CHORD/RIFF_ID -> role drum_anchor/harmony/full). TEXTURE reads
         # as atmosphere/spark, not a bed: taste_arrangement_gate does NOT credit it to
@@ -3811,7 +3918,7 @@ class EarcrateCore:
             tf = playable(item, role)
             if tf is None:
                 return False
-            layers.append({"loop_id": item["id"], "atom_id": item.get("atom_id"), "ear_role": item.get("ear_role"), "role": role, "pitch_shift": float(tf.get("synthetic_pitch_shift") or 0.0), "bar_offset": int(off), "bar_len": int(blen), "gain_db": gain_db, "world": "taste", "source_track_key": source_of(item), "dry_high3000_share": float(item.get("high_share") or 0.0), "dry_quality_score": float(item.get("score") or 0.0), "transform_mode": tf.get("transform_mode") or tf.get("mode"), "source_bpm_raw": tf.get("source_bpm_raw"), "source_bpm_folded": tf.get("source_bpm_folded"), "tempo_octave_multiplier": tf.get("tempo_octave_multiplier"), "speed_ratio": tf.get("speed_ratio"), "varispeed_pct": tf.get("varispeed_pct"), "natural_pitch_shift": tf.get("natural_pitch_shift"), "desired_key_shift": tf.get("desired_key_shift"), "residual_pitch_shift": tf.get("residual_pitch_shift"), "artifact_risk": tf.get("artifact_risk")})
+            layers.append({"loop_id": item["id"], "atom_id": item.get("atom_id"), "ear_role": item.get("ear_role"), "role": role, "external_ref": item.get("external_ref"), "pitch_shift": float(tf.get("synthetic_pitch_shift") or 0.0), "bar_offset": int(off), "bar_len": int(blen), "gain_db": gain_db, "world": "taste", "source_track_key": source_of(item), "dry_high3000_share": float(item.get("high_share") or 0.0), "dry_quality_score": float(item.get("score") or 0.0), "transform_mode": tf.get("transform_mode") or tf.get("mode"), "source_bpm_raw": tf.get("source_bpm_raw"), "source_bpm_folded": tf.get("source_bpm_folded"), "tempo_octave_multiplier": tf.get("tempo_octave_multiplier"), "speed_ratio": tf.get("speed_ratio"), "varispeed_pct": tf.get("varispeed_pct"), "natural_pitch_shift": tf.get("natural_pitch_shift"), "desired_key_shift": tf.get("desired_key_shift"), "residual_pitch_shift": tf.get("residual_pitch_shift"), "artifact_risk": tf.get("artifact_risk")})
             recent_loop_ids.append(str(item["id"]))
             recent_sources.append(source_of(item))
             source_use[source_of(item)] = source_use.get(source_of(item), 0) + 1
@@ -3829,6 +3936,11 @@ class EarcrateCore:
         _sec_seconds = section_bars * 4 * 60.0 / max(1e-6, render_bpm)
         floor_hold = max(1, int(round(float(profile.get("max_source_run_s") or 16.0) / max(1e-6, _sec_seconds))))
         fg_hold = max(1, int(round(float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS) / max(1e-6, _sec_seconds))))
+        # A dropped vocal is one continuous performance — it must never rotate. Hold it
+        # for the whole track so the same external take rides every section (each section
+        # draws its OWN window of that take; see external_vocal_window stamping below).
+        if external_fg:
+            fg_hold = total_bars + section_bars
         max_layers_persona = max(2, int(profile.get("max_layers") or 4))
         held_floor: Optional[Dict[str, Any]] = None; held_floor_left = 0
         held_fg: Optional[Dict[str, Any]] = None; held_fg_left = 0
@@ -3921,6 +4033,24 @@ class EarcrateCore:
                 layers = sorted(layers, key=lambda l: _pri.get(str(l.get("role")), 3))[:max_layers_persona]
             transition = self.plan_transition(prev_sec, sec_type, int(prev_sec.get("target_key") or target_key) if prev_sec else None, target_key, bar, bars, layers, int(params.get("chaos") or 72), int(params.get("drama") or 82), rng)
             sec = {"bar_start": bar, "bars": bars, "type": sec_type, "energy_level": round(energy, 2), "target_key": target_key, "transition_in": transition, "layers": layers}
+            # Stamp each external-vocal layer with ITS window of the dropped take, so the
+            # continuous performance plays front-to-back across the arrangement (section
+            # at absolute bar `bar` -> the matching slice of the vocal). A section past the
+            # end of the vocal drops the layer: the bed plays on instrumental.
+            if external_fg:
+                ext_dur = float((external_fg.get("external_ref") or {}).get("duration_s") or 0.0)
+                keep: List[Dict[str, Any]] = []
+                for L in layers:
+                    er = L.get("external_ref")
+                    if not er:
+                        keep.append(L); continue
+                    win = external_vocal_window(bar, int(L.get("bar_len") or bars), render_bpm, ext_dur)
+                    if win is None:
+                        continue  # vocal spent — bed carries this section alone
+                    L["external_ref"] = {**er, "start_s": win[0], "len_s": win[1]}
+                    keep.append(L)
+                layers = keep
+                sec["layers"] = layers
             sections.append(sec)
             prev_sec = sec
             bar += bars
@@ -5430,8 +5560,49 @@ class EarcrateCore:
             tail_parts: Dict[str, np.ndarray] = {}
             for layer in sec.get("layers", []):
                 lid = layer.get("loop_id")
-                info = loops.get(lid)
                 drop_base = {"section_index": sidx, "loop_id": lid, "role": layer.get("role")}
+                # EXTERNAL VOCAL: a dropped, out-of-library take. It is the render ANCHOR
+                # (render_bpm == the vocal's own tempo, target_key == its own key), so it
+                # plays at IDENTITY — no time-stretch, no pitch-shift, no transform mud.
+                # We slice the section's window straight out of the file and place it.
+                ext_ref = layer.get("external_ref")
+                if ext_ref:
+                    try:
+                        epath = str(ext_ref.get("path") or "")
+                        if epath not in audio_cache:
+                            audio_cache[epath] = decode_audio(Path(epath), sr)
+                        esrc = audio_cache[epath]
+                        wa = max(0, int(float(ext_ref.get("start_s") or 0.0) * sr))
+                        wlen = ext_ref.get("len_s")
+                        wb = esrc.size if wlen is None else min(esrc.size, wa + int(float(wlen) * sr))
+                        clip = esrc[wa:wb].astype(np.float32, copy=True)
+                        if clip.size < 256:
+                            report["drops"].append({**drop_base, "reason": "external vocal window empty"}); continue
+                        role_name = "vocal"
+                        layer_bar_offset = max(0, int(layer.get("bar_offset") or 0))
+                        active_bars = min(max(1, int(layer.get("bar_len") or sec["bars"])), int(sec["bars"]) - layer_bar_offset)
+                        if layer_bar_offset >= int(sec["bars"]):
+                            report["drops"].append({**drop_base, "reason": "bar_offset outside section"}); continue
+                        active_start = int(round(layer_bar_offset * 4 * 60.0 / bpm * sr))
+                        active_len = max(512, int(round(active_bars * 4 * 60.0 / bpm * sr)))
+                        # Fit the take's window to the section grid, then run the SAME
+                        # mix chain a library vocal gets (band filter, RMS match, fades).
+                        clip = tile_with_crossfade(clip, active_len, sr) if clip.size < active_len else clip[:active_len]
+                        clip = simple_fft_filter(clip, sr, role_name, vocal_present, section_has_bass)
+                        clip = normalize_layer_rms(clip, role_name)
+                        clip = apply_edge_fades(clip, sr, fade_in=(active_start == 0 and sidx == 0) or active_start > 0, fade_out=True, fade_ms=14)
+                        layer_gain_db = cap_overlay_gain_db(float(layer.get("gain_db", -6.5)), role_name, active_bars)
+                        gain = 10 ** (layer_gain_db / 20.0)
+                        active_end = min(deck_len, active_start + clip.size)
+                        if active_end > active_start:
+                            section_deck[active_start:active_end] += clip[: active_end - active_start] * gain
+                            report["layers"].append({**drop_base, "stretch_rate": 1.0, "stretch_pct": 0.0, "pitch_shift": 0.0, "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": "vocal", "world": "external", "source_track_key": "external", "stem_source": "external_target", "stem_identity": ext_ref.get("pcm_sha"), "transform_mode": "identity_anchor", "external_window_s": [ext_ref.get("start_s"), ext_ref.get("len_s")]})
+                        else:
+                            report["drops"].append({**drop_base, "reason": "external render window is empty"})
+                    except Exception as exc:
+                        report["drops"].append({**drop_base, "reason": f"external vocal render error: {exc}"})
+                    continue
+                info = loops.get(lid)
                 if not info:
                     report["drops"].append({**drop_base, "reason": "loop metadata missing"}); continue
                 file_generation = int(info.get("audio_generation") or 0)

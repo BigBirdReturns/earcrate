@@ -323,6 +323,10 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.build_compatibility_graph(str(data.get("taste_profile") or "girl_talk_v1"), float(data.get("target_seconds") or 120), float(data.get("bpm") or 0.0))); return
             if path == "/api/mashup/propose":
                 self._json(200, self.core.propose_mashup(data)); return
+            if path == "/api/remix/external":
+                # Drop an out-of-library vocal (target_path); the engine anchors to its
+                # tempo/key and rebuilds a library bed under it in the persona's style.
+                self._json(200, self.core.propose_external_remix(data)); return
             if path == "/api/one_click_bg":
                 self._json(200, self.core.run_background(self.core.one_click_mix, data)); return
             if path == "/api/one_click":

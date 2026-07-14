@@ -163,3 +163,38 @@ Notes: auto-seed/relocate (`40da2de`/`5f59287`) was a no-op here because the box
 to the C: workspace (the seed only relocates a truly-fresh box); `machine_defaults.json` (D: persist +
 S: NVMe cache) is correct for a clean first run. `/api/status configured:null` still reproduces (the
 status-source display bug), but the engine was configured and the bake-off ran.
+
+---
+
+## PERFORMANCE — before vs after the perf commits (`4ef1829` model-cache, `16a59ed` scaling+NVMe)
+Measured render wall-clock on the real box (analysis banked; compose fast). Render is **GPU-separation-
+bound**: each cache MISS = one ~6 s demucs separation; cache HITS (from S: NVMe) are near-free.
+
+| render | commit era | cache | duration | misses | hits | disk_hits |
+|---|---|---|---|---|---|---|
+| `736bff5b` | pre (84f825d) | cold | 115 s | 21 | 54 | 18 |
+| `d6001286` | pre (dda8bc0) | warm | 19 s | 5 | 45 | 20 |
+| `e8f419e7` | pre (dda8bc0) | warm | 34 s | 1 | 48 | 23 |
+| `c6299aaa` | **post** (893d613) | cold | 170 s | 25 | 49 | 0 |
+| `28bd6c49` | **post** (893d613) | warm | 48 s | 4 | 71 | 25 |
+
+**Honest read — the perf commits did NOT produce a measured render speedup:**
+- Per-separation cost is ~5.5 s (pre) vs ~6.8 s (post) — same ballpark; a cold render is
+  separation-bound (~6 s × N misses). `4ef1829` model-caching can't move a single render: if the model
+  were truly reloaded per separation, the 21-sep cold render would've been ~300 s, not 115 s — so it
+  wasn't the bottleneck.
+- **The real lever is the content cache** (stems reused by pcm_sha), which pre-dates these commits:
+  cold ~170 s (25 sep) → warm ~48 s (4 sep + 25 disk_hits) ≈ **3.5×**. The commits' actual contribution
+  is *where* the cache lives — now **1.7 GB on S: NVMe** instead of C: — plus not littering C: and a
+  marginal model-reload skip across renders in a long-lived process.
+- **To speed up the FIRST (cold) render, target the demucs separation itself** (GPU batching, a smaller
+  model, or 2-stem `--two-stems=vocals`), not caching — caching already handles repeat material.
+
+## Workspace relocated to D: (manual — auto-relocate didn't fire on `-m`)
+Moved `EarCrate-Workspace` off C: → `D:\BonkyJones Backups\EarCrate-Workspace` (DB/atoms/edges/features
++ runs + renders intact: 3 crates ×1152, 1260 edges, 96 features); C: workspace deleted; hot cache on
+`S:\earcrate_cache` (1.7 GB). **Finding:** the auto-seed/relocate (`40da2de`/`5f59287`) did NOT fire via
+`python -m earcrate --serve` even unconfigured with `EARCRATE_DEFAULTS` set — `machine_defaults.json` is
+resolved via `visible_app_dir()`, which for `-m` isn't the repo root (same `-m`-vs-dist gap as the
+config-pointer trap). So "git pull + run just works" holds for the **dist launcher** only; the `-m` path
+needs the seed to key off `EARCRATE_DEFAULTS`/CWD, not `visible_app_dir()`.

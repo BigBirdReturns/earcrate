@@ -335,3 +335,21 @@ The TasteSpecs define each persona as a distinct MASHUP AESTHETIC (not a genre):
    coverage (a medley has no gaps); it fails because the composer can't sustain a continuous bed from
    disjoint atoms — a **composition** gap, not a gate-number bug. The genuinely-broken gate is the
    **spectral quality** one (§ ground-truth: earcrate bass-heavy/treble-dead vs every reference).
+
+### OWNER'S INTENT — the actual mashup GRAMMAR of each persona (definitive)
+Per the owner, the personas are three distinct mashup *constructions*, not just density settings:
+- **girl_talk** — a dense, fast-turnover COLLAGE: many recognizable hooks stacked and swapped on a grid.
+- **troubadour** — a **chain of two-song PAIRINGS**. Each unit = two songs that *wouldn't* naturally go
+  together but share an **earworm chord progression** (the universal I–V–vi–IV-type magic), mashed on
+  that shared harmony; then pairings are strung one after another. "Hook-mashup-sync." The engine
+  primitive is a **chord-progression-matched surprising PAIR**, sequenced — NOT a genre, NOT folk.
+  (Implication: troubadour's compatibility graph should score edges on shared chord progression /
+  earworm-hook match between *unlike* sources, and the arrangement is a sequence of such pair-units.)
+- **notorious** — **exactly TWO FULL ALBUMS paired 1:1**: one artist's acapellas across one other
+  artist's complete instrumental album, start to finish (Notorious B.I.G. × The xx = *Notorious XX*).
+  Not "a voice over assorted beds" — a whole-album marriage. (Implication: notorious wants a single
+  dominant vocal *source-album* riding a single instrumental *source-album* for the whole set, i.e.
+  very low source turnover on BOTH rails — which matches its 40–60 s runs but is even stronger: it's
+  album-locked, not just verse-locked.)
+This reframes troubadour/notorious as **source-pairing constraints** the composer must honor, above the
+per-atom scoring — a level the current graph (atom-pairwise) may not express.

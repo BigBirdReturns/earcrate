@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Executable gates (rebuild plan §5). Run: python tests/run_gates.py"""
-import sys, random
+import os, sys, random, tempfile
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
+# Same sandbox as run_gates.py, for direct pytest invocation: gates that build
+# EarcrateCore() must never write the user's real repo-root workspace pointer.
+os.environ.setdefault("EARCRATE_HOME", tempfile.mkdtemp(prefix="earcrate_gates_home_"))
 from earcrate.deck.transform import plan_varispeed_transform
 from earcrate.deck.lattice import score_bpm_lattice
 from earcrate.ear.readiness import crate_readiness_audit, girl_talk_targets, endless_sustain
@@ -3756,3 +3759,129 @@ def test_per_persona_gate_judges_a_warm_remix_on_its_own_aesthetic():
     pl = drydeck_quality_gate(warm, 120.0, pl_prof)
     assert not gt["passed"] and any("dark" in f for f in gt["failures"])
     assert pl["passed"], f"warm render must pass on Pretty Lights' own target: {pl['failures']}"
+
+
+def test_freshness_harvest_folds_new_tracks_into_ready_crate():
+    """A ready crate still digests one bounded batch of never-analyzed tracks.
+
+    Readiness gates ENTRY to the fail-fast harvest, but nothing gated GROWTH:
+    tracks added after the crate first satisfied the contract were scanned yet
+    never analyzed via one-click, so every set recycled the same sources —
+    against the profile's own turnover contract. The freshness pass is the
+    growth gate: analyze at most one batch, extract, re-crate, recompute
+    readiness, and account for it in the harvest log.
+    """
+    from earcrate.app import EarcrateCore
+
+    core = EarcrateCore.__new__(EarcrateCore)
+    calls = []
+    core._perf_stage = lambda ledger, name, fn, *a, **k: fn(*a, **k)
+    core.set_status = lambda *a, **k: None
+    core.analyze = lambda limit=0, force=False: (calls.append(("analyze", limit, force)), {"analyzed": 3, "failed": []})[1]
+    core.extract_loops = lambda limit=0, auto_approve=False, force=False: (calls.append(("extract_loops", auto_approve)), {"inserted": 7})[1]
+    core.build_ear_crate = lambda **k: (calls.append(("ear_crate", k["taste_profile"])), {"ok": True})[1]
+    core.taste_readiness = lambda p, t: (calls.append(("readiness",)), {"ready": True, "have": {"sources": 9}, "need": {"sources": 6}})[1]
+    core._trusted_analyzed_count = lambda: 25
+
+    analyze_result = {"analyzed": 4, "failed": []}
+    loop_result = {"inserted": 19}
+    log = []
+    readiness = core._freshness_harvest({}, 96, "girl_talk_v1", 60.0, analyze_result, loop_result, log)
+
+    assert readiness is not None and readiness["ready"] is True
+    assert [c[0] for c in calls] == ["analyze", "extract_loops", "ear_crate", "readiness"]
+    assert calls[0][1] == 96 and calls[0][2] is False  # bounded batch, never a force re-analyze
+    assert calls[1][1] is False  # new loops stay candidates: quota/human review still owns approval
+    assert calls[2][1] == "girl_talk_v1"
+    assert analyze_result["analyzed"] == 7 and loop_result["inserted"] == 26
+    assert log and log[0]["batch"] == "freshness" and log[0]["tracks_analyzed"] == 25 and log[0]["ready"] is True
+
+
+def test_freshness_harvest_costs_nothing_on_stable_library():
+    """No never-analyzed tracks -> one cheap select, zero downstream work."""
+    from earcrate.app import EarcrateCore
+
+    core = EarcrateCore.__new__(EarcrateCore)
+    calls = []
+    core._perf_stage = lambda ledger, name, fn, *a, **k: fn(*a, **k)
+    core.set_status = lambda *a, **k: None
+    core.analyze = lambda limit=0, force=False: (calls.append("analyze"), {"analyzed": 0, "failed": []})[1]
+    core.extract_loops = lambda **k: (_ for _ in ()).throw(AssertionError("extract_loops must not run"))
+    core.build_ear_crate = lambda **k: (_ for _ in ()).throw(AssertionError("build_ear_crate must not run"))
+    core.taste_readiness = lambda p, t: (_ for _ in ()).throw(AssertionError("readiness must not be recomputed"))
+
+    analyze_result = {"analyzed": 4, "failed": []}
+    loop_result = {"inserted": 19}
+    log = []
+    assert core._freshness_harvest({}, 96, "girl_talk_v1", 60.0, analyze_result, loop_result, log) is None
+    assert calls == ["analyze"]
+    assert analyze_result["analyzed"] == 4 and loop_result["inserted"] == 19 and log == []
+
+
+def test_one_click_runs_freshness_pass_between_readiness_and_graph():
+    """Wiring gate: a ready crate reaches the freshness pass BEFORE graph build,
+    and skip_freshness opts out. Sentinel-stops at build_compatibility_graph so
+    no plan/render machinery runs."""
+    from earcrate.app import EarcrateCore
+
+    class _Stop(Exception):
+        pass
+
+    def _make_core(calls):
+        core = EarcrateCore.__new__(EarcrateCore)
+        core.ensure_config = lambda: None
+        core.outcome_params = lambda data: {"target_seconds": 60}
+        core._perf_new_ledger = lambda *a, **k: {"run_id": "r1"}
+        core._perf_stage = lambda ledger, name, fn, *a, **k: fn(*a, **k)
+        core._perf_publish = lambda *a, **k: {"summary": None}
+        core._run_bundle_set_plan = lambda *a, **k: None
+        core._run_bundle_finish = lambda *a, **k: None
+        core.set_status = lambda *a, **k: None
+        core.doctor = lambda: {"ok": True}
+        core.scan = lambda: {"ok": True, "total": 9}
+        core._trusted_analyzed_count = lambda: 9
+        core.taste_readiness = lambda p, t: {"ready": True, "have": {}, "need": {}, "failures": []}
+        core._freshness_harvest = lambda *a, **k: (calls.append("freshness"), None)[1]
+        core.build_compatibility_graph = lambda *a, **k: (calls.append("graph"), (_ for _ in ()).throw(_Stop()))[1]
+        return core
+
+    calls = []
+    try:
+        _make_core(calls).one_click_taste_mix({"target_seconds": 60})
+    except _Stop:
+        pass
+    else:
+        raise AssertionError("sentinel did not stop the run at graph build")
+    assert calls == ["freshness", "graph"]
+
+    calls = []
+    try:
+        _make_core(calls).one_click_taste_mix({"target_seconds": 60, "skip_freshness": True})
+    except _Stop:
+        pass
+    else:
+        raise AssertionError("sentinel did not stop the run at graph build")
+    assert calls == ["graph"]
+
+
+def test_gate_suite_sandboxes_the_workspace_pointer():
+    """The suite must never write the user's real workspace pointer.
+
+    Every gate that constructs EarcrateCore() writes the app-global pointer
+    via visible_app_dir(); unsandboxed, that is the REPO ROOT — so running the
+    shipped test suite re-pointed a real workspace at a deleted temp fixture.
+    This gate pins the contract: inside the suite, EARCRATE_HOME is always a
+    sandbox, and pointer writes resolve inside it, never beside the package.
+    """
+    import os as _os
+    from pathlib import Path as _Path
+    from earcrate.core.util import visible_app_dir, pointer_search_dirs
+
+    home = _os.environ.get("EARCRATE_HOME")
+    assert home, "gate suite must run with EARCRATE_HOME sandboxed"
+    repo_root = _Path(__file__).resolve().parent.parent
+    resolved = visible_app_dir().resolve()
+    assert resolved == _Path(home).expanduser().resolve()
+    assert resolved != repo_root, "pointer writes would land in the real repo root"
+    # EARCRATE_HOME is an override, not a hint: no fallback dir may leak in.
+    assert [d.resolve() for d in pointer_search_dirs()] == [resolved]

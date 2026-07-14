@@ -316,3 +316,22 @@ mix-bug conclusion is unchanged and stronger. Practical gate: bass **ceiling ~0.
 ~0.15**, dynamics ≳3.5 (catches earcrate on all three axes), optionally tightened per-persona toward
 each reference's mean. (User also flagged **Branchez** as another mashup reference — not found as an
 Artists folder; likely in Singles/comps, TODO to locate.)
+
+### Authoritative persona definitions (from `profiles/*.json`) — corrects 2 earlier calls
+The TasteSpecs define each persona as a distinct MASHUP AESTHETIC (not a genre):
+
+| persona | contract | event/turnover | layers | coverage floor / fg | real sonic (measured) |
+|---|---|---|---|---|---|
+| **girl_talk** | recognizable foreground + stable floor + FAST turnover | ~11 s / 5.5 songs·min, no vox >20% | 2–4 | 0.70 / 0.50 | rms 5.2, bass 0.19, pres 0.31 (bright) |
+| **troubadour** | long **key-matched MEDLEY**: one persistent bed, sequential hooks, minimal layering | ~22 s / 2.7·min, runs to 45 s | **1–2** | **0.95** / 0.75 | (ref TBD — a medley bootleg, NOT folk) |
+| **notorious** | one voice over another era's beds (whole verses) | ~16 s / 1.5·min, runs to **60 s** | 2–3 | 0.90 / 0.80, intelligibility 0.6 | rms 4.6, bass 0.27, pres 0.19 (dark, The-xx beds) |
+
+**CORRECTIONS to my earlier notes:**
+1. **troubadour is a key-matched MEDLEY mashup, NOT singer-songwriter** — my earlier troubadour
+   ground-truth (Bright Eyes/Elliott Smith/…) measured the WRONG reference material. Its real
+   reference is a continuous one-bed medley bootleg (user to name it; I'll re-measure).
+2. **Coverage floors are DELIBERATELY per-persona** (collage 0.70 < notorious 0.90 < medley 0.95),
+   so my "coverage gate is miscalibrated / too strict" was WRONG. troubadour SHOULD demand ~total
+   coverage (a medley has no gaps); it fails because the composer can't sustain a continuous bed from
+   disjoint atoms — a **composition** gap, not a gate-number bug. The genuinely-broken gate is the
+   **spectral quality** one (§ ground-truth: earcrate bass-heavy/treble-dead vs every reference).

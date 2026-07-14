@@ -222,3 +222,25 @@ needs the seed to key off `EARCRATE_DEFAULTS`/CWD, not `visible_app_dir()`.
   (0.47); after rebuild it PASSED. Consider a stale-crate warning / auto-rebuild on engine-version bump.
 - Not exercised here (plan_only = no render): the demucs speed knob and bake-off persistence from
   `c711c52` — need a real render / non-plan_only bake-off to verify.
+
+---
+
+## BIGGER POOL (896 files / 10,704 loops) + recurrence scoring (`aedb8ce`) — coverage still short
+Ingested 800 more songs (CPU, 18 cores, ~26 min; GPU idle — analyze is librosa, not demucs),
+extract_loops (1,152 → 10,704), force-rebuilt all 3 crates (**9,552 atoms each**) + graphs, plan_only
+bake-off. Build-time note: **cold `ear_crate/build` on ~10.7k loops = ~847 s; warm rebuilds ~85–95 s.**
+
+| persona | gate | total | bed | src tracks | foreground cov (prev → now) |
+|---|---|---|---|---|---|
+| girl_talk_v1 | ✅ PASS | 44.13 | 15 | 18 → **35** | passes |
+| troubadour_v1 | ✗ FAIL | 41.33 | 7 | 17 | 0.56 → **0.68** (floor 0.47) |
+| notorious_v1 | ✗ FAIL | 40.84 | 15 | 18 | 0.61 → **0.63** |
+
+**Verdict: material-depth was PARTIALLY right, not the whole story.** 9× more material lifted troubadour
+foreground coverage 0.56→0.68 and girl_talk source diversity 18→35 — real, measurable — but
+troubadour/notorious STILL miss their gates. So it's ALSO **gate calibration**: troubadour's sparse
+key-matched medley and notorious's one-voice-over-beds *structurally* carry more air than girl_talk's
+dense collage, so a girl_talk-tuned coverage floor is likely wrong for them. Diminishing returns
+(0.56→0.68 from 9× data, still short) suggest **persona-aware coverage thresholds** are the bigger lever
+than yet more material. Recommendation to cloud: per-persona coverage floors (a medley ≠ a wall), or
+far more taste-targeted ingest.

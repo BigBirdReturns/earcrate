@@ -301,6 +301,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.save_plan(str(data.get("name") or "plan"), data["plan"], str(data.get("taste_profile") or "girl_talk_v1"))); return
             if path == "/api/timeline/load":
                 self._json(200, self.core.load_plan(str(data["plan_hash"]))); return
+            if path == "/api/study/reference":
+                self._json(200, self.core.study_reference(str(data.get("path") or ""), str(data.get("taste_profile") or "girl_talk_v1"))); return
             if path == "/api/taste/readiness":
                 self._json(200, self.core.taste_readiness(str(data.get("taste_profile") or "girl_talk_v1"), float(data.get("target_seconds") or 120))); return
             if path == "/api/taste/graph":

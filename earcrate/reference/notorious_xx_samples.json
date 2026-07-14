@@ -1,0 +1,246 @@
+{
+  "album": "The Notorious xx",
+  "artist": "Wait What",
+  "maps_to_persona": "notorious_v1",
+  "sources": [
+    "https://en.wikipedia.org/wiki/The_notorious_xx",
+    "https://waitwhat.bandcamp.com/album/the-notorious-xx",
+    "https://www.last.fm/music/Wait+What/the+notorious+xx",
+    "https://en.wikipedia.org/wiki/The_Notorious_B.I.G.",
+    "https://en.wikipedia.org/wiki/Xx_(album)"
+  ],
+  "notes": "11-track mashup (Charlie Kubal, released 2010-03-25): Notorious B.I.G. acapellas (role 'vocal') over The xx's self-titled debut instrumentals (role 'instrumental'). Track N of the mashup uses track N of The xx's debut in album order (Intro, VCR, Crystalised, Islands, Heart Skipped a Beat, Fantasy, Shelter, Basic Space, Infinity, Night Time, Stars) - an independent structural confirmation of every pairing. Portmanteau titles decoded and cross-checked against Wikipedia, Bandcamp and Last.fm. Durations from Bandcamp; per-sample timestamps are not documented (null).",
+  "tracks": [
+    {
+      "index": 1,
+      "title": "dead wrong intro",
+      "duration_s": 240,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Dead Wrong",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Intro",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "juicy-r",
+      "duration_s": 236,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Juicy",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "VCR",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "it's all about the crystalizabeths",
+      "duration_s": 270,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "It's All About the Benjamins",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Crystalised",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "title": "islands is the limit",
+      "duration_s": 185,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Sky's the Limit",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Islands",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "title": "one more chance for a heart to skip a beat",
+      "duration_s": 285,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "One More Chance",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Heart Skipped a Beat",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "title": "suicidal fantasy",
+      "duration_s": 169,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Suicidal Thoughts",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Fantasy",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "title": "everyday shelter",
+      "duration_s": 215,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Everyday Struggle",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Shelter",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "title": "basic hypnosis",
+      "duration_s": 186,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Hypnotize",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Basic Space",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "title": "infinite victory",
+      "duration_s": 265,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Victory",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Infinity",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "title": "the curious incident of big poppa in the nighttime",
+      "duration_s": 230,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Big Poppa",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Night Time",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "title": "mo stars mo problems",
+      "duration_s": 256,
+      "samples": [
+        {
+          "source_artist": "The Notorious B.I.G.",
+          "source_title": "Mo Money Mo Problems",
+          "start_s": null,
+          "end_s": null,
+          "role": "vocal"
+        },
+        {
+          "source_artist": "The xx",
+          "source_title": "Stars",
+          "start_s": null,
+          "end_s": null,
+          "role": "instrumental"
+        }
+      ]
+    }
+  ]
+}

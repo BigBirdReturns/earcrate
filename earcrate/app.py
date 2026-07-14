@@ -5,6 +5,7 @@ from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_like
 from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio, decoded_audio_sha256
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
+from earcrate.study.reference import load_reference, reference_fingerprint, reference_edges, calibrate_profile
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
 
@@ -5724,6 +5725,27 @@ class EarcrateCore:
 
     def taste_profile_receipt(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
         return profile_summary(taste_profile)
+
+    def study_reference(self, path: str, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """Turn a documented Girl Talk sample dataset into engine ground truth.
+
+        Reads the reference JSON at ``path``, measures the persona fingerprint,
+        counts the Girl-Talk-PROVEN overlap edges, and computes how the measured
+        numbers would recalibrate ``taste_profile`` — WITHOUT touching the shipped
+        JSON. Heavy logic lives in earcrate/study/reference.py; this is thin
+        wiring so the capability is reachable from the CLI and the HTTP layer.
+        """
+        dataset = load_reference(path)
+        fingerprint = reference_fingerprint(dataset)
+        edges = reference_edges(dataset)
+        base = load_tastespec(taste_profile)
+        calibration = calibrate_profile(fingerprint, base)
+        return {
+            "taste_profile": taste_profile,
+            "fingerprint": fingerprint,
+            "edges_count": len(edges),
+            "calibration_diff": calibration["diff"],
+        }
 
     def set_atom_judgment(self, atom_id: str, taste_profile: str, status: str, relabel_role: str = "", favorite: bool = False, locked: bool = False, reason: str = "") -> Dict[str, Any]:
         if status not in {"approved", "rejected", "candidate"}:

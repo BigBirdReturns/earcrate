@@ -370,3 +370,18 @@ is universal and clearly hearable. (2) **troubadour has the BEST spectral match 
 bed. So troubadour's gap is STRUCTURAL (can't build the chord-matched pairing chain), not mix — the
 clearest evidence of the atom-engine-vs-source-pairing-grammar gap. WAVs local only
 (work/previews/PREVIEW_<persona>.wav).
+
+### WHY THE PREVIEWS SOUND ALIKE (owner's ears, confirmed in arrangement data)
+Analyzed the 3 preview render reports by `section_index`:
+1. **Identical intro:** section 0 uses the SAME 2 source tracks for all three personas (2/2 shared);
+   sections 1+ share 0 sources. The composer picks a persona-agnostic opening anchor -> same first ~15-30s.
+2. **girl_talk ≈ notorious are the SAME arrangement:** identical per-section density curve
+   `[2,3,2,3,2,3,3,3,2,3,2,3,3,2,2]`, identical 38 layers, identical role mix (15 drum / 23 vocal).
+   They differ ONLY in which source tracks were selected. notorious is SUPPOSED to be sparse (1.5
+   songs/min, one voice over one bed for 60s) but composes girl_talk's dense fast-turnover collage.
+   => the per-persona `density_model`/`source_turnover` params are NOT reaching the composer's STRUCTURE;
+   personas differentiate at atom SELECTION (893d613) but not at arrangement STRUCTURE. **Composer bug.**
+3. troubadour is the only structurally-distinct one (flat 2-layer density) -> reads as "different".
+"Diverges later" = 0%-shared source picks accumulate audibly over time, but GT/notorious structure never
+actually diverges (sample drift, not structural difference). Fix: make density/turnover/foreground-share
+per-persona params drive the arrangement builder, and differentiate the opening anchor per persona.

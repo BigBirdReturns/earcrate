@@ -5955,8 +5955,12 @@ class EarcrateCore:
             report["transitions"].append(applied_transition)
             self.set_status(f"rendering section {sidx+1}/{len(sections)}", (sidx + 1) / max(1, len(sections)), True)
         # One final full-mix limiter/trim only. Do not flatten section dynamics.
-        if str((arrangement.get("params") or {}).get("quality_mode") or "") in {"dry_deck", "stable_deck"}:
-            mix = stable_presence_restore(mix, sr)
+        # The measured finishing EQ runs on EVERY render that faces the calibrated
+        # gate. It used to be gated to dry_deck/stable_deck only, which meant the
+        # external-target remix ("external_remix") shipped with NO tonal correction
+        # at all — the box measured high3000_share 0.067 across releases and named
+        # the treble-dead chain the sole blocker for audible #4 output.
+        mix = stable_presence_restore(mix, sr)
         mix = integrated_lufs_normalize(mix, sr, -14.0)
         target_seconds = float((arrangement.get("params") or {}).get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
         prof_spec = self._persona_spectral_profile(str((arrangement.get("params") or {}).get("taste_profile") or ""))

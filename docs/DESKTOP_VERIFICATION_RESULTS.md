@@ -385,3 +385,46 @@ Analyzed the 3 preview render reports by `section_index`:
 "Diverges later" = 0%-shared source picks accumulate audibly over time, but GT/notorious structure never
 actually diverges (sample drift, not structural difference). Fix: make density/turnover/foreground-share
 per-persona params drive the arrangement builder, and differentiate the opening anchor per persona.
+
+---
+
+## External-target remix (#4, cloud a2490ba) — box end-to-end verification (2026-07-14)
+
+Test: dropped an OUT-of-library-style vocal (Bill Withers "Ain't No Sunshine" -> demucs htdemucs
+`vocals.wav`, 5s on the 4060) into `propose_external_remix` + `execute_manifest(apply=True)`,
+girl_talk_v1, target 60s. Called in-process (see finding 1). Verdict: **design is right, but it
+produces no output today for two independent reasons.**
+
+**GOOD — anchor-inversion is correctly implemented.** Arrangement placed **16 external vocal windows**
+(`role=vocal`, `is_external=true`, no rate/pitch transform = identity) over **11 conforming bed atoms**
+(drum_anchor x8, harmony x2, bass x1). Feasibility passed: "bed OK: 12 floor, 85 bass, 78 spark across
+51 sources at 156.6 BPM key 7." The vocal is the boss and only the bed bends — exactly as designed.
+
+**FINDING 1 (wiring): `POST /api/remix/external` is not registered.** `propose_external_remix` + the
+`remix/external` helpers exist and the docstring promises the route, but no HTTP handler dispatches to it
+— the endpoint 404s. Only callable in-process. Wire the handler.
+
+**FINDING 2 (correctness, high value): the anchor is confidently WRONG on an acapella.** "Ain't No
+Sunshine" is ~78 BPM / A-minor. The engine anchored the whole render to **156.6 BPM (a clean 2x octave
+error) at bpm_confidence 0.93**, and **key_root 7 (G) at key_confidence 0.17** (essentially a guess,
+key_mode 0). The bed then dutifully conforms to the wrong tempo AND wrong key. `remix_anchor`'s
+garbage-guard only catches absent/extreme tempo, not a high-confidence octave error, and there is no
+key-confidence floor. Acapellas — the canonical thing a user drops here — are the worst-case input for
+tempo/key estimation (no percussion, sparse harmony). Fix: fold BPM into a sane band (test half/double
+against a target range) and add a key-confidence floor (below ~0.3 don't hard-pin the key; keep the bed's
+own compatible key or derive from vocal chroma more robustly). This is the highest-leverage fix for #4.
+
+**FINDING 3 (contract): gate rejection is SILENT to the caller.** The render was produced (61.3s, 26
+layers) then rejected by `post_render_quality_gate`. But `execute_manifest` returned `ok:true`, the op
+logged `status:"done"`, and the only signal is `done[].type == "render_rejected"` (path=null,
+presented=false). A caller — and the future HTTP route — gets success + no audio + no reason. Same class
+as the earlier dinner-run "0 tracks, no error." Propagate rejection as a distinct non-ok status/error
+carrying the failure so the UI can say "rejected: presence too dark," not silently succeed.
+
+**CONFIRMED — the post-render gate calibration works.** It caught this render correctly:
+`high3000_share 0.068` -> "catastrophically dark (real Girl Talk ~0.31); presence is dead" (FAIL);
+`rms_std_db 2.26` vs target ~5.0 (WARN, dynamics too flat); low200_share 0.279. Those targets are the
+real-Girl-Talk ground truth measured earlier — the gate is now honest. But the RENDERER is still
+treble-dead + dynamically flat, so external remix inherits the same mix defect and will keep getting
+rejected until the render EQ/dynamics are fixed. Net: #4 is structurally sound but yields zero output
+today = wrong anchor (F2) x treble-dead render (F below the calibrated gate).

@@ -9,6 +9,12 @@ from earcrate.study.reference import load_reference, reference_fingerprint, refe
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
 
+# Byte ceiling for the L3 stem cache on the NVMe. The 4060's separations are the
+# expensive, REUSABLE unit (one source's stems serve every mashup that touches
+# it), so the background warmer pre-banks them into this cache and renders become
+# cache-hits instead of blocking on the GPU. EARCRATE_CACHE_BUDGET_GB overrides.
+DEFAULT_STEM_CACHE_BUDGET_GB = 60.0
+
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
     """Measure every loop of ONE file (decode once, DSP per segment) in a worker
@@ -1263,6 +1269,137 @@ class EarcrateCore:
                 "stem_capability": stems, "cache_root": str(cache_root),
                 "cache_root_source": cache_source, "cache_write_ms": cache_write_ms,
                 "recommended": recommended}
+
+    # ------------------------------------------------------------------ #
+    # Background stem-warming: put the idle GPU to work banking the        #
+    # expensive, reusable unit (demucs stems) into the NVMe cache AHEAD of #
+    # render time, so composing/rendering is a cache-hit and never blocks  #
+    # on separation. Renders already consult cache-before-separate, so a   #
+    # warm cache needs ZERO render-path change. Capability-aware: no GPU   #
+    # -> the warmer is an honest no-op that reports why.                   #
+    # ------------------------------------------------------------------ #
+    def _cache_byte_budget(self) -> int:
+        """Byte ceiling for the L3 stem cache. EARCRATE_CACHE_BUDGET_GB overrides;
+        else DEFAULT_STEM_CACHE_BUDGET_GB. The warmer stops filling at this ceiling
+        and never writes work it would immediately have to evict; the ArtifactStore
+        evict(budget) sheds ephemeral-first under other pressure."""
+        env = os.environ.get("EARCRATE_CACHE_BUDGET_GB")
+        try:
+            gb = float(env) if env else DEFAULT_STEM_CACHE_BUDGET_GB
+        except ValueError:
+            gb = DEFAULT_STEM_CACHE_BUDGET_GB
+        return int(max(1.0, gb) * (1024 ** 3))
+
+    def _resolve_stem_provider(self):
+        """Resolve the stem provider with the SAME precedence the render path uses
+        (EARCRATE_STEMS > config.stem_provider > registered default), so the warmer
+        fills exactly the keys a render will look up. Returns (provider, name)."""
+        c = self.config
+        selected = os.environ.get("EARCRATE_STEMS") or (getattr(c, "stem_provider", None) if c else None) or "noop"
+        try:
+            prov = get("stems") if selected == "noop" else get("stems", selected)
+        except Exception:
+            prov, selected = get("stems"), "noop"
+        return prov, selected
+
+    def stem_warm_candidates(self, taste_profile: str = "girl_talk_v1",
+                             limit: int = 0) -> List[Dict[str, Any]]:
+        """The priority queue of SOURCES to pre-separate for a persona: distinct
+        source files backing that persona's approved atoms, each with its pcm
+        identity + path, ranked by the best atom score that draws on it (then by
+        how many atoms it feeds). One separation per SOURCE serves every atom cut
+        from it, so we dedup by file and warm the highest-value sources first."""
+        rows = self.conn().execute(
+            """SELECT f.id file_id, f.path path, f.audio_sha256 pcm_sha,
+                      MAX(a.score) best_score, COUNT(*) atom_count
+               FROM ear_atoms a JOIN files f ON f.id=a.file_id
+               WHERE a.taste_profile=? AND a.status='approved'
+                 AND COALESCE(f.present,1)=1
+                 AND f.audio_sha256_scope='full' AND f.audio_sha256 IS NOT NULL
+               GROUP BY f.id
+               ORDER BY best_score DESC, atom_count DESC, f.id ASC""",
+            (taste_profile,),
+        ).fetchall()
+        out = [dict(r) for r in rows if r["pcm_sha"] and r["path"]]
+        if limit and limit > 0:
+            out = out[:limit]
+        return out
+
+    def stem_warm_status(self, taste_profile: str = "girl_talk_v1",
+                         roles: Any = ("vocals", "no_vocals")) -> Dict[str, Any]:
+        """How render-ready the persona is: of the sources its atoms need, how many
+        already have their stems in the cache. Pure cache lookups (has_stems) — no
+        GPU, no separation — so it is safe to poll."""
+        role_list = list(roles)
+        cands = self.stem_warm_candidates(taste_profile)
+        prov, name = self._resolve_stem_provider()
+        warm = sum(1 for c in cands if prov.has_stems(str(c["pcm_sha"]), role_list))
+        total = len(cands)
+        store = get("artifacts")
+        return {
+            "taste_profile": taste_profile, "provider": name,
+            "total_sources": total, "warm": warm, "cold": total - warm,
+            "pct_warm": round(100.0 * warm / max(1, total), 1),
+            "cache_bytes": int(store.total_bytes()), "budget_bytes": self._cache_byte_budget(),
+            "capability": stem_capability(), "roles": role_list,
+        }
+
+    def warm_stems(self, taste_profile: str = "girl_talk_v1", max_items: int = 0,
+                   roles: Any = ("vocals", "no_vocals")) -> Dict[str, Any]:
+        """Pre-separate the persona's cold sources into the NVMe cache using the
+        GPU, in priority order, until the queue drains, ``max_items`` is hit, or the
+        cache budget is reached. Skips sources already warm (no GPU) and, when the
+        cache is full, STOPS rather than evicting its own fresh work. Delegates the
+        actual separation to the SELECTED provider (the desktop-verified Demucs seam
+        on a real box); on a box without a ready GPU it is an honest no-op."""
+        cap = stem_capability()
+        prov, name = self._resolve_stem_provider()
+        if name == "noop" or not cap.get("ready"):
+            return {"available": False, "provider": name, "capability": cap,
+                    "reason": "no ready GPU stem provider on this box; nothing to warm "
+                              "(default NoopStemProvider). Renders fall back to full-mix beds.",
+                    "separated": 0, "skipped": 0, "candidates": 0}
+        role_list = list(roles)
+        store = get("artifacts")
+        budget = self._cache_byte_budget()
+        cands = self.stem_warm_candidates(taste_profile)
+        separated = 0
+        skipped = 0
+        errors: List[Dict[str, Any]] = []
+        stopped_reason = "queue drained"
+        total = len(cands)
+        for i, cand in enumerate(cands):
+            if max_items and separated >= max_items:
+                stopped_reason = "max_items reached"
+                break
+            pcm = str(cand["pcm_sha"])
+            path = str(cand["path"])
+            if prov.has_stems(pcm, role_list):
+                skipped += 1
+                continue
+            if store.total_bytes() >= budget:
+                stopped_reason = "cache budget reached"
+                break
+            if not os.path.exists(path):
+                errors.append({"pcm_sha": pcm[:12], "error": "source file missing"})
+                continue
+            try:
+                sep = prov.separate(pcm, path, role_list)
+                if sep and sep.get("available"):
+                    separated += 1
+                else:
+                    errors.append({"pcm_sha": pcm[:12], "error": str((sep or {}).get("reason") or "provider produced no stems")})
+            except Exception as exc:
+                errors.append({"pcm_sha": pcm[:12], "error": str(exc)[:200]})
+            self.set_status(
+                "warming stems %d/%d (%d cached)" % (separated + skipped, total, skipped),
+                (i + 1) / max(1, total), True)
+        return {
+            "available": True, "provider": name, "taste_profile": taste_profile,
+            "candidates": total, "separated": separated, "skipped": skipped,
+            "stopped_reason": stopped_reason, "errors": errors[:20],
+            "cache_bytes": int(store.total_bytes()), "budget_bytes": budget,
+        }
 
     def connect_db(self) -> None:
         c = self.ensure_config()

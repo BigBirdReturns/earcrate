@@ -73,6 +73,14 @@ class StemProvider(ABC):
                  roles: Optional[Any] = None) -> Dict[str, Any]:
         raise NotImplementedError
 
+    def has_stems(self, pcm_sha: str, roles: Optional[Any] = None) -> bool:
+        """Whether the requested stems are ALREADY materialized in the cache,
+        WITHOUT running (or triggering) a separation. The background warmer and
+        the warm-status probe use this to skip already-cached sources and report
+        progress without touching the GPU. Default False: a provider that cannot
+        separate has nothing cached."""
+        return False
+
 
 class NoopStemProvider(StemProvider):
     """DEFAULT. Reports stems unavailable; touches no heavy deps; never crashes."""
@@ -168,6 +176,17 @@ class DemucsStemProvider(StemProvider):
             "cached": False,
             "stems": stems,
         }
+
+    def has_stems(self, pcm_sha: str, roles: Optional[Any] = None) -> bool:
+        """True iff EVERY requested role is already materialized in L3 for this
+        pcm_sha under the effective model — a pure cache lookup, no torch, no GPU,
+        no separation. This is exactly the CACHE-BEFORE-SEPARATE predicate, lifted
+        out so the warmer can ask 'is this source already warm?' cheaply."""
+        role_list = list(roles) if roles else list(DEFAULT_ROLES)
+        if not role_list:
+            return False
+        return all(self.store.get(self._artifact_key(str(pcm_sha), r)) is not None
+                   for r in role_list)
 
     def _artifact_key(self, pcm_sha: str, role: str) -> str:
         # Deterministic L3 key: same sound + model + role -> same artifact.

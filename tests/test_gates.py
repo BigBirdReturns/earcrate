@@ -3523,3 +3523,77 @@ def test_status_snapshot_reports_live_configured():
         if sh is not None: os.environ["HOME"] = sh
         if se is not None: os.environ["EARCRATE_HOME"] = se
         else: os.environ.pop("EARCRATE_HOME", None)
+
+
+def test_recurrence_hook_ranks_repeated_segment():
+    """Recurrence-based hook detection (Bartsch-Wakefield / Cooper-Foote).
+
+    Build a track where one distinct chroma pattern RECURS 4x while every other
+    segment is unique-once, then assert:
+      1. the song-level recurrence curve ranks the repeated segment strictly
+         highest (its off-diagonal chroma self-similarity is real recurrence);
+      2. hook_score for the repeated segment beats an equally-clean UNIQUE segment
+         (same local audio, so identical local cleanliness -> the win is purely the
+         folded-in recurrence term).
+    Deterministic: fixed synthesis, no RNG in the signal.
+    """
+    import numpy as np
+    from earcrate.analyze.features import song_recurrence_curve, segment_recurrence
+
+    SR = 22050
+    SEGDUR = 4.0
+    NOTE = {n: 440.0 * 2 ** ((m - 9) / 12.0) for n, m in {
+        "C": 0, "Cs": 1, "D": 2, "Ds": 3, "E": 4, "F": 5, "Fs": 6,
+        "G": 7, "Gs": 8, "A": 9, "As": 10, "B": 11}.items()}
+
+    def chord(notes, dur=SEGDUR):
+        t = np.arange(int(dur * SR)) / SR
+        y = np.zeros_like(t)
+        for n in notes:
+            y += np.sin(2 * np.pi * NOTE[n] * t)
+        y *= (0.6 + 0.4 * np.abs(np.sin(2 * np.pi * 2.0 * t)))  # tremolo -> onsets
+        return (y / (np.max(np.abs(y)) + 1e-9) * 0.5).astype(np.float32)
+
+    P = chord(["C", "E", "G"])       # the hook: a distinct chroma pattern, repeats
+    U1 = chord(["D", "Fs", "A"])     # unique-once segments, each a different chroma
+    U2 = chord(["F", "A", "C"])
+    U3 = chord(["Ds", "G", "As"])
+    U4 = chord(["E", "Gs", "B"])
+    seq = [("U1", U1), ("P", P), ("U2", U2), ("P", P),
+           ("U3", U3), ("P", P), ("U4", U4), ("P", P)]  # P appears 4x
+    y = np.concatenate([s for _, s in seq])
+
+    spans, t = [], 0.0
+    for name, _ in seq:
+        spans.append((name, t, t + SEGDUR))
+        t += SEGDUR
+
+    cs, ce, rc = song_recurrence_curve(y, SR)
+    assert rc.size >= 4, f"empty recurrence curve: {rc.size}"
+
+    per = {}
+    for name, a, b in spans:
+        per.setdefault(name, []).append(segment_recurrence(cs, ce, rc, a, b))
+    agg = {k: float(np.mean(v)) for k, v in per.items()}
+    p_rec = agg["P"]
+    other_rec = max(v for k, v in agg.items() if k != "P")
+    rec_margin = p_rec - other_rec
+    assert p_rec > other_rec, f"repeated segment not highest recurrence: {agg}"
+    assert rec_margin > 0.30, f"recurrence margin too small: {rec_margin:.3f} ({agg})"
+
+    # Equal-cleanliness control: SAME audio, so identical local features; the only
+    # difference fed to the scorer is the recurrence value. The repeated segment
+    # (high recurrence) must beat the unique one (low recurrence).
+    seg = P
+    m_hook = EarcrateCore.ear_atom_metrics(None, seg, SR, 4, 0.0, "full", p_rec)
+    m_unique = EarcrateCore.ear_atom_metrics(None, seg, SR, 4, 0.0, "full", other_rec)
+    hook_margin = m_hook["hook_score"] - m_unique["hook_score"]
+    assert m_hook["hook_score"] > m_unique["hook_score"], (
+        f"recurrence did not raise hook_score: {m_hook['hook_score']} vs {m_unique['hook_score']}")
+    assert abs(m_hook["recurrence"] - p_rec) < 1e-6, m_hook
+    # weighted contributor: gap == HOOK_RECUR_W * (p_rec - other_rec) within clamp
+    assert hook_margin > 0.08, f"hook margin too small: {hook_margin:.3f}"
+
+    # Determinism: same PCM -> same numbers.
+    cs2, ce2, rc2 = song_recurrence_curve(y, SR)
+    assert np.array_equal(rc, rc2), "recurrence curve not deterministic"

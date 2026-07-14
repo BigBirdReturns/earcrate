@@ -52,3 +52,61 @@ def test_atom_and_pair_judgments_are_profile_scoped(tmp_path):
     assert core.set_pair_judgment("e1", "girl_talk_v1", "rejected", "too masked")["ok"]
     pair = db.execute("SELECT * FROM pair_judgments WHERE edge_id='e1'").fetchone()
     assert pair["status"] == "rejected" and pair["reason"] == "too masked"
+
+
+def _seed_stale_crate_fixture(core, analyzer_version: str):
+    """One approved atom whose features row was produced by `analyzer_version`."""
+    db = core.conn()
+    db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
+               ("fs", "/tmp/stale.wav", "master", 1, 1, "now"))
+    db.execute("INSERT INTO tracks(id,file_id,artist,title) VALUES(?,?,?,?)", ("ts", "fs", "S", "Stale"))
+    db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+               ("ls", "fs", 0, 4, 2, "vocal", 0.9, "now"))
+    db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,status,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               ("as", "ls", "fs", "girl_talk_v1", "VOX_HOOK", "vocal", 0, 4, 2, 0.9, "approved", "{}", "now"))
+    db.execute("INSERT INTO features(file_id,analyzer_version,analyzed_at) VALUES(?,?,?)",
+               ("fs", analyzer_version, "now"))
+    db.commit()
+
+
+def test_crate_stale_on_version_bump(tmp_path):
+    """A crate stamped/analyzed by an OLD engine or analyzer reports crate_stale
+    True; a current one reports False. Closes the stale-crate coverage trap."""
+    from earcrate.core.deps import ENGINE_VERSION, ANALYZER_VERSION
+
+    # --- current crate: stamp + features carry the running versions -> NOT stale
+    core = configured_core(tmp_path)
+    _seed_stale_crate_fixture(core, ANALYZER_VERSION)
+    core.stamp_crate_versions("girl_talk_v1")
+    fresh = core.crate_staleness("girl_talk_v1")
+    assert fresh["crate_stale"] is False, fresh
+    assert core.taste_readiness("girl_talk_v1")["crate_stale"] is False
+    assert core.status_snapshot()["crate_stale"] is False
+
+    # --- analyzer bump: features row stamped by an OLD analyzer -> stale
+    (tmp_path / "b").mkdir(parents=True, exist_ok=True)
+    core2 = configured_core(tmp_path / "b")
+    _seed_stale_crate_fixture(core2, "gt-v0.0.1-ANCIENT")
+    core2.stamp_crate_versions("girl_talk_v1")  # stamp is current; analyzer is old
+    a = core2.crate_staleness("girl_talk_v1")
+    assert a["crate_stale"] is True, a
+    assert "ANCIENT" in a["reason"]
+    assert core2.taste_readiness("girl_talk_v1")["crate_stale"] is True
+    snap = core2.status_snapshot()
+    assert snap["crate_stale"] is True and "girl_talk_v1" in snap["crate_stale_profiles"]
+
+    # --- engine bump: stamp carries an OLD engine version -> stale
+    (tmp_path / "c").mkdir(parents=True, exist_ok=True)
+    core3 = configured_core(tmp_path / "c")
+    _seed_stale_crate_fixture(core3, ANALYZER_VERSION)
+    core3.kv_set_json("crate_stamp:girl_talk_v1",
+                      {"engine_version": "earcrate_vOLD", "analyzer_version": ANALYZER_VERSION, "stamped_at": "now"})
+    e = core3.crate_staleness("girl_talk_v1")
+    assert e["crate_stale"] is True and "earcrate_vOLD" in e["reason"], e
+
+    # --- a stale crate must not silently render: propose refuses loudly
+    try:
+        core3.propose_taste_mashup({"taste_profile": "girl_talk_v1", "target_seconds": 30})
+        raise AssertionError("propose_taste_mashup should refuse a stale crate")
+    except RuntimeError as exc:
+        assert "STALE CRATE" in str(exc), str(exc)

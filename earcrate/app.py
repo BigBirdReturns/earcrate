@@ -20,12 +20,19 @@ def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:
         out["error"] = str(exc)[:300]
         return out
+    # Song-level recurrence, computed ONCE per file: the hook is the part the track
+    # repeats, so every loop of this file is scored against the same self-similarity.
+    try:
+        _rc_start, _rc_end, _rc_val = song_recurrence_curve(y, sr)
+    except Exception:
+        _rc_start = _rc_end = _rc_val = np.zeros(0, dtype=np.float32)
     for lp in job["loops"]:
         try:
             a = max(0, int(float(lp["start_s"]) * sr))
             b = min(y.size, int(float(lp["end_s"]) * sr))
             seg = y[a:b].astype(np.float32, copy=False)
-            metrics = EarcrateCore.ear_atom_metrics(None, seg, sr, int(lp["bars"] or 1), float(lp["vocal_likelihood"] or 0.0), str(lp["role"] or "full"))
+            recurrence = segment_recurrence(_rc_start, _rc_end, _rc_val, float(lp["start_s"]), float(lp["end_s"]))
+            metrics = EarcrateCore.ear_atom_metrics(None, seg, sr, int(lp["bars"] or 1), float(lp["vocal_likelihood"] or 0.0), str(lp["role"] or "full"), recurrence)
             ear_role = EarcrateCore.ear_role_from_metrics(None, str(lp["role"] or "full"), int(lp["bars"] or 1), metrics)
             render_role = EAR_TO_RENDER_ROLE.get(ear_role, str(lp["role"] or "full"))
             status = classify_atom_status(ear_role, metrics)
@@ -184,6 +191,27 @@ class EarcrateCore:
         snap["configured"] = c is not None
         snap["master_root"] = str(c.master_root) if c is not None else None
         snap["working_root"] = str(c.working_root) if c is not None else None
+        # Loudly and deterministically flag a crate built by a different engine/
+        # analyzer version, so a stale crate never silently drives coverage.
+        snap["crate_stale"] = False
+        snap["crate_stale_reason"] = ""
+        snap["crate_stale_profiles"] = []
+        if c is not None:
+            try:
+                db = self.conn()
+                profiles = [r["taste_profile"] for r in db.execute(
+                    "SELECT DISTINCT taste_profile FROM ear_atoms WHERE status='approved'").fetchall()]
+                reasons = []
+                for pid in profiles:
+                    st = self.crate_staleness(pid)
+                    if st["crate_stale"]:
+                        snap["crate_stale_profiles"].append(pid)
+                        reasons.append(f"{pid}: {st['reason']}")
+                if reasons:
+                    snap["crate_stale"] = True
+                    snap["crate_stale_reason"] = " | ".join(reasons)
+            except Exception:
+                pass
         return snap
 
     def _run_bundle_path(self, run_id: str, artifact: Optional[str] = None) -> Path:
@@ -1557,6 +1585,84 @@ class EarcrateCore:
         self.conn().execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)", (key, str(int(value))))
         self.conn().commit()
 
+    def kv_get_json(self, key: str) -> Optional[Dict[str, Any]]:
+        row = self.conn().execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        if not row:
+            return None
+        try:
+            v = json.loads(row["value"])
+            return v if isinstance(v, dict) else None
+        except Exception:
+            return None
+
+    def kv_set_json(self, key: str, value: Dict[str, Any]) -> None:
+        self.conn().execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)",
+                            (key, json.dumps(value, ensure_ascii=False, sort_keys=True)))
+        self.conn().commit()
+
+    def _crate_stamp_key(self, taste_profile: str) -> str:
+        return f"crate_stamp:{taste_profile}"
+
+    def stamp_crate_versions(self, taste_profile: str) -> None:
+        """Record the engine/analyzer version that built this profile's ear crate.
+
+        Written at the end of every build_ear_crate so a later `git pull` that
+        bumps ENGINE_VERSION/ANALYZER_VERSION becomes detectable: the stored
+        stamp no longer matches the running constants and the crate reads stale.
+        """
+        self.kv_set_json(self._crate_stamp_key(taste_profile), {
+            "engine_version": ENGINE_VERSION,
+            "analyzer_version": ANALYZER_VERSION,
+            "stamped_at": now_utc(),
+        })
+
+    def crate_staleness(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """Detect a crate built by a DIFFERENT engine/analyzer than the running one.
+
+        Two independent, deterministic signals:
+          * the ear-crate build stamp (kv) carries the engine+analyzer version
+            that last built this profile's atoms;
+          * every features row carries the analyzer_version that produced it, so
+            approved atoms resting on features from an old analyzer are stale even
+            if no stamp exists (e.g. a crate that predates the stamp).
+        A stale crate must never silently drive coverage — the girl_talk 0.47
+        false-FAIL came from exactly this: stale atoms + a current engine.
+        """
+        db = self.conn()
+        reasons: List[str] = []
+        stamp = self.kv_get_json(self._crate_stamp_key(taste_profile))
+        if stamp:
+            se = str(stamp.get("engine_version") or "")
+            sa = str(stamp.get("analyzer_version") or "")
+            if se and se != ENGINE_VERSION:
+                reasons.append(f"ear crate built by engine {se} (running {ENGINE_VERSION})")
+            if sa and sa != ANALYZER_VERSION:
+                reasons.append(f"ear crate built by analyzer {sa} (running {ANALYZER_VERSION})")
+        try:
+            row = db.execute(
+                """SELECT COUNT(*) n, MIN(ft.analyzer_version) av FROM ear_atoms a
+                     JOIN features ft ON ft.file_id=a.file_id
+                    WHERE a.taste_profile=? AND a.status='approved'
+                      AND ft.analyzer_version IS NOT NULL
+                      AND ft.analyzer_version!=?""",
+                (taste_profile, ANALYZER_VERSION)).fetchone()
+        except Exception:
+            row = None
+        stale_feat = int(row["n"]) if row and row["n"] else 0
+        if stale_feat:
+            reasons.append(f"{stale_feat} approved atoms analyzed by {row['av']} (running {ANALYZER_VERSION})")
+        stale = bool(reasons)
+        reason = ""
+        if stale:
+            reason = "; ".join(reasons) + " — your crate is stale; rebuild it (ear_crate/build?force=1 then taste/graph) before trusting coverage"
+        return {
+            "crate_stale": stale,
+            "reason": reason,
+            "engine_version": ENGINE_VERSION,
+            "analyzer_version": ANALYZER_VERSION,
+            "crate_stamp": stamp,
+        }
+
     def next_render_seed(self, base_seed: int) -> int:
         counter = self.kv_get_int("render_counter", 0) + 1
         self.kv_set_int("render_counter", counter)
@@ -2723,9 +2829,10 @@ class EarcrateCore:
             return "BED_CHORD"
         return "TEXTURE"
 
-    def ear_atom_metrics(self, seg: np.ndarray, sr: int, bars: int, track_vocal_like: float, base_role: str = "full") -> Dict[str, float]:
+    def ear_atom_metrics(self, seg: np.ndarray, sr: int, bars: int, track_vocal_like: float, base_role: str = "full", recurrence: float = 0.0) -> Dict[str, float]:
+        recurrence = 0.0 if recurrence is None else float(max(0.0, min(1.0, recurrence)))
         if seg.size < 512 or float(np.max(np.abs(seg))) < 1e-6:
-            return {"score": 0.0, "hook_score": 0.0, "bed_score": 0.0, "floor_score": 0.0, "bass_score": 0.0, "spark_score": 0.0, "intelligibility": 0.0, "low_share": 0.0, "mid_share": 0.0, "high_share": 0.0, "loopability": 0.0, "transient_density": 0.0}
+            return {"score": 0.0, "hook_score": 0.0, "bed_score": 0.0, "floor_score": 0.0, "bass_score": 0.0, "spark_score": 0.0, "intelligibility": 0.0, "low_share": 0.0, "mid_share": 0.0, "high_share": 0.0, "loopability": 0.0, "transient_density": 0.0, "recurrence": recurrence}
         seg = seg.astype(np.float32, copy=False)
         rms = rms_value(seg)
         peak = float(np.max(np.abs(seg))) + 1e-9
@@ -2757,7 +2864,14 @@ class EarcrateCore:
         percussive_ratio = float(np.sum(np.abs(percussive)) / hp_total)
         energy_score = float(min(1.0, rms / 0.11))
         intelligibility = float(max(0.0, min(1.0, 0.40 * min(1.0, mid_share / 0.42) + 0.28 * min(1.0, presence_share / 0.24) + 0.22 * float(track_vocal_like or 0.0) + 0.10 * (1.0 - min(1.0, low_share / 0.42)))))
-        hook_score = float(max(0.0, min(1.0, 0.32 * intelligibility + 0.20 * min(1.0, presence_share / 0.22) + 0.16 * transient_density + 0.16 * energy_score + 0.10 * min(1.0, crest / 5.5) + 0.06 * (1.0 if bars in (2, 4) else 0.4))))
+        local_hook = 0.32 * intelligibility + 0.20 * min(1.0, presence_share / 0.22) + 0.16 * transient_density + 0.16 * energy_score + 0.10 * min(1.0, crest / 5.5) + 0.06 * (1.0 if bars in (2, 4) else 0.4)
+        # A hook is, deterministically, the part the song REPEATS. Fold the
+        # song-level recurrence of this segment into hook_score as a real weighted
+        # contributor so a genuinely repeated segment outranks an equally-clean but
+        # unique one; recurrence==0 (no curve / no repetition) preserves the pure
+        # local formula's ordering.
+        HOOK_RECUR_W = 0.28
+        hook_score = float(max(0.0, min(1.0, (1.0 - HOOK_RECUR_W) * local_hook + HOOK_RECUR_W * recurrence)))
         floor_score = float(max(0.0, min(1.0, 0.34 * percussive_ratio + 0.24 * transient_density + 0.18 * loopability + 0.14 * energy_score + 0.10 * (1.0 - min(1.0, mid_share / 0.75)))))
         bass_score = float(max(0.0, min(1.0, 0.48 * min(1.0, low_share / 0.34) + 0.22 * min(1.0, sub_share / 0.18) + 0.16 * loopability + 0.14 * energy_score)))
         bed_score = float(max(0.0, min(1.0, 0.32 * harmonic_ratio + 0.24 * loopability + 0.18 * min(1.0, (lowmid_share + mid_share) / 0.62) + 0.14 * energy_score + 0.12 * (1.0 - min(1.0, intelligibility / 0.88)))))
@@ -2766,7 +2880,7 @@ class EarcrateCore:
         score = float(max(hook_score, floor_score, bass_score, bed_score, spark_score, base_bias) * 0.72 + loopability * 0.16 + energy_score * 0.12)
         if rms < 1e-4:
             score *= 0.1
-        return {"score": score, "hook_score": hook_score, "bed_score": bed_score, "floor_score": floor_score, "bass_score": bass_score, "spark_score": spark_score, "intelligibility": intelligibility, "low_share": low_share, "mid_share": mid_share, "high_share": high_share, "loopability": loopability, "transient_density": transient_density, "rms": rms, "crest": crest, "harmonic_ratio": harmonic_ratio, "percussive_ratio": percussive_ratio, "flatness": flat}
+        return {"score": score, "hook_score": hook_score, "bed_score": bed_score, "floor_score": floor_score, "bass_score": bass_score, "spark_score": spark_score, "intelligibility": intelligibility, "low_share": low_share, "mid_share": mid_share, "high_share": high_share, "loopability": loopability, "transient_density": transient_density, "rms": rms, "crest": crest, "harmonic_ratio": harmonic_ratio, "percussive_ratio": percussive_ratio, "flatness": flat, "recurrence": recurrence}
 
     def build_ear_crate(self, limit: int = 0, force: bool = False, taste_profile: str = "girl_talk_v1", write_previews: bool = False) -> Dict[str, Any]:
         """Turn loop candidates into deterministic, auditionable phrase atoms.
@@ -2962,6 +3076,9 @@ class EarcrateCore:
                       OR (l.source_audio_sha256 IS NULL AND COALESCE(f.audio_generation,0)=0))""",
             (taste_profile,),
         ).fetchone()["n"]
+        # Stamp the crate with the engine/analyzer that just built it, so a later
+        # version bump makes this profile's atoms detectably stale (crate_staleness).
+        self.stamp_crate_versions(taste_profile)
         self.set_status(f"TasteSpec ear crate complete: {approved} approved atoms", 1.0, False)
         return {"ok": True, "taste_profile": taste_profile, "scanned_loops": len(rows), "inserted": inserted, "updated": updated, "adopted": adopted, "parallel_files": len(jobs), "approved": int(approved), "role_counts": counts, "rejected": rejected, "failed": failed[:50]}
 
@@ -3078,7 +3195,9 @@ class EarcrateCore:
         # reads as a rerun; a source contributes at most ~3 fresh foreground moments.
         atom_event_capacity = min(len(pool) * 2, len(source_keys) * 3)
         endless = endless_sustain(atom_event_capacity, len(source_keys), profile)
-        return {"ok": True, "ready": not failures, "taste_profile": taste_profile, "profile": profile, "have": have, "need": need, "role_counts": by_role, "source_tracks": len(source_keys), "pool_size": len(pool), "failures": failures, "endless": endless}
+        stale = self.crate_staleness(taste_profile)
+        return {"ok": True, "ready": not failures, "taste_profile": taste_profile, "profile": profile, "have": have, "need": need, "role_counts": by_role, "source_tracks": len(source_keys), "pool_size": len(pool), "failures": failures, "endless": endless,
+                "crate_stale": stale["crate_stale"], "crate_stale_reason": stale["reason"], "crate_stamp": stale["crate_stamp"]}
 
     def atom_edge_score(self, left: Dict[str, Any], right: Dict[str, Any], relation: str, render_bpm: float, target_key: int, stretch_budget: float, pitch_budget: int) -> Tuple[float, Dict[str, Any]]:
         def key_of(x: Dict[str, Any]) -> int:
@@ -3254,6 +3373,8 @@ class EarcrateCore:
         taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
         target_seconds = float(params.get("target_seconds") or 120)
         readiness = self.taste_readiness(taste_profile, target_seconds)
+        if readiness.get("crate_stale") and not params.get("allow_stale_crate"):
+            raise RuntimeError("STALE CRATE: " + str(readiness.get("crate_stale_reason") or "engine/analyzer version bumped since this crate was built"))
         if not readiness.get("ready"):
             raise RuntimeError("TasteSpec crate is not ready: " + "; ".join(readiness.get("failures") or []))
         pool = self.approved_atom_pool(taste_profile)

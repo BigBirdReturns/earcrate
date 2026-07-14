@@ -1232,7 +1232,7 @@
    "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
    "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "75/75 gates pass (all fanned-out fixes combined)",
+  "gate_result": "77/77 gates pass",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
  },
  "fixes_remaining_notes": [
@@ -1265,7 +1265,14 @@
    "fix": "floor rail excludes TEXTURE (fallback only if zero structural beds); drop/breakdown COUNT scales to total_bars (evenly spaced). Verified: all 3 personas PASS their taste gates on a feasible pool (troubadour floor 1.00/need 0.95, fg 1.00/need 0.75; notorious passes; girl_talk still dense+passing). Desktop 'material-depth' hypothesis: partially true (feasibility) but the coverage shortfall was a real texture-wins-floor LOGIC bug.",
    "followup": "actual rendered rms_std_db clearing 3.0 needs a real decodable WAV crate on the desktop (enriched test pool uses /fake/ paths); arc is verified at the energy-curve level."
   },
-  "bakeoff_persistence": "Backgrounded /api/bakeoff now persists its per-persona summary to agent_root/bakeoff_last.json AND status['last_bakeoff'], so results survive run_background (which discards return values)."
+  "bakeoff_persistence": "Backgrounded /api/bakeoff now persists its per-persona summary to agent_root/bakeoff_last.json AND status['last_bakeoff'], so results survive run_background (which discards return values).",
+  "hook_detection_recurrence": {
+   "answer_to_'what makes a juicy bit'": "REPETITION, deterministically. A hook is the maximally-RECURRING segment of a track (the chorus returns, the phrase you can't forget is heard 3-4x). Not lyrics, not chords \u2014 recurrence. The old hook_score had zero repetition signal (only local cleanliness).",
+   "impl": "analyze/features.py song_recurrence_curve(y,sr): beat-synchronous chroma cosine self-similarity matrix, zero the ~2s diagonal band, off-diagonal row-sum = per-segment recurrence in [0,1] (per-song relative). Bounded O(1500^2) via beat-grid subsampling; computed ONCE per file. segment_recurrence() maps it to each loop's window. Folded into hook_score = (1-0.28)*local_hook + 0.28*recurrence, so a genuinely repeated segment outranks an equally-clean unique one.",
+   "verified": "synthetic known-hook signal: recurrence ranks the 4x-repeated segment strictly highest (0.944 vs 0.056, margin 0.889); hook_score margin 0.249; bit-identical across runs (deterministic). Won a bake-off vs a recurrence/lag-matrix approach (margin 0.249 vs 0.027).",
+   "why_it_matters": "more/better foreground+floor atoms per file -> attacks the material-depth wall the sparse personas (troubadour/notorious) keep hitting, without analyzing all 15k files.",
+   "followup": "recurrence is per-song relative; a through-composed track still yields one ~1.0 column. If false-positive hooks on non-repetitive tracks appear, gate the term by an absolute repetition-confidence factor."
+  }
  },
  "performance": {
   "demucs_model_cache": {
@@ -1322,6 +1329,13 @@
    "stem_provider": "demucs",
    "preset": "machine_defaults.json (repo root) auto-configures on first launch via EarcrateCore._seed_from_machine_defaults; safe no-op when the D: library isn't mounted.",
    "relocation": "POST /api/relocate_workspace {old:'C:\\\\Users\\\\BAM-Desktop\\\\EarCrate-Workspace', new:'D:\\\\BonkyJones Backups\\\\EarCrate-Workspace', apply:true} \u2014 run ONCE to move the existing C: workspace (DB/atoms/judgments/renders) onto D: with no re-analyze; regenerable cache is left to rebuild on S:."
+  }
+ },
+ "reliability": {
+  "stale_crate_guard": {
+   "trap": "After a git pull that changes the analyzer/composer, cached ear_atoms were stale but still used -> wrong coverage (real box: girl_talk falsely FAILED 0.47 until force-rebuild).",
+   "fix": "stamp_crate_versions() stamps the crate with ENGINE_VERSION/ANALYZER_VERSION at build_ear_crate end; crate_staleness() flags a mismatch (stamp OR any approved atom on an old features.analyzer_version). crate_stale + rebuild reason now surface in taste_readiness() and status_snapshot(); propose_taste_mashup() refuses (loud 'STALE CRATE' error, unless allow_stale_crate) so stale atoms can never silently produce wrong coverage.",
+   "followup": "optional: auto-trigger force rebuild on detection instead of only refusing; per-atom engine-version column for mixed-version crates."
   }
  }
 }

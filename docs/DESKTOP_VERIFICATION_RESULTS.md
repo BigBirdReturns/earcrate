@@ -428,3 +428,39 @@ real-Girl-Talk ground truth measured earlier — the gate is now honest. But the
 treble-dead + dynamically flat, so external remix inherits the same mix defect and will keep getting
 rejected until the render EQ/dynamics are fixed. Net: #4 is structurally sound but yields zero output
 today = wrong anchor (F2) x treble-dead render (F below the calibrated gate).
+
+---
+
+## v0.8.29 re-verification of #4 (box A/B vs the v0827 run above, 2026-07-14)
+
+Same inputs as the v0827 run, isolating the release: fresh htdemucs vocal stem of the same
+"Ain't No Sunshine" library track (4060), `girl_talk_v1`, `target_seconds=60`, **seed 1402**.
+In-process `propose_external_remix` + `execute_manifest(apply=True)` on `earcrate_v0829`
+(arr_sha 2cf7a6f1fbbc).
+
+**F3 (silent gate rejection) — VERIFIED FIXED.** `execute_manifest` now returns
+`ok:false` with `error: "render rejected by post-render quality gate: high3000_share 0.067
+catastrophically dark (real Girl Talk ~0.31); presence is dead"`, and no WAV is published
+(`done[].type=render_rejected, path=null, presented=false`; dst absent on disk). The v0827 run
+returned ok:true and left the WAV. Exactly the contract asked for.
+
+**F2 (anchor octave/key) — HALF-FIXED.** Anchor now reports provenance:
+`{"bpm": 156.605, "bpm_confidence": 0.932, "key_root": 9, "key_mode": 0, "key_confidence": 0.173,
+"anchor_source": {"bpm_raw": 156.605, "bpm_from": "vocal", "key_from": "bed_dominant"}}`.
+- KEY: fixed. The 0.17-confidence guess no longer hard-pins; it deferred to the bed's dominant
+  key and landed on **A (key_root 9) — the actually-correct key** for this A-minor song (v0827
+  pinned G). The worst musical artifact (bed transposed to a wrong key) is gone.
+- BPM: **the 2x octave error is unchanged** — still 156.605, `bpm_from:"vocal"`, and
+  `bpm_raw == bpm` (no fold applied). Ambiguity the receipts can't resolve: did the half/double
+  test run and *choose* 156.6 because the girl_talk crate genuinely lives there (a defensible
+  fold-to-crate outcome), or did the fold never trigger? Request: annotate `anchor_source` with
+  the fold decision (e.g. `bpm_fold_tested: [78.3, 156.6], bpm_fold_choice: "crate_density"`)
+  so the box can tell "deliberate" from "broken". If deliberate, consider whether a ~78 BPM
+  vocal over a 156.6 bed should at least try the half-tempo bed when the crate has material there.
+
+**Renderer darkness — unchanged, as the PR27 review predicted.** high3000_share 0.067 (v0827:
+0.066); the anti-aliased resampler is not an EQ fix. The calibrated gate keeps correctly
+refusing. **The treble-dead render chain is now the single blocker for #4 producing audible
+output** — no anchor/wiring work will change that. (Human note: the box owner asked to *hear*
+v0.8.29; today the honest answer is "nothing passes the gate yet." The v0827 WAV they heard
+only exists because pre-F3 published rejected renders.)

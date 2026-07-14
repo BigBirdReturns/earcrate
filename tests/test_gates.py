@@ -2859,8 +2859,17 @@ def test_pcm_identity_covers_full_track_not_analysis_prefix():
     hd = decoded_audio_sha256(dup, sr, 2.0)
     assert ha != hb, "same prefix collided despite different full-track audio"
     assert ha == hd, "identical full canonical PCM did not deduplicate"
+    # The single-decode analyze path hashes the decoder's own byte stream instead
+    # of running a second full hash-muxer pass. That is only legal because the two
+    # digests are byte-identical for the same canonical decode — assert it, per
+    # file, including one where only the tail differs from another.
+    from earcrate.analyze.decode import decode_audio_with_full_sha
+    for p, want in ((a, ha), (b, hb), (dup, hd)):
+        y_pref, got = decode_audio_with_full_sha(p, sr, keep_seconds=1.0, duration_hint=2.0)
+        assert got == want, "streaming decode digest diverged from the hash-muxer digest"
+        assert y_pref.size == sr, "bounded feature prefix has the wrong length"
     worker_source = inspect.getsource(analyze_file_worker)
-    assert "decoded_audio_sha256" in worker_source and 'pcm_scope=np.asarray("full")' in worker_source, \
+    assert "decode_audio_with_full_sha" in worker_source and 'pcm_scope=np.asarray("full")' in worker_source, \
         "analysis worker is not persisting the complete-PCM identity contract"
 
 
@@ -3961,3 +3970,52 @@ def test_gate_suite_sandboxes_the_workspace_pointer():
     assert resolved != repo_root, "pointer writes would land in the real repo root"
     # EARCRATE_HOME is an override, not a hint: no fallback dir may leak in.
     assert [d.resolve() for d in pointer_search_dirs()] == [resolved]
+
+
+def test_presence_restore_is_measured_and_reaches_gate_bands():
+    """The finishing EQ must MEASURE the mix and land it inside the calibrated
+    gate's spectral bands — the fixed-shelf version under-corrected forever
+    (high3000_share stuck ~0.067 vs the 0.30 real-GT target across releases)
+    and was named the sole blocker for audible external-remix output. Also pins:
+    dynamics are untouched (pure linear EQ), the correction is deterministic,
+    a balanced mix passes through within bands, and EVERY render path applies
+    it (the external_remix mode used to get no correction at all)."""
+    import inspect
+    import numpy as np
+    from earcrate.judge.audio import stable_presence_restore, drydeck_metrics
+    from earcrate.app import EarcrateCore
+
+    sr = 44100
+    rng = np.random.default_rng(7)
+    t = np.arange(sr * 20) / sr
+    low = 0.55 * np.sin(2 * np.pi * 90 * t) + 0.25 * np.sin(2 * np.pi * 160 * t)
+    mid = 0.35 * np.sin(2 * np.pi * 600 * t) + 0.25 * np.sin(2 * np.pi * 1500 * t)
+    hi = 0.05 * rng.standard_normal(t.size)
+    env = (np.sin(2 * np.pi * t / 8.0) > 0).astype(np.float32) * 0.7 + 0.3
+    dark = ((low + mid + hi) * env).astype(np.float32) * 0.2
+
+    m0 = drydeck_metrics(dark, sr)
+    assert m0["high3000_share"] < 0.05 and m0["low200_share"] > 0.45, "fixture must reproduce the dark render"
+    out = stable_presence_restore(dark, sr)
+    m1 = drydeck_metrics(out, sr)
+    assert m1["high3000_share"] >= 0.15, "presence still below the gate's warn floor after finishing"
+    assert m1["low200_share"] <= 0.34, "low-end mud still above the gate's warn ceiling after finishing"
+    # Linear time-invariant EQ cannot manufacture dynamics.
+    assert abs(m1["rms_std_db"] - m0["rms_std_db"]) < 0.5
+    assert np.array_equal(out, stable_presence_restore(dark.copy(), sr)), "finishing EQ must be deterministic"
+
+    # A mix already inside the bands passes through without a correction pass
+    # dragging it OUT of band.
+    bal = (0.2 * np.sin(2 * np.pi * 150 * t) + 0.3 * np.sin(2 * np.pi * 1000 * t)
+           + 0.1 * rng.standard_normal(t.size)).astype(np.float32) * 0.2
+    mb = drydeck_metrics(stable_presence_restore(bal, sr), sr)
+    assert mb["high3000_share"] >= 0.15 and mb["low200_share"] <= 0.34
+
+    # Every gated render applies the finish — no quality_mode carve-out that
+    # ships external remixes uncorrected.
+    render_source = inspect.getsource(EarcrateCore.render_mashup.__wrapped__)
+    idx = render_source.find("stable_presence_restore(mix")
+    assert idx != -1, "renderer no longer applies the finishing EQ"
+    guard = render_source[max(0, idx - 220):idx]
+    assert 'in {"dry_deck", "stable_deck"}' not in guard, \
+        "finishing EQ is quality_mode-gated again; external_remix would ship uncorrected"

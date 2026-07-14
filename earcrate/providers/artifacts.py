@@ -76,6 +76,14 @@ class ArtifactStore:
         meta_path.write_text(json_dumps(meta), encoding="utf-8")
         return dict(meta)
 
+    def has(self, key: str) -> bool:
+        """Existence check WITHOUT reading the blob. Callers used ``get(key) is
+        not None`` to probe for cached stems — which read the entire ~48 MB WAV
+        (and its meta) off disk per probe. A warm-status sweep over a big library
+        did gigabytes of IO to answer a yes/no question."""
+        bin_path, meta_path = self._paths(key)
+        return bin_path.exists() and meta_path.exists()
+
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         """Return ``{\"data\": bytes, \"meta\": {...}}`` or None if absent."""
         bin_path, meta_path = self._paths(key)

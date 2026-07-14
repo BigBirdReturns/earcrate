@@ -142,20 +142,31 @@ def beat_activity(y, sr, beats):
     return out
 
 
-def beat_novelty(y, sr, beats):
+def _onset_curve(y, sr, onset=None):
+    """The per-frame onset-strength curve, computed at most ONCE per track.
+
+    Both novelty and groove consume the identical curve (same hop, same signal);
+    computing it in each consumer re-ran a full mel spectrogram per call — pure
+    waste flagged by the hot-path audit. Callers with the curve pass it through."""
+    if onset is not None:
+        return np.asarray(onset, dtype=np.float64)
+    return librosa.onset.onset_strength(y=y, sr=sr, hop_length=_HOP)
+
+
+def beat_novelty(y, sr, beats, onset=None):
     """Per-beat spectral-flux novelty, per-track normalized -- how much the sound
     CHANGES at each beat (fills, entrances, drops)."""
     y = np.nan_to_num(np.asarray(y, dtype=np.float32))
     beats = np.asarray(beats, dtype=np.float64)
     if y.size < _N_FFT or beats.size < 2:
         return []
-    onset = librosa.onset.onset_strength(y=y, sr=sr, hop_length=_HOP)
+    onset = _onset_curve(y, sr, onset)
     bframes = _beat_frames(beats, sr, onset.shape[0])
     per_beat = _aggregate_per_beat(onset, bframes, "max")
     return [_r(v) for v in _norm01(per_beat)]
 
 
-def groove_descriptor(y, sr, beats, downbeats):
+def groove_descriptor(y, sr, beats, downbeats, onset=None):
     """Groove that a BPM/phase match cannot capture.
 
     onset_histogram : 16 bins over the bar (16th-note grid), the rhythmic
@@ -172,7 +183,7 @@ def groove_descriptor(y, sr, beats, downbeats):
              "halftime_prob": 0.0, "doubletime_prob": 0.0}
     if y.size < _N_FFT or beats.size < 3:
         return empty
-    onset = librosa.onset.onset_strength(y=y, sr=sr, hop_length=_HOP)
+    onset = _onset_curve(y, sr, onset)
     times = librosa.frames_to_time(np.arange(onset.shape[0]), sr=sr, hop_length=_HOP)
     db = np.asarray(downbeats, dtype=np.float64)
     # bar span: consecutive downbeats, else 4 beats
@@ -243,29 +254,45 @@ def local_harmony(y, sr, beats, window_s=6.0, hop_s=3.0):
         return []
     win = int(window_s * sr)
     hop = max(1, int(hop_s * sr))
+    # ONE whole-track chromagram, sliced per window. This function used to re-run
+    # chroma_cqt on every 6s window (~59 CQT builds on a 3-minute track — measured
+    # at 36% of the ENTIRE per-track analyze cost). The CQT is shift-invariant
+    # enough that slicing the track-level frame grid per window preserves the
+    # windowed-key semantics (windowed Krumhansl over local chroma mass), and the
+    # gates that matter — tonal material scores confident, noise scores low, same
+    # audio -> byte-identical output — hold on the sliced form.
+    try:
+        chroma_full = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=_HOP)
+    except Exception:
+        chroma_full = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=_HOP)
+    n_frames = chroma_full.shape[1]
     out = []
     for start in range(0, max(1, y.size - sr), hop):
-        seg = y[start:start + win]
-        if seg.size < sr:
+        seg_len = min(win, y.size - start)
+        if seg_len < sr:
             break
-        try:
-            chroma = librosa.feature.chroma_cqt(y=seg, sr=sr)
-        except Exception:
-            chroma = librosa.feature.chroma_stft(y=seg, sr=sr)
-        v = np.mean(chroma, axis=1)
-        root, mode, conf = krumhansl_key(chroma)
+        f0 = min(n_frames, start // _HOP)
+        f1 = min(n_frames, (start + seg_len) // _HOP)
+        if f1 <= f0:
+            break
+        root, mode, conf = krumhansl_key(chroma_full[:, f0:f1])
         out.append({"start_s": _r(start / sr), "key_root": int(root),
                     "key_mode": int(mode), "tonal_confidence": _r(_clamp01(conf))})
     return out
 
 
-def beat_state_features(y, sr, beats, downbeats):
+def beat_state_features(y, sr, beats, downbeats, onset=None):
     """Assemble the beat-synchronous state for one track: role activity, novelty,
     groove, and local harmony. Deterministic and JSON-serializable -- suitable to
     store per file OR compute on demand for the two tracks in a transition."""
     activity = beat_activity(y, sr, beats)
-    novelty = beat_novelty(y, sr, beats)
-    groove = groove_descriptor(y, sr, beats, downbeats)
+    # Compute the onset curve once and share it: novelty and groove used to each
+    # rebuild it (a full mel spectrogram per call).
+    yf = np.nan_to_num(np.asarray(y, dtype=np.float32))
+    if onset is None and yf.size >= _N_FFT:
+        onset = _onset_curve(yf, sr)
+    novelty = beat_novelty(y, sr, beats, onset=onset)
+    groove = groove_descriptor(y, sr, beats, downbeats, onset=onset)
     harmony = local_harmony(y, sr, beats)
     n_beats = max(0, len(np.asarray(beats)) - 1)
     return {

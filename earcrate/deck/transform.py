@@ -83,7 +83,35 @@ def plan_varispeed_transform(role: str, source_bpm: float, target_bpm: float, lo
     The renderer implements this plan by resampling the clip to the target loop
     length first. That is the clean varispeed operation. Only the small residual
     pitch difference, if any, is handed to synthetic pitch shifting.
-    """
+
+    MEMOIZED: this is a pure function, and the deck search calls it millions of
+    times per propose (every key x lattice-BPM x pool-loop combination, and then
+    again in feasibility) with heavily repeated arguments — the hot-path audit
+    measured ~4.4M calls computed twice. The cache returns a fresh shallow copy so
+    callers that annotate the plan cannot poison the cached entry."""
+    try:
+        return dict(_plan_varispeed_cached(
+            str(role or "full"), float(source_bpm or 0.0), float(target_bpm or 0.0),
+            None if loop_key is None else int(loop_key),
+            None if target_key is None else int(target_key),
+            float(user_stretch_budget or 0.0),
+            None if residual_pitch_budget is None else float(residual_pitch_budget)))
+    except (TypeError, ValueError):
+        # Unhashable/garbage metadata: fall through to the uncached path, which
+        # already defends against bad inputs.
+        return _plan_varispeed_uncached(role, source_bpm, target_bpm, loop_key,
+                                        target_key, user_stretch_budget, residual_pitch_budget)
+
+
+@functools.lru_cache(maxsize=1 << 18)
+def _plan_varispeed_cached(role, source_bpm, target_bpm, loop_key, target_key,
+                           user_stretch_budget, residual_pitch_budget) -> Dict[str, Any]:
+    return _plan_varispeed_uncached(role, source_bpm, target_bpm, loop_key,
+                                    target_key, user_stretch_budget, residual_pitch_budget)
+
+
+def _plan_varispeed_uncached(role, source_bpm, target_bpm, loop_key, target_key,
+                             user_stretch_budget, residual_pitch_budget) -> Dict[str, Any]:
     role = str(role or "full")
     raw_src = float(source_bpm or target_bpm or 120.0)
     tgt = float(target_bpm or raw_src or 120.0)

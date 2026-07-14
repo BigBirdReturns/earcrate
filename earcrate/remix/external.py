@@ -96,20 +96,35 @@ def remix_anchor(feats: Dict[str, Any],
     candidates = _octave_candidates(raw_bpm)
     bpm = raw_bpm
     bpm_from = "vocal"
+    # FOLD PROVENANCE (box request, v0.8.29 re-verification of #4): when the
+    # chosen anchor equals bpm_raw the receipts could not distinguish "the fold
+    # ran and DELIBERATELY kept the raw octave (the crate genuinely lives there)"
+    # from "the fold never triggered". bpm_fold_tested lists every octave
+    # candidate that was actually scored; bpm_fold_choice names the rule that
+    # picked the winner; bed_median_bpm shows the crate evidence the bed rule used.
+    fold_choice = "untested_raw"
+    bed_median_bpm = None
     tempos = [float(t) for t in (bed_tempos or []) if t and float(t) > 0.0]
     if tempos:
         med = float(median(tempos))
+        bed_median_bpm = round(med, 3)
         target = math.log2(med) if med > 0 else math.log2(max(1e-6, raw_bpm))
         bpm = min(candidates, key=lambda c: abs(math.log2(c) - target))
         bpm_from = "bed_matched" if abs(bpm - raw_bpm) > 1e-6 else "vocal"
+        fold_choice = "crate_density_folded" if abs(bpm - raw_bpm) > 1e-6 else "crate_density_kept_raw"
     else:
         in_band = [c for c in candidates if _VOCAL_BAND[0] <= c <= _VOCAL_BAND[1]]
         if _VOCAL_BAND[0] <= raw_bpm <= _VOCAL_BAND[1]:
             bpm = raw_bpm
+            fold_choice = "vocal_band_kept_raw"
         elif in_band:
             bpm = min(in_band, key=lambda c: abs(math.log2(c) - math.log2(raw_bpm)))
+            fold_choice = "vocal_band_folded"
         elif raw_bpm > 130.0 and (raw_bpm / 2.0) >= _VOCAL_BAND[0]:
             bpm = raw_bpm / 2.0
+            fold_choice = "halved_out_of_band"
+        else:
+            fold_choice = "no_candidate_kept_raw"
         bpm_from = "halved" if bpm < raw_bpm - 1e-6 else "vocal"
 
     key_root = int(feats.get("key_root") or 0) % 12
@@ -134,6 +149,9 @@ def remix_anchor(feats: Dict[str, Any],
         "anchor_source": {
             "bpm_raw": round(raw_bpm, 3),
             "bpm_from": bpm_from,
+            "bpm_fold_tested": [round(c, 3) for c in candidates],
+            "bpm_fold_choice": fold_choice,
+            "bed_median_bpm": bed_median_bpm,
             "key_from": key_from,
             "key_conf": key_conf,
         },

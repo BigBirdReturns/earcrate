@@ -1,0 +1,188 @@
+{
+  "id": "remix_avalanches_v1",
+  "version": "1.0.0",
+  "name": "Remix — The Avalanches v1",
+  "contract": "sunlit seamless multi-source collage assembled into a new pop song under a lead melody",
+  "mode": "remix",
+  "provenance": {
+    "basis": "The Avalanches / Since I Left You: maximalist plunderphonics (WhoSampled tree, clearance history)",
+    "scout": "roster fan-out (documented breakdowns)",
+    "note": "spectral/tempo/density are informed estimates, tune on the box"
+  },
+  "permitted_roles": [
+    "VOX_HOOK",
+    "VOX_VERSE",
+    "RIFF_ID",
+    "BED_CHORD",
+    "DRUM_BREAK",
+    "BASS_RIFF",
+    "TEXTURE",
+    "PICKUP_FILL",
+    "DROP_HIT",
+    "TRANSITION_TAIL"
+  ],
+  "role_salience": {
+    "VOX_HOOK": {
+      "min_score": 0.48,
+      "min_intelligibility": 0.5
+    },
+    "RIFF_ID": {
+      "min_score": 0.46
+    },
+    "BED_CHORD": {
+      "min_bed_score": 0.46
+    },
+    "BASS_RIFF": {
+      "min_bass_score": 0.48
+    },
+    "DRUM_BREAK": {
+      "min_floor_score": 0.46
+    }
+  },
+  "hard_constraints": {
+    "rails": [
+      "floor",
+      "foreground",
+      "spark"
+    ],
+    "require_transform_feasible_before_compose": true,
+    "forbid_silent_layer_drop": true,
+    "forbid_wav_on_gate_failure": true
+  },
+  "objective_weights": {
+    "recognizability": 0.3,
+    "role_clarity": 0.26,
+    "danceability": 0.14,
+    "deck_feasibility": 0.16,
+    "contrast": 0.14
+  },
+  "compatibility_relations": {
+    "vocal_over_bed": {
+      "min_score": 0.52
+    },
+    "bass_over_drums": {
+      "min_score": 0.52
+    },
+    "spark_into_phrase": {
+      "min_score": 0.52
+    },
+    "floor": {
+      "min_score": 0.52
+    },
+    "foreground": {
+      "min_score": 0.52
+    }
+  },
+  "min_edge_score": 0.52,
+  "transition_grammar": {
+    "allowed": [
+      "hook_blend_over_bed",
+      "beatmatch_blend",
+      "acapella_bridge",
+      "impact_drop",
+      "hard_cut_pickup",
+      "hard_cut_to_air"
+    ]
+  },
+  "transform_budgets": {
+    "default_stretch_pct": 8.0,
+    "default_pitch_semitones": 2,
+    "roles": {
+      "drum_anchor": {
+        "varispeed_pct": 8.0,
+        "residual_pitch": 0.75
+      },
+      "bass": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 0.9
+      },
+      "vocal": {
+        "varispeed_pct": 6.5,
+        "residual_pitch": 1.15
+      },
+      "harmony": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 1.25
+      },
+      "texture": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 1.0
+      },
+      "fx": {
+        "varispeed_pct": 8.5,
+        "residual_pitch": 1.0
+      },
+      "full": {
+        "varispeed_pct": 7.0,
+        "residual_pitch": 0.9
+      }
+    }
+  },
+  "coverage_obligations": {
+    "floor_coverage": 0.9,
+    "foreground_coverage": 0.75,
+    "first_foreground_s": 6.0,
+    "max_silent_gap_s": 1.5
+  },
+  "source_turnover": {
+    "source_seconds": 12.0,
+    "max_source_run_s": 28.0,
+    "foreground_max_share": 0.5,
+    "min_feasible_sources": 7
+  },
+  "density_model": {
+    "seconds_per_event": 6.0,
+    "sources_per_minute": 5.0,
+    "min_layers": 4,
+    "max_layers": 6
+  },
+  "tempo_target": {
+    "bpm_low": 100,
+    "bpm_high": 120,
+    "half_time_feel": true
+  },
+  "groove_target": {
+    "feel": "four_on_floor",
+    "swing": "light",
+    "syncopation": "medium"
+  },
+  "spectral_target": {
+    "rms_std_db": {
+      "target": 4.5,
+      "floor": 3.2
+    },
+    "low200_share": {
+      "ceiling_fail": 0.44,
+      "ceiling_warn": 0.34,
+      "floor_warn": 0.06
+    },
+    "high3000_share": {
+      "target": 0.2,
+      "floor_warn": 0.12,
+      "floor_fail": 0.07
+    }
+  },
+  "endless_contract": {
+    "min_recycle_gap_s": 600.0,
+    "note": "the foreground anchors; the bed rotates"
+  },
+  "foreground_limits": {
+    "max_foreground_reuse": 5,
+    "max_foreground_duration_s": 45.0
+  },
+  "low_end_ownership": {
+    "max_simultaneous_bass_layers": 1,
+    "low_conflict_warn": 0.38,
+    "bass_ducking_required": true
+  },
+  "masking_intelligibility": {
+    "max_mid_mask": 0.55,
+    "min_vocal_intelligibility": 0.5
+  },
+  "acceptance_corpus_metrics": {
+    "hook_top5_recall": 0.8,
+    "pair_top10_min_approved_when_available": 3,
+    "deterministic_plan_hash": true,
+    "deterministic_render_hash": true
+  }
+}

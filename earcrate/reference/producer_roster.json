@@ -1,0 +1,5 @@
+{
+  "note": "Scouted roster of heavily-documented producers of the last ~2 decades, each built into a remix persona via scripts/build_roster.py + build_remix_persona. Spectral/tempo/density are informed ESTIMATES (calibration starting points), tunable on the box against real audio.",
+  "built_personas": ["remix_branchez_v1","remix_prettylights_v1","remix_dilla_v1","remix_madlib_v1","remix_shadow_v1","remix_avalanches_v1","remix_dangermouse_v1","remix_kanye_v1","remix_flyinglotus_v1","remix_kaytranada_v1","remix_clamscasino_v1","remix_alchemist_v1","remix_premier_v1","remix_nujabes_v1","remix_rjd2_v1","remix_9thwonder_v1","remix_knxwledge_v1","remix_toddedwards_v1","remix_hudmo_v1","remix_metroboomin_v1","remix_madeon_v1","remix_burial_v1"],
+  "documentation_basis": "WhoSampled depth, Tracklib guides, RBMA lectures, Micro-Chop/Attack Magazine analyses, samplingdonuts, YouTube deconstructions, track-by-track interviews (verified per-producer by the roster scout)."
+}

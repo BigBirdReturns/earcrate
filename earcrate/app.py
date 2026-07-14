@@ -521,9 +521,34 @@ class EarcrateCore:
         if self.config is not None:
             return
         try:
+            # Resolve the preset across entry points: EARCRATE_DEFAULTS first, then
+            # machine_defaults.json in every dir the pointer search covers (cwd,
+            # the launcher/-m dir, the package/dist dir, visible_app_dir). This is
+            # the -m-vs-dist gap the desktop hit: visible_app_dir() alone isn't the
+            # repo root under `python -m earcrate`, so the preset was never found.
+            cand: Optional[Path] = None
             src = os.environ.get("EARCRATE_DEFAULTS")
-            cand = Path(src).expanduser() if src else (visible_app_dir() / "machine_defaults.json")
-            if not cand.exists():
+            search: List[Path] = []
+            if src:
+                search.append(Path(src).expanduser())
+            # Every entry-point-visible location, checked EXPLICITLY (not only via
+            # pointer_search_dirs, which collapses to a single dir when EARCRATE_HOME
+            # is set): the launcher/-m dir, the current working dir (repo root under
+            # `python -m earcrate`), the package/dist dir, and visible_app_dir.
+            roots: List[Path] = [visible_app_dir(), Path.cwd()]
+            main = sys.modules.get("__main__")
+            mf = getattr(main, "__file__", None) if main is not None else None
+            if mf:
+                roots.append(Path(mf).resolve().parent)
+            roots.extend(pointer_search_dirs())
+            for _d in roots:
+                search.append(_d / "machine_defaults.json")
+            for c in search:
+                with contextlib.suppress(Exception):
+                    if c.exists():
+                        cand = c
+                        break
+            if cand is None:
                 return
             d = json.loads(cand.read_text(encoding="utf-8"))
             master = str(d.get("master_root") or "").strip()

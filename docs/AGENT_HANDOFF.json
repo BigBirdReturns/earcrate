@@ -1257,7 +1257,8 @@
    "bug": "Desktop bake-off proof: all 3 personas produced byte-identical arrangements (score 43.87, 27 voice / 23 bed / 18 sources); only the per-persona GATE threshold differed, so girl_talk passed and troubadour/notorious failed on foreground coverage. compose ignored the persona contract.",
    "fix": "compose_taste_arrangement now derives source-HOLD duration (floor+foreground) from the persona's source_turnover (max_source_run_s / source_seconds) and caps simultaneous layers by density_model.max_layers. girl_talk rotates fast + layers dense; troubadour holds one bed with minimal layering; notorious rides one foreground voice for whole verses.",
    "verified": "same pool -> girl_talk avg_layers 3.47 / distinct_fg 12 / fg_run 1; troubadour 2.0 / 5 / 3; notorious 2.8 / 3 / 5. Gate test_personas_produce_divergent_arrangements locks it. 70/70 gates.",
-   "note": "Also raises foreground coverage for troubadour/notorious (held voice present more), which should let them clear their own fg_cov gates (0.75/0.8) that the old shared arrangement failed at 0.61 \u2014 desktop to confirm on real audio."
+   "note": "Also raises foreground coverage for troubadour/notorious (held voice present more), which should let them clear their own fg_cov gates (0.75/0.8) that the old shared arrangement failed at 0.61 \u2014 desktop to confirm on real audio.",
+   "desktop_confirmed": "02f4397: personas now DISTINCT (girl_talk 43.87/23beds PASS; troubadour 38.39/5beds; notorious 38.63/17beds; before: all 43.87/23). Logic fixed. troubadour/notorious still miss their coverage gates -> material-depth (96-file pool too thin for sparse voice-forward styles), analyze a bigger/more diverse slice."
   }
  },
  "performance": {
@@ -1290,6 +1291,16 @@
     "ArtifactStore (L3) unconfigured fallback: visible_app_dir()/cache/L3, honoring EARCRATE_CACHE_ROOT (was a random mkdtemp temp dir)."
    ],
    "verified": "no home-root litter on configure; cache + L3 fall back under the visible app dir, never temp; 67/67 gates"
+  },
+  "honest_perf_finding": {
+   "question": "did the model-cache / scaling perf commits speed up renders?",
+   "answer": "NO measured render speedup. Desktop measured: a cold render is demucs-separation-bound (~6s x N cache-misses). Proof the model wasn't reloaded per separation: a 21-sep cold render took 115s, not the ~300s real per-call reloads would cost.",
+   "what_actually_holds": "The CONTENT cache (stems reused by pcm_sha) is the real lever: cold ~170s -> warm ~48s ~= 3.5x, and it pre-dates these commits. The commits' real contribution is PLACEMENT (1.7GB cache now on S: NVMe, not C:) + no C: litter + a marginal cross-render model skip in a long-lived server.",
+   "to_speed_cold_render": "attack the demucs separation itself (smaller/faster model, GPU batching), not caching."
+  },
+  "m_dash_seed_fix": {
+   "bug": "machine_defaults.json was resolved via visible_app_dir() only, which under `python -m earcrate` is the package dir, not the repo root -> preset never found, so `-m` still booted unconfigured.",
+   "fix": "_seed_from_machine_defaults now searches EARCRATE_DEFAULTS + explicit cwd + __main__ dir + visible_app_dir + pointer_search_dirs. Verified it resolves a cwd preset even with EARCRATE_HOME set."
   }
  },
  "machine": {

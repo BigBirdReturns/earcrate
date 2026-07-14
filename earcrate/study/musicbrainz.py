@@ -127,7 +127,11 @@ def enrich_library(manifest_path: str, out_path: str, cache_path: str = "",
                 enriched = enrich_track(artist, title, fetch=fetch, sleep=_sleep)
             except Exception as exc:
                 enriched = {"matched": False, "artist": artist, "title": title, "error": str(exc)[:120]}
-            cache[key] = enriched
+            if "error" not in enriched:
+                # Cache only real answers. A transient failure (503/timeout) cached
+                # forever would make the resumable batch permanently blind to that
+                # track; leaving it uncached means the next resume retries it.
+                cache[key] = enriched
             if cp and (i % 50 == 0):
                 cp.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
         if has_any_relationship(enriched):

@@ -8,7 +8,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from earcrate.app import EarcrateCore
 from earcrate.remix.external import (remix_anchor, external_foreground_atom,
-                                     external_vocal_window, external_remix_feasibility)
+                                     external_vocal_window, external_remix_feasibility,
+                                     fit_external_clip, external_edge_fades)
 
 
 def configured_core(tmp_path: Path) -> EarcrateCore:
@@ -125,6 +126,38 @@ def test_external_vocal_window_advances_and_ends():
     assert tail is not None and abs(tail[0] - 24.0) < 1e-6 and abs(tail[1] - 6.0) < 1e-6
     # Past the end -> None: the bed plays on with no vocal.
     assert external_vocal_window(16, 4, bpm, 30.0) is None
+
+
+# ---- pure: a continuous take is NEVER loop-tiled (a short final window must not
+#      stutter-echo the last words) and fades only at its true edges ----
+
+def test_fit_external_clip_never_tiles():
+    import numpy as np
+    long = np.ones(1000, dtype=np.float32)
+    assert fit_external_clip(long, 600).size == 600            # trim when long
+    short = np.arange(400, dtype=np.float32)
+    out = fit_external_clip(short, 1000)
+    assert out.size == 400                                      # NO tiling: stays short
+    assert np.array_equal(out, short)                           # and untouched
+    exact = np.ones(512, dtype=np.float32)
+    assert fit_external_clip(exact, 512).size == 512
+
+
+def test_external_edge_fades_only_at_true_edges():
+    dur = 30.0
+    # First window of the take: fade in, no fade out (take continues).
+    fi, fo = external_edge_fades(0, 0, 0.0, 8.0, dur)
+    assert fi and not fo
+    # Interior window: NO fades — a 14ms dip in a held word every 4 bars is audible.
+    fi, fo = external_edge_fades(0, 1, 8.0, 8.0, dur)
+    assert not fi and not fo
+    # Final window (reaches the end of the vocal): fade out.
+    fi, fo = external_edge_fades(0, 3, 24.0, 6.0, dur)
+    assert fo
+    # Unknown duration: fade out defensively.
+    assert external_edge_fades(0, 1, 8.0, 8.0, 0.0)[1] is True
+    # Mid-section entry fades in regardless of position.
+    assert external_edge_fades(4410, 2, 16.0, 8.0, dur)[0] is True
 
 
 # ---- pure: honest buildability at the anchor ----

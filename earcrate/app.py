@@ -5,8 +5,9 @@ from earcrate.analyze.features import _clamp01, _estimate_downbeats, _vocal_like
 from earcrate.deck.transform import _artifact_cost
 from earcrate.analyze.decode import decode_audio, decoded_audio_sha256
 from earcrate.tastespec import load_tastespec, tastespec_hash, profile_summary
-from earcrate.study.reference import load_reference, reference_fingerprint, reference_edges, calibrate_profile
-from earcrate.remix.external import remix_anchor, external_foreground_atom, external_vocal_window, external_remix_feasibility
+from earcrate.study.reference import load_reference, reference_fingerprint, reference_edges, calibrate_profile, source_key, recall_report, sample_cut_list, artist_key
+from earcrate.materials.regions import propose_regions
+from earcrate.remix.external import remix_anchor, external_foreground_atom, external_vocal_window, external_remix_feasibility, fit_external_clip, external_edge_fades
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
 
@@ -2472,7 +2473,6 @@ class EarcrateCore:
         MaterialRegions (or the frozen [8,4,2,1] baseline when baseline=True). This is
         the seam a regions_v2 crate builder consumes; it does not touch the current
         atom pool, so composition is unchanged until the flip is made deliberately."""
-        from earcrate.materials.regions import propose_regions
         row = self.conn().execute(
             "SELECT f.duration_s, ft.bpm, ft.bpm_confidence, ft.beat_grid, ft.downbeats, "
             "ft.sections, ft.key_root, ft.key_mode FROM files f JOIN features ft ON ft.file_id=f.id "
@@ -3717,8 +3717,14 @@ class EarcrateCore:
         profile = TASTE_PROFILES[taste_profile]
         target_seconds = float(params.get("target_seconds") or min(duration_s or 120.0, 240.0))
         needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
+        # The full-set turnover count assumes a rotating FOREGROUND too; here one held
+        # vocal replaces that whole rail, so the bed alone needs only enough distinct
+        # sources to rotate under it — a third of the set contract, floor 2. Demanding
+        # the full count re-imposed the exact requirement the composer waives for
+        # external mode and refused perfectly buildable remixes.
+        needed_bed_sources = max(2, needed_sources // 3)
         _feasible, diag = self.taste_feasible_pool(pool, float(anchor["bpm"]), int(anchor["key_root"]), params)
-        feasibility = external_remix_feasibility(diag, needed_sources)
+        feasibility = external_remix_feasibility(diag, needed_bed_sources)
         if not feasibility.get("buildable"):
             raise RuntimeError("external remix infeasible at target anchor ("
                                f"{anchor['bpm']} BPM, key {anchor['key_root']}): "
@@ -5416,6 +5422,7 @@ class EarcrateCore:
         total_len = int(math.ceil(total_bars * 4 * 60.0 / bpm * sr))
         mix = np.zeros(total_len, dtype=np.float32)
         audio_cache: Dict[str, np.ndarray] = {}
+        external_identity_cache: Dict[str, str] = {}
         transform_cache: Dict[str, np.ndarray] = {}
         transform_cache_dir = self._cache_root() / "transforms" / ENGINE_VERSION
         transform_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -5638,6 +5645,19 @@ class EarcrateCore:
                 if ext_ref:
                     try:
                         epath = str(ext_ref.get("path") or "")
+                        # Verify the dropped file still IS the take that was proposed —
+                        # a library source is identity-checked twice before render, and
+                        # the external target deserves the same honesty: a file swapped
+                        # between propose and render must not ship under the old receipt.
+                        expected_pcm = str(ext_ref.get("pcm_sha") or "")
+                        if expected_pcm and epath not in external_identity_cache:
+                            try:
+                                external_identity_cache[epath] = decoded_audio_sha256(
+                                    Path(epath), sr, float(ext_ref.get("duration_s") or 0.0))
+                            except Exception as exc:
+                                external_identity_cache[epath] = f"unreadable:{exc}"
+                        if expected_pcm and external_identity_cache.get(epath) != expected_pcm:
+                            report["drops"].append({**drop_base, "reason": "external target changed since propose; re-propose the remix"}); continue
                         if epath not in audio_cache:
                             audio_cache[epath] = decode_audio(Path(epath), sr)
                         esrc = audio_cache[epath]
@@ -5654,12 +5674,19 @@ class EarcrateCore:
                             report["drops"].append({**drop_base, "reason": "bar_offset outside section"}); continue
                         active_start = int(round(layer_bar_offset * 4 * 60.0 / bpm * sr))
                         active_len = max(512, int(round(active_bars * 4 * 60.0 / bpm * sr)))
-                        # Fit the take's window to the section grid, then run the SAME
-                        # mix chain a library vocal gets (band filter, RMS match, fades).
-                        clip = tile_with_crossfade(clip, active_len, sr) if clip.size < active_len else clip[:active_len]
+                        # Fit the take's window to the grid WITHOUT tiling (a short final
+                        # window must NOT stutter-echo the last words — the bed carries
+                        # the rest), then the same band filter + RMS match a library
+                        # vocal gets. Fades only at the take's true edges, never at
+                        # interior section seams (a 14ms dip in a held word every 4 bars).
+                        clip = fit_external_clip(clip, active_len)
                         clip = simple_fft_filter(clip, sr, role_name, vocal_present, section_has_bass)
                         clip = normalize_layer_rms(clip, role_name)
-                        clip = apply_edge_fades(clip, sr, fade_in=(active_start == 0 and sidx == 0) or active_start > 0, fade_out=True, fade_ms=14)
+                        _fi, _fo = external_edge_fades(active_start, sidx,
+                                                       float(ext_ref.get("start_s") or 0.0),
+                                                       float(ext_ref.get("len_s") or 0.0),
+                                                       float(ext_ref.get("duration_s") or 0.0))
+                        clip = apply_edge_fades(clip, sr, fade_in=_fi, fade_out=_fo, fade_ms=14)
                         layer_gain_db = cap_overlay_gain_db(float(layer.get("gain_db", -6.5)), role_name, active_bars)
                         gain = 10 ** (layer_gain_db / 20.0)
                         active_end = min(deck_len, active_start + clip.size)
@@ -6069,7 +6096,16 @@ class EarcrateCore:
                     if arr_sha and arr_sha in seen_sha:
                         continue  # identical arrangement -> not a new track
                     seen_sha.add(arr_sha)
-                    self.execute_manifest(proposal["manifest"], apply=True)
+                    rendered = self.execute_manifest(proposal["manifest"], apply=True)
+                    if not rendered.get("ok", True):
+                        # A gate-rejected render must never appear on the tracklist as a
+                        # phantom WAV (the file was never written). Same F3 contract as
+                        # the manifest boundary: rejection is a visible skip with reason.
+                        skipped.append({"taste_profile": pid, "seed": seed,
+                                        "reason": str(rendered.get("rejection_reason") or rendered.get("error") or "render rejected")[:180]})
+                        # NOT progress: if every seed of every persona rejects, the album
+                        # is unrenderable and the no-progress break must fire, not spin.
+                        continue
                     dst = Path(proposal["dst"])
                     gate = self._album_gate_of(dst)
                     made.append({"track": len(made) + 1, "taste_profile": pid, "seed": seed,
@@ -6362,7 +6398,6 @@ class EarcrateCore:
         of the two sources. The reported recall + the ``missed`` list answer the
         owner's exact question -- what SHOULD the system discover on its own, and
         where is the gap. Reads only; heavy logic lives in study/reference.py."""
-        from earcrate.study.reference import source_key, recall_report
         db = self.conn()
         # what we own: normalized source keys of every present library track
         present = set()
@@ -6418,7 +6453,6 @@ class EarcrateCore:
         vs which master tracks we're missing. Read-only, exact. The actual WAV
         slicing (decode + cut [start,end]) is a box step over the makeable cuts."""
         import re as _re
-        from earcrate.study.reference import load_reference, sample_cut_list, artist_key
         def _tkey(s: Any) -> str:
             return _re.sub(r"[^a-z0-9]", "", str(s or "").lower())
         ds = load_reference(path)

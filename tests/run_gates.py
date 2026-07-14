@@ -37,7 +37,10 @@ for _thread_var in (
 # every gate that constructs EarcrateCore() and configures a temp workspace
 # writes the REAL repo-root pointer file — so running the shipped test suite
 # silently re-points a user's configured workspace at a deleted temp fixture.
-os.environ.setdefault("EARCRATE_HOME", tempfile.mkdtemp(prefix="earcrate_gates_home_"))
+# UNCONDITIONAL (not setdefault): a user who exports EARCRATE_HOME at their real
+# workspace and then runs the suite must get the sandbox too — a test runner
+# never has a legitimate reason to write a real workspace pointer.
+os.environ["EARCRATE_HOME"] = tempfile.mkdtemp(prefix="earcrate_gates_home_")
 
 MODULES = ("test_gates", "test_tastespec_vertical", "test_first_minute_fixes", "test_reference_study", "test_stem_warmer", "test_transitions", "test_beat_features", "test_materials", "test_analysis_wiring", "test_album", "test_remix_builder", "test_reference_recall", "test_musicbrainz", "test_external_remix")
 

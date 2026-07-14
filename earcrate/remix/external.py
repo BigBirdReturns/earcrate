@@ -201,6 +201,37 @@ def external_vocal_window(abs_bar_start: int, bars: int, render_bpm: float,
     return (round(start_s, 4), round(len_s, 4))
 
 
+def fit_external_clip(clip, active_len: int):
+    """Fit the dropped vocal's window to the section grid WITHOUT tiling.
+
+    A library loop that comes up short is loop-tiled to fill its slot — correct for
+    a 2-bar riff, catastrophically wrong for a continuous vocal take: tiling the
+    final window replays the last words of the lyric as a stutter-echo. The take's
+    contract is linear, front-to-back, once. So: trim when long; when short (the
+    window where the vocal runs out, or a 1-3 sample rounding shortfall), return it
+    AS IS and let the bed carry the rest of the section instrumental."""
+    if clip.size > active_len:
+        return clip[:active_len]
+    return clip
+
+
+def external_edge_fades(active_start: int, section_index: int,
+                        start_s: float, len_s: float, duration_s: float) -> Tuple[bool, bool]:
+    """Edge-fade policy for one section's window of a continuous take.
+
+    The take is ONE performance sliced across contiguous section windows, so a fade
+    at an interior seam is an audible 14ms dip in a held word every 4 bars. Fade IN
+    only at the very first window (or a mid-section entry); fade OUT only in the
+    window that actually reaches the end of the vocal (or when the duration is
+    unknown and we cannot tell)."""
+    fade_in = (active_start == 0 and section_index == 0) or active_start > 0
+    if duration_s and duration_s > 0.0:
+        fade_out = (float(start_s) + float(len_s)) >= (float(duration_s) - 0.05)
+    else:
+        fade_out = True
+    return fade_in, fade_out
+
+
 def external_remix_feasibility(diag: Dict[str, Any], needed_sources: int) -> Dict[str, Any]:
     """Honest buildability verdict for an external remix at the pinned anchor.
 

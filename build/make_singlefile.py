@@ -15,9 +15,17 @@ html_b64 = base64.b64encode((PKG / "ui/static/index.html").read_bytes()).decode(
 profiles_b64 = {f.stem: base64.b64encode(f.read_bytes()).decode("ascii")
                 for f in sorted((ROOT / "profiles").glob("*.json")) if f.stem != "tastespec.schema"}
 parts = ["#!/usr/bin/env python3\nfrom __future__ import annotations\n# Auto-built from the earcrate package. Do not edit; edit the package.\nimport base64 as _b64\n"]
+INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
 for rel in ORDER:
     src = (PKG / rel).read_text(encoding="utf-8")
     lines = [l for l in src.split("\n") if not STRIP.match(l) and not l.startswith("from __future__")]
+    # A function-level `from earcrate.` import survives the column-0 strip and then
+    # raises ModuleNotFoundError in the standalone dist — only at call time, only in
+    # the single-file build, invisible to package-mode gates. Refuse to build it:
+    # hoist the import to module top level instead (ORDER guarantees definition order).
+    bad = [f"{rel}:{i+1}: {l.strip()}" for i, l in enumerate(lines) if INDENTED_EARCRATE.match(l)]
+    if bad:
+        raise SystemExit("indented earcrate imports would break the single-file dist at call time:\n  " + "\n  ".join(bad))
     body = "\n".join(lines)
     if rel == "tastespec/profiles.py":
         body = body.replace("EMBEDDED_PROFILES: Dict[str, str] = {}",

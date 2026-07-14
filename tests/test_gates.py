@@ -1025,6 +1025,82 @@ def test_saved_plan_renders_identically():
         else: os.environ.pop("EARCRATE_HOME", None)
 
 
+def test_execute_manifest_surfaces_rejected_render(tmp_path):
+    """Contract gate (F3): a render REFUSED by the post-render quality gate must
+    NOT return from the manifest-execution boundary as a plain success. The
+    render still executes, the rejected report is still written to disk, and the
+    canonical render_rejected receipt still lands in done[]; but the result the
+    caller receives (used by taste mashup, album, and the external remix route)
+    must be non-ok, carry rejected=True, and carry the gate's failure reason.
+    Without this, a rejected render reads as 'success + no audio + no reason'."""
+    import os, json, copy, tempfile
+    from pathlib import Path
+    from unittest.mock import patch
+    from earcrate.app import EarcrateCore, ENGINE_VERSION
+    from earcrate.core.util import arrangement_sha, ulidish, now_utc
+    with patch.dict(os.environ, {"EARCRATE_HOME": str(tmp_path), "HOME": str(tmp_path)}):
+        for d in ("music", "work", "agent"):
+            (tmp_path / d).mkdir(exist_ok=True)
+        bpm = 120.0
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                        "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+        db = core.conn()
+        pool = _v3_build_render_pool(core, db, tmp_path, bpm=bpm)
+        params = {"taste_profile": "girl_talk_v1", "target_seconds": 16, "bpm": bpm, "quality_mode": "stable_deck"}
+        arr = core.compose_taste_arrangement(list(pool), dict(params), seed=11)
+        assert arr.get("sections"), "composer produced an empty arrangement"
+        # Keep the render cheap (one bar / two layers) but declare a >=60s target
+        # so the post-render quality-gate branch is armed under the fixture.
+        arr["sections"] = arr["sections"][:1]
+        arr["sections"][0]["bars"] = 1
+        arr["sections"][0]["layers"] = arr["sections"][0].get("layers", [])[:2]
+        arr.setdefault("params", {})
+        arr["params"]["target_seconds"] = 60
+        arr["params"]["post_render_gate"] = True
+        arr_sha = arrangement_sha(arr)
+
+        mid = ulidish()
+        db.execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
+                   (mid, "m", arr.get("seed"), json.dumps(arr.get("params") or {}),
+                    json.dumps(arr), None, now_utc(), ENGINE_VERSION, arr_sha))
+        db.commit()
+
+        dst = tmp_path / "work" / "renders" / "rejected_out.wav"
+        manifest_path = core.write_manifest("gate", 11, "F3 rejected render", [
+            {"op_id": ulidish(), "type": "render_mashup",
+             "args": {"mashup_id": mid, "dst": str(dst)},
+             "preconditions": {"dst_absent": True}}])
+
+        forced_gate = {"passed": False, "failures": ["forced post-render gate failure for F3 gate"],
+                       "warnings": [], "metrics": {}}
+        with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+             patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
+             patch("earcrate.app.drydeck_metrics", return_value={}), \
+             patch("earcrate.app.drydeck_quality_gate", return_value=copy.deepcopy(forced_gate)):
+            result = core.execute_manifest(manifest_path, apply=True)
+
+        # The render_rejected receipt is still produced and recorded in done[].
+        rejected_items = [i for i in result.get("done", []) if isinstance(i, dict) and i.get("type") == "render_rejected"]
+        assert rejected_items, f"execute_manifest did not record a render_rejected receipt: {result}"
+        assert rejected_items[0].get("path") is None and rejected_items[0].get("presented") is False
+
+        # THE CONTRACT: a rejected render is never a plain success at this boundary.
+        assert result.get("ok") is False, f"a rejected render was reported as ok: {result}"
+        assert result.get("rejected") is True, f"result did not carry rejected=True: {result}"
+        reason = str(result.get("rejection_reason") or "") + " " + str(result.get("error") or "")
+        assert "forced post-render gate failure for F3 gate" in reason, \
+            f"result did not carry the gate's failure reason: {result}"
+        assert "forced post-render gate failure for F3 gate" in (result.get("failures") or []), \
+            f"result did not carry the gate failures list: {result}"
+
+        # The on-disk rejected report is intact and no WAV was published.
+        assert not dst.exists(), "a gate-rejected render still published a WAV"
+        assert result.get("rejected_reports"), f"rejected report path was not surfaced: {result}"
+        rej_report = Path(result["rejected_reports"][0])
+        assert rej_report.is_file(), f"rejected report was not written to disk: {rej_report}"
+
+
 def test_measurements_persona_free():
     """v3 §5.3 L1 (persona-free measurements): a file's measurement is stored ONCE
     per (file, analyzer_version) and SHARED across personas — not re-measured per

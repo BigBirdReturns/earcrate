@@ -5212,6 +5212,25 @@ class EarcrateCore:
         with self.status_lock:
             if last_render:
                 self.status["last_render_path"] = last_render
+        # A render can execute cleanly yet be REFUSED by the post-render quality
+        # gate (or render-integrity gate). render_mashup returns a canonical
+        # render_rejected receipt with path=null/presented=false in that case.
+        # Surface it as a non-ok result so a rejected render can never be
+        # mistaken for a plain success at the manifest-execution boundary; the
+        # on-disk rejected report and gate decision are left untouched.
+        rejected = [item for item in done if isinstance(item, dict) and item.get("type") == "render_rejected"]
+        if rejected:
+            failures: List[str] = []
+            for item in rejected:
+                gate = item.get("quality_gate") or {}
+                failures.extend(str(f) for f in (gate.get("failures") or []))
+            reason = "; ".join(failures) or "; ".join(str(item.get("failure_kind") or "render_rejected") for item in rejected)
+            self.set_status("manifest render rejected by quality gate", 1, False, reason)
+            return {"ok": False, "rejected": True, "dry_run": False, "manifest_id": manifest.get("manifest_id"),
+                    "error": "render rejected by post-render quality gate: " + reason,
+                    "rejection_reason": reason, "failures": failures,
+                    "rejected_reports": [item.get("report") for item in rejected if item.get("report")],
+                    "done": done, "plan": plan}
         self.set_status("manifest executed", 1, False)
         return {"ok": True, "dry_run": False, "manifest_id": manifest.get("manifest_id"), "done": done, "plan": plan}
 

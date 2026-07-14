@@ -1450,6 +1450,11 @@ class EarcrateCore:
         self.db = sqlite3.connect(str(_db_path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
+        # WAL + synchronous=NORMAL: fsync only at checkpoint, not every commit. Durable
+        # across app crashes (only an OS/power crash can lose the last commits). On a
+        # DB that lives on a slower array (D:), FULL fsync-per-commit serializes writes
+        # -> analyze/extract crawl and the box lags on input despite idle CPU/GPU/disk.
+        self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.execute("PRAGMA foreign_keys=ON")
         self.create_schema()
         self.migrate_ear_atoms_per_profile()

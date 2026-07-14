@@ -323,6 +323,26 @@ def source_key(artist: Any, title: Any) -> str:
     return _n(artist) + "|" + _n(title)
 
 
+def sample_cut_list(dataset: Any) -> List[Dict[str, Any]]:
+    """Since we OWN the master's albums, this is the list of sample regions to CUT
+    from the master's own audio: which of HIS tracks, the [start,end] inside it,
+    and what source it is. Only TIMED samples yield a cut (you need the timestamps
+    to slice); an untimed dataset (Donuts-style) yields [] -- nothing to cut here,
+    that path needs audio fingerprinting instead. Deterministic."""
+    data = load_reference(dataset)
+    cuts: List[Dict[str, Any]] = []
+    for t in data["tracks"]:
+        for s in t["samples"]:
+            a, b = s.get("start_s"), s.get("end_s")
+            if a is not None and b is not None and float(b) > float(a):
+                cuts.append({
+                    "master_track_index": t["index"], "master_track_title": t["title"],
+                    "source_artist": s["source_artist"], "source_title": s["source_title"],
+                    "start_s": _round(a), "end_s": _round(b), "role": s.get("role"),
+                })
+    return cuts
+
+
 def artist_key(artist: Any) -> str:
     """Normalized ARTIST identity for coarse library-coverage matching (do we own
     ANY material by this source artist?). Drops a leading 'the', feat. credits, and

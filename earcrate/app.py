@@ -6172,6 +6172,39 @@ class EarcrateCore:
                                   ensure_ascii=False, indent=2), encoding="utf-8")
         return {"ok": True, "count": len(items), "path": str(dst)}
 
+    def plan_reference_extraction(self, path: str) -> Dict[str, Any]:
+        """Since we OWN the master's albums, plan extracting his DOCUMENTED samples
+        from HIS OWN audio: which timed cuts are makeable (we own that master track)
+        vs which master tracks we're missing. Read-only, exact. The actual WAV
+        slicing (decode + cut [start,end]) is a box step over the makeable cuts."""
+        import re as _re
+        from earcrate.study.reference import load_reference, sample_cut_list, artist_key
+        def _tkey(s: Any) -> str:
+            return _re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+        ds = load_reference(path)
+        cuts = sample_cut_list(ds)
+        master = artist_key(ds["artist"])
+        owned: Dict[str, str] = {}
+        for r in self.conn().execute(
+                "SELECT t.artist artist, t.title title, f.id fid FROM tracks t "
+                "JOIN files f ON f.id=t.file_id WHERE COALESCE(f.present,1)=1 AND t.title IS NOT NULL"):
+            if artist_key(r["artist"]) == master:
+                owned.setdefault(_tkey(r["title"]), str(r["fid"]))
+        makeable = 0
+        missing: set = set()
+        for c in cuts:
+            if owned.get(_tkey(c["master_track_title"])):
+                makeable += 1
+            else:
+                missing.add(c["master_track_title"])
+        return {
+            "ok": True, "master": ds["artist"], "album": ds["album"],
+            "timed_cuts_total": len(cuts), "makeable": makeable,
+            "master_tracks_owned": len(owned), "missing_master_tracks": sorted(missing)[:30],
+            "note": "makeable cuts slice from owned master audio on the box; untimed "
+                    "datasets (0 cuts) need audio fingerprinting (AcoustID) instead",
+        }
+
     def set_atom_judgment(self, atom_id: str, taste_profile: str, status: str, relabel_role: str = "", favorite: bool = False, locked: bool = False, reason: str = "") -> Dict[str, Any]:
         if status not in {"approved", "rejected", "candidate"}:
             raise ValueError("atom judgment status must be approved, rejected, or candidate")

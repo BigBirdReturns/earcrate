@@ -163,3 +163,38 @@ def test_material_coverage_counts_owned_source_artists():
     assert rep["artist_coverage"] == 0.5
     assert "The Beatles" in rep["owned"] and "Kool & the Gang" in rep["missing"]
     assert artist_key("The Beatles") == artist_key("beatles")   # 'the' + case normalized
+
+
+def test_sample_cut_list_from_timed_master_data():
+    """We own the master's albums + the TIMED sample map -> we can cut the exact
+    sample regions from his own audio. Untimed data yields no cuts."""
+    from earcrate.study.reference import sample_cut_list
+    cuts = sample_cut_list(_fixture())          # timed fixture
+    assert len(cuts) == 4                        # all 4 samples are timed
+    c = cuts[0]
+    assert c["master_track_title"] == "t1" and c["source_artist"] == "Cream"
+    assert c["start_s"] == 0.0 and c["end_s"] == 10.0
+    # untimed (Donuts-style) -> nothing to cut
+    untimed = {"album": "D", "artist": "J Dilla", "sources": [], "tracks": [
+        {"index": 1, "title": "t", "duration_s": None, "samples": [
+            {"source_artist": "A", "source_title": "x", "start_s": None, "end_s": None, "role": None}]}]}
+    assert sample_cut_list(untimed) == []
+
+
+def test_plan_reference_extraction_resolves_owned_master_tracks(tmp_path):
+    """Own the master track 't1' (by 'Girl Talk') -> its timed cuts are makeable;
+    the un-owned master track 't2' is reported missing."""
+    import json
+    core = _core(tmp_path)
+    db = core.conn()
+    db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at,present) VALUES(?,?,?,?,?,?,1)",
+               ("f1", "/m/gt.wav", "master", 1, 1, "now"))
+    db.execute("INSERT INTO tracks(id,file_id,artist,title) VALUES(?,?,?,?)", ("tr1", "f1", "Girl Talk", "t1"))
+    db.commit()
+    ds = dict(_fixture(), artist="Girl Talk")
+    ref = tmp_path / "gt.json"
+    ref.write_text(json.dumps(ds), encoding="utf-8")
+    plan = core.plan_reference_extraction(str(ref))
+    assert plan["ok"] and plan["timed_cuts_total"] == 4
+    assert plan["makeable"] == 2          # the two 't1' samples (we own t1)
+    assert "t2" in plan["missing_master_tracks"]

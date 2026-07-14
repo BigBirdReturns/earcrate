@@ -1412,5 +1412,27 @@
     "step4_RESEARCH": "Learn technique selection + control curves (EQ/fader/filter/effect envelopes) from aligned expert mixes; set-level beam search over SetState; online crowd/venue adaptation.",
     "immediate_next": "Wire generate_transition_candidates into the composer behind a flag + a /api route so the desktop can run it on REAL track pairs and A/B it against the current rule-tree, WITHOUT disrupting the default render path. Then Step 2 features.",
     "two_measured_but_unused_signals_this_closes": "bpm_confidence (computed, never consulted in composition -- now the abstention driver) and section labels (estimate_sections, never used in selection -- now anchor kinds)."
+  },
+  "patch2_material_regions": {
+    "why": "Review verdict: extract_loops_one [8,4,2,1] at downbeats[::bars] is the information bottleneck -- everything downstream reasons over a fixed candidate set.",
+    "DONE_representation": "earcrate/materials/regions.py: MaterialRegion (variable-length, anchor-started, independently-proposed ends, role CAPABILITIES not one label, measured loopability/salience/confidence) + propose_regions(). Old fixed-bar extractor preserved behind baseline=True as baseline_v1. Gated on candidate RECALL (test_materials, 7 gates): the new path surfaces a planted drop/vocal-phrase/outro-tail the baseline cannot. Deterministic, audio-free, ADDITIVE (not yet in the live pipeline).",
+    "concrete_bugs_fixed_from_review": [
+      "judge contradiction (dry-deck low200 ceiling vs v1_1 floor) -- both now GT-calibrated ceilings",
+      "atom_edge_score harmonic OR bug -- now requires the PAIR to agree, not either-atom-vs-target"
+    ],
+    "NEXT_to_make_it_live (needs the box)": [
+      "Compute Step-2 beat_state (analyze/beat_features) DURING analysis and store it (compact blob per file), so propose_regions + the transition collision model have real per-beat activity.",
+      "Remove the 180s analysis bound (or add a second low-res full-track pass) so long tracks contribute their real outro/tail regions -- the review notes the renderer has the full source but the representation is truncated.",
+      "Wire propose_regions into atom/crate construction behind a flag (baseline_v1 vs regions_v2); measure candidate recall on REAL tracks with known intros/outros/drops.",
+      "Then Patch 3: technique templates emit full TransitionPlans (per-stem gain/EQ/filter/effect curves) executed by the renderer; Patch 4: real candidate competition (render short previews, score summed audio); Patch 5: set-level beam search + learned technique selection."
+    ],
+    "still_open_from_review (not yet done, higher blast radius)": [
+      "taste_arrangement_gate coverage double-counts overlapping layers (can exceed 1.0) -> interval-union + longest-contiguous-run",
+      "preflight() reads approved_loop_pool not the persona approved_atom_pool",
+      "split judge into hard-fail integrity vs rank/warn taste",
+      "reference edges are weak supervision (co-occurrence != universal compatibility) -> treat as prior with uncertainty, not ground truth",
+      "machine_defaults.json left as-is per owner (private repo, may never release)"
+    ],
+    "gates": "125/125"
   }
 }

@@ -333,6 +333,43 @@ def reference_source_keys(dataset: Any) -> List[str]:
     return list(seen.keys())
 
 
+def reference_cooccurrence_edges(dataset: Any) -> List[Dict[str, Any]]:
+    """Same-track CO-USE pairings for UNTIMED datasets (most producer sample maps
+    have no per-sample timing). The producer combined these sources into ONE
+    track, so every unordered pair of DISTINCT sources within a track is a co-use
+    edge. Deduped across the album (first-seen track kept). overlap_s is None."""
+    data = load_reference(dataset)
+    edges: List[Dict[str, Any]] = []
+    seen: set = set()
+    for t in data["tracks"]:
+        srcs = [(s["source_artist"], s["source_title"]) for s in t["samples"]]
+        for i in range(len(srcs)):
+            for j in range(i + 1, len(srcs)):
+                a, b = srcs[i], srcs[j]
+                ka, kb = source_key(*a), source_key(*b)
+                if ka == kb:
+                    continue
+                pair = frozenset((ka, kb))
+                if pair in seen:
+                    continue
+                seen.add(pair)
+                edges.append({"a": {"artist": a[0], "title": a[1]},
+                              "b": {"artist": b[0], "title": b[1]},
+                              "track": t["index"], "overlap_s": None})
+    return edges
+
+
+def reference_pairings(dataset: Any) -> Tuple[List[Dict[str, Any]], str]:
+    """The proven pairings + which notion produced them: TIMED overlap edges when
+    the dataset carries per-sample timing (Girl Talk), else same-track
+    CO-OCCURRENCE (Donuts-style producer maps). Auto-selected so recall works for
+    both kinds of answer key."""
+    timed = reference_edges(dataset)
+    if timed:
+        return timed, "timed_overlap"
+    return reference_cooccurrence_edges(dataset), "same_track_cooccurrence"
+
+
 def recall_report(dataset: Any, present_source_keys: Any,
                   recovered_pair_keys: Any) -> Dict[str, Any]:
     """The answer-key benchmark: of the PROVEN pairings the masters actually used,
@@ -351,7 +388,7 @@ def recall_report(dataset: Any, present_source_keys: Any,
     didn't, ranked by the masters' overlap time (strongest evidence first)."""
     present = set(present_source_keys or [])
     recovered = set(recovered_pair_keys or [])
-    edges = reference_edges(dataset)
+    edges, pairing_mode = reference_pairings(dataset)
     all_sources = reference_source_keys(dataset)
     recoverable: List[Dict[str, Any]] = []
     recovered_edges: List[Dict[str, Any]] = []
@@ -374,6 +411,7 @@ def recall_report(dataset: Any, present_source_keys: Any,
     missed.sort(key=lambda e: -float(e.get("overlap_s") or 0.0))
     return {
         "album": load_reference(dataset)["album"],
+        "pairing_mode": pairing_mode,
         "sources_total": len(all_sources),
         "sources_in_library": sum(1 for k in all_sources if k in present),
         "proven_pairs_total": len(seen_pairs),

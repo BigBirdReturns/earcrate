@@ -1,0 +1,896 @@
+{
+  "album": "Donuts",
+  "artist": "J Dilla",
+  "maps_to_persona": "remix_dilla_v1",
+  "sources": [
+    "https://samplingdonuts.com/",
+    "https://beats-rhymes-lists.com/lists/every-single-sample-featured-j-dilla-donuts/",
+    "https://www.whosampled.com/album/J-Dilla/Donuts/",
+    "https://www.tracklib.com/blog/jdilla-donuts-samples"
+  ],
+  "notes": "All 31 tracks documented, cross-corroborated between samplingdonuts.com and beats-rhymes-lists.com. No per-sample timestamps documented for Donuts (start_s/end_s null). Mantronix 'King of the Beats' and Skillz & Ras Kass 'Six Figures' recur as drum/scratch layers across many tracks. Some minor cross-source discrepancies included as union.",
+  "tracks": [
+    {
+      "index": 1,
+      "title": "Donuts (Outro)",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Gary Davis",
+          "source_title": "Stay With Me",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Shuggie Otis",
+          "source_title": "Not Available",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Skillz & Ras Kass",
+          "source_title": "Six Figures",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Workinonit",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "10cc",
+          "source_title": "The Worst Band in the World",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "\"Sweet\" Charles Sherrell",
+          "source_title": "Yes It's You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Raymond Scott",
+          "source_title": "Sprite: Melonball Bounce",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Malcolm McLaren",
+          "source_title": "Buffalo Gals",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Beastie Boys",
+          "source_title": "The New Style",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Joeski Love",
+          "source_title": "Pee-Wee's Dance",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Skillz & Ras Kass",
+          "source_title": "Six Figures",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Waves",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "10cc",
+          "source_title": "Johnny, Don't Do It",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "B.R. Gunna",
+          "source_title": "Intro",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Light My Fire",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Africa",
+          "source_title": "Light My Fire",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "James Brown",
+          "source_title": "My Thang",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "title": "The New",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Detroit Emeralds",
+          "source_title": "What'cha Gonna Wear Tomorrow",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Beastie Boys",
+          "source_title": "The New Style",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "title": "Stop!",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Dionne Warwick",
+          "source_title": "You're Gonna Need Me",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Jadakiss",
+          "source_title": "Why",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Skillz & Ras Kass",
+          "source_title": "Six Figures",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "title": "People",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Eddie Kendricks",
+          "source_title": "My People...Hold On",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Asha Bhosle",
+          "source_title": "Mujhe Maar Daalo",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Run-D.M.C.",
+          "source_title": "Here We Go (Live at the Funhouse)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "title": "The Diff'rence",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Kool & the Gang",
+          "source_title": "Fruitman",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Kool & the Gang",
+          "source_title": "Jungle Boogie",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Skillz & Ras Kass",
+          "source_title": "Six Figures",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "title": "Mash",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Galt MacDermot",
+          "source_title": "Golden Apples - Part II",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Lou Rawls",
+          "source_title": "Season of the Witch",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Frank Zappa",
+          "source_title": "Dance Contest",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "title": "Time: The Donut of the Heart",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Jackson 5",
+          "source_title": "All I Do Is Think of You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "\"Sweet\" Charles Sherrell",
+          "source_title": "Yes It's You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "\"Sweet\" Charles Sherrell",
+          "source_title": "Strangers in the Night",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "\"Sweet\" Charles Sherrell",
+          "source_title": "Dedicated to the One I Love",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "title": "Glazed",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Gene Chandler & Jerry Butler",
+          "source_title": "You Just Can't Win (By Making the Same Mistake)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Ramsey Lewis",
+          "source_title": "Dreams",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Lou Rawls",
+          "source_title": "Season of the Witch",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Edwin Starr",
+          "source_title": "Ball of Confusion (That's What the World Is Today)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "title": "Airworks",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "L.V. Johnson",
+          "source_title": "I Don't Really Care",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Raymond Scott",
+          "source_title": "Bendix 1: The Tomorrow People",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "title": "Lightworks",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Raymond Scott",
+          "source_title": "Lightworks",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Raymond Scott",
+          "source_title": "Bendix 1: The Tomorrow People",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Skillz & Ras Kass",
+          "source_title": "Six Figures",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "title": "Stepson of the Clapper",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Mountain",
+          "source_title": "Long Red (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "title": "The Twister (Huh, What)",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Fred Frith",
+          "source_title": "Kick the Can (Part 1)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Temptations",
+          "source_title": "Cloud Nine (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "A Tribe Called Quest",
+          "source_title": "His Name Is Mutty Ranks",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Joeski Love",
+          "source_title": "Pee-Wee's Dance",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Stevie Wonder",
+          "source_title": "For Once in My Life (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Malcolm McLaren",
+          "source_title": "Buffalo Gals",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "title": "One Eleven",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Smokey Robinson & The Miracles",
+          "source_title": "A Legend in Its Own Time",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Run-D.M.C.",
+          "source_title": "Here We Go (Live at the Funhouse)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Fatback Band",
+          "source_title": "King Tim III (Personality Jock)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "title": "Two Can Win",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Sylvers",
+          "source_title": "Only One Can Win",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "title": "Don't Cry",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Escorts",
+          "source_title": "I Can't Stand (To See You Cry)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Temptations & George Kirby",
+          "source_title": "Comedy Routine: Hello Young Lovers / Cloud Nine / If I Didn't Care",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 19,
+      "title": "Anti-American Graffiti",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Tin Tin",
+          "source_title": "Family Tree",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "David Ossman (Firesign Theatre)",
+          "source_title": "Emergency Program Over-Ride",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Joeski Love",
+          "source_title": "Pee-Wee's Dance",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 20,
+      "title": "Geek Down",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Jimi Entley Sound",
+          "source_title": "Charlie's Theme",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "ESG",
+          "source_title": "UFO",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 21,
+      "title": "Thunder",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Martha Reeves",
+          "source_title": "Sweet Misery",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Stevie Wonder",
+          "source_title": "For Once in My Life (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Bobby Taylor & the Vancouvers",
+          "source_title": "Who's Making Love (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Blinky",
+          "source_title": "I Can't Turn You Loose (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Originals",
+          "source_title": "Sing a Simple Song (Live)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 22,
+      "title": "Gobstopper",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Luther Ingram",
+          "source_title": "To the Other Man",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 23,
+      "title": "One for Ghost",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Luther Ingram",
+          "source_title": "To the Other Man",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 24,
+      "title": "Dilla Says Go",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Trammps",
+          "source_title": "Rubber Band",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "B.R. Gunna",
+          "source_title": "Do Ya Thing",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Jaylib",
+          "source_title": "No Games",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "B.R. Gunna",
+          "source_title": "Intro",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 25,
+      "title": "Walkinonit",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Undisputed Truth",
+          "source_title": "Walk On By",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Skillz & Ras Kass",
+          "source_title": "Six Figures",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 26,
+      "title": "The Factory",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Fred Weinberg",
+          "source_title": "Animosity",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Mantronix",
+          "source_title": "King of the Beats",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Bruce Haack",
+          "source_title": "Mean Old Devil",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 27,
+      "title": "U-Love",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Jerry Butler",
+          "source_title": "Just Because I Really Love You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "B.R. Gunna",
+          "source_title": "Intro",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "B.R. Gunna",
+          "source_title": "Do Ya Thing",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 28,
+      "title": "Hi.",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Three Degrees",
+          "source_title": "Maybe",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 29,
+      "title": "Bye.",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Isley Brothers",
+          "source_title": "Don't Say Goodnight (It's Time for Love) (Parts 1 & 2)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 30,
+      "title": "Last Donut of the Night",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "The Moments",
+          "source_title": "To You With Love",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Gene Chandler",
+          "source_title": "Rainbow '65",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 31,
+      "title": "Welcome to the Show",
+      "duration_s": null,
+      "samples": [
+        {
+          "source_artist": "Motherlode",
+          "source_title": "When I Die",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Gary Davis",
+          "source_title": "Stay With Me",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Shuggie Otis",
+          "source_title": "Not Available",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Hudson & Landry",
+          "source_title": "Bruiser La Rue",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Skillz & Ras Kass",
+          "source_title": "Six Figures",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    }
+  ]
+}

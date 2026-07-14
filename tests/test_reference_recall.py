@@ -119,3 +119,34 @@ def test_export_library_manifest_is_public_safe(tmp_path):
     row = man["tracks"][0]
     assert row["artist"] == "Cream" and row["title"] == "Sunshine of Your Love" and row["year"] == 1967
     assert "/Users/secret" not in text and "path" not in row      # no path/machine leak
+
+
+def test_untimed_dataset_uses_cooccurrence_pairings():
+    """Producer sample maps (Donuts-style) have no timestamps, so 'proven pairing'
+    = sources the producer COMBINED in the same track. Recall must switch to that
+    notion automatically."""
+    from earcrate.study.reference import reference_pairings, recall_report, source_key as sk
+    ds = {"album": "Donuts", "artist": "J Dilla", "sources": [], "tracks": [
+        {"index": 1, "title": "t1", "duration_s": None, "samples": [
+            {"source_artist": "A", "source_title": "x", "start_s": None, "end_s": None, "role": None},
+            {"source_artist": "B", "source_title": "y", "start_s": None, "end_s": None, "role": None},
+            {"source_artist": "C", "source_title": "z", "start_s": None, "end_s": None, "role": None}]}]}
+    edges, mode = reference_pairings(ds)
+    assert mode == "same_track_cooccurrence"
+    assert len(edges) == 3                       # A-B, A-C, B-C
+    present = {sk("A", "x"), sk("B", "y"), sk("C", "z")}
+    recovered = {frozenset((sk("A", "x"), sk("B", "y")))}
+    rep = recall_report(ds, present, recovered)
+    assert rep["pairing_mode"] == "same_track_cooccurrence"
+    assert rep["recoverable"] == 3 and rep["recovered"] == 1
+
+
+def test_real_donuts_answer_key_loads_and_pairs():
+    """The committed J Dilla Donuts answer key is well-formed and yields co-use
+    pairings the engine can be graded against."""
+    from earcrate.study.reference import load_reference, reference_pairings, reference_source_keys
+    ds = load_reference("earcrate/reference/donuts_samples.json")
+    assert len(ds["tracks"]) == 31
+    assert len(reference_source_keys(ds)) > 50
+    edges, mode = reference_pairings(ds)
+    assert mode == "same_track_cooccurrence" and len(edges) > 40

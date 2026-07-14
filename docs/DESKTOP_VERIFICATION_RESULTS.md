@@ -271,3 +271,26 @@ PASSING girl_talk render:
 instrumental beds + a presence lift. The real albums are a ready-made validation set — a good render
 should land inside the real-GT metric ranges, not just above today's floors.
 (Caveat: metric formulas replicated in librosa; earcrate's exact defs may differ, but a 10× gap ≠ noise.)
+
+### All-persona ground truth (real reference artists from the library)
+Same metrics over each persona's REAL reference material (40 tracks/group):
+
+| persona (real reference) | rms_std_db | low200_share | high3000_share |
+|---|---|---|---|
+| girl_talk (Girl Talk) | 5.21 [3.2–7.9] | 0.19 [0.02–0.32] | 0.31 [0.16–0.53] |
+| troubadour (Bright Eyes, Elliott Smith, Iron & Wine, Sufjan, Sun Kil Moon) | 4.78 [2.9–8.3] | 0.21 [0.11–0.40] | 0.23 [0.06–0.35] |
+| notorious (Wale, Kanye West, Wu-Tang) | 5.16 [3.3–7.0] | 0.18 [0.07–0.34] | 0.33 [0.17–0.55] |
+| **earcrate render (PASSES)** | **3.19** | **0.59** | **0.031** |
+
+**Findings:**
+- **The three real personas share ~one quality box** (dynamics ~5, bass ~0.19, presence ~0.23–0.33) →
+  the quality gate should be **uniform, not persona-specific**. Real singer-songwriter / hip-hop are as
+  dynamic + present as Girl Talk; the persona difference is arrangement/coverage, not spectral quality.
+  (troubadour presence 0.23 is slightly lower — acoustic warmth — but still ~7× earcrate's 0.031.)
+- **earcrate's mix fails ALL THREE references universally** — 3× too bassy, ~10× too dull, under-dynamic.
+  Not a per-persona problem: a bass-wall / no-treble MIX problem.
+- **Recommendation (revised):** ONE real-calibrated quality gate for all personas — `rms_std_db` ≳4
+  (real ~5), a `low200_share` **CEILING ~0.30** (real ~0.19; earcrate 0.59 must fail), `high3000_share`
+  ≳0.20 (real ~0.25–0.30; earcrate 0.031 must fail). Fix the render mix: high-pass/low-shelf + presence
+  lift so output lands INSIDE the real-reference box. The library's real artists are per-persona
+  validation sets (Girl Talk / SS-writers / hip-hop).

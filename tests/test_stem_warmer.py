@@ -179,3 +179,45 @@ def test_warm_status_reports_render_readiness(tmp_path):
             st = core.stem_warm_status("girl_talk_v1")
     assert st["total_sources"] == 2 and st["warm"] == 1 and st["cold"] == 1
     assert st["pct_warm"] == 50.0
+
+
+def test_companion_caching_one_inference_serves_the_whole_vocal_pair(tmp_path):
+    """Demucs separates the full mixture regardless of stems requested, so asking
+    for vocals then no_vocals must cost ONE forward pass, not two. The reviewer's
+    exact contract, checked with a forward-pass-counting fake _run_demucs."""
+    from earcrate.providers.stems import DemucsStemProvider
+
+    passes = {"n": 0}
+
+    class _Counting(DemucsStemProvider):
+        def _run_demucs(self, audio_path, roles):
+            passes["n"] += 1
+            # Demucs would return whatever roles were asked; companion caching asks
+            # for both pair members on a miss.
+            return {r: (r.encode() + b"_wav") for r in roles}
+
+    store = ArtifactStore(tmp_path / "L3")
+    prov = _Counting(store=store, model_version="htdemucs")
+
+    v = prov.separate("pcmX", "/fake.wav", ["vocals"])
+    assert v["available"] and passes["n"] == 1
+    # the companion was materialized by the SAME pass
+    assert prov.has_stems("pcmX", ["vocals", "no_vocals"])
+
+    nv = prov.separate("pcmX", "/fake.wav", ["no_vocals"])
+    assert nv["available"] and nv["cached"] is True
+    assert passes["n"] == 1, "requesting the companion must be a cache hit, not a 2nd inference"
+
+
+def test_artifact_key_depends_on_the_full_recipe(tmp_path):
+    """A different segment/overlap/precision must NOT collide with another recipe's
+    cache. Changing a recipe field changes the key."""
+    import os
+    from earcrate.providers.stems import DemucsStemProvider
+    prov = DemucsStemProvider(store=ArtifactStore(tmp_path / "L3"), model_version="htdemucs")
+    base = prov._artifact_key("pcmX", "vocals")
+    with patch.dict(os.environ, {"EARCRATE_DEMUCS_OVERLAP": "0.25"}):
+        changed = prov._artifact_key("pcmX", "vocals")
+    with patch.dict(os.environ, {"EARCRATE_DEMUCS_PRECISION": "amp_fp16"}):
+        changed2 = prov._artifact_key("pcmX", "vocals")
+    assert base != changed and base != changed2 and changed != changed2

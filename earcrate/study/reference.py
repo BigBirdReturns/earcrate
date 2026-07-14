@@ -323,6 +323,27 @@ def source_key(artist: Any, title: Any) -> str:
     return _n(artist) + "|" + _n(title)
 
 
+def flip_index(datasets: Any) -> Dict[str, Dict[str, Any]]:
+    """INVERT the answer-key corpus: for each SOURCE record, which famous flips use
+    it. Returns {artist_key(source_artist) -> {"display": "Artist", "sources":
+    set-of-titles, "flips": [{flip_artist, flip_album, flip_track, role}]}}. This is
+    the library-centric view -- feed it a library artist set to find which of a
+    user's songs are ingredients in known mashups/beats. Deterministic."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for ds in (datasets if isinstance(datasets, (list, tuple)) else [datasets]):
+        data = load_reference(ds)
+        for t in data["tracks"]:
+            for s in t["samples"]:
+                ak = artist_key(s["source_artist"])
+                slot = out.setdefault(ak, {"display": s["source_artist"], "sources": set(), "flips": []})
+                slot["sources"].add(s["source_title"])
+                slot["flips"].append({"flip_artist": data["artist"], "flip_album": data["album"],
+                                      "flip_track": t["title"], "role": s.get("role")})
+    for slot in out.values():
+        slot["sources"] = sorted(slot["sources"])
+    return out
+
+
 def sample_cut_list(dataset: Any) -> List[Dict[str, Any]]:
     """Since we OWN the master's albums, this is the list of sample regions to CUT
     from the master's own audio: which of HIS tracks, the [start,end] inside it,

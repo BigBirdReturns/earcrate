@@ -198,3 +198,16 @@ def test_plan_reference_extraction_resolves_owned_master_tracks(tmp_path):
     assert plan["ok"] and plan["timed_cuts_total"] == 4
     assert plan["makeable"] == 2          # the two 't1' samples (we own t1)
     assert "t2" in plan["missing_master_tracks"]
+
+
+def test_flip_index_inverts_corpus_to_source_centric():
+    from earcrate.study.reference import flip_index, artist_key
+    ds1 = {"album": "A1", "artist": "P1", "sources": [], "tracks": [{"index": 1, "title": "t", "duration_s": None,
+           "samples": [{"source_artist": "The Beatles", "source_title": "Julia", "start_s": None, "end_s": None, "role": "instrumental"}]}]}
+    ds2 = {"album": "A2", "artist": "P2", "sources": [], "tracks": [{"index": 1, "title": "u", "duration_s": None,
+           "samples": [{"source_artist": "the beatles", "source_title": "Helter Skelter", "start_s": None, "end_s": None, "role": None}]}]}
+    idx = flip_index([ds1, ds2])
+    bk = artist_key("The Beatles")
+    assert bk in idx and idx[bk]["display"] == "The Beatles"
+    assert set(idx[bk]["sources"]) == {"Julia", "Helter Skelter"}   # normalized across case
+    assert {f["flip_album"] for f in idx[bk]["flips"]} == {"A1", "A2"}

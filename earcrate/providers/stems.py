@@ -177,7 +177,7 @@ class DemucsStemProvider(StemProvider):
         # WITHOUT touching torch — a cache hit needs no GPU. (Note: this checks the
         # requested roles, so asking for the companion of an already-warmed pair
         # member is a pure cache hit.)
-        if role_list and all(self.store.get(k) is not None for k in req_keys.values()):
+        if role_list and all(self.store.has(k) for k in req_keys.values()):
             return {
                 "available": True, "provider": "demucs", "pcm_sha": str(pcm_sha),
                 "model_version": model_version, "tier": self.tier, "evictable": True,
@@ -205,7 +205,7 @@ class DemucsStemProvider(StemProvider):
             )
         # Return only what the caller asked for (both are now cached regardless).
         stems = {role: req_keys[role] for role in role_list
-                 if self.store.get(req_keys[role]) is not None}
+                 if self.store.has(req_keys[role])}
         return {
             "available": True, "provider": "demucs", "pcm_sha": str(pcm_sha),
             "model_version": model_version, "tier": self.tier, "evictable": True,
@@ -220,7 +220,10 @@ class DemucsStemProvider(StemProvider):
         role_list = list(roles) if roles else list(DEFAULT_ROLES)
         if not role_list:
             return False
-        return all(self.store.get(self._artifact_key(str(pcm_sha), r)) is not None
+        # store.has is an existence probe (no blob read); store.get here pulled the
+        # ENTIRE ~48 MB WAV per role just to compare against None — a warm-status
+        # sweep over the library cost gigabytes of IO for a boolean.
+        return all(self.store.has(self._artifact_key(str(pcm_sha), r))
                    for r in role_list)
 
     def _artifact_key(self, pcm_sha: str, role: str) -> str:

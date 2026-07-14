@@ -206,7 +206,9 @@ def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
     # to {} and the region/transition layers fall back to grid-only anchors.
     beat_state: Dict[str, Any] = {}
     with contextlib.suppress(Exception):
-        beat_state = beat_state_features(y, sr, beat_times, downbeats)
+        # onset_env is the SAME curve (hop 512) beat-state needs for novelty and
+        # groove; passing it through skips a third onset_strength computation.
+        beat_state = beat_state_features(y, sr, beat_times, downbeats, onset=onset_env)
     return {"bpm": bpm, "bpm_confidence": bpm_conf, "beats": beat_times, "downbeats": downbeats,
             "key_root": int(key_root), "key_mode": int(key_mode), "key_confidence": float(key_conf),
             "loudness_lufs": loudness, "energy": energy, "vocal_likelihood": vocal_like,
@@ -224,14 +226,14 @@ def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
         max_sec = int(job["max_sec"])
         cache_path = Path(job["cache_path"])
         duration = float(job.get("duration") or 0)
-        decode_dur = min(duration, max_sec) if duration > 0 else max_sec
-        y = decode_audio(path, sr, duration=decode_dur)
+        # ONE full-track decode: the stream is hashed byte-for-byte as it arrives
+        # (identical digest to the old separate hash-muxer pass, so every banked
+        # pcm_sha / L3 stem key stays valid) while only the bounded feature window
+        # is retained in RAM. This halves per-track decode cost.
+        y, pcm = decode_audio_with_full_sha(path, sr, keep_seconds=max_sec,
+                                            duration_hint=duration)
         if y.size > sr * max_sec:
             y = y[: sr * max_sec]
-        # Stem artifacts cover the whole track, so their identity must too. The
-        # feature window remains bounded; the hash muxer streams a separate full
-        # canonical decode without retaining the whole track in RAM.
-        pcm = decoded_audio_sha256(path, sr, duration)
         feats = compute_pcm_features(y, sr)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(

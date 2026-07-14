@@ -243,12 +243,14 @@ class EarcrateCore:
         snap["crate_stale_profiles"] = []
         if c is not None:
             try:
-                db = self.conn()
+                # Status polls run continuously from the UI; they must NEVER queue
+                # behind a background writer's statements on the shared connection.
+                db = self.read_conn()
                 profiles = [r["taste_profile"] for r in db.execute(
                     "SELECT DISTINCT taste_profile FROM ear_atoms WHERE status='approved'").fetchall()]
                 reasons = []
                 for pid in profiles:
-                    st = self.crate_staleness(pid)
+                    st = self.crate_staleness(pid, db=db)
                     if st["crate_stale"]:
                         snap["crate_stale_profiles"].append(pid)
                         reasons.append(f"{pid}: {st['reason']}")
@@ -600,6 +602,7 @@ class EarcrateCore:
         except Exception:
             self.config = None
             self.db = None
+            self._read_db = None
 
     def _seed_from_machine_defaults(self) -> None:
         """First-run auto-config from a committed machine preset, so a known box
@@ -1448,6 +1451,12 @@ class EarcrateCore:
         _legacy = c.agent_root / "jukebreaker.sqlite"
         if not _db_path.exists() and _legacy.exists():
             _db_path = _legacy
+        # A reconnect must also drop the read-only poll connection so it re-opens
+        # against the (possibly different) DB file on next status read.
+        with contextlib.suppress(Exception):
+            if getattr(self, "_read_db", None) is not None:
+                self._read_db.close()
+        self._read_db = None
         self.db = sqlite3.connect(str(_db_path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
@@ -1467,6 +1476,31 @@ class EarcrateCore:
             self.connect_db()
         assert self.db is not None
         return self.db
+
+    def read_conn(self) -> sqlite3.Connection:
+        """A SECOND, read-only connection for UI status polls.
+
+        The UI polls /api/status continuously; when those reads share the single
+        connection with a background analyze/extract's statements, every poll
+        queues behind write work and the box lags on input even at idle CPU/GPU —
+        the fsync fix (synchronous=NORMAL) removed only half of that lag. WAL
+        mode exists precisely so readers never block behind the writer; this
+        connection is opened in SQLite read-only mode (`mode=ro`) so it can never
+        take a write lock, and falls back to the shared connection only if the
+        read-only open fails (e.g. the DB does not exist yet)."""
+        if self.db is None:
+            self.connect_db()
+        if getattr(self, "_read_db", None) is None:
+            try:
+                assert self.db is not None
+                row = self.db.execute("PRAGMA database_list").fetchone()
+                db_path = str(row[2])
+                ro = sqlite3.connect("file:%s?mode=ro" % db_path, uri=True, check_same_thread=False)
+                ro.row_factory = sqlite3.Row
+                self._read_db = ro
+            except Exception:
+                return self.conn()
+        return self._read_db
 
     def migrate_ear_atoms_per_profile(self) -> None:
         """v0.7.8: ear_atoms had UNIQUE(loop_id) — one atom per loop GLOBALLY —
@@ -1766,8 +1800,8 @@ class EarcrateCore:
         self.conn().execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)", (key, str(int(value))))
         self.conn().commit()
 
-    def kv_get_json(self, key: str) -> Optional[Dict[str, Any]]:
-        row = self.conn().execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+    def kv_get_json(self, key: str, db: Optional[sqlite3.Connection] = None) -> Optional[Dict[str, Any]]:
+        row = (db or self.conn()).execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
         if not row:
             return None
         try:
@@ -1797,7 +1831,8 @@ class EarcrateCore:
             "stamped_at": now_utc(),
         })
 
-    def crate_staleness(self, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+    def crate_staleness(self, taste_profile: str = "girl_talk_v1",
+                        db: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
         """Detect a crate built by a DIFFERENT engine/analyzer than the running one.
 
         Two independent, deterministic signals:
@@ -1809,9 +1844,9 @@ class EarcrateCore:
         A stale crate must never silently drive coverage — the girl_talk 0.47
         false-FAIL came from exactly this: stale atoms + a current engine.
         """
-        db = self.conn()
+        db = db or self.conn()
         reasons: List[str] = []
-        stamp = self.kv_get_json(self._crate_stamp_key(taste_profile))
+        stamp = self.kv_get_json(self._crate_stamp_key(taste_profile), db=db)
         if stamp:
             se = str(stamp.get("engine_version") or "")
             sa = str(stamp.get("analyzer_version") or "")
@@ -3094,11 +3129,19 @@ class EarcrateCore:
         mid_share = float(np.sum(S[(freqs >= 520) & (freqs <= 3400)]) / total)
         presence_share = float(np.sum(S[(freqs >= 1800) & (freqs <= 6500)]) / total)
         high_share = float(np.sum(S[freqs > 3400]) / total)
-        flat = float(np.mean(librosa.feature.spectral_flatness(S=np.sqrt(S))))
-        harmonic, percussive = librosa.effects.hpss(seg)
-        hp_total = float(np.sum(np.abs(harmonic)) + np.sum(np.abs(percussive)) + 1e-9)
-        harmonic_ratio = float(np.sum(np.abs(harmonic)) / hp_total)
-        percussive_ratio = float(np.sum(np.abs(percussive)) / hp_total)
+        S_mag = np.sqrt(S)
+        flat = float(np.mean(librosa.feature.spectral_flatness(S=S_mag)))
+        # HPSS on the spectrogram we ALREADY computed. librosa.effects.hpss(seg)
+        # ran a second full STFT + two iSTFTs per clip just to produce two scalar
+        # energy shares — measured as the single most expensive call of the crate
+        # pass (~0.78 s/clip x 12 clips/track, as costly as analyze itself).
+        # decompose.hpss median-filters the existing magnitudes and the ratio is
+        # read off the masks directly; no resynthesis, same harmonic-vs-percussive
+        # meaning.
+        H_mag, P_mag = librosa.decompose.hpss(S_mag)
+        hp_total = float(np.sum(H_mag) + np.sum(P_mag) + 1e-9)
+        harmonic_ratio = float(np.sum(H_mag) / hp_total)
+        percussive_ratio = float(np.sum(P_mag) / hp_total)
         energy_score = float(min(1.0, rms / 0.11))
         intelligibility = float(max(0.0, min(1.0, 0.40 * min(1.0, mid_share / 0.42) + 0.28 * min(1.0, presence_share / 0.24) + 0.22 * float(track_vocal_like or 0.0) + 0.10 * (1.0 - min(1.0, low_share / 0.42)))))
         local_hook = 0.32 * intelligibility + 0.20 * min(1.0, presence_share / 0.22) + 0.16 * transient_density + 0.16 * energy_score + 0.10 * min(1.0, crest / 5.5) + 0.06 * (1.0 if bars in (2, 4) else 0.4)
@@ -5424,6 +5467,10 @@ class EarcrateCore:
         audio_cache: Dict[str, np.ndarray] = {}
         external_identity_cache: Dict[str, str] = {}
         transform_cache: Dict[str, np.ndarray] = {}
+        # One decoded stem per (pcm_sha, stem_role) per RENDER. Without this every
+        # vocal/bed layer in every section re-consulted the provider and re-decoded
+        # the full stem WAV — ~10 GB of IO and ~80 ffmpeg spawns on a warm render.
+        stem_source_cache: Dict[Tuple[str, str], Tuple[Optional[np.ndarray], Optional[str], Optional[str]]] = {}
         transform_cache_dir = self._cache_root() / "transforms" / ENGINE_VERSION
         transform_cache_dir.mkdir(parents=True, exist_ok=True)
         max_tail_decks = max(1, min(6, int((arrangement.get("params") or {}).get("max_aux_decks") or 3)))
@@ -5583,7 +5630,18 @@ class EarcrateCore:
             store, same EARCRATE_L3_ROOT the provider wrote to); both resolve to
             decoded samples sliced at the SAME loop window as the mix. Returns
             ``(samples_or_None, reason_or_None, stem_identity_or_None)`` so the caller can SURFACE why a
-            fallback happened instead of swallowing it silently."""
+            fallback happened instead of swallowing it silently. Memoized per render
+            via ``stem_source_cache`` — the same stem feeds every section's layers
+            from ONE provider consult + ONE decode."""
+            memo_key = (str(pcm_sha), str(stem_role))
+            if memo_key in stem_source_cache:
+                arr, reason, ident = stem_source_cache[memo_key]
+                return (None if arr is None else arr, reason, ident)
+            result = _resolve_stem_source(pcm_sha, src_path, stem_role)
+            stem_source_cache[memo_key] = result
+            return result
+
+        def _resolve_stem_source(pcm_sha: str, src_path: str, stem_role: str) -> Tuple[Optional[np.ndarray], Optional[str], Optional[str]]:
             selected = os.environ.get("EARCRATE_STEMS") or getattr(c, "stem_provider", None) or "noop"
             try:
                 prov = get("stems") if selected == "noop" else get("stems", selected)

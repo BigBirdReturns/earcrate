@@ -2859,8 +2859,17 @@ def test_pcm_identity_covers_full_track_not_analysis_prefix():
     hd = decoded_audio_sha256(dup, sr, 2.0)
     assert ha != hb, "same prefix collided despite different full-track audio"
     assert ha == hd, "identical full canonical PCM did not deduplicate"
+    # The single-decode analyze path hashes the decoder's own byte stream instead
+    # of running a second full hash-muxer pass. That is only legal because the two
+    # digests are byte-identical for the same canonical decode — assert it, per
+    # file, including one where only the tail differs from another.
+    from earcrate.analyze.decode import decode_audio_with_full_sha
+    for p, want in ((a, ha), (b, hb), (dup, hd)):
+        y_pref, got = decode_audio_with_full_sha(p, sr, keep_seconds=1.0, duration_hint=2.0)
+        assert got == want, "streaming decode digest diverged from the hash-muxer digest"
+        assert y_pref.size == sr, "bounded feature prefix has the wrong length"
     worker_source = inspect.getsource(analyze_file_worker)
-    assert "decoded_audio_sha256" in worker_source and 'pcm_scope=np.asarray("full")' in worker_source, \
+    assert "decode_audio_with_full_sha" in worker_source and 'pcm_scope=np.asarray("full")' in worker_source, \
         "analysis worker is not persisting the complete-PCM identity contract"
 
 

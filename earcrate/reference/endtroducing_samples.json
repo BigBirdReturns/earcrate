@@ -1,0 +1,434 @@
+{
+  "album": "Endtroducing.....",
+  "artist": "DJ Shadow",
+  "maps_to_persona": "remix_shadow_v1",
+  "sources": [
+    "https://musicismysanctuary.com/dj-shadows-endtroducing-sample-list",
+    "https://en.wikipedia.org/wiki/Endtroducing.....",
+    "https://www.whosampled.com/album/DJ-Shadow/Endtroducing...../",
+    "https://www.udiscovermusic.com/stories/dj-shadow-endtroducing-explained-feature/"
+  ],
+  "notes": "13-track CD tracklist; per-track sources from Music Is My Sanctuary (mirrors WhoSampled) + Wikipedia + uDiscover. ~500 samples total on the album; only identified named source records listed. Timestamps null.",
+  "tracks": [
+    {
+      "index": 1,
+      "title": "Best Foot Forward",
+      "duration_s": 49,
+      "samples": [
+        {
+          "source_artist": "Stanley Clarke",
+          "source_title": "Concerto for Jazz/Rock Orchestra Part II",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Jeru the Damaja",
+          "source_title": "You Can't Stop the Prophet",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "JVC Force",
+          "source_title": "Strong Island",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Kool G Rap & DJ Polo",
+          "source_title": "Poison",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Stezo",
+          "source_title": "It's My Turn",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Beastie Boys",
+          "source_title": "The Party's Getting Rough",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Building Steam with a Grain of Salt",
+      "duration_s": 400,
+      "samples": [
+        {
+          "source_artist": "Jeremy Storch",
+          "source_title": "I Feel a New Shadow",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "H.P. Riot",
+          "source_title": "I Need You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Lexia",
+          "source_title": "I Worship You",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Music Makers",
+          "source_title": "Percussion",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "The Number Song",
+      "duration_s": 280,
+      "samples": [
+        {
+          "source_artist": "Metallica",
+          "source_title": "Orion",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Tony Alvon & The Belairs",
+          "source_title": "Sexy Coffee Pot",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Pink Floyd",
+          "source_title": "On the Run",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Jimmy Smith",
+          "source_title": "8 Counts for Rita",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "T La Rock",
+          "source_title": "Breakdown",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "A Tribe Called Quest",
+          "source_title": "Can I Kick It? (Spirit Mix)",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Grandmaster Flash",
+          "source_title": "Flash It to the Beat",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Pigmeat Markham",
+          "source_title": "Who Got the Number",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Changeling / Transmission 1",
+      "duration_s": 471,
+      "samples": [
+        {
+          "source_artist": "Tangerine Dream",
+          "source_title": "Invisible Limits",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Meters",
+          "source_title": "Here Comes the Meter Man",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Kay Gardner",
+          "source_title": "Touching Souls",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Motherlode",
+          "source_title": "Hard Life",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Loudon Wainwright III",
+          "source_title": "The Man Who Couldn't Cry",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "title": "What Does Your Soul Look Like (Part 4)",
+      "duration_s": 308,
+      "samples": [
+        {
+          "source_artist": "Flying Island",
+          "source_title": "The Vision and the Voice Part 1",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "title": "Untitled",
+      "duration_s": 24,
+      "samples": [
+        {
+          "source_artist": "Human Race",
+          "source_title": "Grey Boy",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "title": "Stem/Long Stem / Transmission 2",
+      "duration_s": 561,
+      "samples": [
+        {
+          "source_artist": "Nirvana",
+          "source_title": "Love Suite",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Giorgio Moroder",
+          "source_title": "Tears",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Pekka Pohjola",
+          "source_title": "The Madness Subsides",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "David Axelrod",
+          "source_title": "The Human Abstract",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "title": "Mutual Slump",
+      "duration_s": 242,
+      "samples": [
+        {
+          "source_artist": "Björk",
+          "source_title": "Possibly Maybe",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Motherlode",
+          "source_title": "Soft Shell",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Ron Geesin and Roger Waters",
+          "source_title": "Seven Dwarfs in Penis Land",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "title": "Organ Donor",
+      "duration_s": 117,
+      "samples": [
+        {
+          "source_artist": "Giorgio Moroder",
+          "source_title": "Tears",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "title": "Why Hip Hop Sucks in '96",
+      "duration_s": 43,
+      "samples": [
+        {
+          "source_artist": "Cleo McNett",
+          "source_title": "Snap",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "title": "Midnight in a Perfect World",
+      "duration_s": 297,
+      "samples": [
+        {
+          "source_artist": "Organized Konfusion",
+          "source_title": "Releasing Hypnotical Gases",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Rotary Connection",
+          "source_title": "Life Could",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Meredith Monk",
+          "source_title": "Dolmen Music",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "David Axelrod",
+          "source_title": "The Human Abstract",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Pekka Pohjola",
+          "source_title": "The Madness Subsides",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Akinyele",
+          "source_title": "Outta State",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "title": "Napalm Brain/Scatter Brain",
+      "duration_s": 563,
+      "samples": [
+        {
+          "source_artist": "Joann Garrett",
+          "source_title": "Walk On By",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Charles Bernstein",
+          "source_title": "Moment of Truth",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Tyrannosaurus Rex",
+          "source_title": "Pon a Hill",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Billy Cobham",
+          "source_title": "Funky Kind of Thing",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "title": "What Does Your Soul Look Like (Part 1) / Transmission 3",
+      "duration_s": 448,
+      "samples": [
+        {
+          "source_artist": "The Alan Parsons Project",
+          "source_title": "Nucleus",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "The Heath Brothers",
+          "source_title": "The Voice of the Saxophone",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        },
+        {
+          "source_artist": "Shawn Phillips",
+          "source_title": "All Our Love",
+          "start_s": null,
+          "end_s": null,
+          "role": null
+        }
+      ]
+    }
+  ]
+}

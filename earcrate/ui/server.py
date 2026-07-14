@@ -305,6 +305,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.study_reference(str(data.get("path") or ""), str(data.get("taste_profile") or "girl_talk_v1"))); return
             if path == "/api/study/recall":
                 self._json(200, self.core.reference_recall(str(data.get("path") or ""), str(data.get("taste_profile") or "girl_talk_v1"))); return
+            if path == "/api/library/manifest":
+                self._json(200, self.core.export_library_manifest(str(data.get("path") or ""))); return
             if path == "/api/stems/warm":
                 self._json(200, self.core.run_background(self.core.warm_stems, str(data.get("taste_profile") or "girl_talk_v1"), int(data.get("max_items") or 0))); return
             if path == "/api/stems/warm_status":

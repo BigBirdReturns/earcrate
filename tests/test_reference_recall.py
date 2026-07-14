@@ -99,3 +99,23 @@ def test_reference_recall_end_to_end_on_a_seeded_library(tmp_path):
     assert rep["sources_in_library"] == 2       # own Cream + Doors (not Nas/Jay)
     assert rep["recoverable"] == 1 and rep["recovered"] == 1 and rep["recall"] == 1.0
     assert rep["engine_edges"] == 1
+
+
+def test_export_library_manifest_is_public_safe(tmp_path):
+    """The manifest carries artist/title/album/year/genre for cross-referencing
+    against sample sites -- but NO file paths or machine identifiers (public repo)."""
+    import json
+    core = _core(tmp_path)
+    db = core.conn()
+    db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at,present) VALUES(?,?,?,?,?,?,1)",
+               ("f1", "/Users/secret/Music/x.wav", "master", 1, 1, "now"))
+    db.execute("INSERT INTO tracks(id,file_id,artist,album,title,year) VALUES(?,?,?,?,?,?)",
+               ("t1", "f1", "Cream", "Disraeli Gears", "Sunshine of Your Love", 1967))
+    db.commit()
+    res = core.export_library_manifest(str(tmp_path / "man.json"))
+    assert res["ok"] and res["count"] == 1
+    text = (tmp_path / "man.json").read_text()
+    man = json.loads(text)
+    row = man["tracks"][0]
+    assert row["artist"] == "Cream" and row["title"] == "Sunshine of Your Love" and row["year"] == 1967
+    assert "/Users/secret" not in text and "path" not in row      # no path/machine leak

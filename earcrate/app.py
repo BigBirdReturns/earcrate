@@ -6150,6 +6150,28 @@ class EarcrateCore:
         report["path"] = str(path)
         return report
 
+    def export_library_manifest(self, path: str = "") -> Dict[str, Any]:
+        """Export a PUBLIC-SAFE catalog of the library -- artist/title/album/year/
+        genre for every present track, with NO file paths or machine identifiers --
+        so it can be committed and cross-referenced (off the box) against the
+        documented producer sample sources that grade the engine's discovery.
+        Read-only. Writes to ``path`` or <agent_root>/library_manifest.json."""
+        c = self.ensure_config()
+        rows = self.conn().execute(
+            "SELECT t.artist artist, t.title title, t.album album, t.year year, "
+            "(SELECT value FROM tags WHERE file_id=f.id AND key='genre' LIMIT 1) genre "
+            "FROM tracks t JOIN files f ON f.id=t.file_id "
+            "WHERE COALESCE(f.present,1)=1 AND t.title IS NOT NULL "
+            "ORDER BY t.artist, t.title").fetchall()
+        items = [{"artist": r["artist"] or "", "title": r["title"] or "",
+                  "album": r["album"] or "", "year": r["year"], "genre": r["genre"] or ""}
+                 for r in rows]
+        dst = Path(path) if path else (c.agent_root / "library_manifest.json")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(json.dumps({"created": now_utc(), "count": len(items), "tracks": items},
+                                  ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"ok": True, "count": len(items), "path": str(dst)}
+
     def set_atom_judgment(self, atom_id: str, taste_profile: str, status: str, relabel_role: str = "", favorite: bool = False, locked: bool = False, reason: str = "") -> Dict[str, Any]:
         if status not in {"approved", "rejected", "candidate"}:
             raise ValueError("atom judgment status must be approved, rejected, or candidate")

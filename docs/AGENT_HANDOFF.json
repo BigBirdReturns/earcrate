@@ -1359,11 +1359,21 @@
         "samples": 22,
         "all_timed": false,
         "note": "Biggie acapella x The xx instrumental per track; per-sample timing undocumented (null) so density-only"
+      },
+      "troubadour_patandsean_samples.json": {
+        "artist": "Pat & Sean Kelly",
+        "maps_to_persona": "troubadour_v1",
+        "tracks": 28,
+        "samples": 53,
+        "all_timed": false,
+        "density_spm": 1.53,
+        "note": "YouTube/site medleys; per-sample timing undocumented so density-only. 18/28 tracks have documented ordered song lists; 10 vague medleys left with empty samples[] rather than fabricated."
       }
     },
     "key_finding": "The hand-tuned girl_talk_v1 badly underestimated source hold. Measured on real All Day: source_seconds 11.5->30.68 (Girl Talk holds a source ~2.7x LONGER than the persona assumed), max_source_run_s 16->149 (a single source can run ~2.5 min, e.g. War Pigs), sources_per_minute 5.5->4.86, seconds_per_event 11->12.36, mean_layers 2.61 (fits min2/max4 band). Notorious xx density 1.5->0.52 spm (one voice over one foreign bed = very sparse).",
     "calibration_is_a_diff_not_a_mutation": "calibrate_profile returns {profile, diff}; the shipped profiles/*.json are never rewritten. Applying the calibration is a deliberate future step, not automatic.",
     "gates": "84/84 (added 7 reference-study gates on a synthetic fixture with hand-computed expected numbers)",
-    "pending": "troubadour_patandsean_samples.json (Pat & Sean Kelly medleys) and Branchez identification still in-flight from the reference-artists workflow."
+    "pending": "none \u2014 all four reference targets resolved (Girl Talk, Notorious xx, Pat & Sean; Branchez ruled out with rationale).",
+    "branchez_verdict": "Branchez does NOT map to a persona. He is a NYC melodic-trap producer whose \"bootlegs\" are single-source REMIXES (one vocal, e.g. Rihanna \"Stay\", rebuilt over his OWN original instrumental) plus fully original productions. No track combines two identifiable songs, so there are no A/B pairings and no sample corpus to catalog. Closest FORM is notorious_v1 (keep a foreground vocal, swap the bed) but it is a remix, not a mashup \u2014 no reference dataset written (would require fabricating data)."
   }
 }

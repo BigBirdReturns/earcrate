@@ -8,7 +8,7 @@ PKG = ROOT / "earcrate"
 ORDER = ["tastespec/profiles.py", "core/deps.py", "core/util.py", "core/wavinfo.py", "analyze/decode.py", "deck/dsp.py",
          "deck/transform.py", "deck/lattice.py", "ear/readiness.py", "judge/audio.py",
          "deck/harmony.py", "core/config.py", "analyze/features.py", "analyze/beat_features.py", "librarian/ingest.py",
-         "providers/__init__.py", "providers/artifacts.py", "providers/stems.py", "providers/retrieval.py", "plan/math.py", "plan/transitions.py", "study/reference.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
+         "providers/__init__.py", "providers/artifacts.py", "providers/stems.py", "providers/retrieval.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
 import base64
 html_b64 = base64.b64encode((PKG / "ui/static/index.html").read_bytes()).decode("ascii")

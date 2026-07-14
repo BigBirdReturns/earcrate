@@ -1433,6 +1433,25 @@
       "reference edges are weak supervision (co-occurrence != universal compatibility) -> treat as prior with uncertainty, not ground truth",
       "machine_defaults.json left as-is per owner (private repo, may never release)"
     ],
-    "gates": "125/125"
+    "gates": "125/125",
+    "LIVE_NOW": "beat_state computed during real analysis (compute_pcm_features + analyze_one), stored in the per-file npz (ANALYZER_VERSION 0.7.0-beatstate -> re-analyze repopulates), read via load_beat_state(), regions via material_regions(file_id, baseline)/POST /api/materials/regions. Verified end-to-end: 6x more regions than baseline incl. natural_tail/section. Still additive -- does NOT drive composition until a regions_v2 crate builder is flipped on."
+  },
+  "compute_gpu_roadmap": {
+    "DONE_cloud_verifiable": [
+      "Companion vocal-pair caching: one Demucs inference materializes BOTH vocals+no_vocals (gated: separate(vocals) then separate(no_vocals) == 1 forward pass).",
+      "StemRecipe + recipe-aware L3 artifact key (model/segment/overlap/shifts/precision) so recipes never collide; env-overridable EARCRATE_DEMUCS_SEGMENT_S/OVERLAP/SHIFTS/PRECISION.",
+      "_run_demucs inference contract (pragma no cover): CPU-resident full-track mixture + apply_model(split=True, segment<=7.8, overlap, shifts); inference_mode with no_grad fallback; optional AMP behind recipe."
+    ],
+    "BOX_ONLY_next (torch+GPU+browser, cannot verify in cloud)": [
+      "Patch A: split control plane from compute plane -- persistent GPU child process (one per GPU, one resident model), UI server stays Torch-free/normal-priority; ComputeJob envelope + real priority queue (playback 0 > user render 10 > preview 20 > candidate stems 40 > warm 70 > full-library 90). Windows PROCESS_MODE_BACKGROUND_BEGIN on maintenance workers.",
+      "Patch B: responsiveness governor -- browser heartbeat (rAF interval, long tasks, status RTT, interaction lease ~750ms) drives a token-bucket GPU duty target (Focus 0.65 / Balanced 0.88 / Idle 0.95) via Demucs per-segment callback (cooperative preemption at segment boundary, cancellation). Show mode/throttle reason in UI.",
+      "Patch C: VRAM headroom -- set_per_process_memory_fraction with reserve=max(1.25GB, 15% VRAM); segment auto-calibration (start 6.0s, grow 0.5s while reserve holds, OOM -> shrink+retry once); model idle-unload grace; no empty_cache per track.",
+      "Patch D (biggest first-render latency win): plan-scoped WINDOWED separation -- separate only the exact source intervals the accepted plan needs (+/-10s model context, merged), cache lookup order full->window->schedule->fallback; move stem materialization AHEAD of rendering so render never launches Demucs.",
+      "Patch E: pipeline decode/inference/encode (depth<=2), pinned-memory non_blocking transfers, then benchmark AMP/torch.compile behind flags.",
+      "Warm-priority upgrade: rank by expected reuse (source_in_accepted_plan 100 > top_candidate_plan_count 40 > favorite 20 > station 10 > graph_degree 5 > best_atom_score 4 > atom_count 2 - separation_cost).",
+      "Stem-necessity planner: classify each layer (vocal-over-bed needs vocal+dest-instrumental; full-mix cut needs none; one-shot needs none) so full-model passes are only run where they change the result.",
+      "Hardware soak suite: GPU util, high-water VRAM, RTF, browser frame p95<32ms, /api/status p95<100ms, audio seek p95<100ms, 0 underruns, preemption <=1 segment, 0 OOM after calibration."
+    ],
+    "governing_objective": "Maximize completed musical work per minute SUBJECT TO a hard responsiveness budget (browser frames, audio, mouse). 88% GPU with stable latency beats nominal saturation that drops UI frames."
   }
 }

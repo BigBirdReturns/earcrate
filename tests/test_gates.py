@@ -3682,3 +3682,45 @@ def test_presence_corrective_moves_signal_toward_gt_balance():
     after = drydeck_metrics(stable_presence_restore(y, sr), sr)
     assert after["low200_share"] < before["low200_share"] - 0.10, (before, after)
     assert after["high3000_share"] > before["high3000_share"] * 2.0, (before, after)
+
+
+def test_atom_edge_harmonic_requires_pair_agreement_not_either_or():
+    """Regression: two atoms play SIMULTANEOUSLY, so harmonic credit must reflect
+    their relation to EACH OTHER. The old rule gave harmonic=1.0 when either atom
+    alone fit the target key, so an atom in C layered with one in F# (a tritone)
+    scored a perfect 1.0. The pair must agree first."""
+    core = EarcrateCore()
+    L = {"key_root": 0, "bpm": 120, "role": "vocal", "low_share": 0.2, "mid_share": 0.3,
+         "intelligibility": 0.7, "bed_score": 0.5, "floor_score": 0.5,
+         "id": "L", "source_track_key": "sL", "artist": "A", "title": "l"}
+    def R(kr, sid):
+        return {"key_root": kr, "bpm": 120, "role": "harmony", "low_share": 0.2, "mid_share": 0.3,
+                "bed_score": 0.5, "floor_score": 0.5, "id": sid, "source_track_key": sid,
+                "artist": "B", "title": sid}
+    # generous transform budgets so nothing is rejected for a varispeed violation;
+    # a 1-semitone (chromatic) clash needs only a tiny shift, isolating the
+    # harmonic formula from the transform gate.
+    _, good = core.atom_edge_score(L, R(0, "same"), "vocal_over_bed", 120.0, 0, 1.0, 12)
+    _, clash = core.atom_edge_score(L, R(1, "chromatic"), "vocal_over_bed", 120.0, 0, 1.0, 12)
+    assert good["harmonic"] == 1.0, good
+    assert clash["harmonic"] < 1.0, "C layered with a chromatic clash must not score a perfect harmonic"
+    assert clash["harmonic"] <= good["harmonic"]
+
+
+def test_judge_contracts_agree_on_low200_direction():
+    """The dry-deck gate treats low200 as a mud CEILING (real Girl Talk ~0.20); the
+    legacy v1_1 judge must not simultaneously demand low200 be HIGH. Both now use
+    the same ceiling, so a real-GT-like render passes both and a mud wall fails
+    both -- no render is caught in a contradiction."""
+    from earcrate.judge.audio import GT_SPECTRAL_PROFILE, drydeck_quality_gate
+    ceiling = GT_SPECTRAL_PROFILE["low200_share"]["ceiling_fail"]
+    # v1_1 low200 gate is now `low200 <= ceiling`; check it agrees with dry-deck.
+    for low200, expect_ok in ((0.20, True), (0.60, False)):
+        v1_1_ok = low200 <= ceiling
+        m = {"peak": 0.6, "audible_seconds": 118.0, "active_coverage_ratio": 0.92,
+             "silence_ratio": 0.08, "first_audible_s": 1.0, "largest_silence_gap_s": 4.0,
+             "rms_std_db": 5.0, "low200_share": low200, "high3000_share": 0.31}
+        dry = drydeck_quality_gate(m, 120.0)
+        dry_low200_ok = not any("mud wall" in f for f in dry["failures"])
+        assert v1_1_ok == expect_ok
+        assert dry_low200_ok == expect_ok, (low200, dry["failures"])

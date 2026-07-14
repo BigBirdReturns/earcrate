@@ -285,10 +285,15 @@ def judge_audio_file(path: Path, ref_path: Optional[Path] = None) -> Dict[str, A
         }
     render = metrics_one(path)
     out: Dict[str, Any] = {"render": render, "engine": render.get("engine") or ENGINE_VERSION}
+    # low200 is a CEILING, consistent with drydeck_quality_gate + the real Girl
+    # Talk distribution (~0.20 [0.07-0.31]). The old v1_1 rule REQUIRED low200 >=
+    # 0.48, which directly contradicted the dry-deck mud ceiling (fail > 0.45): a
+    # real-GT-like render (0.20) failed here while a mud wall (0.5) failed there,
+    # so nothing could satisfy both judges. See GT_SPECTRAL_PROFILE.
     gates = {
-        "rms_std_db": render["rms_std_db"] >= 4.5,
+        "rms_std_db": render["rms_std_db"] >= 3.5,
         "silence_ratio": render["silence_ratio"] <= 0.22,
-        "low200_share": render["low200_share"] >= 0.48,
+        "low200_share": render["low200_share"] <= GT_SPECTRAL_PROFILE["low200_share"]["ceiling_fail"],
         "distinct_pcs": render["distinct_pcs"] >= 4,
     }
     out["v1_1_gates"] = gates

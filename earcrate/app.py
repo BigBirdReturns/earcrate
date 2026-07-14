@@ -3347,7 +3347,23 @@ class EarcrateCore:
         lk = key_of(left); rk = key_of(right)
         lrel = harmonic_relation_name(lk, target_key)
         rrel = harmonic_relation_name(rk, target_key)
-        harmonic = 1.0 if lk == rk or lrel in {"same_key","dominant","subdominant","relative_or_parallel"} or rrel in {"same_key","dominant","subdominant","relative_or_parallel"} else 0.42
+        # The two atoms play SIMULTANEOUSLY, so their compatibility is governed by
+        # the relation between EACH OTHER, not by "either one fits the target key".
+        # The old expression awarded harmonic=1.0 when either atom alone related to
+        # the target, so an atom in C layered with one in F# (a tritone -- maximally
+        # dissonant with each other) scored a perfect 1.0. Require the PAIR to agree
+        # first; fit-to-target is a secondary bonus.
+        _COMPAT = {"same_key", "dominant", "subdominant", "relative_or_parallel"}
+        pair_ok = (lk == rk) or (harmonic_relation_name(lk, rk) in _COMPAT)
+        targ_ok = (lrel in _COMPAT) and (rrel in _COMPAT)
+        if pair_ok and targ_ok:
+            harmonic = 1.0
+        elif pair_ok:
+            harmonic = 0.75          # layers agree with each other but drift from target key
+        elif (lrel in _COMPAT) and (rrel in _COMPAT):
+            harmonic = 0.55          # both fit target yet clash with each other -> risky
+        else:
+            harmonic = 0.3
         try:
             lt = plan_varispeed_transform(str(left.get("role") or "full"), bpm_of(left), render_bpm, lk, target_key, stretch_budget, pitch_budget)
             rt = plan_varispeed_transform(str(right.get("role") or "full"), bpm_of(right), render_bpm, rk, target_key, stretch_budget, pitch_budget)

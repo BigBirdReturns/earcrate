@@ -294,3 +294,25 @@ Same metrics over each persona's REAL reference material (40 tracks/group):
   ≳0.20 (real ~0.25–0.30; earcrate 0.031 must fail). Fix the render mix: high-pass/low-shelf + presence
   lift so output lands INSIDE the real-reference box. The library's real artists are per-persona
   validation sets (Girl Talk / SS-writers / hip-hop).
+
+### CORRECTION — "notorious" = *Notorious XX* (Wait What), a MASHUP, not raw hip-hop
+The persona is named after the **Notorious XX** mixtape (`Artists/Wait What`, 11 trk — Biggie acapellas
+over **The xx** instrumentals), NOT generic rap. Re-measured against the real thing:
+
+| persona (corrected real ref) | rms_std_db | low200 (bass) | high3000 (presence) | character |
+|---|---|---|---|---|
+| girl_talk (Girl Talk) | 5.21 | 0.19 | **0.31** | brightest |
+| troubadour (SS-writers) | 4.78 | 0.21 | 0.23 | mid |
+| **notorious (Notorious XX / Wait What)** | 4.59 | **0.27** | **0.19** | **darkest** (The xx beds) |
+| *(source: The xx)* | 5.64 | 0.34 | 0.14 | — |
+| earcrate render (PASSES) | 3.19 | **0.59** | **0.031** | broken |
+
+**Revised finding (supersedes the "one uniform box" claim above):** there IS a per-persona **spectral
+gradient** — girl_talk bright (presence 0.31) → notorious/XX dark (0.19), because notorious rides
+minimal warm The-xx beds. So the quality gate wants *some* per-persona spectral tolerance, not one
+threshold. **BUT earcrate's render is outside EVERY real target:** its bass 0.59 exceeds even The xx
+(0.34, the bassiest ref); its presence 0.031 is below even The xx (0.14, the dullest ref). So the
+mix-bug conclusion is unchanged and stronger. Practical gate: bass **ceiling ~0.35**, presence **floor
+~0.15**, dynamics ≳3.5 (catches earcrate on all three axes), optionally tightened per-persona toward
+each reference's mean. (User also flagged **Branchez** as another mashup reference — not found as an
+Artists folder; likely in Singles/comps, TODO to locate.)

@@ -39,6 +39,7 @@ no timing and density needs only the track duration.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -320,6 +321,42 @@ def source_key(artist: Any, title: Any) -> str:
                 s = s[:i]
         return "".join(ch for ch in s if ch.isalnum())
     return _n(artist) + "|" + _n(title)
+
+
+def artist_key(artist: Any) -> str:
+    """Normalized ARTIST identity for coarse library-coverage matching (do we own
+    ANY material by this source artist?). Drops a leading 'the', feat. credits, and
+    non-alphanumerics; '&' -> 'and'. Coarser than source_key (artist+title) -- used
+    when only an artist-level library manifest is available, not full titles."""
+    s = str(artist or "").lower().replace("&", " and ")
+    s = re.sub(r"\bfeat.*|\bfeaturing.*|\bft\.?.*", "", s)
+    s = re.sub(r"\bthe\b", "", s)
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def answer_key_material_coverage(dataset: Any, owned_artist_keys: Any) -> Dict[str, Any]:
+    """Artist-level MATERIAL coverage: of the distinct source artists a master
+    sampled, how many does the library own ANY material by. This is the ceiling on
+    what the engine could POSSIBLY rediscover -- you can't recover a flip whose
+    source records you don't have. Coarser than the title-level recall (owning the
+    artist != owning the exact track), but it's the honest first cut from an
+    artist-level manifest."""
+    data = load_reference(dataset)
+    owned = set(owned_artist_keys or [])
+    arts: Dict[str, str] = {}
+    for t in data["tracks"]:
+        for s in t["samples"]:
+            arts.setdefault(artist_key(s["source_artist"]), s["source_artist"])
+    have = sorted(orig for k, orig in arts.items() if k in owned)
+    missing = sorted(orig for k, orig in arts.items() if k not in owned)
+    n = len(arts)
+    return {
+        "album": data["album"], "artist": data["artist"],
+        "source_artists_total": n,
+        "source_artists_owned": len(have),
+        "artist_coverage": _round(len(have) / n) if n else None,
+        "owned": have, "missing": missing,
+    }
 
 
 def reference_source_keys(dataset: Any) -> List[str]:

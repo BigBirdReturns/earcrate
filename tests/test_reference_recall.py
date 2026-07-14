@@ -150,3 +150,16 @@ def test_real_donuts_answer_key_loads_and_pairs():
     assert len(reference_source_keys(ds)) > 50
     edges, mode = reference_pairings(ds)
     assert mode == "same_track_cooccurrence" and len(edges) > 40
+
+
+def test_material_coverage_counts_owned_source_artists():
+    from earcrate.study.reference import answer_key_material_coverage, artist_key
+    ds = {"album": "X", "artist": "P", "sources": [], "tracks": [
+        {"index": 1, "title": "t", "duration_s": None, "samples": [
+            {"source_artist": "The Beatles", "source_title": "a", "start_s": None, "end_s": None, "role": None},
+            {"source_artist": "Kool & the Gang", "source_title": "b", "start_s": None, "end_s": None, "role": None}]}]}
+    rep = answer_key_material_coverage(ds, {artist_key("The Beatles")})
+    assert rep["source_artists_total"] == 2 and rep["source_artists_owned"] == 1
+    assert rep["artist_coverage"] == 0.5
+    assert "The Beatles" in rep["owned"] and "Kool & the Gang" in rep["missing"]
+    assert artist_key("The Beatles") == artist_key("beatles")   # 'the' + case normalized

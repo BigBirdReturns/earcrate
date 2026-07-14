@@ -16,6 +16,42 @@ from earcrate.providers import get, stem_capability
 DEFAULT_STEM_CACHE_BUDGET_GB = 60.0
 
 
+def album_readme_markdown(made: List[Dict[str, Any]], skipped: List[Dict[str, Any]],
+                          params: Dict[str, Any], album_dir: str) -> str:
+    """Render an album's playlist README (pure/deterministic -- no clock, no I/O).
+    Lists every kept track with its persona, seed, score, and gate verdict so the
+    listener knows which are gate-clean vs. flagged (e.g. presence-dark), plus a
+    compact tally of what was skipped and why."""
+    def _verdict(g: Dict[str, Any]) -> str:
+        if not g:
+            return "no-gate"
+        if g.get("passed"):
+            return "PASS" + (" (warn)" if g.get("warnings") else "")
+        return "FLAGGED: " + "; ".join((g.get("failures") or [])[:2])
+    lines = ["# EarCrate album", "",
+             "%d track(s), personas=%s, target=%ss, recognizability_bias=%s." % (
+                 len(made), ",".join(params.get("personas") or []),
+                 params.get("target_seconds"), params.get("recognizability_bias")),
+             "", "Play the WAVs in this folder in order. Gate verdicts are advisory —",
+             "a FLAGGED track (often presence-dark until the bed high-pass lands) is",
+             "still worth an ear; that's the point of an audition album.", "",
+             "| # | persona | seed | score | gate | file |", "|--:|---|--:|--:|---|---|"]
+    for t in made:
+        lines.append("| %d | %s | %s | %s | %s | `%s` |" % (
+            t.get("track"), t.get("taste_profile"), t.get("seed"), t.get("score"),
+            _verdict(t.get("gate") or {}), t.get("wav")))
+    if skipped:
+        from collections import Counter
+        tally = Counter(s.get("taste_profile", "?") for s in skipped)
+        lines += ["", "## Skipped", "",
+                  ", ".join("%s×%d" % (k, v) for k, v in sorted(tally.items())),
+                  "", "First reasons:"]
+        for s in skipped[:8]:
+            lines.append("- **%s**: %s" % (s.get("taste_profile"), s.get("reason")))
+    lines += ["", "_Folder: `%s`_" % album_dir, ""]
+    return "\n".join(lines)
+
+
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
     """Measure every loop of ONE file (decode once, DSP per segment) in a worker
     process. Metrics are persona-independent; classification uses the same
@@ -5742,6 +5778,100 @@ class EarcrateCore:
         result = self.execute_manifest(manifest, apply=True)
         return {"ok": result.get("ok", True) if isinstance(result, dict) else True,
                 "manifest": manifest, "arrangement_sha": arr_sha, "render": result}
+
+    def render_album(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Autonomous 'drop an album' run: compose + render MANY mashups across
+        personas and seeds, dedupe by arrangement, and collect them into ONE album
+        folder with a playlist to audition. Every rendered track is KEPT with its
+        gate verdict noted (a treble-dark render is still worth hearing while the
+        mix is iterated), so the album shows what the box can make right now.
+        Fire-and-forget safe: per-track failures are recorded as skips, never
+        crash the run."""
+        personas = list(data.get("personas") or ["girl_talk_v1", "troubadour_v1", "notorious_v1"])
+        tracks = max(1, int(data.get("tracks") or 10))
+        target_seconds = float(data.get("target_seconds") or 150)
+        raw_bias = data.get("recognizability_bias", "max")
+        bias: Optional[int] = None
+        if raw_bias not in (None, "", "none", "None"):
+            bias = 92 if str(raw_bias).lower() in ("max", "maximize", "high", "1", "true") else int(raw_bias)
+        c = self.ensure_config()
+        stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        album_dir = c.working_root / "renders" / ("album_" + stamp)
+        album_dir.mkdir(parents=True, exist_ok=True)
+        made: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+        seen_sha: set = set()
+        attempts = 0
+        max_attempts = tracks * 6
+        while len(made) < tracks and attempts < max_attempts:
+            progressed = False
+            for pid in personas:
+                if len(made) >= tracks:
+                    break
+                attempts += 1
+                if TASTE_PROFILES.get(pid) is None:
+                    continue
+                try:
+                    if not self.approved_atom_pool(pid):
+                        skipped.append({"taste_profile": pid, "reason": "no approved atoms"}); continue
+                    rd = self.taste_readiness(pid, target_seconds)
+                    if not rd.get("ready"):
+                        skipped.append({"taste_profile": pid, "reason": "crate not ready: " + "; ".join(rd.get("failures") or [])}); continue
+                    seed = self.next_render_seed(c.seed)
+                    params: Dict[str, Any] = {"taste_profile": pid, "target_seconds": target_seconds,
+                                              "seed": seed, "quality_mode": "stable_deck",
+                                              "mix_mode": "tastespec_graph", "post_render_gate": True}
+                    if bias is not None:
+                        params["recognizability_bias"] = bias
+                    proposal = self.propose_taste_mashup(params)
+                    arr_sha = str(proposal.get("arrangement_sha") or "")
+                    if arr_sha and arr_sha in seen_sha:
+                        continue  # identical arrangement -> not a new track
+                    seen_sha.add(arr_sha)
+                    self.execute_manifest(proposal["manifest"], apply=True)
+                    dst = Path(proposal["dst"])
+                    gate = self._album_gate_of(dst)
+                    made.append({"track": len(made) + 1, "taste_profile": pid, "seed": seed,
+                                 "arrangement_sha": arr_sha[:12], "wav": dst.name,
+                                 "score": round(float(self.score_arrangement(proposal["arrangement"])), 4),
+                                 "gate": gate})
+                    progressed = True
+                    self.set_status("album: %d/%d rendered (%s)" % (len(made), tracks, pid),
+                                    len(made) / max(1, tracks), True)
+                except PlanRejectedError as exc:
+                    skipped.append({"taste_profile": pid, "reason": "pre-render gate: " + str(exc)[:140]})
+                except Exception as exc:
+                    skipped.append({"taste_profile": pid, "reason": str(exc)[:180]})
+            if not progressed:
+                break  # nothing more is renderable with the current material
+        params_used = {"personas": personas, "target_seconds": target_seconds,
+                       "recognizability_bias": bias, "tracks_requested": tracks}
+        manifest = {"created": now_utc(), "engine_version": ENGINE_VERSION, "album_dir": str(album_dir),
+                    "params": params_used, "made": len(made), "tracks": made, "skipped": skipped[:60]}
+        (album_dir / "album_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        readme = album_readme_markdown(made, skipped, params_used, str(album_dir))
+        (album_dir / "README.md").write_text(readme, encoding="utf-8")
+        # A committable report at the repo-facing agent_root, so the box can push a
+        # trace of the run back to the branch without the (large) WAVs.
+        with contextlib.suppress(Exception):
+            (c.agent_root / "ALBUM_REPORT.md").write_text(readme, encoding="utf-8")
+        return {"ok": bool(made), "album_dir": str(album_dir), "made": len(made),
+                "tracks": made, "skipped": skipped, "readme": str(album_dir / "README.md")}
+
+    def _album_gate_of(self, dst: Path) -> Dict[str, Any]:
+        """Read the post-render quality gate for a rendered WAV from its sidecar
+        report; returns {} if not found. Never raises."""
+        for cand in (dst.parent / (dst.stem + ".render_report.json"),
+                     dst.with_suffix(".render_report.json")):
+            try:
+                if cand.exists():
+                    rep = json.loads(cand.read_text(encoding="utf-8"))
+                    qg = rep.get("quality_gate") or {}
+                    return {"passed": bool(qg.get("passed")), "failures": qg.get("failures") or [],
+                            "warnings": qg.get("warnings") or []}
+            except Exception:
+                continue
+        return {}
 
     def bakeoff(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Persona bake-off: render the SAME library through several personas so you

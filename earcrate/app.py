@@ -2392,12 +2392,69 @@ class EarcrateCore:
             vocal_like = self.vocal_likelihood(y, c.sample_rate)
             sections = self.estimate_sections(y, c.sample_rate, beat_times, downbeats)
             beats = beat_times
+        # Step-2 per-beat state, guarded (never fail analysis over it); stored in the
+        # npz cache only, not the DB, so 15k tracks don't bloat SQLite.
+        beat_state: Dict[str, Any] = {}
+        if beats.size:
+            with contextlib.suppress(Exception):
+                beat_state = beat_state_features(y, c.sample_rate, beats, downbeats)
         np.savez_compressed(
             cache_path,
-            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like), pcm_sha=pcm, pcm_scope=np.asarray("full")
+            bpm=np.float32(bpm), bpm_confidence=np.float32(bpm_conf), key_root=np.int16(key_root), key_mode=np.int16(key_mode), key_confidence=np.float32(key_conf), loudness_lufs=np.float32(loudness), energy=np.float32(energy), beats=beats.astype(np.float32), downbeats=downbeats.astype(np.float32), sections_json=json.dumps(sections, ensure_ascii=False), beat_state_json=json.dumps(beat_state, ensure_ascii=False), vocal_likelihood=np.float32(vocal_like), pcm_sha=pcm, pcm_scope=np.asarray("full")
         )
         self.store_features(row["id"], bpm, bpm_conf, key_root, key_mode, key_conf, loudness, energy, beats, downbeats, sections, vocal_like)
         self._set_pcm(row["id"], pcm)
+
+    def load_beat_state(self, file_id: str) -> Dict[str, Any]:
+        """Read a file's Step-2 per-beat state from its analysis npz (where it is
+        stored to keep 15k tracks out of SQLite). Returns {} when absent, so callers
+        degrade to grid-only anchors instead of failing."""
+        c = self.ensure_config()
+        row = self.conn().execute("SELECT sha256 FROM files WHERE id=?", (file_id,)).fetchone()
+        if not row or not row["sha256"]:
+            return {}
+        p = c.agent_root / "cache" / "analysis" / f"{row['sha256']}-{ANALYZER_VERSION}.npz"
+        if not p.exists():
+            return {}
+        try:
+            data = np.load(p, allow_pickle=False)
+            bs = json.loads(str(data["beat_state_json"])) if "beat_state_json" in data.files else {}
+            data.close()
+            return bs or {}
+        except Exception:
+            return {}
+
+    def material_regions(self, file_id: str, baseline: bool = False) -> Dict[str, Any]:
+        """LIVE Patch-2 region proposal for one analyzed file: assemble the analysis
+        dict from its features row + the npz beat_state, then propose variable-length
+        MaterialRegions (or the frozen [8,4,2,1] baseline when baseline=True). This is
+        the seam a regions_v2 crate builder consumes; it does not touch the current
+        atom pool, so composition is unchanged until the flip is made deliberately."""
+        from earcrate.materials.regions import propose_regions
+        row = self.conn().execute(
+            "SELECT f.duration_s, ft.bpm, ft.bpm_confidence, ft.beat_grid, ft.downbeats, "
+            "ft.sections, ft.key_root, ft.key_mode FROM files f JOIN features ft ON ft.file_id=f.id "
+            "WHERE f.id=?", (file_id,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "no analyzed features for file", "file_id": file_id}
+        beats = blob_to_array(row["beat_grid"])
+        downbeats = blob_to_array(row["downbeats"])
+        try:
+            sections = json.loads(row["sections"]) if row["sections"] else []
+        except Exception:
+            sections = []
+        analysis = {
+            "id": file_id, "bpm": float(row["bpm"] or 0.0),
+            "bpm_confidence": float(row["bpm_confidence"] or 0.0),
+            "key_root": int(row["key_root"] or 0), "key_mode": int(row["key_mode"] or 1),
+            "beats": [float(x) for x in beats], "downbeats": [float(x) for x in downbeats],
+            "sections": sections, "duration_s": float(row["duration_s"] or 0.0),
+        }
+        beat_state = {} if baseline else self.load_beat_state(file_id)
+        regions = propose_regions(analysis, beat_state or None, baseline=baseline)
+        return {"ok": True, "file_id": file_id, "baseline": bool(baseline),
+                "has_beat_state": bool(beat_state), "count": len(regions),
+                "regions": [r.as_dict() for r in regions]}
 
     def estimate_downbeats(self, y: np.ndarray, sr: int, beat_frames: np.ndarray) -> np.ndarray:
         return _estimate_downbeats(y, sr, beat_frames)

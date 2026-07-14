@@ -1,6 +1,7 @@
 from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.core.config import *
+from earcrate.analyze.beat_features import beat_state_features
 def _clamp01(x: float) -> float:
     return 0.0 if x < 0.0 else (1.0 if x > 1.0 else float(x))
 
@@ -173,7 +174,7 @@ def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
         return {"bpm": 120.0, "bpm_confidence": 0.0, "beats": np.array([], dtype=np.float32),
                 "downbeats": np.array([], dtype=np.float32), "key_root": 0, "key_mode": 1,
                 "key_confidence": 0.0, "loudness_lufs": -70.0, "energy": 0.0,
-                "vocal_likelihood": 0.0, "sections": []}
+                "vocal_likelihood": 0.0, "sections": [], "beat_state": {}}
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo_val = librosa.feature.tempo(onset_envelope=onset_env, sr=sr, aggregate=np.median)
     bpm = float(np.atleast_1d(tempo_val)[0])
@@ -200,9 +201,16 @@ def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
         loudness = float(20 * np.log10(max(1e-9, energy)))
     vocal_like = _vocal_likelihood(y, sr)
     sections = _estimate_sections(y, sr, beat_times, downbeats)
+    # Step-2 per-beat state (role activity/groove/local harmony/novelty). Guarded:
+    # a beat-state failure must never fail the whole file's analysis -- it degrades
+    # to {} and the region/transition layers fall back to grid-only anchors.
+    beat_state: Dict[str, Any] = {}
+    with contextlib.suppress(Exception):
+        beat_state = beat_state_features(y, sr, beat_times, downbeats)
     return {"bpm": bpm, "bpm_confidence": bpm_conf, "beats": beat_times, "downbeats": downbeats,
             "key_root": int(key_root), "key_mode": int(key_mode), "key_confidence": float(key_conf),
-            "loudness_lufs": loudness, "energy": energy, "vocal_likelihood": vocal_like, "sections": sections}
+            "loudness_lufs": loudness, "energy": energy, "vocal_likelihood": vocal_like,
+            "sections": sections, "beat_state": beat_state}
 
 
 def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -234,6 +242,7 @@ def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
             energy=np.float32(feats["energy"]), beats=feats["beats"].astype(np.float32),
             downbeats=feats["downbeats"].astype(np.float32),
             sections_json=json.dumps(feats["sections"], ensure_ascii=False),
+            beat_state_json=json.dumps(feats.get("beat_state") or {}, ensure_ascii=False),
             vocal_likelihood=np.float32(feats["vocal_likelihood"]),
             pcm_sha=pcm,
             pcm_scope=np.asarray("full"),

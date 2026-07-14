@@ -307,6 +307,8 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.run_background(self.core.warm_stems, str(data.get("taste_profile") or "girl_talk_v1"), int(data.get("max_items") or 0))); return
             if path == "/api/stems/warm_status":
                 self._json(200, self.core.stem_warm_status(str(data.get("taste_profile") or "girl_talk_v1"))); return
+            if path == "/api/materials/regions":
+                self._json(200, self.core.material_regions(str(data.get("file_id") or ""), bool(data.get("baseline", False)))); return
             if path == "/api/taste/readiness":
                 self._json(200, self.core.taste_readiness(str(data.get("taste_profile") or "girl_talk_v1"), float(data.get("target_seconds") or 120))); return
             if path == "/api/taste/graph":

@@ -244,3 +244,30 @@ dense collage, so a girl_talk-tuned coverage floor is likely wrong for them. Dim
 (0.56→0.68 from 9× data, still short) suggest **persona-aware coverage thresholds** are the bigger lever
 than yet more material. Recommendation to cloud: per-persona coverage floors (a medley ≠ a wall), or
 far more taste-targeted ingest.
+
+---
+
+## GROUND TRUTH — real Girl Talk vs earcrate output (the gate is badly miscalibrated)
+The library has **93 real Girl Talk tracks** (`Artists/Girl Talk/`). Measured earcrate's own gate metrics
+(`rms_std_db`, `low200_share`, `high3000_share`, replicated in librosa) over 24 of them vs earcrate's
+PASSING girl_talk render:
+
+| metric | REAL Girl Talk (24 trk, mean [min–max]) | earcrate render (PASSES) | gate floor |
+|---|---|---|---|
+| rms_std_db (dynamics) | **5.31** [3.23–7.62] | 3.19 | ≥3.0 |
+| low200_share (bass) | **0.20** [0.07–0.31] | **0.59** | *(none)* |
+| high3000_share (presence) | **0.31** [0.19–0.53] | **0.031** | ≥0.030 |
+
+**earcrate's "passing" render does NOT sound like Girl Talk — it clears floors set 3–10× too low.**
+- **Presence:** real 0.31 vs earcrate 0.031 → **10× less treble/air**; earcrate passes only because the
+  floor is 0.030. This is why the "presence repair recommended" warning fires yet the render still passes.
+- **Bass:** real 0.20 vs earcrate 0.59 → earcrate is a **low-end mud wall**, and there is **no low200
+  ceiling** in the gate to catch it.
+- **Dynamics:** real 5.31 vs earcrate 3.19 → earcrate squeaks over the 3.0 floor.
+
+**Actionable for cloud:** recalibrate the quality gate to the ground-truth Girl Talk distribution —
+`rms_std_db` target ~5 (floor ~3.5), **add a `low200_share` CEILING ~0.30**, `high3000_share` target ~0.30
+(floor ~0.15). And fix the mix itself (it's bass-heavy + treble-dead vs real GT): high-pass/low-shelf the
+instrumental beds + a presence lift. The real albums are a ready-made validation set — a good render
+should land inside the real-GT metric ranges, not just above today's floors.
+(Caveat: metric formulas replicated in librosa; earcrate's exact defs may differ, but a 10× gap ≠ noise.)

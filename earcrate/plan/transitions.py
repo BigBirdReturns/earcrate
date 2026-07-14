@@ -54,11 +54,12 @@ def _clamp01(x: float) -> float:
 # --------------------------------------------------------------------------- #
 # Anchors: musically meaningful in/out points, NOT every beat.                #
 # --------------------------------------------------------------------------- #
-# The kinds we can derive from TODAY's analysis. Vocal-sentence / bass-event /
-# fill anchors need per-beat activity (Step 2) and are intentionally absent here
-# rather than faked from a scalar vocal_likelihood.
-ENTRY_KINDS = ("clean_in", "drop_in", "section_in")
-EXIT_KINDS = ("clean_out", "outro_in", "break_out", "cadence")
+# Grid/section anchors are always available. The activity anchors (drums_in,
+# bass_exit, vocal_start/end, drop) require Step-2 per-beat features; they appear
+# ONLY when a beat_state is supplied, which is exactly what gates the stem-level
+# techniques on until the features exist.
+ENTRY_KINDS = ("clean_in", "drop_in", "section_in", "drums_in", "vocal_start", "drop")
+EXIT_KINDS = ("clean_out", "outro_in", "break_out", "cadence", "bass_exit", "vocal_end", "drop")
 
 
 @dataclass(frozen=True)
@@ -103,7 +104,8 @@ def _nearest_beat_index(beats: List[float], t: float) -> int:
     return best_i
 
 
-def track_anchors(analysis: Dict[str, Any]) -> Dict[str, List[Anchor]]:
+def track_anchors(analysis: Dict[str, Any],
+                  beat_state: Optional[Dict[str, Any]] = None) -> Dict[str, List[Anchor]]:
     """Derive entry (incoming) and exit (outgoing) anchors for one track from its
     stored analysis. Deterministic and audio-free.
 
@@ -112,6 +114,8 @@ def track_anchors(analysis: Dict[str, Any]) -> Dict[str, List[Anchor]]:
       * sections[label,...]  -> section_in / outro_in / break_out / drop_in
       * bpm_confidence       -> per-anchor confidence
       * recurrence hook curve (optional) -> boosts strength of anchors near a hook
+      * beat_state (Step 2, optional) -> drums_in / bass_exit / vocal_start /
+        vocal_end / drop, the activity-derived anchors the stem techniques need
 
     A track with no downbeats yields no anchors (honest: we cannot place a
     grid-aligned transition without a grid)."""
@@ -168,9 +172,102 @@ def track_anchors(analysis: Dict[str, Any]) -> Dict[str, List[Anchor]]:
         elif label == "verse":
             exit_.append(Anchor("exit", "break_out", bi, start, 0.5, conf, lead, tail))
 
+    if beat_state:
+        a_entry, a_exit = _activity_anchors(beat_state, beats, bars_total, bpm_conf)
+        entry.extend(a_entry)
+        exit_.extend(a_exit)
+
     entry.sort(key=lambda a: (a.beat_index, a.kind))
     exit_.sort(key=lambda a: (a.beat_index, a.kind))
     return {"entry": entry, "exit": exit_}
+
+
+# Activity thresholds for calling a role "present" / "absent" at a beat.
+_HI, _LO = 0.5, 0.25
+
+
+def _activity_anchors(beat_state: Dict[str, Any], beats: List[float],
+                      bars_total: float, conf: float) -> Tuple[List[Anchor], List[Anchor]]:
+    """The Step-2 anchors: entrances/exits defined by what the MUSIC does, not just
+    the grid. A clean drum entrance (kick up, bass still down) is the correct place
+    to start a bass swap; a bass departure is where the outgoing low end should
+    leave; vocal edges are sentence boundaries; a novelty spike is a drop."""
+    act = beat_state.get("activity") or {}
+    nov = beat_state.get("novelty") or []
+    kick = act.get("kick") or []
+    bass = act.get("bass") or []
+    vocal = act.get("vocal") or []
+    n = len(kick)
+
+    def t_of(i: int) -> float:
+        return float(beats[i]) if i < len(beats) else (float(beats[-1]) if beats else 0.0)
+
+    def lead(i: int) -> float:
+        return i / 4.0
+
+    def tail(i: int) -> float:
+        return max(0.0, bars_total - i / 4.0)
+
+    entry: List[Anchor] = []
+    exit_: List[Anchor] = []
+    for i in range(1, n):
+        # drums_in: a downbeat where incoming drums play but bass does not -- the
+        # clean-drum region a bass swap rides in on (not necessarily a fresh
+        # entrance; any bass-free drum bar works).
+        if i % 4 == 0 and kick[i] >= _HI and bass[i] <= _LO:
+            entry.append(Anchor("entry", "drums_in", i, t_of(i), kick[i], conf, lead(i), tail(i)))
+        if bass[i - 1] >= _HI and bass[i] <= _LO:
+            exit_.append(Anchor("exit", "bass_exit", i, t_of(i), bass[i - 1], conf, lead(i), tail(i)))
+        if i < len(vocal) and vocal[i] >= _HI and vocal[i - 1] < _LO:
+            entry.append(Anchor("entry", "vocal_start", i, t_of(i), vocal[i], conf, lead(i), tail(i)))
+        if i < len(vocal) and vocal[i - 1] >= _HI and vocal[i] < _LO:
+            exit_.append(Anchor("exit", "vocal_end", i, t_of(i), vocal[i - 1], conf, lead(i), tail(i)))
+    for i in range(len(nov)):
+        if nov[i] >= 0.85:
+            entry.append(Anchor("entry", "drop", i, t_of(i), nov[i], conf, lead(i), tail(i)))
+            exit_.append(Anchor("exit", "drop", i, t_of(i), nov[i], conf, lead(i), tail(i)))
+    return entry, exit_
+
+
+# Role-collision weights per technique: which simultaneous roles are RISKY. Two
+# bass lines are almost always bad; two kicks flam; two leads/vocals clash; two
+# percussion layers are often fine. hard_cut has no overlap so no collisions.
+_COLLISION_W: Dict[str, Dict[str, float]] = {
+    "long_blend": {"bass": 1.0, "vocal": 0.8, "lead": 0.5, "kick": 0.3, "snare": 0.1, "hat": 0.0},
+    "bass_swap": {"bass": 1.0, "vocal": 0.5, "lead": 0.4, "kick": 0.2, "snare": 0.1, "hat": 0.0},
+    "double_drop": {"bass": 1.0, "kick": 0.9, "lead": 0.8, "vocal": 0.6, "snare": 0.3, "hat": 0.1},
+    "echo_out": {"bass": 0.3, "vocal": 0.3, "lead": 0.2, "kick": 0.1, "snare": 0.0, "hat": 0.0},
+    "hard_cut": {},
+}
+
+
+def _role_collision(a_state: Optional[Dict[str, Any]], b_state: Optional[Dict[str, Any]],
+                    a_exit_beat: int, b_entry_beat: int, dur_bars: int,
+                    tech_name: str) -> Tuple[float, Dict[str, float]]:
+    """C_s(c): per-role co-activity across the overlap, weighted by how risky that
+    role's collision is for THIS technique. Returns (normalized penalty [0,1],
+    per-role co-activity). The outgoing track's tail continues from its exit; the
+    incoming head plays from its entry; they are compared beat-for-beat."""
+    w = _COLLISION_W.get(tech_name, {})
+    if not a_state or not b_state or dur_bars <= 0 or not w:
+        return 0.0, {}
+    aA = a_state.get("activity") or {}
+    aB = b_state.get("activity") or {}
+    K = dur_bars * 4
+    per: Dict[str, float] = {}
+    for role in w:
+        ra = aA.get(role) or []
+        rb = aB.get(role) or []
+        vals = []
+        for k in range(K):
+            ia, ib = a_exit_beat + k, b_entry_beat + k
+            if ia < len(ra) and ib < len(rb):
+                vals.append(float(ra[ia]) * float(rb[ib]))
+        if vals:
+            per[role] = sum(vals) / len(vals)
+    tw = sum(w.values()) or 1.0
+    penalty = sum(w[r] * c for r, c in per.items()) / tw
+    return _clamp01(penalty), {r: _r(c) for r, c in per.items()}
 
 
 def _hook_spans(analysis: Dict[str, Any]) -> List[Tuple[float, float, float]]:
@@ -230,14 +327,14 @@ TECHNIQUES: Tuple[TransitionTemplate, ...] = (
         w={"phrase": 0.8, "impact": 0.1, "harmonic": 0.8, "energy": 0.5},
         r={"grid": 0.7, "collision": 0.6}),
     TransitionTemplate(
-        "bass_swap", entry_kinds=("clean_in",),
-        exit_kinds=("clean_out", "break_out"),
+        "bass_swap", entry_kinds=("drums_in",),
+        exit_kinds=("bass_exit", "break_out"),
         min_grid_conf=0.6, max_tempo_warp=0.06, needs_stem_activity=True,
         w={"phrase": 0.7, "impact": 0.3, "harmonic": 0.5, "energy": 0.4},
         r={"grid": 0.6, "collision": 0.9}),
     TransitionTemplate(
-        "double_drop", entry_kinds=("drop_in",),
-        exit_kinds=("cadence",),
+        "double_drop", entry_kinds=("drop",),
+        exit_kinds=("drop", "cadence"),
         min_grid_conf=0.75, max_tempo_warp=0.06, needs_stem_activity=True,
         w={"phrase": 0.9, "impact": 1.0, "harmonic": 0.6, "energy": 0.8},
         r={"grid": 0.8, "collision": 1.0}),
@@ -316,20 +413,25 @@ def derive_duration(tech: TransitionTemplate, a_exit: Anchor, b_entry: Anchor,
         return 0
     if tech.name == "echo_out":
         return 4 if grid_conf >= 0.5 else 2
-    avail = max(0.0, min(a_exit.safe_lead_bars, b_entry.safe_tail_bars))
+    # Overlapping techniques play BOTH tracks forward from their anchors, so the
+    # available material is the outgoing TAIL after its exit and the incoming tail
+    # after its entry -- not the outgoing lead-in (that has already played).
+    avail = max(0.0, min(a_exit.safe_tail_bars, b_entry.safe_tail_bars))
     if tech.name == "long_blend":
         want = 32.0 if (grid_conf >= 0.8 and avail >= 32.0) else 16.0
-        return int(min(want, max(8.0, avail)))
+        return int(min(want, avail))
     if tech.name == "bass_swap":
-        return int(min(8.0, max(4.0, avail)))
+        return int(min(8.0, avail))
     if tech.name == "double_drop":
-        return int(min(8.0, max(4.0, avail)))
+        return int(min(8.0, avail))
     return int(max(1.0, min(8.0, avail)))
 
 
 def _score_plan(tech: TransitionTemplate, a: Dict[str, Any], b: Dict[str, Any],
                 a_exit: Anchor, b_entry: Anchor, set_state: Dict[str, Any],
-                grid_conf: float) -> Tuple[Dict[str, float], float, List[str]]:
+                grid_conf: float, dur_bars: int = 0,
+                a_state: Optional[Dict[str, Any]] = None,
+                b_state: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, float], float, List[str]]:
     warp = _tempo_warp(float(a.get("bpm") or 0), float(b.get("bpm") or 0))
     harmonic = _harmonic_compat(a, b)
     phrase = 0.5 * (a_exit.strength + b_entry.strength)
@@ -350,27 +452,45 @@ def _score_plan(tech: TransitionTemplate, a: Dict[str, Any], b: Dict[str, Any],
     # risks: shaky grid, and a tempo warp beyond what the technique tolerates
     grid_risk = tech.r["grid"] * (1.0 - grid_conf)
     warp_over = max(0.0, warp - tech.max_tempo_warp)
-    collision = tech.r["collision"] * min(1.0, warp_over / max(1e-6, tech.max_tempo_warp or 1.0))
-    total = benefits - grid_risk - collision
+    warp_risk = tech.r["collision"] * min(1.0, warp_over / max(1e-6, tech.max_tempo_warp or 1.0))
+    # role collision C_s(c): needs per-beat activity (Step 2). 0 without it.
+    role_penalty, per_role = _role_collision(a_state, b_state, a_exit.beat_index,
+                                             b_entry.beat_index, dur_bars, tech.name)
+    role_risk = tech.r["collision"] * role_penalty
+    total = benefits - grid_risk - warp_risk - role_risk
     failures: List[str] = []
     if grid_conf < 0.5:
         failures.append("low beat-grid confidence (%.2f)" % grid_conf)
     if warp > tech.max_tempo_warp:
         failures.append("tempo warp %.1f%% exceeds %s limit %.1f%%"
                         % (warp * 100, tech.name, tech.max_tempo_warp * 100))
+    if per_role.get("bass", 0.0) >= 0.4:
+        failures.append("bass-vs-bass collision %.2f across the overlap" % per_role["bass"])
+    if per_role.get("vocal", 0.0) >= 0.4:
+        failures.append("two lead vocals overlap %.2f" % per_role["vocal"])
     scores = {
         "phrase": phrase, "impact": impact, "harmonic": harmonic,
-        "energy": energy, "grid_risk": grid_risk, "collision_risk": collision,
+        "energy": energy, "grid_risk": grid_risk, "warp_risk": warp_risk,
+        "role_collision": role_risk,
     }
     return scores, total, failures
 
 
 def _preconditions(tech: TransitionTemplate, a: Dict[str, Any], b: Dict[str, Any],
-                   a_exit: Anchor, b_entry: Anchor, grid_conf: float) -> Tuple[bool, List[str]]:
+                   a_exit: Anchor, b_entry: Anchor, grid_conf: float,
+                   have_state: bool = False) -> Tuple[bool, List[str]]:
     reasons: List[str] = []
-    if tech.needs_stem_activity:
+    if tech.needs_stem_activity and not have_state:
         reasons.append("%s needs per-beat stem activity (Step 2); disabled" % tech.name)
         return False, reasons
+    # Overlapping techniques need enough clean material AFTER both anchors to run.
+    _MIN_TAIL = {"long_blend": 8.0, "bass_swap": 4.0, "double_drop": 4.0, "echo_out": 2.0}
+    need = _MIN_TAIL.get(tech.name)
+    if need is not None:
+        avail = min(a_exit.safe_tail_bars, b_entry.safe_tail_bars)
+        if avail < need:
+            reasons.append("%s needs >=%d bars after both anchors, have %.1f"
+                           % (tech.name, int(need), avail))
     if a_exit.kind not in tech.exit_kinds:
         reasons.append("exit anchor %r not valid for %s" % (a_exit.kind, tech.name))
     if b_entry.kind not in tech.entry_kinds:
@@ -386,37 +506,50 @@ def _preconditions(tech: TransitionTemplate, a: Dict[str, Any], b: Dict[str, Any
 
 def generate_transition_candidates(a: Dict[str, Any], b: Dict[str, Any],
                                    set_state: Optional[Dict[str, Any]] = None,
-                                   top_k: int = 8) -> List[TransitionPlan]:
+                                   top_k: int = 8,
+                                   a_state: Optional[Dict[str, Any]] = None,
+                                   b_state: Optional[Dict[str, Any]] = None) -> List[TransitionPlan]:
     """All viable transition plans from outgoing ``a`` to incoming ``b``, scored
     and ranked. For every technique x valid exit-anchor x valid entry-anchor we
     instantiate a plan, drop it if it fails the technique's HARD preconditions,
     otherwise derive its duration and score it. Deterministic order (score desc,
     then technique/beat for stable ties).
 
+    ``a_state``/``b_state`` are the optional Step-2 beat states. WITHOUT them the
+    stem techniques (bass_swap, double_drop) generate nothing (their anchors don't
+    exist) and role collisions are unknown -- honest degradation. WITH them, the
+    activity anchors appear, the stem techniques become reachable, and each plan is
+    penalized for bass/vocal/lead collisions across its actual overlap.
+
     The UNCERTAINTY RULE is structural, not cosmetic: a low-confidence grid fails
     the ``min_grid_conf`` precondition of long_blend/double_drop, so those simply
     are not generated -- what survives is the robust cut / echo. The planner
     therefore abstains from a fragile blend instead of attempting it."""
     set_state = set_state or {}
-    a_anchors = track_anchors(a)["exit"]
-    b_anchors = track_anchors(b)["entry"]
+    a_anchors = track_anchors(a, a_state)["exit"]
+    b_anchors = track_anchors(b, b_state)["entry"]
     grid_conf = min(_clamp01(float(a.get("bpm_confidence") or 0.0)),
                     _clamp01(float(b.get("bpm_confidence") or 0.0)))
     a_id = str(a.get("id") or a.get("file_id") or "A")
     b_id = str(b.get("id") or b.get("file_id") or "B")
+    have_state = bool(a_state and b_state)
     plans: List[TransitionPlan] = []
     for tech in TECHNIQUES:
+        # Stem techniques stay disabled until BOTH beat states are supplied.
+        if tech.needs_stem_activity and not have_state:
+            continue
         for a_exit in a_anchors:
             if a_exit.kind not in tech.exit_kinds:
                 continue
             for b_entry in b_anchors:
                 if b_entry.kind not in tech.entry_kinds:
                     continue
-                ok, _reasons = _preconditions(tech, a, b, a_exit, b_entry, grid_conf)
+                ok, _reasons = _preconditions(tech, a, b, a_exit, b_entry, grid_conf, have_state)
                 if not ok:
                     continue
-                scores, total, failures = _score_plan(tech, a, b, a_exit, b_entry, set_state, grid_conf)
                 dur = derive_duration(tech, a_exit, b_entry, grid_conf)
+                scores, total, failures = _score_plan(
+                    tech, a, b, a_exit, b_entry, set_state, grid_conf, dur, a_state, b_state)
                 plans.append(TransitionPlan(
                     outgoing=a_id, incoming=b_id, technique=tech.name,
                     a_exit_beat=a_exit.beat_index, b_entry_beat=b_entry.beat_index,
@@ -427,9 +560,12 @@ def generate_transition_candidates(a: Dict[str, Any], b: Dict[str, Any],
 
 
 def best_transition(a: Dict[str, Any], b: Dict[str, Any],
-                    set_state: Optional[Dict[str, Any]] = None) -> Optional[TransitionPlan]:
+                    set_state: Optional[Dict[str, Any]] = None,
+                    a_state: Optional[Dict[str, Any]] = None,
+                    b_state: Optional[Dict[str, Any]] = None) -> Optional[TransitionPlan]:
     """The single highest-scoring viable plan, or None when NOTHING is viable
     (e.g. no grid on either track) -- the caller should then hold/skip rather than
     force an unmusical transition."""
-    cands = generate_transition_candidates(a, b, set_state, top_k=1)
+    cands = generate_transition_candidates(a, b, set_state, top_k=1,
+                                           a_state=a_state, b_state=b_state)
     return cands[0] if cands else None

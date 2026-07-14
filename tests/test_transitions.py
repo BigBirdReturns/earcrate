@@ -114,3 +114,47 @@ def test_energy_intent_shapes_the_score():
     lift = best_transition(a, b, {"energy_intent": "lift"})
     release = best_transition(a, b, {"energy_intent": "release"})
     assert lift.scores["energy"] > release.scores["energy"]
+
+
+def _state(nb, bass, kick=0.8, vocal=0.1, nov=None):
+    return {"activity": {"kick": [kick] * nb, "bass": bass, "snare": [0.1] * nb,
+                         "vocal": [vocal] * nb, "lead": [0.1] * nb, "hat": [0.2] * nb},
+            "novelty": nov if nov is not None else [0.2] * nb}
+
+
+def _aligned_track(tid):
+    bars = 16; n = bars * 4; bi = 60.0 / 128.0
+    beats = [round(i * bi, 4) for i in range(n + 1)]
+    db = [beats[i] for i in range(0, n, 4)]
+    return {"id": tid, "bpm": 128.0, "bpm_confidence": 0.9, "key_root": 0, "key_mode": 1,
+            "energy": 0.6, "beats": beats, "downbeats": db, "duration_s": beats[-1],
+            "sections": [{"start": 0.0, "end": beats[8], "label": "intro", "energy": 0.2},
+                         {"start": beats[8], "end": beats[-1], "label": "chorus", "energy": 0.8}]}, n - 1
+
+
+def test_step2_state_unlocks_stem_techniques():
+    (a, nb), (b, _) = _aligned_track("A"), _aligned_track("B")
+    a_state = _state(nb, [0.8] * 8 + [0.1] * (nb - 8))      # bass exits at beat 8
+    b_state = _state(nb, [0.1] * 16 + [0.8] * (nb - 16))    # clean drums, bass in later
+    # Without state, stem techniques are impossible; with state they become reachable.
+    # top_k is large so the rarer stem candidates are not truncated behind the many
+    # cut/echo/blend candidates.
+    without = {c.technique for c in generate_transition_candidates(a, b, {}, top_k=999)}
+    with_st = {c.technique for c in generate_transition_candidates(a, b, {}, top_k=999,
+                                                                   a_state=a_state, b_state=b_state)}
+    assert "bass_swap" not in without and "double_drop" not in without
+    assert "bass_swap" in with_st, "a bass exit + a clean drum entrance should enable a bass swap"
+
+
+def test_role_collision_penalizes_bass_over_bass():
+    (a, nb), (b, _) = _aligned_track("A"), _aligned_track("B")
+    bassy = _state(nb, [0.9] * nb)
+    clean = _state(nb, [0.05] * nb)
+    def max_blend_collision(b_state):
+        cs = [c for c in generate_transition_candidates(a, b, {}, top_k=64, a_state=bassy, b_state=b_state)
+              if c.technique == "long_blend"]
+        return max((c.scores["role_collision"] for c in cs), default=0.0)
+    both_bassy = max_blend_collision(bassy)
+    b_clean = max_blend_collision(clean)
+    assert both_bassy > b_clean, (both_bassy, b_clean)
+    assert both_bassy > 0.1, "two sustained bass lines across the overlap must be penalized"

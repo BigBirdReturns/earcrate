@@ -1453,5 +1453,27 @@
       "Hardware soak suite: GPU util, high-water VRAM, RTF, browser frame p95<32ms, /api/status p95<100ms, audio seek p95<100ms, 0 underruns, preemption <=1 segment, 0 OOM after calibration."
     ],
     "governing_objective": "Maximize completed musical work per minute SUBJECT TO a hard responsiveness budget (browser frames, audio, mouse). 88% GPU with stable latency beats nominal saturation that drops UI frames."
+  },
+  "remix_persona_program": {
+    "what": "REMIX personas: one foreground element over a bed REBUILT in a DJ/producer style (distinct from the mashup personas). Per-persona SPECTRAL GATE (each TasteSpec spectral_target, merged over GT) so each is judged on its own aesthetic.",
+    "built": [
+      "remix_branchez_v1 (melodic chill-trap, bright/808/130-145bpm)",
+      "remix_prettylights_v1 (chopped soul, warm/vinyl/90-100bpm)"
+    ],
+    "builder": "earcrate/tastespec/remix_builder.build_remix_persona(spec) -> schema-valid TasteSpec from a compact style fingerprint; canonical transform budgets + weights-sum-to-1 enforced so a roster fan-out only supplies style numbers. Gated (test_remix_builder).",
+    "roster_in_progress": "Scouting the most-broken-down producers of the last ~2 decades (J Dilla/Madlib/RJD2/Avalanches/Flying Lotus/Kaytranada/DJ Shadow/Danger Mouse-tier) -> fingerprint each -> build_remix_persona -> profiles/*.json (auto-register + auto-embed).",
+    "still_todo": "The EXTERNAL-TARGET remix path: intake a fresh out-of-library track (analyze + separate its vocal), then compose a style-bed under it. Owner will provide test tracks. The personas define the bed STYLE; the target-vocal-as-foreground injection is the remaining composition wiring."
+  },
+  "morphing_roadmap (owner fun-thought)": {
+    "idea": "Use the GPU for MORPHING, not just separation: voice conversion, genre/timbre transfer, lyric/melody morph, lo-fi degradation. Flagship use case: chill lullaby cuts made from pop + classical songs, RENDERED ON BABY TOYS (toy piano / music box / speak-n-spell timbre).",
+    "shape": "A new TRANSFORM PROVIDER seam (mirror the StemProvider): morph(pcm, recipe) -> new artifact, content-addressed in L3, GPU-scheduled behind the same one-worker governor. Never source-of-truth.",
+    "candidate_models (box, unverifiable in cloud)": [
+      "voice conversion: RVC / so-vits-svc (sing/speak timbre swap)",
+      "timbre transfer: DDSP / neural instrument morph (-> toy-piano/music-box)",
+      "lo-fi render: neural codec bottleneck / bitcrush+wow-flutter+tape as a deterministic DSP first pass",
+      "style/genre morph: latent-space interpolation or a trained remix-transition ranker"
+    ],
+    "first_cheap_step (cloud-doable)": "A DETERMINISTIC lo-fi/toy-render DSP (bitcrush, sample-rate reduction, wow/flutter, band-limit to a music-box-ish partial set, gentle detune) as a transform provider -- provable here on synthetic audio, no models. The neural morphs (voice/timbre) layer on top as GPU providers.",
+    "status": "logged, NOT built. Exploratory; needs owner priority vs the remix roster + the transition Patches 2-5 + the mix bed-high-pass fix."
   }
 }

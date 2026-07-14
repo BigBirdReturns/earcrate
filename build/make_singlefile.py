@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / "earcrate"
-ORDER = ["tastespec/profiles.py", "core/deps.py", "core/util.py", "core/wavinfo.py", "analyze/decode.py", "deck/dsp.py",
+ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", "core/util.py", "core/wavinfo.py", "analyze/decode.py", "deck/dsp.py",
          "deck/transform.py", "deck/lattice.py", "ear/readiness.py", "judge/audio.py",
          "deck/harmony.py", "core/config.py", "analyze/features.py", "analyze/beat_features.py", "librarian/ingest.py",
          "providers/__init__.py", "providers/artifacts.py", "providers/stems.py", "providers/retrieval.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]

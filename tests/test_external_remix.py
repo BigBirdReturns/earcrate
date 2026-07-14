@@ -23,11 +23,77 @@ def configured_core(tmp_path: Path) -> EarcrateCore:
 # ---- pure: anchor is READ off the target, folded into a sane render range ----
 
 def test_remix_anchor_reads_and_guards_tempo():
-    a = remix_anchor({"bpm": 148.0, "key_root": 7, "key_mode": 0, "key_confidence": 0.8})
-    assert a["bpm"] == 148.0 and a["key_root"] == 7 and a["key_mode"] == 0
+    # In-band, confident read: passes through untouched (root/mode/tempo).
+    a = remix_anchor({"bpm": 96.0, "key_root": 7, "key_mode": 0, "key_confidence": 0.8})
+    assert a["bpm"] == 96.0 and a["key_root"] == 7 and a["key_mode"] == 0
+    assert a["anchor_source"]["bpm_from"] == "vocal" and a["anchor_source"]["key_from"] == "vocal"
     # A garbage/near-zero tempo (arrhythmic acapella) falls back to a usable grid.
     assert remix_anchor({"bpm": 0.0, "key_root": 13})["bpm"] == 120.0
     assert remix_anchor({"bpm": 0.0, "key_root": 13})["key_root"] == 1  # 13 % 12
+
+
+# ---- F2: BPM octave disambiguation. A bare acapella's tempo estimate famously
+#      doubles (76 -> a confident 152). The bed's own tempos, or the vocal-plausible
+#      band, must fold that clean 2x back down instead of railing the bed double-time ----
+
+def test_remix_anchor_bpm_folds_to_bed_median():
+    # Bill Withers case: vocal reads a confident 152 (2x of ~76); the library bed lives
+    # around 95-115 BPM. The bed's median pulls the vocal's octave down to 76.
+    bed = [96.0, 104.0, 110.0, 100.0, 115.0]
+    a = remix_anchor({"bpm": 152.0, "key_root": 9, "key_mode": 0, "key_confidence": 0.9,
+                      "bpm_confidence": 0.96}, bed_tempos=bed)
+    assert abs(a["bpm"] - 76.0) < 1e-6, a["bpm"]
+    assert a["anchor_source"]["bpm_from"] == "bed_matched"
+    assert a["anchor_source"]["bpm_raw"] == 152.0
+
+
+def test_remix_anchor_bpm_halves_without_bed():
+    # No bed hints: a >130 read is folded into the vocal-plausible band [60,120].
+    a = remix_anchor({"bpm": 152.0, "key_root": 9, "key_mode": 0, "key_confidence": 0.9})
+    assert abs(a["bpm"] - 76.0) < 1e-6, a["bpm"]
+    assert a["anchor_source"]["bpm_from"] == "halved"
+
+
+# ---- F2: key-confidence floor. A key pinned at ~0.2 is a guess. We must NOT transpose
+#      a whole library bed to it — defer to the bed's own dominant key ----
+
+def test_remix_anchor_guessed_key_defers_to_bed():
+    # Vocal key is a 0.17-confidence guess (root 3); the bed is overwhelmingly root 8.
+    bed_keys = [(8, 0.9), (8, 0.8), (8, 0.7), (3, 0.2), (1, 0.1)]
+    a = remix_anchor({"bpm": 100.0, "key_root": 3, "key_mode": 1, "key_confidence": 0.17},
+                     bed_keys=bed_keys)
+    assert a["key_root"] == 8, a["key_root"]  # bed's dominant key wins, not the guess
+    assert a["anchor_source"]["key_from"] == "bed_dominant"
+
+
+def test_remix_anchor_confident_key_is_kept():
+    # A confident key (0.85) is NOT overridden even when the bed leans elsewhere.
+    bed_keys = [(8, 0.9), (8, 0.9), (8, 0.9)]
+    a = remix_anchor({"bpm": 100.0, "key_root": 3, "key_mode": 1, "key_confidence": 0.85},
+                     bed_keys=bed_keys)
+    assert a["key_root"] == 3, a["key_root"]  # vocal key stands
+    assert a["anchor_source"]["key_from"] == "vocal"
+
+
+def test_remix_anchor_backward_compatible_no_hints():
+    # Calling with no bed hints still returns every original key (nothing downstream breaks).
+    a = remix_anchor({"bpm": 100.0, "key_root": 5, "key_mode": 1, "key_confidence": 0.6,
+                      "bpm_confidence": 0.7, "vocal_likelihood": 0.8})
+    for k in ("bpm", "key_root", "key_mode", "key_confidence", "bpm_confidence", "vocal_likelihood"):
+        assert k in a, k
+    assert a["bpm"] == 100.0 and a["key_root"] == 5 and a["key_mode"] == 1
+    # Low-confidence key with no bed keeps the vocal key (marked, not transposed).
+    b = remix_anchor({"bpm": 100.0, "key_root": 5, "key_mode": 1, "key_confidence": 0.1})
+    assert b["key_root"] == 5 and b["anchor_source"]["key_from"] == "vocal"
+
+
+def test_remix_anchor_is_deterministic():
+    feats = {"bpm": 152.0, "key_root": 3, "key_mode": 0, "key_confidence": 0.15}
+    bed_tempos = [96.0, 104.0, 110.0]
+    bed_keys = [(8, 0.9), (8, 0.8), (3, 0.2)]
+    first = remix_anchor(feats, bed_tempos=bed_tempos, bed_keys=bed_keys)
+    for _ in range(5):
+        assert remix_anchor(feats, bed_tempos=list(bed_tempos), bed_keys=list(bed_keys)) == first
 
 
 # ---- pure: the dropped vocal atom is shaped so the composer rails it, and its

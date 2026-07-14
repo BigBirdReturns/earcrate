@@ -3703,12 +3703,17 @@ class EarcrateCore:
         duration_s = float(y_full.size) / float(sr) if y_full.size else 0.0
         y_feat = y_full[: sr * MAX_ANALYSIS_SECONDS] if y_full.size > sr * MAX_ANALYSIS_SECONDS else y_full
         feats = compute_pcm_features(y_feat, sr)
-        anchor = remix_anchor(feats)
+        # The library supplies ONLY the bed. Fetch it BEFORE anchoring so the bed's own
+        # tempos/keys can disambiguate the acapella's octave-error-prone estimates: a
+        # doubled vocal read folds to where the crate actually lives, and a guessed key
+        # (low confidence) defers to the bed's dominant key instead of transposing it.
+        pool = self.approved_atom_pool(taste_profile)
+        bed_tempos = [float(x["bpm"]) for x in pool if x.get("bpm")]
+        bed_keys = [(int(x["key_root"]), float(x.get("score") or 0.0)) for x in pool if x.get("key_root") is not None]
+        anchor = remix_anchor(feats, bed_tempos=bed_tempos, bed_keys=bed_keys)
         pcm_sha = decoded_audio_sha256(tp, sr, duration_s)
         title = safe_name(str(params.get("name") or tp.stem or "target"), "target")
         ext_atom = external_foreground_atom(title, anchor, duration_s, pcm_sha, str(tp))
-        # The library supplies ONLY the bed. Feasibility is judged at the anchor.
-        pool = self.approved_atom_pool(taste_profile)
         profile = TASTE_PROFILES[taste_profile]
         target_seconds = float(params.get("target_seconds") or min(duration_s or 120.0, 240.0))
         needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))

@@ -25,32 +25,118 @@ gate-tested without decoding audio; the EarcrateCore method wires analysis + ren
 """
 from __future__ import annotations
 
+import math
+from statistics import median
 from typing import Any, Dict, List, Optional, Tuple
 
 # Ear-roles that count as a usable bed under an external vocal. A remix needs a
 # structural floor (drums/chords/riff) at minimum; bass and sparks are enrichment.
 _FLOOR_ROLES = ("DRUM_BREAK", "BED_CHORD", "RIFF_ID", "TEXTURE")
 
+# Musical band an anchor tempo must land in. Octave candidates outside this are
+# discarded; the vocal-plausible sub-band [60,120] is where sung material lives
+# (an acapella that reads >120 is almost always a doubled estimate).
+_TEMPO_BAND = (60.0, 180.0)
+_VOCAL_BAND = (60.0, 120.0)
 
-def remix_anchor(feats: Dict[str, Any]) -> Dict[str, Any]:
-    """Read the render anchor (tempo + key) off the target vocal's analyzed features.
 
-    ``compute_pcm_features`` already folds bpm into [70, 180]; we only guard against a
-    zero/garbage tempo (a near-silent or arrhythmic acapella) by falling back to a
-    neutral 120 so the bed still has a grid to lock to. Returns the pin the deck is
-    forced to — NOT a search space."""
-    bpm = float(feats.get("bpm") or 0.0)
-    if not (40.0 <= bpm <= 260.0):
-        bpm = 120.0
+def _octave_candidates(v: float) -> List[float]:
+    """Octave-shifted tempo candidates for ``v`` that fall in the musical band.
+
+    Tempo estimators on acapellas famously octave-error (double or halve the true
+    pulse). We enumerate v, v/2, v*2, v/4, v*4, keep the ones inside [60,180], and
+    let the caller pick — anchoring the vocal's OWN octave, never retuning it to a
+    foreign tempo. De-duplicated, order-stable, and never empty (raw v is the floor)."""
+    seen: List[float] = []
+    for factor in (1.0, 0.5, 2.0, 0.25, 4.0):
+        cand = round(v * factor, 6)
+        if _TEMPO_BAND[0] <= cand <= _TEMPO_BAND[1] and not any(abs(cand - s) < 1e-6 for s in seen):
+            seen.append(cand)
+    return seen or [round(v, 6)]
+
+
+def _dominant_bed_key(bed_keys: List[Tuple[int, float]]) -> Optional[int]:
+    """Score-weighted dominant key root across the library bed (deterministic).
+
+    Ties break to the lowest root so identical input always yields identical output."""
+    agg: Dict[int, float] = {}
+    for root, weight in bed_keys:
+        r = int(root) % 12
+        agg[r] = agg.get(r, 0.0) + max(0.0, float(weight))
+    if not agg:
+        return None
+    return max(sorted(agg.keys()), key=lambda k: agg[k])
+
+
+def remix_anchor(feats: Dict[str, Any],
+                 bed_tempos: Optional[List[float]] = None,
+                 bed_keys: Optional[List[Tuple[int, float]]] = None) -> Dict[str, Any]:
+    """Read the render anchor (tempo + key) off the target vocal, disambiguating the
+    worst-case failure modes of tempo/key estimation on a bare acapella.
+
+    ``compute_pcm_features`` folds bpm into a band but is blind to OCTAVE errors: a
+    76 BPM acapella routinely reads as a confident 152 (a clean 2x), and the whole bed
+    then conforms to double-time. Likewise a key pinned at ~0.2 confidence is a guess we
+    must not transpose a whole library bed to. So:
+
+      * BPM: enumerate the vocal's octave candidates in [60,180]. With ``bed_tempos``,
+        lock to the candidate closest (log-distance) to the bed's MEDIAN — the library
+        material pulls a doubled vocal back down to where real loops live. Without a bed,
+        prefer the vocal-plausible band [60,120]; halve a >130 read (V/2 >= 60).
+      * KEY: if ``key_confidence < 0.30`` the key is a guess — never hard-pin it. Given
+        ``bed_keys`` ((root, weight) per bed atom), adopt the score-weighted dominant bed
+        key (let the bed's natural key win). Otherwise keep the vocal key, low-confidence.
+
+    Backward compatible: ``remix_anchor(feats)`` with no hints still returns every original
+    key. An ``anchor_source`` receipt records what drove each choice for inspection."""
+    raw_bpm = float(feats.get("bpm") or 0.0)
+    if not (40.0 <= raw_bpm <= 260.0):
+        raw_bpm = 120.0
+
+    candidates = _octave_candidates(raw_bpm)
+    bpm = raw_bpm
+    bpm_from = "vocal"
+    tempos = [float(t) for t in (bed_tempos or []) if t and float(t) > 0.0]
+    if tempos:
+        med = float(median(tempos))
+        target = math.log2(med) if med > 0 else math.log2(max(1e-6, raw_bpm))
+        bpm = min(candidates, key=lambda c: abs(math.log2(c) - target))
+        bpm_from = "bed_matched" if abs(bpm - raw_bpm) > 1e-6 else "vocal"
+    else:
+        in_band = [c for c in candidates if _VOCAL_BAND[0] <= c <= _VOCAL_BAND[1]]
+        if _VOCAL_BAND[0] <= raw_bpm <= _VOCAL_BAND[1]:
+            bpm = raw_bpm
+        elif in_band:
+            bpm = min(in_band, key=lambda c: abs(math.log2(c) - math.log2(raw_bpm)))
+        elif raw_bpm > 130.0 and (raw_bpm / 2.0) >= _VOCAL_BAND[0]:
+            bpm = raw_bpm / 2.0
+        bpm_from = "halved" if bpm < raw_bpm - 1e-6 else "vocal"
+
     key_root = int(feats.get("key_root") or 0) % 12
     key_mode = int(feats.get("key_mode") if feats.get("key_mode") is not None else 1)
+    key_conf = float(feats.get("key_confidence") or 0.0)
+    key_from = "vocal"
+    if key_conf < 0.30:
+        # The vocal's key is a guess: do NOT hard-pin it (a whole library bed would be
+        # transposed to a coin-flip). Prefer the bed's own dominant key when we have one.
+        dom = _dominant_bed_key(bed_keys) if bed_keys else None
+        if dom is not None:
+            key_root = dom
+            key_from = "bed_dominant"
+
     return {
         "bpm": round(bpm, 3),
         "key_root": key_root,
         "key_mode": key_mode,
-        "key_confidence": float(feats.get("key_confidence") or 0.0),
+        "key_confidence": key_conf,
         "bpm_confidence": float(feats.get("bpm_confidence") or 0.0),
         "vocal_likelihood": float(feats.get("vocal_likelihood") or 0.0),
+        "anchor_source": {
+            "bpm_raw": round(raw_bpm, 3),
+            "bpm_from": bpm_from,
+            "key_from": key_from,
+            "key_conf": key_conf,
+        },
     }
 
 

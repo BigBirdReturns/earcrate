@@ -5834,7 +5834,7 @@ class EarcrateCore:
                     gate = self._album_gate_of(dst)
                     made.append({"track": len(made) + 1, "taste_profile": pid, "seed": seed,
                                  "arrangement_sha": arr_sha[:12], "wav": dst.name,
-                                 "score": round(float(self.score_arrangement(proposal["arrangement"])), 4),
+                                 "score": round(float((self.score_arrangement(proposal["arrangement"]) or {}).get("total", 0.0)), 4),
                                  "gate": gate})
                     progressed = True
                     self.set_status("album: %d/%d rendered (%s)" % (len(made), tracks, pid),

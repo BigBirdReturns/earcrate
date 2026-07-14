@@ -163,8 +163,7 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(403, {"error": "bad token"})
                 return
             if parsed.path == "/api/status":
-                with self.core.status_lock:
-                    self._json(200, dict(self.core.status))
+                self._json(200, self.core.status_snapshot())
                 return
             if parsed.path == "/api/perf":
                 self._json(200, self.core.last_perf())

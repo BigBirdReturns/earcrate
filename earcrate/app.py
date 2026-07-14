@@ -170,6 +170,22 @@ class EarcrateCore:
                 # Successful completions clear the last-error line; rejected completions pass error explicitly.
                 self.status["last_error"] = None
 
+    def status_snapshot(self) -> Dict[str, Any]:
+        """Status payload for /api/status, with the live configured state merged in.
+
+        The stored self.status dict tracks run progress (busy/message/progress/
+        last_error/...) but says nothing about whether a workspace is configured.
+        `configured` (and the resolved roots) are derived from self.config at read
+        time so a correctly-configured engine never reports configured:null.
+        """
+        with self.status_lock:
+            snap = dict(self.status)
+        c = self.config
+        snap["configured"] = c is not None
+        snap["master_root"] = str(c.master_root) if c is not None else None
+        snap["working_root"] = str(c.working_root) if c is not None else None
+        return snap
+
     def _run_bundle_path(self, run_id: str, artifact: Optional[str] = None) -> Path:
         """Resolve a run-bundle path under the configured agent root, never elsewhere."""
         c = self.ensure_config()
@@ -3306,7 +3322,17 @@ class EarcrateCore:
         if vetoed_atoms:
             pool = [x for x in pool if str(x.get("atom_id")) not in vetoed_atoms]
         foreground = [x for x in pool if x.get("ear_role") in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}]
-        floors = [x for x in pool if x.get("ear_role") in {"DRUM_BREAK","BED_CHORD","RIFF_ID","TEXTURE"}]
+        # The floor rail must be a STRUCTURAL bed the taste gate recognizes as floor
+        # (DRUM_BREAK/BED_CHORD/RIFF_ID -> role drum_anchor/harmony/full). TEXTURE reads
+        # as atmosphere/spark, not a bed: taste_arrangement_gate does NOT credit it to
+        # floor_coverage, so letting TEXTURE win the floor rail silently starved a
+        # section's floor bars — enough to drop a held-bed persona under its obligation
+        # (troubadour floor_coverage 0.95). Keep TEXTURE on the spark rail; fall back to
+        # it as a floor only if the crate ships no structural bed at all (that is a
+        # genuine material shortfall, not a composition gap).
+        floors = [x for x in pool if x.get("ear_role") in {"DRUM_BREAK","BED_CHORD","RIFF_ID"}]
+        if not floors:
+            floors = [x for x in pool if x.get("ear_role") == "TEXTURE"]
         basses = [x for x in pool if x.get("ear_role") == "BASS_RIFF"]
         sparks = [x for x in pool if x.get("ear_role") in {"PICKUP_FILL","DROP_HIT","TRANSITION_TAIL","TEXTURE","VOX_SHOUT"}]
         for xs in (foreground, floors, basses, sparks):
@@ -3435,27 +3461,46 @@ class EarcrateCore:
         max_layers_persona = max(2, int(profile.get("max_layers") or 4))
         held_floor: Optional[Dict[str, Any]] = None; held_floor_left = 0
         held_fg: Optional[Dict[str, Any]] = None; held_fg_left = 0
+        # Macro-dynamics: an energy curve so the track BREATHES — sparse intro,
+        # builds, full drops, and periodic breakdowns — instead of every 4-bar
+        # section sitting at identical loudness. Flat, equal-energy sections were the
+        # post-render quality-gate failure (rms_std_db ~0, "effectively flat").
+        # The cadence is LENGTH-ADAPTIVE: a fixed "drop every 4th section" starves a
+        # short (~120s) set of excursions, so its rendered rms_std_db lands ~2.8 —
+        # below the 3.0 target — while a longer (178s) set that accumulates more
+        # drops/breakdowns clears it. Scaling the drop/breakdown COUNT to total_bars
+        # and spacing them evenly gives a short set the SAME build/drop/breakdown arc
+        # a long one gets. Only per-section loudness (etrim) and bass/spark shedding
+        # move; the floor and foreground rails are placed every section regardless, so
+        # floor/foreground bar-coverage (and the taste gate) is untouched.
+        n_sec = max(1, int(math.ceil(total_bars / float(section_bars))))
+        n_drops = max(2, int(round(n_sec / 3.5))) if n_sec >= 4 else (1 if n_sec >= 2 else 0)
+        n_breaks = max(1, int(round(n_sec / 5.0))) if n_sec >= 5 else 0
+        drop_ids = set(int(round((k + 1) * n_sec / (n_drops + 1))) for k in range(n_drops)) if n_drops else set()
+        drop_ids.discard(0)
+        break_ids: set = set()
+        for _k in range(n_breaks):
+            pos = int(round((_k + 0.5) * n_sec / max(1, n_breaks)))
+            _tries = 0
+            while (pos in drop_ids or (pos + 1) in drop_ids or pos == 0) and _tries < n_sec:
+                pos = (pos + 1) % n_sec; _tries += 1
+            if pos != 0 and pos not in drop_ids:
+                break_ids.add(pos)
         while bar < total_bars:
             bars = min(section_bars, total_bars - bar)
-            sec_type = "drop" if idx % 4 == 0 and idx > 0 else ("build" if idx % 4 == 3 else "sustain")
-            # Macro-dynamics: an energy curve so the track BREATHES — sparse intro,
-            # builds, full drops, and periodic breakdowns — instead of every 4-bar
-            # section sitting at identical loudness. Flat, equal-energy sections
-            # were the post-render quality-gate failure (rms_std_db ~0, "effectively
-            # flat"). `etrim` moves each section's loudness in dB; the quiet sections
-            # also shed bass/spark so the low-end wall (low200_share ~0.66) opens up
-            # and the mix gains spectral variety, not just level. Gain-only elsewhere,
-            # so floor/foreground bar-coverage (and the taste gate) is untouched.
+            # `etrim` moves each section's loudness in dB; quiet sections also shed
+            # bass/spark so the low-end wall opens up and the mix gains spectral
+            # variety, not just level.
             if idx == 0:
-                energy = 0.32                      # sparse open — ease in, don't slam
-            elif sec_type == "drop":
-                energy = 1.0                        # full hit
-            elif sec_type == "build":
-                energy = 0.66                       # rising into the drop
-            elif idx % 8 == 6:
-                energy = 0.44                       # periodic breakdown — pull back
+                sec_type, energy = "sustain", 0.32     # sparse open — ease in, don't slam
+            elif idx in drop_ids:
+                sec_type, energy = "drop", 1.0          # full hit
+            elif (idx + 1) in drop_ids:
+                sec_type, energy = "build", 0.66        # rising into the drop
+            elif idx in break_ids:
+                sec_type, energy = "breakdown", 0.44    # periodic breakdown — pull back
             else:
-                energy = 0.74                       # sustain
+                sec_type, energy = "sustain", 0.74
             etrim = round((energy - 0.74) * 12.0, 1)   # ~ -5dB (intro) .. 0 .. +3.1dB (drop)
             low_energy = energy < 0.5
             # HOLD the bed/voice for the persona's run length before rotating.
@@ -5416,8 +5461,46 @@ class EarcrateCore:
             except Exception as exc:
                 entry.update(ok=False, error=str(exc))
             results.append(entry)
-        return {"ok": any(r.get("ok") for r in results), "recognizability_bias": bias,
-                "target_seconds": target_seconds, "plan_only": plan_only, "bakeoff": results}
+        summary = {"ok": any(r.get("ok") for r in results), "recognizability_bias": bias,
+                   "target_seconds": target_seconds, "plan_only": plan_only, "bakeoff": results}
+        # A rendering bake-off is dispatched through run_background, which returns
+        # {started:true} and DISCARDS this per-persona summary — so without a durable
+        # trace the caller could never see which personas rendered / skipped / failed.
+        # Persist it (artifact + status field) so the outcome survives a backgrounded
+        # or looped run; the synchronous return (plan_only preview) is unchanged.
+        self._persist_bakeoff_summary(summary)
+        return summary
+
+    def _persist_bakeoff_summary(self, summary: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist a bake-off's per-persona outcome so it is retrievable after the
+        run_background dispatch has thrown the return value away: the FULL summary
+        lands in a discoverable artifact (``agent_root/bakeoff_last.json``) and a
+        compact copy in ``status['last_bakeoff']`` (served by GET /api/status)."""
+        results = summary.get("bakeoff") or []
+        record: Dict[str, Any] = {
+            "at": now_utc(),
+            "ok": summary.get("ok"),
+            "plan_only": summary.get("plan_only"),
+            "recognizability_bias": summary.get("recognizability_bias"),
+            "target_seconds": summary.get("target_seconds"),
+            "personas": [{"taste_profile": r.get("taste_profile"),
+                          "ok": bool(r.get("ok")),
+                          "skipped": bool(r.get("skipped")),
+                          "error": r.get("error"),
+                          "score": r.get("score"),
+                          "seed": r.get("seed"),
+                          "taste_gate": r.get("taste_gate"),
+                          "arrangement_sha": r.get("arrangement_sha")} for r in results],
+        }
+        with contextlib.suppress(Exception):
+            c = self.ensure_config()
+            path = c.agent_root / "bakeoff_last.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({**record, "bakeoff": results}, ensure_ascii=False, indent=2), encoding="utf-8")
+            record["path"] = str(path)
+        with self.status_lock:
+            self.status["last_bakeoff"] = record
+        return record
 
     def list_plans(self) -> Dict[str, Any]:
         rows = self.conn().execute("SELECT id,name,taste_profile,plan_hash,created_at FROM saved_plans ORDER BY created_at DESC LIMIT 100").fetchall()

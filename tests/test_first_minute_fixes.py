@@ -100,6 +100,49 @@ def test_run_background_finalizes_status_on_all_paths(tmp_path):
         "a raised exception must be surfaced as last_error"
 
 
+def test_backgrounded_bakeoff_persists_per_persona_summary(tmp_path):
+    """A rendering bake-off is dispatched via run_background, which returns
+    {started:true} and DISCARDS bakeoff()'s per-persona results[]. The outcome
+    (which personas rendered / skipped / failed) must survive that dispatch: it is
+    persisted BOTH to a discoverable artifact (agent_root/bakeoff_last.json) AND
+    into status['last_bakeoff'] (served by /api/status), so a caller can retrieve
+    the per-persona results after a backgrounded or looped run."""
+    core, music = _core(tmp_path)
+    r = core.configure_workspace({"music_folder": str(music), "workspace_folder": str(tmp_path / "WS")})
+    agent_root = Path(r["config"]["agent_root"])
+    personas = ["girl_talk_v1", "troubadour_v1", "notorious_v1"]
+
+    # Non-plan_only == the real (rendering) dispatch path. With an empty crate every
+    # persona resolves to a clean skip — still a per-persona outcome that MUST persist.
+    started = core.run_background(core.bakeoff, {"plan_only": False, "personas": personas, "target_seconds": 16})
+    assert started == {"ok": True, "started": True}, "run_background must return only the started ack (it discards the summary)"
+
+    def wait_idle():
+        for _ in range(400):
+            with core.status_lock:
+                if not core.status.get("busy"):
+                    return dict(core.status)
+            time.sleep(0.02)
+        raise AssertionError("backgrounded bakeoff WEDGED: status stayed busy")
+    s = wait_idle()
+
+    # 1) Retrievable via the status field.
+    lb = s.get("last_bakeoff")
+    assert isinstance(lb, dict), "backgrounded bakeoff must persist into status['last_bakeoff']"
+    got = {p["taste_profile"] for p in (lb.get("personas") or [])}
+    assert got == set(personas), f"status summary must carry every persona's outcome, got {got}"
+    assert lb.get("plan_only") is False
+
+    # 2) Retrievable via the discoverable artifact.
+    art = agent_root / "bakeoff_last.json"
+    assert art.exists(), "backgrounded bakeoff must persist a discoverable artifact under agent_root"
+    doc = json.loads(art.read_text(encoding="utf-8"))
+    assert len(doc.get("bakeoff") or []) == 3, "artifact must retain the full per-persona results[]"
+    for p in doc["personas"]:
+        # Never a crash: each persona is either ok, a clean skip, or a reported error.
+        assert p["ok"] is True or p["skipped"] is True or p.get("error"), f"persona outcome lost: {p}"
+
+
 def test_preflight_exposes_ready_and_warnings(tmp_path):
     core, music = _core(tmp_path)
     core.configure_workspace({"music_folder": str(music), "workspace_folder": str(tmp_path / "WS")})

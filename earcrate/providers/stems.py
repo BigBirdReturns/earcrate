@@ -107,9 +107,19 @@ class DemucsStemProvider(StemProvider):
         self.model_version = str(model_version)
         self.tier = tier
 
+    def _effective_model_version(self) -> str:
+        """The model actually used for separation. EARCRATE_DEMUCS_MODEL lets a box
+        opt into a lighter/faster released model to cut the cold, separation-bound
+        render; unset it returns ``self.model_version`` (htdemucs) so nothing changes.
+        The L3 artifact key, the stored provenance version and the resident-model
+        cache all resolve through THIS, so a swapped model gets its own cache entries
+        and honest provenance instead of colliding with / mislabeling htdemucs."""
+        return os.environ.get("EARCRATE_DEMUCS_MODEL") or self.model_version
+
     def separate(self, pcm_sha: str, audio_path: str,
                  roles: Optional[Any] = None) -> Dict[str, Any]:
         role_list = list(roles) if roles else list(DEFAULT_ROLES)
+        model_version = self._effective_model_version()
         keys = {role: self._artifact_key(str(pcm_sha), role) for role in role_list}
         # --- CACHE-BEFORE-SEPARATE ---------------------------------------
         # A separation is expensive (GPU) and content-addressed by pcm_sha. If
@@ -122,7 +132,7 @@ class DemucsStemProvider(StemProvider):
                 "available": True,
                 "provider": "demucs",
                 "pcm_sha": str(pcm_sha),
-                "model_version": self.model_version,
+                "model_version": model_version,
                 "tier": self.tier,
                 "evictable": True,
                 "cached": True,
@@ -144,7 +154,7 @@ class DemucsStemProvider(StemProvider):
             self.store.put(
                 key, wav_bytes, tier=self.tier,
                 source_identity=str(pcm_sha), provider="demucs",
-                version=self.model_version,
+                version=model_version,
                 extra={"role": role, "audio_path": str(audio_path)},
             )
             stems[role] = key
@@ -152,7 +162,7 @@ class DemucsStemProvider(StemProvider):
             "available": True,
             "provider": "demucs",
             "pcm_sha": str(pcm_sha),
-            "model_version": self.model_version,
+            "model_version": model_version,
             "tier": self.tier,
             "evictable": True,
             "cached": False,
@@ -162,7 +172,7 @@ class DemucsStemProvider(StemProvider):
     def _artifact_key(self, pcm_sha: str, role: str) -> str:
         # Deterministic L3 key: same sound + model + role -> same artifact.
         return "stem_" + sha256_text("|".join(
-            [str(pcm_sha), "demucs", self.model_version, str(role)]))
+            [str(pcm_sha), "demucs", self._effective_model_version(), str(role)]))
 
     def _run_demucs(self, audio_path: str, roles: List[str]) -> Dict[str, bytes]:  # pragma: no cover
         """REAL Demucs invocation. GUARDED: the torch/demucs imports live here so
@@ -191,11 +201,20 @@ class DemucsStemProvider(StemProvider):
                 "use the default NoopStemProvider." % (exc,)
             ) from None
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        cache_key = "%s|%s" % (self.model_version, device)
+        # MODEL-SELECTION knob: the COLD render is separation-bound (~6s/miss), and
+        # htdemucs is the heaviest of the released models. EARCRATE_DEMUCS_MODEL lets
+        # a box opt into a LIGHTER/faster model (e.g. "htdemucs_ft" quality vs a
+        # cheaper "mdx_extra_q") WITHOUT touching the default: unset -> self.model_version
+        # (htdemucs), byte-for-byte today's behavior. The resident-model cache and the
+        # L3 artifact key / provenance version (see _effective_model_version) both key
+        # off the ACTUAL model name, so a swapped model never silently reuses another
+        # model's weights or mislabels an artifact.
+        model_name = self._effective_model_version()
+        cache_key = "%s|%s" % (model_name, device)
         with _MODEL_LOCK:
             model = _MODEL_CACHE.get(cache_key)
             if model is None:
-                model = get_model(self.model_version)
+                model = get_model(model_name)
                 model.to(device)
                 model.eval()
                 _MODEL_CACHE[cache_key] = model  # resident: reused across every separation
@@ -214,23 +233,50 @@ class DemucsStemProvider(StemProvider):
             _sf.write(buf, arr.astype(_np.float32), int(model.samplerate), format="WAV")
             return buf.getvalue()
 
+        def _vocals():
+            # (samples, channels) for the isolated vocal source.
+            return sources[names.index("vocals")].cpu().numpy().T
+
+        def _instrumental():
+            # "no_vocals" is the INSTRUMENTAL tape track: the sum of every non-vocal
+            # source (drums+bass+other) — the clean bed a foreign acapella rides over,
+            # equivalent to demucs --two-stems=vocals.
+            idxs = [i for i, n in enumerate(names) if n != "vocals"]
+            if not idxs:
+                return None
+            inst = sources[idxs[0]]
+            for i in idxs[1:]:
+                inst = inst + sources[i]
+            return inst.cpu().numpy().T
+
+        # TWO-STEMS FAST PATH: when the renderer only asks for the vocal and/or the
+        # instrumental (the roles the mashup layers actually consume), behave like
+        # demucs --two-stems=vocals — emit ONLY those two stems instead of decoding
+        # and WAV-encoding all four sources then discarding drums/bass/other. Both
+        # come from the one separation and are cached independently in L3. Byte-
+        # identical to the 4-stem path for these roles; it just skips the wasted
+        # per-stem encode work on the cold miss.
+        role_set = set(roles)
+        if role_set and role_set <= {"vocals", "no_vocals"}:
+            if "vocals" in role_set and "vocals" in names:
+                out["vocals"] = _emit(_vocals())
+            if "no_vocals" in role_set:
+                inst = _instrumental()
+                if inst is not None:
+                    out["no_vocals"] = _emit(inst)
+            return out
+
+        # FULL 4-stem path: emit every requested individual source, plus the summed
+        # instrumental when "no_vocals" is also requested alongside real stems.
         for role in roles:
             if role not in names:
                 continue
             arr = sources[names.index(role)].cpu().numpy().T  # (samples, channels)
             out[role] = _emit(arr)
-        # "no_vocals" is the INSTRUMENTAL tape track: the sum of every non-vocal
-        # source (drums+bass+other). It is the clean bed a foreign acapella rides
-        # over — equivalent to demucs --two-stems=vocals, but reusing the 4-stem
-        # model so both the vocal and the instrumental come from one separation and
-        # are cached independently in L3.
         if "no_vocals" in roles:
-            idxs = [i for i, n in enumerate(names) if n != "vocals"]
-            if idxs:
-                inst = sources[idxs[0]]
-                for i in idxs[1:]:
-                    inst = inst + sources[i]
-                out["no_vocals"] = _emit(inst.cpu().numpy().T)
+            inst = _instrumental()
+            if inst is not None:
+                out["no_vocals"] = _emit(inst)
         return out
 
 

@@ -1232,7 +1232,7 @@
    "tests/manual/verify_ingest_live.py": "live server: ingest copies files; migrate preview returns a usable signature",
    "tests/manual/verify_finish_core.py": "identify apply->undo round-trip on real FLAC; render_plan refusal paths"
   },
-  "gate_result": "70/70 gates pass",
+  "gate_result": "75/75 gates pass (all fanned-out fixes combined)",
   "pipeline_observed": "scan(8)->analyze(8)->extract(27 loops)->build_ear_crate(27 approved); taste_readiness/preflight/one_click all return correct structured shapes; one_click cleanly refuses on insufficient atoms (no wedge/crash)"
  },
  "fixes_remaining_notes": [
@@ -1259,7 +1259,13 @@
    "verified": "same pool -> girl_talk avg_layers 3.47 / distinct_fg 12 / fg_run 1; troubadour 2.0 / 5 / 3; notorious 2.8 / 3 / 5. Gate test_personas_produce_divergent_arrangements locks it. 70/70 gates.",
    "note": "Also raises foreground coverage for troubadour/notorious (held voice present more), which should let them clear their own fg_cov gates (0.75/0.8) that the old shared arrangement failed at 0.61 \u2014 desktop to confirm on real audio.",
    "desktop_confirmed": "02f4397: personas now DISTINCT (girl_talk 43.87/23beds PASS; troubadour 38.39/5beds; notorious 38.63/17beds; before: all 43.87/23). Logic fixed. troubadour/notorious still miss their coverage gates -> material-depth (96-file pool too thin for sparse voice-forward styles), analyze a bigger/more diverse slice."
-  }
+  },
+  "persona_coverage_fix": {
+   "root_cause": "Two defects in compose_taste_arrangement: (1) FLOOR STARVATION \u2014 the floor rail admitted TEXTURE atoms, which taste_arrangement_gate does NOT credit to floor_coverage; a texture-floor section = 0 floor bars, dropping held-bed personas below threshold (troubadour needs 0.95). NOT the density cap. (2) fixed-cadence dynamics (drop every 4 / breakdown every 8) starved short sets of arc.",
+   "fix": "floor rail excludes TEXTURE (fallback only if zero structural beds); drop/breakdown COUNT scales to total_bars (evenly spaced). Verified: all 3 personas PASS their taste gates on a feasible pool (troubadour floor 1.00/need 0.95, fg 1.00/need 0.75; notorious passes; girl_talk still dense+passing). Desktop 'material-depth' hypothesis: partially true (feasibility) but the coverage shortfall was a real texture-wins-floor LOGIC bug.",
+   "followup": "actual rendered rms_std_db clearing 3.0 needs a real decodable WAV crate on the desktop (enriched test pool uses /fake/ paths); arc is verified at the energy-curve level."
+  },
+  "bakeoff_persistence": "Backgrounded /api/bakeoff now persists its per-persona summary to agent_root/bakeoff_last.json AND status['last_bakeoff'], so results survive run_background (which discards return values)."
  },
  "performance": {
   "demucs_model_cache": {
@@ -1301,7 +1307,11 @@
   "m_dash_seed_fix": {
    "bug": "machine_defaults.json was resolved via visible_app_dir() only, which under `python -m earcrate` is the package dir, not the repo root -> preset never found, so `-m` still booted unconfigured.",
    "fix": "_seed_from_machine_defaults now searches EARCRATE_DEFAULTS + explicit cwd + __main__ dir + visible_app_dir + pointer_search_dirs. Verified it resolves a cwd preset even with EARCRATE_HOME set."
-  }
+  },
+  "demucs_speed_knob": {
+   "fix": "EARCRATE_DEMUCS_MODEL env (lighter/faster released model, own cache+provenance) + two-stems fast path (emit only vocals + summed instrumental when that's all the renderer needs, skipping WAV-encode of drums/bass/other). Default byte-identical to htdemucs 4-stem. Static-correct; actual speedup needs a desktop GPU receipt."
+  },
+  "status_configured_truth": "Added core.status_snapshot() (served by GET /api/status) that derives 'configured' + resolved roots from live self.config, so a configured app never reports configured:null. Fixes the desktop display bug."
  },
  "machine": {
   "BAM_Desktop": {

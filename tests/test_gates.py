@@ -2637,6 +2637,123 @@ def test_demucs_uses_released_model_id():
     assert seen == ["htdemucs"], f"invalid Demucs model requested: {seen}"
 
 
+def test_demucs_fast_path_and_model_knob():
+    """v3 §5.2 COLD-render speedups on the GUARDED Demucs path (no torch/GPU here):
+
+      (1) EARCRATE_DEMUCS_MODEL opt-in — unset keeps htdemucs (byte-identical
+          default); set, it becomes the model passed to get_model AND the model that
+          keys the L3 artifact + provenance (via _effective_model_version), so a
+          swapped model never collides with / mislabels htdemucs artifacts.
+      (2) TWO-STEMS FAST PATH — when the renderer asks only for {vocals, no_vocals}
+          the producer emits EXACTLY those two stems (demucs --two-stems=vocals
+          equivalent) instead of encoding all four sources then discarding
+          drums/bass/other; a request that includes a real 4-stem role still gets
+          every requested source.
+
+    Driven with a fully FAKE demucs/torch stack (a 4-source model), so it proves the
+    STATIC wiring only. The real separation stays UNVERIFIED pending a GPU receipt."""
+    import sys as _sys
+    import os as _os
+    import types, contextlib
+    import numpy as _np
+    from unittest.mock import patch
+    from earcrate.providers.stems import DemucsStemProvider
+    from earcrate.providers import stems as _stems_mod
+
+    # --- (1) model knob is honest even without any torch import ---------------
+    prov = DemucsStemProvider()
+    prev = _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+    try:
+        assert prov._effective_model_version() == "htdemucs"
+        key_default = prov._artifact_key("sha_x", "vocals")
+        _os.environ["EARCRATE_DEMUCS_MODEL"] = "mdx_extra_q"
+        assert prov._effective_model_version() == "mdx_extra_q"
+        key_swapped = prov._artifact_key("sha_x", "vocals")
+        assert key_swapped != key_default, \
+            "a swapped model must key a DISTINCT artifact (no cross-model cache collision)"
+    finally:
+        if prev is None:
+            _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+        else:
+            _os.environ["EARCRATE_DEMUCS_MODEL"] = prev
+
+    # --- fake demucs stack: a 4-source model whose apply_model returns tensors --
+    class _Src:  # minimal torch-tensor stand-in over numpy
+        def __init__(self, a): self.a = _np.asarray(a, dtype=float)
+        def __mul__(self, o): return _Src(self.a * o)
+        __rmul__ = __mul__
+        def __add__(self, o): return _Src(self.a + (o.a if isinstance(o, _Src) else o))
+        __radd__ = __add__
+        def __getitem__(self, i): return _Src(self.a[i])
+        def cpu(self): return self
+        def numpy(self): return self.a
+
+    class _Arr(_np.ndarray):
+        def to(self, *a, **k): return self  # numpy stand-in for tensor.to(device)
+
+    names = ["drums", "bass", "other", "vocals"]
+    seen = []
+
+    class _Model:
+        samplerate = 44100
+        audio_channels = 2
+        sources = names
+        def to(self, *a, **k): return self
+        def eval(self): return self
+
+    def _get_model(name):
+        seen.append(name)
+        return _Model()
+
+    class _AudioFile:
+        def __init__(self, path): pass
+        def read(self, streams=0, samplerate=None, channels=None):
+            return _np.zeros((int(channels), 200)).view(_Arr)
+
+    # each of the 4 sources gets a distinct constant so mixing is observable
+    _four = _Src(_np.stack([_np.full((2, 200), float(i + 1)) for i in range(4)]))
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.cuda = types.SimpleNamespace(is_available=lambda: False)
+    torch_mod.no_grad = lambda: contextlib.nullcontext()
+    demucs_pkg = types.ModuleType("demucs"); demucs_pkg.__path__ = []
+    separate_mod = types.ModuleType("demucs.separate")
+    pretrained_mod = types.ModuleType("demucs.pretrained"); pretrained_mod.get_model = _get_model
+    apply_mod = types.ModuleType("demucs.apply"); apply_mod.apply_model = lambda *a, **k: [_four]
+    audio_mod = types.ModuleType("demucs.audio"); audio_mod.AudioFile = _AudioFile
+    modules = {
+        "torch": torch_mod, "demucs": demucs_pkg, "demucs.separate": separate_mod,
+        "demucs.pretrained": pretrained_mod, "demucs.apply": apply_mod, "demucs.audio": audio_mod,
+    }
+
+    prev = _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+    try:
+        with patch.dict(_sys.modules, modules):
+            # (2) two-stems fast path emits EXACTLY {vocals, no_vocals}, nothing else.
+            out = DemucsStemProvider()._run_demucs("unused.wav", ["vocals", "no_vocals"])
+            assert set(out) == {"vocals", "no_vocals"}, \
+                "two-stems fast path must emit only the vocal + instrumental: %r" % (sorted(out),)
+            assert all(isinstance(v, (bytes, bytearray)) and v for v in out.values())
+            # a request that includes a real 4-stem role takes the full path.
+            out2 = DemucsStemProvider()._run_demucs("unused.wav", ["vocals", "drums"])
+            assert set(out2) == {"vocals", "drums"}, sorted(out2)
+            # (1) default model selection unchanged when env is unset.
+            assert seen and all(n == "htdemucs" for n in seen), seen
+            # env override actually reaches get_model.
+            _os.environ["EARCRATE_DEMUCS_MODEL"] = "mdx_extra_q"
+            seen.clear()
+            DemucsStemProvider()._run_demucs("unused.wav", ["vocals"])
+            assert seen == ["mdx_extra_q"], seen
+    finally:
+        # the resident-model cache is module-global; drop the FAKE models this gate
+        # inserted so a later gate re-loads through get_model (sentinel) as expected.
+        _stems_mod._MODEL_CACHE.clear()
+        if prev is None:
+            _os.environ.pop("EARCRATE_DEMUCS_MODEL", None)
+        else:
+            _os.environ["EARCRATE_DEMUCS_MODEL"] = prev
+
+
 def test_pcm_identity_covers_full_track_not_analysis_prefix():
     """Tracks sharing an analyzed prefix but differing later need distinct stem keys."""
     import tempfile
@@ -3283,3 +3400,126 @@ def test_personas_produce_divergent_arrangements(tmp_path):
     gt, tr, no = shape("girl_talk_v1"), shape("troubadour_v1"), shape("notorious_v1")
     assert gt["avg_layers"] > tr["avg_layers"], f"girl_talk must layer denser than troubadour ({gt['avg_layers']} !> {tr['avg_layers']})"
     assert no["avg_fg_run"] > gt["avg_fg_run"], f"notorious must hold a voice longer than girl_talk ({no['avg_fg_run']} !> {gt['avg_fg_run']})"
+
+
+def test_personas_meet_taste_coverage(tmp_path):
+    """Every resident persona must PASS its OWN taste_arrangement_gate on a
+    realistic (source-enriched) pool — not just girl_talk. The failure this locks
+    out: the persona-shape logic (held bed + density cap) letting a TEXTURE atom
+    win the floor rail, which the gate does not credit as floor, silently starving
+    a held-bed persona below its floor_coverage obligation (troubadour needs 0.95,
+    notorious 0.90). A held-bed / voice-forward persona must meet the coverage its
+    identity demands, and girl_talk must still clear its own (lower) thresholds."""
+    import copy
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    base = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    pool = []
+    for m in range(6):
+        for a in base:
+            b = copy.deepcopy(a); uid = f"{a['id']}_{m}"
+            b["id"] = uid; b["atom_id"] = uid; b["source_track_key"] = f"src_{uid}"
+            b["path"] = f"/fake/{uid}.wav"; b["title"] = f"Track {uid}"
+            pool.append(b)
+    from earcrate.app import TASTE_PROFILES
+    for pid in ("girl_talk_v1", "troubadour_v1", "notorious_v1"):
+        arr = core.compose_taste_arrangement(list(pool), {"taste_profile": pid, "target_seconds": 120,
+              "bpm": 120.0, "quality_mode": "stable_deck"}, seed=5)
+        gate = core.taste_arrangement_gate(arr)
+        prof = TASTE_PROFILES[pid]
+        m = gate["metrics"]
+        assert gate["passed"], f"{pid} taste gate failed: {gate['failures']} metrics={m}"
+        # And prove the coverage obligation is actually met (not passed on a technicality).
+        assert m["floor_coverage"] >= prof["floor_coverage"], f"{pid} floor {m['floor_coverage']} < {prof['floor_coverage']}"
+        assert m["foreground_coverage"] >= prof["foreground_coverage"], f"{pid} fg {m['foreground_coverage']} < {prof['foreground_coverage']}"
+
+
+def test_short_set_has_length_adaptive_energy_arc(tmp_path):
+    """A short (~120s) set must complete the SAME multi-level energy arc a long set
+    gets. A fixed 'drop every 4th section' cadence starved short renders of
+    excursions so their rendered rms_std_db landed ~2.8 (a below-target warning)
+    while longer sets cleared 3.0. The cadence is now scaled to total_bars: a ~120s
+    arrangement must ease in, hit multiple full drops AND breakdowns, span several
+    distinct energy levels, and — the tell rendered dynamics are real — swing the
+    per-section loudness proxy well past the flat-render floor."""
+    import math, copy, statistics as st
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    base = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    pool = []  # enrich so a full ~120s set is source-feasible (needs 11+ sources)
+    for m in range(6):
+        for a in base:
+            b = copy.deepcopy(a); uid = f"{a['id']}_{m}"
+            b["id"] = uid; b["atom_id"] = uid; b["source_track_key"] = f"src_{uid}"
+            b["path"] = f"/fake/{uid}.wav"; b["title"] = f"Track {uid}"
+            pool.append(b)
+    arr = core.compose_taste_arrangement(list(pool),
+            {"taste_profile": "girl_talk_v1", "target_seconds": 120, "bpm": 120.0, "quality_mode": "stable_deck"}, seed=7)
+    secs = arr.get("sections") or []
+    assert len(secs) >= 10, f"~120s should be many sections, got {len(secs)}"
+    energies = [round(float(s.get("energy_level") or 0), 2) for s in secs]
+    assert abs(energies[0] - 0.32) < 0.01, f"intro must ease in at 0.32, got {energies[0]}"
+    # Proportional arc: a short set must still land multiple drops AND breakdowns.
+    n_drop = sum(1 for e in energies if e >= 0.99)
+    n_break = sum(1 for e in energies if e <= 0.5 and e > 0.33)  # breakdown dips, not the intro
+    assert n_drop >= 2, f"short set needs multiple full drops for a real arc, got {n_drop}: {energies}"
+    assert n_break >= 1, f"short set needs at least one breakdown, got {n_break}: {energies}"
+    # Multi-level, not two-state: eased intro, sustain, build, drop, breakdown.
+    assert len(set(energies)) >= 4, f"energy must span multiple levels, saw {sorted(set(energies))}"
+    # The variance is the point: a ~120s arc must clearly beat the flat-render floor.
+    assert st.pstdev(energies) >= 0.16, f"energy variance too flat for a real arc: {st.pstdev(energies):.3f}"
+
+    def sec_db(s):
+        amp = sum(10 ** (float(ly.get("gain_db", 0)) / 20.0) for ly in s.get("layers") or []) or 1e-6
+        return 20 * math.log10(amp)
+    dbs = [sec_db(s) for s in secs]
+    assert (max(dbs) - min(dbs)) >= 4.0, f"section loudness swing too small for a live arc: {max(dbs)-min(dbs):.1f} dB"
+
+
+def test_status_snapshot_reports_live_configured():
+    """/api/status must tell the truth about whether the engine is configured.
+
+    Regression: status reported configured:null even for a correctly-configured
+    engine because the stored self.status dict never carried the configured state.
+    status_snapshot() (what the server returns for GET /api/status) derives it
+    from the live self.config, so a configured core reports configured:true and an
+    unconfigured one reports false — without dropping busy/message/progress/last_error.
+    """
+    import os, tempfile
+    from pathlib import Path
+
+    d = Path(tempfile.mkdtemp(prefix="earcrate-status-"))
+    sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
+    os.environ["HOME"] = str(d); os.environ["EARCRATE_HOME"] = str(d)
+    try:
+        for x in ("m", "w", "a"):
+            (d / x).mkdir()
+        core = EarcrateCore()
+
+        # Unconfigured: honest false, and the run-status fields are still present.
+        snap = core.status_snapshot()
+        assert snap["configured"] is False, snap
+        assert snap["master_root"] is None and snap["working_root"] is None, snap
+        for k in ("busy", "message", "progress", "last_error"):
+            assert k in snap, f"status lost {k}: {snap}"
+
+        # Configured: honest true, with the resolved roots exposed.
+        core.configure({"master_root": str(d / "m"), "working_root": str(d / "w"),
+                        "agent_root": str(d / "a")})
+        assert core.config is not None
+        snap = core.status_snapshot()
+        assert snap["configured"] is True, snap
+        assert snap["master_root"] == str(core.config.master_root), snap
+        assert snap["working_root"] == str(core.config.working_root), snap
+        for k in ("busy", "message", "progress", "last_error"):
+            assert k in snap, f"status lost {k}: {snap}"
+    finally:
+        if sh is not None: os.environ["HOME"] = sh
+        if se is not None: os.environ["EARCRATE_HOME"] = se
+        else: os.environ.pop("EARCRATE_HOME", None)

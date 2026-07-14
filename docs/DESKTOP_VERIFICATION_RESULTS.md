@@ -353,3 +353,20 @@ Per the owner, the personas are three distinct mashup *constructions*, not just 
   album-locked, not just verse-locked.)
 This reframes troubadour/notorious as **source-pairing constraints** the composer must honor, above the
 per-atom scoring — a level the current graph (atom-pairwise) may not express.
+
+### Gate-off preview renders (all 3 personas, real engine+demucs, big pool)
+Rendered one labeled preview per persona (pre/post gates bypassed so failing personas produce audio;
+NOT committed, NOT product renders). Real (pre-bypass) gate metrics:
+
+| preview | real gate | rms_std_db | low200 | high3000 |
+|---|---|---|---|---|
+| girl_talk | PASS | 3.24 | 0.44 | 0.047 |
+| troubadour | FAIL (coverage) | **5.00** | **0.17** | 0.051 |
+| notorious | PASS | 2.85 | 0.57 | 0.049 |
+
+Audible findings: (1) **presence ~0.05 across ALL three vs real ~0.20–0.31** — the treble-dead mix bug
+is universal and clearly hearable. (2) **troubadour has the BEST spectral match to real mashups**
+(rms 5.0, bass 0.17) yet FAILS purely on coverage — its minimal layering can't sustain the 0.95 medley
+bed. So troubadour's gap is STRUCTURAL (can't build the chord-matched pairing chain), not mix — the
+clearest evidence of the atom-engine-vs-source-pairing-grammar gap. WAVs local only
+(work/previews/PREVIEW_<persona>.wav).

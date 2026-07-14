@@ -3297,6 +3297,41 @@ class EarcrateCore:
         ).fetchone()
         return int(row["n"] or 0)
 
+    def _freshness_harvest(self, ledger: Dict[str, Any], batch: int, taste_profile: str,
+                           target_seconds: float, analyze_result: Dict[str, Any],
+                           loop_result: Dict[str, Any], harvest_log: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Bounded turnover pass: a ready crate must not go stale.
+
+        The fail-fast harvest gates ENTRY (stop analyzing the moment the
+        contract is satisfied) but nothing gated GROWTH: tracks added after the
+        crate first became ready were scanned yet never analyzed by the
+        one-click path, so every set recycled the same sources — against the
+        profile's own turnover contract. This pass digests at most ONE batch of
+        never-analyzed tracks per run: bounded cost, monotone progress toward
+        the profile's endless target, and zero work when the library is stable
+        (the analyze select returns nothing new). It only ADDS approved
+        material; it never touches readiness thresholds or gates.
+
+        Returns the recomputed readiness when fresh material entered the crate,
+        else None. Mutates analyze_result / loop_result / harvest_log in place,
+        matching the harvest-loop accounting.
+        """
+        step = self._perf_stage(ledger, "freshness_analyze", self.analyze, limit=batch, force=False)
+        newly = int(step.get("analyzed") or 0)
+        if newly <= 0:
+            return None
+        self.set_status(f"TasteSpec: freshness pass folded {newly} new track(s) into the crate", 0.72, True, None)
+        analyze_result["analyzed"] = int(analyze_result.get("analyzed") or 0) + newly
+        analyze_result["failed"] = (analyze_result.get("failed") or []) + list(step.get("failed") or [])
+        lstep = self._perf_stage(ledger, "freshness_extract_loops", self.extract_loops, limit=0, auto_approve=False, force=False)
+        loop_result["inserted"] = int(loop_result.get("inserted") or 0) + int(lstep.get("inserted") or 0)
+        self._perf_stage(ledger, "freshness_ear_crate", self.build_ear_crate, limit=0, force=False, taste_profile=taste_profile, write_previews=False)
+        readiness = self._perf_stage(ledger, "freshness_readiness", self.taste_readiness, taste_profile, target_seconds)
+        harvest_log.append({"batch": "freshness", "tracks_analyzed": self._trusted_analyzed_count(),
+                            "have": dict(readiness.get("have") or {}), "need": dict(readiness.get("need") or {}),
+                            "ready": bool(readiness.get("ready"))})
+        return readiness
+
     def one_click_taste_mix(self, data: Dict[str, Any]) -> Dict[str, Any]:
         c = self.ensure_config()
         taste_profile = str(data.get("taste_profile") or "girl_talk_v1")
@@ -3370,6 +3405,11 @@ class EarcrateCore:
                 final_perf = self._perf_publish(ledger, ok=False, in_progress=False)
                 self.set_status(msg, 1, False, msg)
                 return self._finish_one_click_result(ledger, {"ok": False, "error": msg, "harvest": harvest_log, "scan": scan_result, "analyze": analyze_result, "loops": loop_result, "crate": crate_result, "readiness": readiness, "perf": final_perf.get("summary")})
+
+            if not bool(data.get("skip_freshness", False)):
+                fresh_readiness = self._freshness_harvest(ledger, batch, taste_profile, target_seconds, analyze_result, loop_result, harvest_log)
+                if fresh_readiness is not None:
+                    readiness = fresh_readiness
 
             self.set_status("TasteSpec: building compatibility graph", 0.76, True, None)
             graph = self._perf_stage(ledger, "build_compatibility_graph", self.build_compatibility_graph, taste_profile, target_seconds, float(data.get("bpm") or 0.0))

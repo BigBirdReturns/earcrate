@@ -33,6 +33,12 @@ for _thread_var in (
     # oversubscribe hard enough to segfault on ordinary CI/local machines.
     os.environ[_thread_var] = "1"
 
+# Sandbox the app-global workspace pointer for the whole suite. Without this,
+# every gate that constructs EarcrateCore() and configures a temp workspace
+# writes the REAL repo-root pointer file — so running the shipped test suite
+# silently re-points a user's configured workspace at a deleted temp fixture.
+os.environ.setdefault("EARCRATE_HOME", tempfile.mkdtemp(prefix="earcrate_gates_home_"))
+
 MODULES = ("test_gates", "test_tastespec_vertical")
 
 

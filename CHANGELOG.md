@@ -1,5 +1,30 @@
 # EarCrate — CHANGELOG
 
+## v0.8.28 — turnover freshness pass + gate-suite pointer sandbox
+- FIX **stagnant crate through the one-click path**: the fail-fast harvest
+  gates ENTRY (stop analyzing the moment readiness is satisfied) but nothing
+  gated GROWTH — tracks added after the crate first became ready were scanned
+  yet never analyzed by one-click, so every set recycled the same sources
+  while readiness itself reported `bottleneck: sources`. One-click now runs a
+  bounded freshness pass after readiness: at most ONE `harvest_batch` of
+  never-analyzed tracks per run (analyze → extract → re-crate → recompute
+  readiness), accounted in the harvest log and runtime ledger, opt-out via
+  `skip_freshness`. Zero work on a stable library; loops enter as candidates
+  (quota/human review still owns approval); no gate or threshold changed.
+  Observed live over the API: tracks stuck at `bpm=None, loops=0` under the
+  old path were analyzed and looped by the one-click run itself
+  (`freshness_*` stages in the perf ledger). Gates:
+  `test_freshness_harvest_folds_new_tracks_into_ready_crate`,
+  `test_freshness_harvest_costs_nothing_on_stable_library`,
+  `test_one_click_runs_freshness_pass_between_readiness_and_graph`.
+- FIX **the shipped test suite hijacked the real workspace pointer**: gates
+  constructing `EarcrateCore()` wrote the app-global pointer at the repo root,
+  so `python tests/run_gates.py` silently re-pointed a configured workspace at
+  a deleted temp fixture (observed live: a fresh server booted into
+  `/tmp/tmp…/` instead of the user library). The runner and `test_gates.py`
+  now sandbox `EARCRATE_HOME` for the whole suite; gate
+  `test_gate_suite_sandboxes_the_workspace_pointer` pins the contract.
+
 ## v0.8.27 — release consolidation: truthful gates, fail-hard renders, durable receipts
 - Consolidates the v0.8.16–v0.8.25 architecture and seam work with the parallel
   v0.8.26 real-library fixes under one package-visible release version.

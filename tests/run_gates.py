@@ -33,7 +33,7 @@ for _thread_var in (
     # oversubscribe hard enough to segfault on ordinary CI/local machines.
     os.environ[_thread_var] = "1"
 
-MODULES = ("test_gates", "test_tastespec_vertical", "test_first_minute_fixes", "test_reference_study", "test_stem_warmer", "test_transitions", "test_beat_features", "test_materials", "test_analysis_wiring", "test_album", "test_remix_builder", "test_reference_recall")
+MODULES = ("test_gates", "test_tastespec_vertical", "test_first_minute_fixes", "test_reference_study", "test_stem_warmer", "test_transitions", "test_beat_features", "test_materials", "test_analysis_wiring", "test_album", "test_remix_builder", "test_reference_recall", "test_musicbrainz")
 
 
 def _cases():

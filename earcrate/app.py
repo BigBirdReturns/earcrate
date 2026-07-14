@@ -6113,6 +6113,43 @@ class EarcrateCore:
             "calibration_diff": calibration["diff"],
         }
 
+    def reference_recall(self, path: str, taste_profile: str = "girl_talk_v1") -> Dict[str, Any]:
+        """THE ANSWER-KEY BENCHMARK: run OUR library against a master's DOCUMENTED
+        pairings and measure how many our engine independently rediscovers.
+
+        A proven pairing is only 'recoverable' when we own BOTH its source tracks;
+        of those, 'recovered' when the engine's OWN compatibility graph links atoms
+        of the two sources. The reported recall + the ``missed`` list answer the
+        owner's exact question -- what SHOULD the system discover on its own, and
+        where is the gap. Reads only; heavy logic lives in study/reference.py."""
+        from earcrate.study.reference import source_key, recall_report
+        db = self.conn()
+        # what we own: normalized source keys of every present library track
+        present = set()
+        for r in db.execute(
+                "SELECT t.artist artist, t.title title FROM tracks t "
+                "JOIN files f ON f.id=t.file_id WHERE COALESCE(f.present,1)=1"):
+            present.add(source_key(r["artist"], r["title"]))
+        # file_id -> source key (to translate engine edges into source pairs)
+        fkey: Dict[str, str] = {}
+        for r in db.execute("SELECT file_id fid, artist, title FROM tracks"):
+            fkey[str(r["fid"])] = source_key(r["artist"], r["title"])
+        # what the engine independently linked: compatibility edges -> source pairs
+        recovered = set()
+        for r in db.execute(
+                "SELECT la.file_id lf, ra.file_id rf FROM compatibility_edges e "
+                "JOIN ear_atoms la ON la.id=e.left_atom_id "
+                "JOIN ear_atoms ra ON ra.id=e.right_atom_id WHERE e.taste_profile=?",
+                (taste_profile,)):
+            ka, kb = fkey.get(str(r["lf"])), fkey.get(str(r["rf"]))
+            if ka and kb and ka != kb:
+                recovered.add(frozenset((ka, kb)))
+        report = recall_report(path, present, recovered)
+        report["taste_profile"] = taste_profile
+        report["engine_edges"] = len(recovered)
+        report["path"] = str(path)
+        return report
+
     def set_atom_judgment(self, atom_id: str, taste_profile: str, status: str, relabel_role: str = "", favorite: bool = False, locked: bool = False, reason: str = "") -> Dict[str, Any]:
         if status not in {"approved", "rejected", "candidate"}:
             raise ValueError("atom judgment status must be approved, rejected, or candidate")

@@ -1475,5 +1475,12 @@
     ],
     "first_cheap_step (cloud-doable)": "A DETERMINISTIC lo-fi/toy-render DSP (bitcrush, sample-rate reduction, wow/flutter, band-limit to a music-box-ish partial set, gentle detune) as a transform provider -- provable here on synthetic audio, no models. The neural morphs (voice/timbre) layer on top as GPU providers.",
     "status": "logged, NOT built. Exploratory; needs owner priority vs the remix roster + the transition Patches 2-5 + the mix bed-high-pass fix."
+  },
+  "answer_key_recall_benchmark": {
+    "idea": "The masters DOCUMENTED sample choices are a ground-truth answer key of good discoveries. Run OUR library through the engine and measure how many our system rediscovers ON ITS OWN. The gap = what it SHOULD discover but does not.",
+    "how": "EarcrateCore.reference_recall(path, taste_profile) / POST /api/study/recall. Matches reference sources to library tracks (normalized artist|title), then compares the reference PROVEN pairings (reference_edges) to the engine OWN compatibility graph. Reports: sources_in_library, recoverable (own both sources), recovered (engine linked them), recall, and missed[] (recoverable-but-not-recovered = the discovery gap, ranked by the masters overlap time).",
+    "run_it (box)": "reference_recall(\"earcrate/reference/girltalk_samples.json\", \"girl_talk_v1\") after analyze+crate+graph. 621 proven Girl Talk edges are the first answer key; sources_in_library tells us coverage, recall tells us discovery quality, missed[] is the punch-list.",
+    "extends_to_roster": "Any producer with documented per-track sample sources (WhoSampled/Tracklib) can be turned into a *_samples.json answer key the same way, so each of the 22 remix personas gets a recall score against how the real producer paired sources.",
+    "gated": "test_reference_recall (pure recall math + seeded-DB end-to-end); 143/143."
   }
 }

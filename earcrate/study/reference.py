@@ -307,6 +307,84 @@ def reference_edges(dataset: Any) -> List[Dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------- #
+# 3b) reference_recall — the answer-key benchmark                              #
+# --------------------------------------------------------------------------- #
+def source_key(artist: Any, title: Any) -> str:
+    """Normalized identity for matching a reference source to a library track:
+    lowercased, alphanumerics only, feat./remix noise dropped. Deterministic."""
+    def _n(s: Any) -> str:
+        s = str(s or "").lower()
+        for cut in (" feat", " ft.", " ft ", " featuring", " (feat", " prod"):
+            i = s.find(cut)
+            if i != -1:
+                s = s[:i]
+        return "".join(ch for ch in s if ch.isalnum())
+    return _n(artist) + "|" + _n(title)
+
+
+def reference_source_keys(dataset: Any) -> List[str]:
+    """Every distinct source track the reference draws on (normalized keys), in
+    first-seen order."""
+    data = load_reference(dataset)
+    seen: Dict[str, None] = {}
+    for t in data["tracks"]:
+        for s in t["samples"]:
+            seen.setdefault(source_key(s["source_artist"], s["source_title"]), None)
+    return list(seen.keys())
+
+
+def recall_report(dataset: Any, present_source_keys: Any,
+                  recovered_pair_keys: Any) -> Dict[str, Any]:
+    """The answer-key benchmark: of the PROVEN pairings the masters actually used,
+    how many does OUR engine independently recover from OUR library?
+
+    * ``present_source_keys``  — normalized source keys (source_key()) that exist
+      in the library (what we even HAVE to work with).
+    * ``recovered_pair_keys``  — set of frozenset({keyA, keyB}) pairs the engine
+      independently linked (compatibility edge / positive score) between atoms of
+      those two sources.
+
+    A proven edge is RECOVERABLE only when BOTH its sources are present (you can't
+    rediscover a pairing whose material you don't own); of those, RECOVERED when
+    the engine linked them. ``missed`` lists the recoverable-but-not-recovered
+    pairings — exactly what the system SHOULD have discovered on its own but
+    didn't, ranked by the masters' overlap time (strongest evidence first)."""
+    present = set(present_source_keys or [])
+    recovered = set(recovered_pair_keys or [])
+    edges = reference_edges(dataset)
+    all_sources = reference_source_keys(dataset)
+    recoverable: List[Dict[str, Any]] = []
+    recovered_edges: List[Dict[str, Any]] = []
+    missed: List[Dict[str, Any]] = []
+    seen_pairs: set = set()
+    for e in edges:
+        ka = source_key(e["a"]["artist"], e["a"]["title"])
+        kb = source_key(e["b"]["artist"], e["b"]["title"])
+        pair = frozenset((ka, kb))
+        if ka == kb or pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        if ka in present and kb in present:
+            recoverable.append(e)
+            if pair in recovered:
+                recovered_edges.append(e)
+            else:
+                missed.append(e)
+    n_recov = len(recoverable)
+    missed.sort(key=lambda e: -float(e.get("overlap_s") or 0.0))
+    return {
+        "album": load_reference(dataset)["album"],
+        "sources_total": len(all_sources),
+        "sources_in_library": sum(1 for k in all_sources if k in present),
+        "proven_pairs_total": len(seen_pairs),
+        "recoverable": n_recov,
+        "recovered": len(recovered_edges),
+        "recall": _round(len(recovered_edges) / n_recov) if n_recov else None,
+        "missed": [{"a": e["a"], "b": e["b"], "overlap_s": e["overlap_s"]} for e in missed[:25]],
+    }
+
+
+# --------------------------------------------------------------------------- #
 # 4) calibrate_profile                                                        #
 # --------------------------------------------------------------------------- #
 # Each entry maps a measured fingerprint value onto the profile field it should

@@ -1399,5 +1399,18 @@
     "IMPORTANT_finding_for_desktop": "A FIXED final-master EQ CANNOT fully rescue a render that is 10x too dark -- 2.2x of near-zero high-frequency energy is still near-zero. Measured: from earcrate-like 0.59/0.031, one corrective pass reaches only ~0.47/0.05, still short of GT. The REAL lever is UPSTREAM: high-pass the instrumental beds at the point they are summed (so the sub-200 mud never accumulates) and ensure presence-carrying layers are not buried. That change lives in the render/layer-mix loop and CANNOT be verified without the real library -- please implement/verify it on the box against real audio and tighten the FAIL thresholds toward the GT range once real renders land in it.",
     "gates": "89/89 (added 5: mud-cave fails, bottom-of-GT-range passes, fail-bands-outside-range self-consistency, low200-is-a-ceiling regression guard, corrective-moves-toward-GT).",
     "verifiable_here_vs_not": "Verified in cloud: gate logic + corrective direction/magnitude on synthetic signals via earcrate own metrics. NOT verifiable in cloud (needs real box): whether a real render now lands in the GT spectral range."
+  },
+  "transition_engine_roadmap": {
+    "reframe": "A transition is a controlled transfer of musical roles (pulse, low-end, harmony, foreground, structure, attention) between two time-varying recordings -- NOT two timestamps on a beat grid. beats[idx+bars*4] is one coordinate in that control problem.",
+    "step1_DONE": {
+      "module": "earcrate/plan/transitions.py (pure, deterministic, gated: test_transitions, 8 gates)",
+      "what": "ANCHORS -> TECHNIQUE TEMPLATE -> technique-DERIVED duration + scored plan. Anchors (clean_in/out, section_in, drop_in, outro_in, cadence, break_out) from existing downbeats+sections+hook-recurrence. Technique library (hard_cut, echo_out, long_blend, bass_swap, double_drop) with real preconditions, octave-folded tempo-warp, multi-factor technique-conditioned score. Uncertainty rule: low bpm_confidence fails long_blend/double_drop preconditions -> abstains to robust cut/echo.",
+      "status": "ADDITIVE module, NOT yet wired into the live render path. Fixed [8,4,2,1] ladder + plan_transition rule-tree still drive real renders."
+    },
+    "step2_NEEDS_NEW_FEATURES (desktop/analysis)": "Per-beat ACTIVITY curves (kick/snare/percussion/bass/vocal/lead/fx), local chord distributions, groove/microtiming (swing, syncopation, halftime prob), section-boundary probabilities, event-novelty curve. These unlock the disabled stem techniques (true stem bass_swap, spectrally-safe double_drop), phrase-aware vocal handling, and per-beat role-collision scoring C_s(c). Requires new analysis (determinism: must be the sole analyzer for a library or crates go inconsistent).",
+    "step3_NEEDS_REAL_AUDIO (desktop)": "Rendered-preview scoring: sum the actual signal at a candidate, check clipping/low-end overload/limiter-duck, predict post-EQ sub energy + short-term loudness. Wire transitions.best_transition into the composer, hear it, tune weights.",
+    "step4_RESEARCH": "Learn technique selection + control curves (EQ/fader/filter/effect envelopes) from aligned expert mixes; set-level beam search over SetState; online crowd/venue adaptation.",
+    "immediate_next": "Wire generate_transition_candidates into the composer behind a flag + a /api route so the desktop can run it on REAL track pairs and A/B it against the current rule-tree, WITHOUT disrupting the default render path. Then Step 2 features.",
+    "two_measured_but_unused_signals_this_closes": "bpm_confidence (computed, never consulted in composition -- now the abstention driver) and section labels (estimate_sections, never used in selection -- now anchor kinds)."
   }
 }

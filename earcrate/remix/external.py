@@ -79,38 +79,61 @@ def remix_anchor(feats: Dict[str, Any],
     then conforms to double-time. Likewise a key pinned at ~0.2 confidence is a guess we
     must not transpose a whole library bed to. So:
 
-      * BPM: enumerate the vocal's octave candidates in [60,180]. With ``bed_tempos``,
-        lock to the candidate closest (log-distance) to the bed's MEDIAN — the library
-        material pulls a doubled vocal back down to where real loops live. Without a bed,
-        prefer the vocal-plausible band [60,120]; halve a >130 read (V/2 >= 60).
+      * BPM: enumerate the vocal's octave candidates in [60,180]. v1 of this function
+        matched unconditionally to the bed's tempo MEDIAN, which box-verified WRONG on
+        a fast crate: girl_talk material centers ~150 BPM, so a doubled 76->152 acapella
+        matched the bed and the fold never fired — the octave error survived disguised as
+        "deliberate". The two sides are not symmetric: the BED is octave-agnostic (every
+        loop tempo-octave-folds under plan_varispeed_transform, so ~150-native material
+        plays fine anchored at 76), but the VOCAL is a fixed human performance whose felt
+        pulse the anchor must serve. So now: prefer the vocal-plausible octave in
+        [60,120] first (where sung/rapped phrasing actually lives — estimators habitually
+        double it); use the bed median only to TIE-BREAK between multiple plausible
+        octaves, never to override a lone plausible one; fall back to bed-matching only
+        when no candidate lands in the vocal band at all.
       * KEY: if ``key_confidence < 0.30`` the key is a guess — never hard-pin it. Given
         ``bed_keys`` ((root, weight) per bed atom), adopt the score-weighted dominant bed
         key (let the bed's natural key win). Otherwise keep the vocal key, low-confidence.
 
     Backward compatible: ``remix_anchor(feats)`` with no hints still returns every original
-    key. An ``anchor_source`` receipt records what drove each choice for inspection."""
+    key. An ``anchor_source`` receipt records the full candidate list and WHICH decision
+    rule fired (``bpm_fold_choice``) so a "deliberate bed match" is distinguishable from a
+    fold that silently never triggered — the ambiguity the box flagged in v1's receipts."""
     raw_bpm = float(feats.get("bpm") or 0.0)
     if not (40.0 <= raw_bpm <= 260.0):
         raw_bpm = 120.0
 
     candidates = _octave_candidates(raw_bpm)
-    bpm = raw_bpm
-    bpm_from = "vocal"
     tempos = [float(t) for t in (bed_tempos or []) if t and float(t) > 0.0]
-    if tempos:
-        med = float(median(tempos))
-        target = math.log2(med) if med > 0 else math.log2(max(1e-6, raw_bpm))
-        bpm = min(candidates, key=lambda c: abs(math.log2(c) - target))
-        bpm_from = "bed_matched" if abs(bpm - raw_bpm) > 1e-6 else "vocal"
+    bed_median = float(median(tempos)) if tempos else None
+    # OCTAVE POLICY (box-verified v1 was wrong): v1 matched the bed's native median,
+    # which on a fast crate (girl_talk lives ~150) kept a doubled acapella at 156
+    # "deliberately". But the two sides are not symmetric: the BED is octave-agnostic
+    # (plan_varispeed_transform tempo-octave-folds every loop, so 156-native material
+    # plays fine under a 78 anchor), while the VOCAL is a fixed human performance whose
+    # felt pulse the anchor exists to serve. So: prefer the vocal-plausible octave
+    # ([60,120] — sung/rapped phrasing lives there; estimators double it), use the bed
+    # median only to break ties WITHIN that band, and fall back to bed matching only
+    # when no candidate is plausible. Every decision lands in anchor_source receipts.
+    plausible = [c for c in candidates if _VOCAL_BAND[0] <= c <= _VOCAL_BAND[1]]
+    if _VOCAL_BAND[0] <= raw_bpm <= _VOCAL_BAND[1]:
+        bpm, bpm_from, fold_choice = raw_bpm, "vocal", "raw_in_vocal_band"
+    elif len(plausible) == 1:
+        bpm, bpm_from, fold_choice = plausible[0], "vocal_band_fold", "single_plausible_octave"
+    elif len(plausible) > 1:
+        if bed_median:
+            _t = math.log2(bed_median)
+            bpm, bpm_from, fold_choice = (min(plausible, key=lambda c: abs(math.log2(c) - _t)),
+                                          "vocal_band_fold", "bed_median_tiebreak")
+        else:
+            bpm, bpm_from, fold_choice = (min(plausible, key=lambda c: abs(math.log2(c) - math.log2(raw_bpm))),
+                                          "vocal_band_fold", "nearest_to_raw_tiebreak")
+    elif bed_median:
+        _t = math.log2(bed_median)
+        bpm, bpm_from, fold_choice = (min(candidates, key=lambda c: abs(math.log2(c) - _t)),
+                                      "bed_matched", "no_plausible_octave_bed_matched")
     else:
-        in_band = [c for c in candidates if _VOCAL_BAND[0] <= c <= _VOCAL_BAND[1]]
-        if _VOCAL_BAND[0] <= raw_bpm <= _VOCAL_BAND[1]:
-            bpm = raw_bpm
-        elif in_band:
-            bpm = min(in_band, key=lambda c: abs(math.log2(c) - math.log2(raw_bpm)))
-        elif raw_bpm > 130.0 and (raw_bpm / 2.0) >= _VOCAL_BAND[0]:
-            bpm = raw_bpm / 2.0
-        bpm_from = "halved" if bpm < raw_bpm - 1e-6 else "vocal"
+        bpm, bpm_from, fold_choice = raw_bpm, "vocal", "no_plausible_octave_kept_raw"
 
     key_root = int(feats.get("key_root") or 0) % 12
     key_mode = int(feats.get("key_mode") if feats.get("key_mode") is not None else 1)
@@ -134,6 +157,9 @@ def remix_anchor(feats: Dict[str, Any],
         "anchor_source": {
             "bpm_raw": round(raw_bpm, 3),
             "bpm_from": bpm_from,
+            "bpm_fold_tested": candidates,
+            "bpm_fold_choice": fold_choice,
+            "bpm_bed_median": round(bed_median, 3) if bed_median else None,
             "key_from": key_from,
             "key_conf": key_conf,
         },

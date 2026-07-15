@@ -34,25 +34,59 @@ def test_remix_anchor_reads_and_guards_tempo():
 
 
 # ---- F2: BPM octave disambiguation. A bare acapella's tempo estimate famously
-#      doubles (76 -> a confident 152). The bed's own tempos, or the vocal-plausible
-#      band, must fold that clean 2x back down instead of railing the bed double-time ----
+#      doubles (76 -> a confident 152). The vocal-plausible band [60,120] must fold
+#      that clean 2x back down — box-verified regression: v1 matched unconditionally
+#      to the bed's tempo MEDIAN, which on a fast crate (girl_talk ~150 native) meant
+#      a doubled 76->152 acapella matched the bed and the fold silently never fired.
+#      The fold must not depend on what the bed's tempo happens to be. ----
 
-def test_remix_anchor_bpm_folds_to_bed_median():
-    # Bill Withers case: vocal reads a confident 152 (2x of ~76); the library bed lives
-    # around 95-115 BPM. The bed's median pulls the vocal's octave down to 76.
-    bed = [96.0, 104.0, 110.0, 100.0, 115.0]
+def test_remix_anchor_bpm_folds_regardless_of_bed_tempo():
+    # Bill Withers case, box-reproduced: vocal reads a confident 152 (2x of ~76). A
+    # FAST crate (girl_talk-like, median ~150 -- the exact case v1 got wrong) must
+    # NOT trap the anchor at 152 just because the bed lives there too.
+    fast_bed = [148.0, 150.0, 152.0, 149.0, 151.0]
     a = remix_anchor({"bpm": 152.0, "key_root": 9, "key_mode": 0, "key_confidence": 0.9,
-                      "bpm_confidence": 0.96}, bed_tempos=bed)
-    assert abs(a["bpm"] - 76.0) < 1e-6, a["bpm"]
-    assert a["anchor_source"]["bpm_from"] == "bed_matched"
+                      "bpm_confidence": 0.96}, bed_tempos=fast_bed)
+    assert abs(a["bpm"] - 76.0) < 1e-6, a["bpm"]  # NOT 152 -- the v1 regression
+    assert a["anchor_source"]["bpm_from"] == "vocal_band_fold"
+    assert a["anchor_source"]["bpm_fold_choice"] == "single_plausible_octave"
     assert a["anchor_source"]["bpm_raw"] == 152.0
+    assert a["anchor_source"]["bpm_fold_tested"] == [152.0, 76.0]
 
 
-def test_remix_anchor_bpm_halves_without_bed():
-    # No bed hints: a >130 read is folded into the vocal-plausible band [60,120].
+def test_remix_anchor_bpm_folds_without_bed():
+    # No bed hints at all: still folds via the vocal-plausible band, same result.
     a = remix_anchor({"bpm": 152.0, "key_root": 9, "key_mode": 0, "key_confidence": 0.9})
     assert abs(a["bpm"] - 76.0) < 1e-6, a["bpm"]
-    assert a["anchor_source"]["bpm_from"] == "halved"
+    assert a["anchor_source"]["bpm_from"] == "vocal_band_fold"
+    assert a["anchor_source"]["bpm_fold_choice"] == "single_plausible_octave"
+
+
+def test_remix_anchor_bpm_slow_bed_also_folds_to_vocal_band():
+    # And a SLOW bed (median ~76) gives the identical 76 result -- proving the fold
+    # is driven by vocal plausibility, not by agreement with whatever bed happens to
+    # be on hand (that dependency was the bug).
+    slow_bed = [74.0, 76.0, 78.0, 75.0, 77.0]
+    a = remix_anchor({"bpm": 152.0, "key_root": 9, "key_mode": 0, "key_confidence": 0.9},
+                     bed_tempos=slow_bed)
+    assert abs(a["bpm"] - 76.0) < 1e-6, a["bpm"]
+    assert a["anchor_source"]["bpm_from"] == "vocal_band_fold"
+
+
+def test_remix_anchor_bpm_multi_plausible_octave_uses_bed_tiebreak():
+    # The one real ambiguous case: a very fast read (240) has TWO octaves that both
+    # land in the vocal-plausible band (120 and 60). With a bed, the median tie-breaks.
+    a_fast_bed = remix_anchor({"bpm": 240.0, "key_root": 0, "key_mode": 0, "key_confidence": 0.9},
+                              bed_tempos=[112.0, 118.0, 120.0, 115.0])
+    assert abs(a_fast_bed["bpm"] - 120.0) < 1e-6, a_fast_bed["bpm"]
+    assert a_fast_bed["anchor_source"]["bpm_fold_choice"] == "bed_median_tiebreak"
+    a_slow_bed = remix_anchor({"bpm": 240.0, "key_root": 0, "key_mode": 0, "key_confidence": 0.9},
+                              bed_tempos=[58.0, 62.0, 60.0, 61.0])
+    assert abs(a_slow_bed["bpm"] - 60.0) < 1e-6, a_slow_bed["bpm"]
+    # Without a bed, prefer the smaller fold (halve once, not twice).
+    a_no_bed = remix_anchor({"bpm": 240.0, "key_root": 0, "key_mode": 0, "key_confidence": 0.9})
+    assert abs(a_no_bed["bpm"] - 120.0) < 1e-6, a_no_bed["bpm"]
+    assert a_no_bed["anchor_source"]["bpm_fold_choice"] == "nearest_to_raw_tiebreak"
 
 
 # ---- F2: key-confidence floor. A key pinned at ~0.2 is a guess. We must NOT transpose

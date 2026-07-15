@@ -1,5 +1,28 @@
 # EarCrate — CHANGELOG
 
+## v0.8.30 — F2 octave fold: fix the fast-crate trap the box's v0.8.29 re-verification caught
+- FIX **BPM octave fold ignored the bed's tempo distribution**: v1 of `remix_anchor`
+  matched a doubled vocal read unconditionally to the bed's tempo MEDIAN. On a FAST
+  crate (girl_talk-native ~150 BPM — exactly the box's repro case), a doubled
+  76->152 acapella matched the bed and the fold silently never fired, so the box's
+  v0.8.29 re-verification still saw 156.605 BPM unchanged from v0.8.27. The bed and
+  the vocal are not symmetric: every library loop tempo-octave-folds under
+  `plan_varispeed_transform` (bed material plays fine at any anchor), but the vocal
+  is a fixed human performance whose felt pulse the anchor must serve. New policy:
+  prefer the vocal-plausible octave ([60,120]) unconditionally; use the bed median
+  only to tie-break the rare case where TWO octaves are both plausible (verified
+  reachable only at raw reads near 240 BPM); fall back to bed-matching only when no
+  octave lands in the vocal band at all. Reproduced the box's exact numbers
+  (156.605 BPM, fast bed ~150) and confirmed the fix folds to 78.3, not 156.6.
+- `anchor_source` now carries `bpm_fold_tested` (every candidate considered) and
+  `bpm_fold_choice` (which rule fired: `raw_in_vocal_band` / `single_plausible_octave`
+  / `bed_median_tiebreak` / `nearest_to_raw_tiebreak` / bed-matched fallbacks) —
+  answers the box's request to distinguish "deliberate bed match" from "fold never
+  triggered" directly from the receipt, no more ambiguity.
+- 6 gates updated/added in `tests/test_external_remix.py`, including a same-bed-
+  tempo-different-result pair (fast bed vs slow bed both correctly fold to 76) that
+  encodes the regression so it can't silently return.
+
 ## v0.8.29 — PR-27 review fixes: anti-aliased resampler, external-vocal integrity, dist import guard
 - FIX **render brightness at the source**: `resample_or_fit` was `np.interp` —
   linear interpolation, a first-order-hold low-pass sitting in the render hot

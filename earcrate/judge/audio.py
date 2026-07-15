@@ -1,6 +1,7 @@
 from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.ear.readiness import *
+from scipy import optimize
 def drydeck_metrics(y: np.ndarray, sr: int) -> Dict[str, float]:
     """Post-render audio metrics with an absolute audible-coverage floor.
 
@@ -223,69 +224,314 @@ def _smooth_band_gain(freqs: np.ndarray, lo_hz: float, hi_hz: Optional[float],
     return (1.0 + (amp - 1.0) * mask).astype(np.float64)
 
 
-def stable_presence_restore(y: np.ndarray, sr: int) -> np.ndarray:
-    """MEASURED, target-directed finishing EQ toward the real-Girl-Talk balance.
+def _presence_shelf_weight(freqs: np.ndarray, lo_hz: float = 3000.0,
+                           hi_hz: float = 4000.0) -> np.ndarray:
+    """Lower-knee-anchored shelf weight: 0 at/below lo_hz, 1 at/above hi_hz,
+    quintic smootherstep (C2-continuous, no zippering) in between, interpolated
+    in LOG frequency so the transition behaves consistently in musical terms.
 
-    The previous version was a FIXED shelf (always -mud/+2.2x presence, blind to
-    the mix in hand) and it demonstrably under-corrected: the calibrated gate
-    kept measuring high3000_share ~0.067 against the 0.30 target and rejecting
-    every render — the box's re-verification of #4 named the treble-dead chain
-    the SOLE remaining blocker. This version closes the loop: it MEASURES the
-    mix's low200/high3000 shares with the exact spectral ruler the gate uses,
-    solves the shelf gains that move those shares to the ground-truth targets
-    (low200 ~0.20 ceiling, high3000 ~0.30), applies them with smooth band edges,
-    re-measures, and iterates (<=3 passes, cumulative gain bounded to +/-14 dB).
+    A logistic curve centered AT the gate's measurement boundary (the previous
+    approach) is only 50% of its amplitude at that exact boundary and doesn't
+    reach full gain until several widths above it -- which both under-delivers
+    right where the gate starts counting AND spills real boost into the
+    1.4-3kHz vocal-presence/intelligibility range this shelf has no business
+    touching. Anchoring the LOWER knee at the measurement boundary means zero
+    gain is applied at or below it -- no collateral lift into protected
+    territory -- while the plateau is reached by a musically reasonable
+    ~0.4-octave transition (3.0-4.0kHz default), not deep into the midrange."""
+    if lo_hz <= 0 or hi_hz <= lo_hz:
+        raise ValueError("Require 0 < lo_hz < hi_hz")
+    safe_freqs = np.maximum(freqs, np.finfo(float).tiny)
+    t = np.log2(safe_freqs / lo_hz) / np.log2(hi_hz / lo_hz)
+    t = np.clip(t, 0.0, 1.0)
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 
-    Still honest: a pure time-invariant linear EQ per pass — it cannot
-    manufacture material, coverage, or dynamics (rms_std_db is untouched by
-    construction), so an arrangement with dead air or flat energy still fails
-    the gate. It only stops TONE from vetoing otherwise-good material."""
-    if y.size < sr // 2:
-        return y.astype(np.float32)
+
+def _presence_shelf_gain(freqs: np.ndarray, shelf_db: float, lo_hz: float = 3000.0,
+                         hi_hz: float = 4000.0) -> np.ndarray:
+    """Amplitude gain for the presence shelf; gain interpolated in dB (not
+    linear amplitude) across the transition, per the lower-knee weight."""
+    weight = _presence_shelf_weight(freqs, lo_hz, hi_hz)
+    return np.power(10.0, shelf_db * weight / 20.0)
+
+
+def _solve_presence_shelf_db(freqs: np.ndarray, bin_power: np.ndarray, target_share: float,
+                             max_db: float, boundary_hz: float = 3000.0,
+                             shelf_lo_hz: float = 3000.0, shelf_hi_hz: float = 4000.0) -> Optional[float]:
+    """Required plateau shelf gain (dB) to reach ``target_share``, solved
+    against the ACTUAL shelf response and the track's ACTUAL per-bin power --
+    not an idealized step-function formula. Returns 0.0 if already there,
+    None if unreachable within max_db (the caller must refuse, not clamp)."""
+    if bin_power.sum() <= 0:
+        return None
+    counted = freqs > boundary_hz
+
+    def _predicted_share(shelf_db: float) -> float:
+        power_gain = np.power(10.0, shelf_db * _presence_shelf_weight(freqs, shelf_lo_hz, shelf_hi_hz) / 10.0)
+        corrected = bin_power * power_gain
+        return float(corrected[counted].sum() / corrected.sum())
+
+    if _predicted_share(0.0) >= target_share:
+        return 0.0
+    if _predicted_share(max_db) < target_share:
+        return None
+    return float(optimize.brentq(lambda db: _predicted_share(db) - target_share, 0.0, max_db, xtol=1e-4))
+
+
+SYSTEM_PRESENCE_CEILING_DB = 6.0
+# Absolute backstop above which the smooth-shelf finishing EQ is not validated,
+# regardless of what any persona's own thresholds would otherwise permit.
+
+
+def _log_odds_gain_db(target: float, floor_fail: float) -> float:
+    """Ideal shelf gain (dB) to move a render at a persona's own floor_fail up
+    to its restoration target, in log-odds space (the natural space for a
+    share/(1-share) ratio, not a linear or raw-ratio one).
+
+    Derivation: for an ideal filter that multiplies all power above 3kHz by K
+    and leaves everything below unchanged, the resulting high-band share is
+    s' = Ks / ((1-s) + Ks). Solving s'=target for K gives
+    K = odds(target) / odds(share), so the two thresholds (target and
+    floor_fail) that already exist in every persona's authored TasteSpec
+    directly imply a defensible gain ceiling -- no new measurement needed."""
+    def _odds(p: float) -> float:
+        p = min(max(p, 1e-9), 1.0 - 1e-9)
+        return p / (1.0 - p)
+    return 10.0 * math.log10(_odds(target) / _odds(floor_fail))
+
+
+def stable_presence_restore(y: np.ndarray, sr: int, return_receipt: bool = False,
+                            spectral_profile: Optional[Dict[str, Any]] = None) -> Any:
+    """Conservative measured finishing EQ with an auditable correction limit.
+
+    Finishing may trim excess low end, but it may only make a small presence
+    correction to material the arrangement already contains. If the calibrated
+    presence floor would require a larger broad shelf, the shelf is refused and
+    the render gate must reject the arrangement. That distinction is important:
+    a large >3 kHz boost can turn an otherwise insignificant hiss or transform
+    residue into enough spectral power to pass a naive gate.
+
+    The correction ceiling is NOT a flat constant across personas -- it is
+    min(SYSTEM_PRESENCE_CEILING_DB, the persona's own log-odds reach from its
+    authored floor_fail to its restoration target). A persona that authors a
+    wider floor_fail-to-target gap (e.g. an intentionally warmer/darker remix
+    persona) legitimately tolerates a larger correction than one authored with
+    a narrow gap -- using data every persona already carries, not a new
+    subsystem. (2026-07-15: replaced a flat 3.0dB cap that was never checked
+    against the 22 personas' own authored floor_fail/target pairs; see
+    .agent/journal for the derivation.)
+
+    ``return_receipt`` lets the publication path record whether presence was
+    naturally present, modestly corrected, or refused as an attempted rescue.
+    The default ndarray return keeps analysis callers backward compatible."""
     x = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
-    prof = GT_SPECTRAL_PROFILE
-    high_target = float(prof["high3000_share"].get("target", 0.30))
+    # Finishing and judgment must use the same ruler.  Pretty Lights is
+    # intentionally warmer/darker than Girl Talk; forcing every persona toward
+    # the GT presence floor can turn a correct rolled-off mix into needless
+    # sharpness (or, worse, promote faint separation residue).  The default is
+    # unchanged for callers without a persona.
+    prof = spectral_profile or GT_SPECTRAL_PROFILE
+    before_low, before_high, _ = _band_shares(x, sr) if x.size else (0.0, 0.0, 0.0)
+    receipt: Dict[str, Any] = {
+        "policy": "presence_is_not_noise_rescue_v1",
+        "before_low200_share": before_low,
+        "before_high3000_share": before_high,
+        "low_cut_db": 0.0,
+        "high_boost_db": 0.0,
+        "required_high_boost_db": 0.0,
+        "high_boost_cap_db": SYSTEM_PRESENCE_CEILING_DB,
+        "persona_reach_db": None,
+        "presence_rescue_refused": False,
+        "passed": True,
+        "spectral_profile": "persona" if spectral_profile is not None else "girl_talk_default",
+    }
+    if y.size < sr // 2:
+        out = x.astype(np.float32)
+        receipt.update({"after_low200_share": before_low, "after_high3000_share": before_high})
+        return (out, receipt) if return_receipt else out
+
+    # Finishing targets the acceptance floor, not the reference mean.  Chasing
+    # the 0.30 mean with a broad shelf was the loophole that promoted hiss.
+    high_floor = float(prof["high3000_share"].get("floor_warn", 0.15))
+    # A narrow margin prevents the smooth shelf from landing a few floating
+    # point ulps below the hard floor; it is not an attempt to chase the mean.
+    high_target = min(high_floor + 0.01, 1.0)
     low_target = 0.20  # real-GT mean; ceiling_warn is 0.34
-    GAIN_LIMIT = 10.0 ** (14.0 / 20.0)  # cumulative +/-14 dB safety bound
+    # The cap is derived from THIS persona's own authored floor_fail -- the
+    # gain that would be legitimate to move a render sitting at that persona's
+    # own "clearly failing" floor up to the restoration target -- capped by an
+    # absolute system backstop so no persona's authored gap can imply an
+    # unbounded shelf. Never a flat number applied identically to every genre.
+    high_floor_fail = float(prof["high3000_share"].get("floor_fail", high_floor * 0.6))
+    persona_reach_db = _log_odds_gain_db(high_target, high_floor_fail)
+    receipt["persona_reach_db"] = persona_reach_db
+    receipt["high_boost_cap_db"] = min(SYSTEM_PRESENCE_CEILING_DB, persona_reach_db)
+    LOW_GAIN_LIMIT = 10.0 ** (14.0 / 20.0)
     cum_low = 1.0
     cum_high = 1.0
-    for _ in range(3):
-        low, high, _tot = _band_shares(x, sr)
-        low_ok = low <= float(prof["low200_share"].get("ceiling_warn", 0.34))
-        high_ok = high >= float(prof["high3000_share"].get("floor_warn", 0.15))
-        if low_ok and high_ok:
-            break
-        # Solve the power multiplier that moves each band's share to its target,
-        # holding the other bands fixed: share' = m*B / (T - B + m*B).
-        def _solve(share: float, target: float) -> float:
-            share = min(max(share, 1e-6), 1.0 - 1e-6)
-            target = min(max(target, 1e-6), 1.0 - 1e-6)
-            return (target * (1.0 - share)) / (share * (1.0 - target))
-        m_low = _solve(low, low_target) if not low_ok else 1.0
-        m_high = _solve(high, high_target) if not high_ok else 1.0
-        a_low = math.sqrt(max(1e-6, m_low))
-        a_high = math.sqrt(max(1e-6, m_high))
-        # Bound the CUMULATIVE correction; a mix so broken it needs more than
-        # +/-14 dB of shelf should fail the gate, not be EQ'd into a pass.
-        a_low = max(1.0 / GAIN_LIMIT / cum_low, min(a_low, 1.0))          # low only ever cut
-        a_high = max(1.0, min(a_high, GAIN_LIMIT / cum_high))             # high only ever boosted
-        if abs(a_low - 1.0) < 1e-3 and abs(a_high - 1.0) < 1e-3:
-            break
-        cum_low *= a_low
-        cum_high *= a_high
+
+    def _solve(share: float, target: float) -> float:
+        share = min(max(share, 1e-6), 1.0 - 1e-6)
+        target = min(max(target, 1e-6), 1.0 - 1e-6)
+        return (target * (1.0 - share)) / (share * (1.0 - target))
+
+    def _apply(low_amp: float = 1.0, high_shelf_db: float = 0.0) -> None:
+        nonlocal x
         n = int(2 ** math.ceil(math.log2(max(32, x.size))))
         spec = np.fft.rfft(x, n=n)
         freqs = np.fft.rfftfreq(n, 1 / sr)
-        gain = _smooth_band_gain(freqs, 0.0, 200.0, a_low) * _smooth_band_gain(freqs, 3000.0, None, a_high)
-        gain[freqs < 30] *= 0.60  # sub-rumble never helps; always tame it
+        gain = _smooth_band_gain(freqs, 0.0, 200.0, low_amp)
+        if high_shelf_db:
+            gain = gain * _presence_shelf_gain(freqs, high_shelf_db)
+        gain[freqs < 30] *= 0.60
         x = np.fft.irfft(spec * gain, n=n)[: x.size].astype(np.float32)
+
+    def _bin_power_for_high_solve() -> Tuple[np.ndarray, np.ndarray]:
+        """Per-frequency-bin power (summed over time frames), same STFT
+        definition _band_shares uses, so the solver predicts against the exact
+        ruler the gate measures with."""
+        stft = np.abs(librosa.stft(x, n_fft=4096, hop_length=2048)) ** 2
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=4096)
+        return freqs, stft.sum(axis=1)
+
+    # Low-end correction cannot invent high-frequency material.  Perform it
+    # first, then judge how much presence boost the corrected mix still needs.
+    for _ in range(3):
+        low, high, _tot = _band_shares(x, sr)
+        low_ok = low <= float(prof["low200_share"].get("ceiling_warn", 0.34))
+        if low_ok:
+            break
+        a_low = math.sqrt(max(1e-6, _solve(low, low_target)))
+        a_low = max(1.0 / LOW_GAIN_LIMIT / cum_low, min(a_low, 1.0))
+        if abs(a_low - 1.0) < 1e-3:
+            break
+        cum_low *= a_low
+        _apply(low_amp=a_low)
+
+    # Response-aware: solve for the shelf gain against the ACTUAL post-low-cut
+    # spectrum and the ACTUAL shelf response (lower-knee-anchored, no
+    # collateral lift into 1.4-3kHz), not an idealized step-function formula.
+    # One correct solve, not iterative approximation toward one.
+    _, high, _tot = _band_shares(x, sr)
+    if high < high_floor:
+        solve_freqs, bin_power = _bin_power_for_high_solve()
+        required_db = _solve_presence_shelf_db(
+            solve_freqs, bin_power, high_target,
+            max_db=receipt["high_boost_cap_db"], boundary_hz=3000.0,
+        )
+        if required_db is None:
+            receipt["presence_rescue_refused"] = True
+            receipt["passed"] = False
+            # required_high_boost_db still reported for the receipt/refusal
+            # message even though we refuse to apply it: solve once more
+            # without the cap to report an honest (if unenforced) figure.
+            uncapped = _solve_presence_shelf_db(
+                solve_freqs, bin_power, high_target,
+                max_db=SYSTEM_PRESENCE_CEILING_DB * 4.0, boundary_hz=3000.0,
+            )
+            receipt["required_high_boost_db"] = float(uncapped) if uncapped is not None else float(SYSTEM_PRESENCE_CEILING_DB * 4.0)
+        elif required_db > 1e-3:
+            receipt["required_high_boost_db"] = required_db
+            cum_high = 10.0 ** (required_db / 20.0)
+            _apply(high_shelf_db=required_db)
+            # Verify against the real render, the same way the gate will --
+            # a predicted solve is not a receipt until it's been measured.
+            _, verify_high, _ = _band_shares(x, sr)
+            if verify_high < high_floor - 1e-4:
+                receipt["presence_rescue_refused"] = True
+                receipt["passed"] = False
+
     peak = float(np.max(np.abs(x))) if x.size else 0.0
     if peak > 0.94:
         x *= 0.94 / peak
-    return np.nan_to_num(x.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    out = np.nan_to_num(x.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    after_low, after_high, _ = _band_shares(out, sr)
+    receipt.update({
+        "low_cut_db": 20.0 * math.log10(max(cum_low, 1e-12)),
+        "high_boost_db": 20.0 * math.log10(max(cum_high, 1e-12)),
+        "after_low200_share": after_low,
+        "after_high3000_share": after_high,
+    })
+    if after_high < high_floor:
+        receipt["passed"] = False
+    return (out, receipt) if return_receipt else out
 
-def judge_audio_file(path: Path, ref_path: Optional[Path] = None) -> Dict[str, Any]:
-    """Reference-comparison harness from Addendum A0."""
+
+def periodic_cycle_receipt(y: np.ndarray, cycle_samples: int) -> Dict[str, Any]:
+    """Verify repeated render context before publishing a seamless middle cycle.
+
+    A loop is not certified by fading its edges.  The arrangement must render at
+    least four consecutive copies; the two interior cycles must be the same
+    signal (within numerical/render state tolerance).  Publishing cycle two then
+    preserves the already-rendered cycle-two -> cycle-three transition at its
+    file boundary, with a full cycle of DSP context on either side.
+    """
+    n = int(cycle_samples)
+    if n <= 0 or y.size < n * 4:
+        return {
+            "passed": False,
+            "cycle_samples": n,
+            "available_samples": int(y.size),
+            "repeat_error_db": 0.0,
+            "reason": "seamless loop verification requires four complete rendered cycles",
+        }
+    middle = y[n:2 * n].astype(np.float64)
+    following = y[2 * n:3 * n].astype(np.float64)
+    signal_rms = float(np.sqrt(np.mean(middle * middle)) + 1e-12)
+    error_rms = float(np.sqrt(np.mean((middle - following) ** 2)) + 1e-12)
+    error_db = float(20.0 * np.log10(error_rms / signal_rms))
+    return {
+        "passed": error_db <= -60.0,
+        "cycle_samples": n,
+        "available_samples": int(y.size),
+        "repeat_error_db": error_db,
+        "threshold_db": -60.0,
+        "crop_start_sample": n,
+        "crop_end_sample": 2 * n,
+        "rule": "cycle two must match cycle three; publish cycle two with rendered context on both sides",
+    }
+
+def reference_fidelity_gates(render: Dict[str, Any], reference: Dict[str, Any]) -> Dict[str, Any]:
+    """Reference-relative acceptance kept separate from the generic GT v1.1 gate.
+
+    A supplied producer reference may intentionally live outside Girl Talk's
+    spectral distribution.  We never weaken or overwrite the v1.1 verdict; this
+    second verdict asks whether the render preserves the supplied reference's
+    dynamics, silence density, low-band balance, tempo, and tonal diversity.
+    """
+    ref_bpm = float(reference.get("bpm") or 0.0)
+    render_bpm = float(render.get("bpm") or 0.0)
+    bpm_tolerance = max(3.0, abs(ref_bpm) * 0.05) if ref_bpm > 0 else 0.0
+    gates = {
+        "rms_std_delta": abs(float(render.get("rms_std_db") or 0.0) - float(reference.get("rms_std_db") or 0.0)) <= 1.5,
+        "silence_ratio_delta": abs(float(render.get("silence_ratio") or 0.0) - float(reference.get("silence_ratio") or 0.0)) <= 0.12,
+        "low200_share_delta": abs(float(render.get("low200_share") or 0.0) - float(reference.get("low200_share") or 0.0)) <= 0.15,
+        "bpm_delta": (abs(render_bpm - ref_bpm) <= bpm_tolerance) if ref_bpm > 0 else True,
+        "tonal_diversity_not_collapsed": int(render.get("distinct_pcs") or 0) >= max(1, int(reference.get("distinct_pcs") or 0) - 2),
+    }
+    return {
+        "gates": gates,
+        "passed": bool(all(gates.values())),
+        "tolerances": {
+            "rms_std_db_absolute_delta_max": 1.5,
+            "silence_ratio_absolute_delta_max": 0.12,
+            "low200_share_absolute_delta_max": 0.15,
+            "bpm_absolute_delta_max": round(bpm_tolerance, 3),
+            "tonal_diversity_allowed_drop": 2,
+        },
+        "rule": "reference fidelity is additive; it never replaces or weakens generic v1.1 gates",
+    }
+
+
+def judge_audio_file(path: Path, ref_path: Optional[Path] = None,
+                     spectral_profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Reference-comparison harness from Addendum A0.
+
+    ``spectral_profile`` (a persona's merged spectral target, as returned by
+    ``EarcrateCore._persona_spectral_profile``) adds an ADDITIVE persona verdict
+    next to the generic v1.1 gates: the v1.1 verdict is never weakened, but a
+    persona-correct render (e.g. Pretty Lights' warm low end failing the Girl
+    Talk mud ceiling) is no longer reported as simply broken."""
     def metrics_one(p: Path) -> Dict[str, Any]:
         sr = 22050
         y = decode_audio(p, sr=sr)
@@ -356,6 +602,19 @@ def judge_audio_file(path: Path, ref_path: Optional[Path] = None) -> Dict[str, A
     }
     out["v1_1_gates"] = gates
     out["passes_all_v1_1_gates"] = bool(all(gates.values()))
+    if spectral_profile:
+        lo = spectral_profile.get("low200_share") or {}
+        hi = spectral_profile.get("high3000_share") or {}
+        rms = spectral_profile.get("rms_std_db") or {}
+        persona_gates = {
+            "rms_std_db": render["rms_std_db"] >= float(rms.get("floor", 3.5)),
+            "silence_ratio": render["silence_ratio"] <= 0.22,
+            "low200_share": render["low200_share"] <= float(lo.get("ceiling_fail", GT_SPECTRAL_PROFILE["low200_share"]["ceiling_fail"])),
+            "distinct_pcs": render["distinct_pcs"] >= 4,
+        }
+        out["persona_gates"] = persona_gates
+        out["passes_all_persona_gates"] = bool(all(persona_gates.values()))
+        out["persona_gate_rule"] = "additive persona verdict; v1.1 gates above are unchanged"
     if ref_path:
         ref = metrics_one(ref_path)
         out["reference"] = ref
@@ -366,6 +625,11 @@ def judge_audio_file(path: Path, ref_path: Optional[Path] = None) -> Dict[str, A
             "distinct_pcs": int(render["distinct_pcs"] - ref["distinct_pcs"]),
             "bpm": round(render["bpm"] - ref["bpm"], 3),
         }
+        fidelity = reference_fidelity_gates(render, ref)
+        out["reference_fidelity_gates"] = fidelity["gates"]
+        out["passes_reference_fidelity"] = fidelity["passed"]
+        out["reference_fidelity_tolerances"] = fidelity["tolerances"]
+        out["reference_fidelity_rule"] = fidelity["rule"]
     return out
 
 

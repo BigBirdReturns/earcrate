@@ -9,7 +9,7 @@ from earcrate.study.reference import load_reference, reference_fingerprint, refe
 from earcrate.materials.regions import propose_regions
 from earcrate.remix.external import remix_anchor, external_foreground_atom, external_vocal_window, external_remix_feasibility, fit_external_clip, external_edge_fades
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
-from earcrate.providers import get, stem_capability
+from earcrate.providers import get, stem_capability, GpuWorkQueue
 
 # Byte ceiling for the L3 stem cache on the NVMe. The 4060's separations are the
 # expensive, REUSABLE unit (one source's stems serve every mashup that touches
@@ -204,6 +204,10 @@ class EarcrateCore:
         self.db: Optional[sqlite3.Connection] = None
         self.status_lock = threading.Lock()
         self.status: Dict[str, Any] = {"busy": False, "message": "idle", "progress": 0, "last_error": None, "last_render_path": None, "perf_summary": None, "perf_ledger_path": None}
+        # Lazy-singleton GPU work queue (see _gpu_queue): built on first use and
+        # reused for the life of this core, so jobs enqueued in one request are
+        # still there for a later drain/status request against the same server.
+        self._gpu_work_queue: Optional[GpuWorkQueue] = None
         self.load_config_if_present()
 
     def set_status(self, message: str, progress: Optional[float] = None, busy: Optional[bool] = None, error: Optional[str] = None) -> None:
@@ -1382,14 +1386,94 @@ class EarcrateCore:
             "capability": stem_capability(), "roles": role_list,
         }
 
+    def _gpu_queue(self) -> GpuWorkQueue:
+        """Lazy-singleton GPU work queue: the SEAM that turns the GPU from a
+        demucs-only tool into a multi-tenant accelerator. Built once and reused
+        for this core's lifetime, so a job enqueued by one request is still
+        queued for a later drain/status request. The ``separate`` kind's
+        provider/capability lookups are wrapped in an extra lambda (not
+        captured bound methods) so they are re-resolved on EVERY call, not
+        frozen at queue-construction time -- that is what lets tests patch
+        ``core._resolve_stem_provider`` / ``earcrate.app.stem_capability`` and
+        have the ALREADY-BUILT queue honor the patch."""
+        if self._gpu_work_queue is None:
+            # THROUGH the registered seam (get("gpu_queue")), not a bare
+            # GpuWorkQueue() constructor call -- core reaches this capability
+            # through the provider registry like every other seam. The
+            # registry factory takes no args, so the box-specific wiring
+            # (which ArtifactStore, which StemProvider) happens here, once.
+            queue = get("gpu_queue")
+            queue.wire_stem_provider(lambda: self._resolve_stem_provider(),
+                                     lambda: stem_capability())
+            self._gpu_work_queue = queue
+        return self._gpu_work_queue
+
+    def gpu_queue_status(self) -> Dict[str, Any]:
+        """Inspect the GPU work queue: registered kinds with honest capability,
+        queued counts by kind/lane, the running job, and lifetime done/error/
+        refused/cached-hit counters. Pure inspection -- never touches the GPU."""
+        return self._gpu_queue().snapshot()
+
+    def gpu_enqueue(self, kind: str, file_ids: Optional[List[str]] = None,
+                    taste_profile: str = "", limit: int = 0, lane: str = "warm",
+                    roles: Any = ("vocals", "no_vocals")) -> Dict[str, Any]:
+        """Enqueue GPU work for ``kind`` (\"separate\", or a future tenant like
+        \"beats\"/\"embed\"/\"transcribe\" once a box installs and registers it).
+        Targets explicit ``file_ids`` when given, else the same taste-profile
+        priority ranking ``stem_warm_candidates`` uses. An unavailable kind
+        returns ONE refusal dict up front -- nothing is queued, nothing raises."""
+        queue = self._gpu_queue()
+        cap = queue.capability(kind)
+        if not cap.get("available"):
+            return queue.refusal(kind)
+        if file_ids:
+            placeholders = ",".join("?" for _ in file_ids)
+            rows = self.conn().execute(
+                "SELECT id file_id, path path, audio_sha256 pcm_sha FROM files WHERE id IN (%s)"
+                % placeholders, tuple(file_ids)).fetchall()
+            cands = [dict(r) for r in rows if r["pcm_sha"] and r["path"]]
+        else:
+            cands = self.stem_warm_candidates(taste_profile or "girl_talk_v1")
+        if limit and limit > 0:
+            cands = cands[:limit]
+        queued: List[Dict[str, Any]] = []
+        refusals: List[Dict[str, Any]] = []
+        for c in cands:
+            res = queue.enqueue(kind, str(c["pcm_sha"]),
+                                payload={"path": str(c["path"]), "roles": list(roles)}, lane=lane)
+            (queued if res.get("ok") else refusals).append(res)
+        return {"ok": True, "kind": kind, "lane": lane, "requested": len(cands),
+                "queued": len(queued), "refused": len(refusals),
+                "jobs": queued, "refusals": refusals[:5]}
+
+    def gpu_drain(self, max_jobs: int = 0, budget_s: float = 0.0,
+                  kinds: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Drain the GPU work queue (every kind, or a restricted set) until it
+        empties, ``max_jobs`` complete, or ``budget_s`` elapses. Meant to run via
+        ``run_background`` -- same threading story ``warm_stems`` always used;
+        this module starts no threads of its own."""
+        queue = self._gpu_queue()
+        def _progress(p: Dict[str, Any]) -> None:
+            self.set_status(
+                "gpu queue: %d ran (%d ok, %d cached, %d errors)"
+                % (p["ran"], p["ok"], p["cached"], p["errors"]), None, True)
+        return queue.drain(max_jobs=max_jobs, budget_s=budget_s, kinds=kinds, progress=_progress)
+
     def warm_stems(self, taste_profile: str = "girl_talk_v1", max_items: int = 0,
                    roles: Any = ("vocals", "no_vocals")) -> Dict[str, Any]:
         """Pre-separate the persona's cold sources into the NVMe cache using the
         GPU, in priority order, until the queue drains, ``max_items`` is hit, or the
         cache budget is reached. Skips sources already warm (no GPU) and, when the
-        cache is full, STOPS rather than evicting its own fresh work. Delegates the
-        actual separation to the SELECTED provider (the desktop-verified Demucs seam
-        on a real box); on a box without a ready GPU it is an honest no-op."""
+        cache is full, STOPS rather than evicting its own fresh work.
+
+        This is tenant #1 of the GpuWorkQueue seam (see _gpu_queue): each cold
+        source is enqueued as a \"separate\" job and drained one at a time through
+        the SAME queue that beats/embed/transcribe will ride once a box installs
+        them. The queue's \"separate\" runner delegates to the SELECTED provider
+        (the desktop-verified Demucs seam on a real box) -- identical to what this
+        method called directly before the queue existed. External behavior and
+        return shape are UNCHANGED: on a box without a ready GPU this is an
+        honest no-op, exactly as before."""
         cap = stem_capability()
         prov, name = self._resolve_stem_provider()
         if name == "noop" or not cap.get("ready"):
@@ -1401,6 +1485,7 @@ class EarcrateCore:
         store = get("artifacts")
         budget = self._cache_byte_budget()
         cands = self.stem_warm_candidates(taste_profile)
+        queue = self._gpu_queue()
         separated = 0
         skipped = 0
         errors: List[Dict[str, Any]] = []
@@ -1421,14 +1506,19 @@ class EarcrateCore:
             if not os.path.exists(path):
                 errors.append({"pcm_sha": pcm[:12], "error": "source file missing"})
                 continue
-            try:
-                sep = prov.separate(pcm, path, role_list)
-                if sep and sep.get("available"):
+            enq = queue.enqueue("separate", pcm, payload={"path": path, "roles": role_list}, lane="warm")
+            if not enq.get("ok"):
+                errors.append({"pcm_sha": pcm[:12], "error": str(enq.get("reason") or "enqueue refused")})
+            else:
+                drained = queue.drain(max_jobs=1, kinds=("separate",))
+                job_row = (drained.get("jobs") or [{}])[0]
+                if job_row.get("status") in ("done", "cached"):
                     separated += 1
                 else:
-                    errors.append({"pcm_sha": pcm[:12], "error": str((sep or {}).get("reason") or "provider produced no stems")})
-            except Exception as exc:
-                errors.append({"pcm_sha": pcm[:12], "error": str(exc)[:200]})
+                    err_row = next((e for e in (drained.get("errors") or [])
+                                    if e.get("job_id") == job_row.get("id")), None)
+                    errors.append({"pcm_sha": pcm[:12],
+                                  "error": str((err_row or {}).get("error") or "provider produced no stems")})
             self.set_status(
                 "warming stems %d/%d (%d cached)" % (separated + skipped, total, skipped),
                 (i + 1) / max(1, total), True)

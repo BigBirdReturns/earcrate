@@ -313,6 +313,12 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.run_background(self.core.warm_stems, str(data.get("taste_profile") or "girl_talk_v1"), int(data.get("max_items") or 0))); return
             if path == "/api/stems/warm_status":
                 self._json(200, self.core.stem_warm_status(str(data.get("taste_profile") or "girl_talk_v1"))); return
+            if path == "/api/gpu/status":
+                self._json(200, self.core.gpu_queue_status()); return
+            if path == "/api/gpu/enqueue":
+                self._json(200, self.core.gpu_enqueue(str(data.get("kind") or "separate"), data.get("file_ids") or None, str(data.get("taste_profile") or ""), int(data.get("limit") or 0), str(data.get("lane") or "warm"))); return
+            if path == "/api/gpu/drain":
+                self._json(200, self.core.run_background(self.core.gpu_drain, int(data.get("max_jobs") or 0), float(data.get("budget_s") or 0.0), data.get("kinds") or None)); return
             if path == "/api/materials/regions":
                 self._json(200, self.core.material_regions(str(data.get("file_id") or ""), bool(data.get("baseline", False)))); return
             if path == "/api/album":

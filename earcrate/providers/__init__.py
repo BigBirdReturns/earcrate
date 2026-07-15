@@ -59,4 +59,5 @@ def default_name(kind: str) -> Optional[str]:
 # effect, execute each module's module-level register() calls.
 from earcrate.providers.artifacts import ArtifactStore
 from earcrate.providers.stems import StemProvider, NoopStemProvider, DemucsStemProvider, stem_capability
+from earcrate.providers.gpu_queue import GpuWorkQueue, job_artifact_key
 from earcrate.providers.retrieval import CandidateRetriever, FullScanRetriever, EmbeddingProvider, NoopEmbeddingProvider, VectorIndex, LinearScanIndex

@@ -84,6 +84,22 @@ class ArtifactStore:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         return {"data": bin_path.read_bytes(), "meta": meta}
 
+    def has(self, key: str) -> bool:
+        """Existence check WITHOUT reading the artifact bytes. A cache-hit
+        predicate (cache-before-separate, warm-status polling) only needs to
+        know a key is present; ``get()`` would read the whole (possibly
+        multi-megabyte) blob just to answer that. Prefer this over
+        ``get(key) is not None`` on any hot presence-check path."""
+        bin_path, meta_path = self._paths(key)
+        return bin_path.exists() and meta_path.exists()
+
+    def bin_path(self, key: str) -> Path:
+        """The on-disk path an artifact WOULD occupy for ``key``, whether or
+        not it currently exists. Lets a caller stat/mmap/stream the blob
+        directly instead of loading it fully via ``get()``."""
+        bin_path, _meta_path = self._paths(key)
+        return bin_path
+
     def _entries(self) -> List[Dict[str, Any]]:
         out: List[Dict[str, Any]] = []
         for meta_path in self.root.glob("*.meta.json"):

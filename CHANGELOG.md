@@ -1,5 +1,37 @@
 # EarCrate — CHANGELOG
 
+## v0.8.31 — GPU work queue: the box's accelerator becomes a multi-tenant seam
+- **NEW `earcrate/providers/gpu_queue.py`**: generalizes the one-off demucs stem
+  warmer into a real accelerator seam. Job kinds are registered
+  (`kind, runner, capability_probe, artifact_kind`); every result is content-
+  addressed through the existing `ArtifactStore`, so a completed job is a cache
+  hit forever. Batch-by-kind draining is the VRAM policy for an 8GB card — one
+  model resident at a time, drained fully before switching tenants, so model-load
+  cost amortizes instead of thrashing. Two lanes (`interactive` beats `warm`) so a
+  render-time cache miss preempts the background warm queue instead of queuing
+  behind it.
+- **`separate` (demucs stem-warming) ships as tenant #1, LIVE not dark**:
+  `warm_stems` now enqueues+drains through the queue with byte-identical external
+  behavior — the entire existing `test_stem_warmer` suite passes UNMODIFIED,
+  which is the proof the refactor changed nothing observable.
+- **`beats` / `embed` / `transcribe` are declared tenants** with honest
+  capability probes: enqueuing an unavailable kind returns a clear refusal
+  (`{"available": false, "reason": "..."}`), never a raise. The box installs the
+  model and registers a runner; the queue does the rest — no engine change
+  needed to add a new accelerator tenant.
+- **`ArtifactStore.has()` / `.bin_path()`** (perf-audit finding): presence checks
+  no longer read the full artifact bytes just to test existence — was costing a
+  whole-stem-WAV read per check and made `stem_warm_status` read the entire
+  multi-GB cache to report state. `DemucsStemProvider.separate`'s cache-before-
+  separate check and `has_stems` both switched to `has()`.
+- New routes: `/api/gpu/status`, `/api/gpu/enqueue`, `/api/gpu/drain`. Existing
+  `/api/stems/warm*` unchanged (they ride the queue internally now).
+- 18 new gates (`tests/test_gpu_queue.py`): refusal honesty, cached-artifact
+  instant completion, batch-by-kind drain order, interactive-lane priority and
+  mid-batch cut-in, runner-exception safety, snapshot shape, and a queue-
+  lifetime-counter proof that `warm_stems` genuinely drives the queue rather than
+  a parallel implementation. 190/190 gates total; dist rebuilt + self-test green.
+
 ## v0.8.30 — F2 octave fold: fix the fast-crate trap the box's v0.8.29 re-verification caught
 - FIX **BPM octave fold ignored the bed's tempo distribution**: v1 of `remix_anchor`
   matched a doubled vocal read unconditionally to the bed's tempo MEDIAN. On a FAST

@@ -1,2 +1,2 @@
-__version__ = "0.8.30"
+__version__ = "0.8.31"
 from earcrate.cli import main

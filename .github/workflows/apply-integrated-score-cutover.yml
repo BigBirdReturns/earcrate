@@ -7,6 +7,13 @@ on:
     paths:
       - .agent/integrated-score-cutover.patch.gz.b64
       - .github/workflows/apply-integrated-score-cutover.yml
+  pull_request:
+    branches:
+      - claude/presence-gate-and-reorg-fixes
+    types: [synchronize, reopened]
+    paths:
+      - .agent/integrated-score-cutover.patch.gz.b64
+      - .github/workflows/apply-integrated-score-cutover.yml
 
 permissions:
   contents: write
@@ -21,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: agent/integrated-score-cutover
           fetch-depth: 0
       - name: Apply the verified integration patch
         shell: bash

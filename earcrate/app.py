@@ -11,6 +11,7 @@ from earcrate.remix.external import remix_anchor, external_foreground_atom, exte
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
 from earcrate.providers.transform import transform_capability, resolve_transform_provider, rubberband_time_stretch, rubberband_pitch_shift
+from earcrate.providers.beats import beat_capability, resolve_beat_provider
 from earcrate.providers.workqueue import GpuWorkQueue, kind_capabilities
 
 # Byte ceiling for the L3 stem cache on the NVMe. The 4060's separations are the
@@ -1980,8 +1981,15 @@ class EarcrateCore:
         with contextlib.suppress(Exception):
             tcap = dict(transform_capability())
             tcap["effective"] = resolve_transform_provider(c)
+        # Beat/downbeat/section provider — informational, like stems/transform:
+        # a box without allin1 is healthy, it just uses the librosa grid.
+        bcap = {}
+        with contextlib.suppress(Exception):
+            bcap = dict(beat_capability())
+            bcap["effective"] = resolve_beat_provider(c)
         return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict(),
-                "stem_capability": cap, "transform_capability": tcap, "gpu_work_kinds": gpu_kinds}
+                "stem_capability": cap, "transform_capability": tcap,
+                "beat_capability": bcap, "gpu_work_kinds": gpu_kinds}
 
     def startup_janitor(self) -> Dict[str, Any]:
         """Launch-time cleanup of everything old versions are known to leave behind.

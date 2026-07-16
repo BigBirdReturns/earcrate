@@ -2,6 +2,7 @@ from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.core.config import *
 from earcrate.analyze.beat_features import beat_state_features
+from earcrate.providers.beats import resolve_beat_provider, detect_beats
 def _clamp01(x: float) -> float:
     return 0.0 if x < 0.0 else (1.0 if x > 1.0 else float(x))
 
@@ -201,6 +202,22 @@ def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
         loudness = float(20 * np.log10(max(1e-9, energy)))
     vocal_like = _vocal_likelihood(y, sr)
     sections = _estimate_sections(y, sr, beat_times, downbeats)
+    beat_backend = "librosa"
+    # BeatProvider seam: OPT-IN (EARCRATE_BEATS=allin1) real beat/downbeat/section
+    # model. Default is librosa — the override is skipped entirely when unset, so
+    # this block changes the analysis for exactly nobody by default. A backend
+    # failure returns None and the librosa grid above stands.
+    with contextlib.suppress(Exception):
+        _bp = resolve_beat_provider()
+        if _bp != "librosa":
+            _ov = detect_beats(y, sr, _bp)
+            if _ov:
+                bpm = float(_ov["bpm"]); bpm_conf = float(_ov["bpm_confidence"])
+                beat_times = np.asarray(_ov["beats"], dtype=np.float32)
+                downbeats = np.asarray(_ov["downbeats"], dtype=np.float32)
+                if _ov.get("sections"):
+                    sections = _ov["sections"]
+                beat_backend = str(_ov.get("backend") or _bp)
     # Step-2 per-beat state (role activity/groove/local harmony/novelty). Guarded:
     # a beat-state failure must never fail the whole file's analysis -- it degrades
     # to {} and the region/transition layers fall back to grid-only anchors.
@@ -212,7 +229,7 @@ def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
     return {"bpm": bpm, "bpm_confidence": bpm_conf, "beats": beat_times, "downbeats": downbeats,
             "key_root": int(key_root), "key_mode": int(key_mode), "key_confidence": float(key_conf),
             "loudness_lufs": loudness, "energy": energy, "vocal_likelihood": vocal_like,
-            "sections": sections, "beat_state": beat_state}
+            "sections": sections, "beat_state": beat_state, "beat_backend": beat_backend}
 
 
 def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:

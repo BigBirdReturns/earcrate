@@ -1,6 +1,7 @@
 from earcrate.core.deps import *
 from earcrate.core.util import json_dumps, sha256_text
 from earcrate.providers.stems import stem_capability
+from earcrate.providers.beats import beat_capability
 """EARCRATE — the GPU work queue: ONE seam for every expensive accelerator job.
 
 The 4060 is a multi-tool, but until now each GPU capability (demucs stems) was
@@ -217,11 +218,18 @@ def _stems_probe() -> Dict[str, Any]:
 
 
 def _beats_probe() -> Dict[str, Any]:
-    have_torch = _module_available("torch")
-    missing = [] if have_torch else ["torch"]
-    missing.append("beat runner (e.g. beat_this / madmom) not installed")
-    return {"ready": False, "torch": have_torch, "missing": missing,
-            "unlocks": "GPU beat/downbeat grids replacing librosa beat_track on hard material"}
+    # Delegate to the BeatProvider seam so this work-queue kind and
+    # `beat_capability()` (and doctor) never disagree about readiness.
+    try:
+        cap = beat_capability()
+        return {"ready": bool(cap.get("ready")), "torch": bool(cap.get("torch")),
+                "backend": "allin1" if cap.get("allin1") else None,
+                "missing": [] if cap.get("ready") else ["allin1 (pip install allin1)"],
+                "unlocks": "real beat/downbeat/section grids (allin1) replacing librosa beat_track"}
+    except Exception:
+        have_torch = _module_available("torch")
+        return {"ready": False, "torch": have_torch, "missing": ["allin1"],
+                "unlocks": "real beat/downbeat/section grids replacing librosa beat_track"}
 
 
 def _embed_probe() -> Dict[str, Any]:

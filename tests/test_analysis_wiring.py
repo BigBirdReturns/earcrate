@@ -74,3 +74,84 @@ def test_beat_state_persists_and_drives_live_regions(tmp_path):
         assert {r["kind"] for r in base["regions"]} == {"phrase"}
         # region role capabilities are populated from the real beat_state
         assert any(r["role_probabilities"] for r in live["regions"])
+
+
+def test_beat_provider_seam_default_stable_and_allin1_override(tmp_path):
+    """M1: the BeatProvider seam. The DEFAULT is the unchanged librosa grid
+    (opt-in only; no ANALYZER_VERSION bump), a box that requests allin1 without
+    the model falls back honestly, and WHERE allin1 is installed its output
+    replaces the librosa beats/downbeats/sections. The real allin1 model is
+    rig-verified (demucs pattern); here a stub matching allin1's documented API
+    (result.beats / .downbeats / .segments / .bpm) exercises the adapter's
+    output-mapping so the wiring is de-risked before the box."""
+    import os
+    import sys
+    import types
+    import numpy as np
+    from earcrate.providers.beats import (
+        beat_capability, resolve_beat_provider, detect_beats, VALID_BEAT_PROVIDERS,
+    )
+    from earcrate.analyze.features import compute_pcm_features
+
+    # (1) probe shape + selection + honest fallback — always
+    cap = beat_capability()
+    assert {"allin1", "torch", "ready", "default", "providers"} <= set(cap)
+    assert cap["default"] == "librosa" and "librosa" in cap["providers"]
+    assert set(VALID_BEAT_PROVIDERS) == {"librosa", "allin1"}
+    os.environ.pop("EARCRATE_BEATS", None)
+    assert resolve_beat_provider(None) == "librosa"
+    prev = os.environ.get("EARCRATE_BEATS")
+    try:
+        os.environ["EARCRATE_BEATS"] = "bogus"
+        assert resolve_beat_provider(None) == "librosa"
+        # requested-but-unavailable degrades to librosa (no allin1 installed here)
+        os.environ["EARCRATE_BEATS"] = "allin1"
+        if not beat_capability()["ready"]:
+            assert resolve_beat_provider(None) == "librosa"
+        assert detect_beats(np.zeros(2048, dtype=np.float32), 22050, "librosa") is None
+    finally:
+        if prev is None:
+            os.environ.pop("EARCRATE_BEATS", None)
+        else:
+            os.environ["EARCRATE_BEATS"] = prev
+
+    # (2) default analysis is byte-identical (env unset) and marked librosa
+    os.environ.pop("EARCRATE_BEATS", None)
+    sr = 22050
+    t = np.arange(sr * 3) / sr
+    y = (0.3 * np.sin(2 * np.pi * 110 * t) + 0.2 * (np.sin(2 * np.pi * 2 * t) > 0)).astype(np.float32)
+    base = compute_pcm_features(y, sr)
+    again = compute_pcm_features(y, sr)
+    assert base["beat_backend"] == "librosa"
+    assert np.array_equal(base["beats"], again["beats"])
+
+    # (3) with a stub allin1 (documented API), the override routes and maps
+    class _Seg:
+        def __init__(self, start, end, label):
+            self.start, self.end, self.label = start, end, label
+
+    class _Res:
+        beats = [0.5, 1.0, 1.5, 2.0, 2.5]
+        downbeats = [0.5, 2.5]
+        segments = [_Seg(0.0, 1.5, "verse"), _Seg(1.5, 3.0, "chorus")]
+        bpm = 120
+
+    stub = types.ModuleType("allin1")
+    stub.analyze = lambda _path: _Res()
+    sys.modules["allin1"] = stub
+    try:
+        assert beat_capability()["ready"] is True  # stub makes it importable
+        ov = detect_beats(y, sr, "allin1")
+        assert ov is not None and ov["backend"] == "allin1"
+        assert list(np.round(ov["beats"], 3)) == [0.5, 1.0, 1.5, 2.0, 2.5]
+        assert [s["label"] for s in ov["sections"]] == ["verse", "chorus"]
+        assert abs(ov["bpm"] - 120.0) < 1e-6
+        # end-to-end: compute_pcm_features honors the opted-in backend
+        os.environ["EARCRATE_BEATS"] = "allin1"
+        feats = compute_pcm_features(y, sr)
+        assert feats["beat_backend"] == "allin1"
+        assert list(np.round(feats["beats"], 3)) == [0.5, 1.0, 1.5, 2.0, 2.5]
+        assert [s["label"] for s in feats["sections"]] == ["verse", "chorus"]
+    finally:
+        sys.modules.pop("allin1", None)
+        os.environ.pop("EARCRATE_BEATS", None)

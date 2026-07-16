@@ -50,27 +50,34 @@ has only ever passed its gates in cloud containers.
 
 Definition of done: the receipt is committed and `main` contains v0.9.
 
-## M1 — perception: real beats, downbeats, sections  (highest audible leverage)
+## M1 — perception: real beats, downbeats, sections  **[seam built, opt-in]**
 
-Adopt **allin1** (one model: beats + downbeats + tempo + key + functional
-sections) as a new work-queue job kind on the GPU box; **madmom** only if
-allin1 disappoints (madmom's py3.11/Windows install is hostile — pin a fork or
-skip). The librosa path stays as the no-torch fallback, selected by capability
+Adopt **allin1** (one model: beats + downbeats + tempo + functional sections)
+as the beat backend. The librosa path stays the default, selected by capability
 probe like `stem_provider`.
 
-- New `beats` runner registered in `providers/workqueue.py` (the kind already
-  exists with an honest probe). Results land in the L1 analysis cache;
-  **`ANALYZER_VERSION` bumps** — that is its job, stale beat_state must be
-  detectable.
-- `beat_state`, MaterialRegions, and the transition planner consume real
-  downbeat confidence and section functions (intro/verse/chorus/drop) instead
-  of max-RMS phase and every-4th-downbeat guessing.
-- Gates: `mir_eval` beat/downbeat F-measure on a small committed answer-key
-  set (synthetic + a few real annotated tracks); sections-drive-MaterialRegions
-  gate; the no-torch box produces today's output byte-identically.
-- Rig receipt: re-analyze the real library on the 4060, before/after downbeat
-  confidence distribution, one transition plan that was previously refused and
-  is now executable (or honestly: no change — say so).
+- **[done]** `earcrate/providers/beats.py`: `beat_capability()` (honest allin1
+  probe), `resolve_beat_provider()` (env `EARCRATE_BEATS` > config > librosa,
+  with allin1-unavailable degrading to librosa), and `detect_beats()` — an
+  allin1 adapter written to its documented API (result.beats / .downbeats /
+  .segments / .bpm), mapping onto EarCrate's beats/downbeats/sections shape.
+- **[done]** Wired into `compute_pcm_features`: opt-in override of the librosa
+  grid, so `beat_state`, MaterialRegions and the transition planner consume the
+  real grid when enabled. Default (env unset) is byte-identical — verified —
+  and the file records its `beat_backend`. The `beats` work-queue kind and
+  `doctor` both report the real capability.
+- **[done]** Gate `test_beat_provider_seam_default_stable_and_allin1_override`
+  pins: probe/selection/fallback, default analysis unchanged, and — via a stub
+  matching allin1's documented API — that the adapter's output-mapping routes
+  end-to-end through `compute_pcm_features`.
+- **Remaining (rig — the payoff): `pip install allin1`** on the box, set
+  `EARCRATE_BEATS=allin1`, `analyze --force` the real library (switching the
+  beat backend is an analysis-identity change — force re-analyze, or bump
+  `ANALYZER_VERSION`), then measure before/after downbeat-confidence
+  distribution and whether a previously-refused transition is now executable.
+  The real allin1 model is unverified-until-the-box (demucs pattern); the stub
+  de-risks the adapter shape. `mir_eval` F-measure on a real annotated set is
+  the rig-side quality gate.
 
 ## M2 — render fidelity: Rubber Band time-stretch  **[seam built, opt-in]**
 

@@ -1,6 +1,15 @@
 # EarCrate — CHANGELOG
 
 ## v0.9.997 — the v0.9.0 integrated release lands in the mainline repo
+- Adds the BeatProvider seam (`earcrate/providers/beats.py`): an opt-in allin1
+  beat/downbeat/section model behind a probe, wired into analysis
+  (`compute_pcm_features`). The default is the unchanged librosa grid — no
+  ANALYZER_VERSION bump, cached analysis stays valid — and allin1 is enabled
+  per-box with `EARCRATE_BEATS=allin1` (then `analyze --force`). A box without
+  allin1, or a bad value, falls back to librosa honestly; each analyzed file
+  records its `beat_backend`; `doctor` and the `beats` work-queue kind report
+  the capability. The allin1 adapter is written to allin1's documented API and
+  rig-verified (demucs pattern); a stub-driven gate de-risks its output mapping.
 - Adds the TransformProvider seam (`earcrate/providers/transform.py`): an
   opt-in Rubber Band time-stretch/pitch-shift engine wired into the render hot
   path. The default is the unchanged phase vocoder (librosa) — so no

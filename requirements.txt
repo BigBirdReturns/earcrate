@@ -24,3 +24,12 @@ mutagen>=1.47
 # Left OUT on purpose — it needs a native binary and the default-flip (with the
 # ENGINE_VERSION bump) waits on a real ears verdict on the box. Check readiness
 # with `earcrate doctor` (transform_capability).
+#
+# OPTIONAL — real beat/downbeat/section detection (BeatProvider seam,
+# earcrate/providers/beats.py). NOT installed by default: the shipped box uses
+# librosa beat_track and every analysis is unchanged. To opt in, install allin1
+# (pulls torch), then set EARCRATE_BEATS=allin1 and re-analyze with --force:
+#     pip install allin1
+# Switching the beat backend is an analysis-identity change — re-analyze with
+# --force so a librosa-analyzed file's cached grid is not reused. Check readiness
+# with `earcrate doctor` (beat_capability).

@@ -5,14 +5,35 @@ true. Same control question as always: **can each milestone prove, on the real
 machine and the real library, that EarCrate produces better audio, a smoother
 listening experience, or meaningful creative control over a musical decision?**
 
-State at time of writing (post v0.9 integration, all verified on this tree):
-194/194 gates; immutable projects are the musical authority; the full 0.8.x
-engine (analysis, personas, external remix, librarian, GPU queue) is intact and
-renders through `render_mashup`; the CLI project surface is complete; the static
-UI predates all of it and references none of `/api/projects`; nothing from
-`docs/OSS_INTEGRATION_AUDIT.md` has been adopted yet; there is no autonomous
-composing loop; judgment is measured DSP (`GT_SPECTRAL_PROFILE`), with the
-`EmbeddingProvider`/`VectorIndex`/`CandidateRetriever` seams declared and empty.
+## Status ledger — what "done" means per milestone (read this first)
+
+Every milestone below has its ENGINEERING on this branch (201/201 hermetic gates
+in the cloud CI env), but engineering-on-branch is NOT the roadmap's definition
+of done. Done requires the on-box receipt against the real library. Honest state:
+
+| Milestone | Code on branch | Verified in cloud CI | Rig receipt (the actual bar) |
+|---|---|---|---|
+| M0 doctor + hygiene | ✅ | ✅ gate | ❌ **the M0 receipt (full gate suite + acceptance + audible compile/keep/undo-identity) has NOT run on the box, and v0.9 has NOT reached `main`** |
+| M1 allin1 beats | seam + adapter + stub gate | ✅ default-unchanged | ❌ real allin1 not installed/run; no downbeat-confidence or transition measurement |
+| M2 Rubber Band | seam, opt-in | ✅ HF spectral A/B | ❌ default NOT flipped, `ENGINE_VERSION` NOT bumped, no ears verdict |
+| M3 techno persona | ✅ persona + gate | ✅ distinct+valid | ❌ audible external-vocal-over-techno proof NOT produced |
+| M4 taste ranker | ✅ seam + train + gate | ✅ deterministic | ❌ no real judgments trained/enabled/compared |
+| M5 player piano | ✅ loop + gate | ✅ bounded/kill-safe | ❌ warm-lane queue integration + one real overnight run outstanding |
+| M6 Workbench | ✅ functional | ✅ package DOM, hermetic gates | ⚠️ single-file DOM drive + rig lifecycle outstanding; design pass deferred |
+
+The whole program is **"engineered, not yet validated."** The 201/201 figure is a
+cloud-CI number, not an independent rig receipt. Nothing here is "done" in the
+roadmap's sense until item-by-item on the box (see "The rig receipt" at the end).
+
+Prior state (pre-M0, for lineage): 194/194 gates; immutable projects the musical
+authority; the full 0.8.x engine intact; CLI project surface complete; the static
+UI referenced no `/api/projects`; nothing from `docs/OSS_INTEGRATION_AUDIT.md`
+adopted; no autonomous composing loop; judgment was measured DSP only.
+
+Process note: the roadmap said "one milestone per PR"; in practice M0–M6 were
+built on this single branch. That was expedient for a stop-when-blocked cloud
+session, but it means the on-box validation is one consolidated receipt, not
+seven, and the branch is not `main`-merged per-milestone.
 
 Supersedes the remaining open items of `MILESTONES.md` (its §3 editable-project
 slice shipped as v0.9). Rules carried over unchanged:
@@ -102,22 +123,24 @@ surfaced in `earcrate doctor` (transform_capability).
   deliberate, receipt-gated step — the seam is ready for it, the flip is not
   taken unverified.
 
-## M3 — the techno persona + the Beatles proof
+## M3 — the techno persona + the Beatles proof  **[persona built, audible proof outstanding]**
 
 The external-remix path (`propose_external_remix` / `remix_anchor`) already
-does "drop a foreign vocal, rebuild a bed under it in a persona's style." What
-is missing is the persona.
+does "drop a foreign vocal, rebuild a bed under it in a persona's style."
 
-- `profiles/remix_techno_v1.json` (and optionally a second flavor — e.g.
-  four-on-floor 125–132 vs harder 135+) built from documented producer
-  breakdowns, same derivation discipline as the existing 22.
-- Gates: schema; persona-differentiation (its arrangements are measurably
-  distinct from the nearest electronic persona, not just thresholds);
-  external-remix feasibility with the new persona.
-- **Definition of done is audible, not statistical:** an out-of-library vocal
-  (yes, that one) over a library-built techno bed, through a project revision,
-  passing the gate, kept by a human. The A/B receipt goes in the persona doc
-  like the bake-off logs.
+- **[done]** `profiles/remix_techno_v1.json` — hypnotic four-on-floor 128–134,
+  long held loops, kick-owned low end, darker+steadier top; same derivation
+  discipline as the existing personas. Loads, projects, and compiles into a
+  policy like the others.
+- **[done]** Gate `test_techno_persona_is_hypnotic_and_distinct` pins schema/
+  identity, that it changes the arrangement from the same pool (holds a
+  foreground source strictly longer than girl_talk), and that it passes its own
+  taste-coverage gate — distinct AND valid.
+- **Remaining — the definition of done is AUDIBLE, not statistical:** an
+  out-of-library vocal (yes, that one) over a library-built techno bed, through
+  a project revision, passing the gate, kept by a human. That A/B proof needs
+  the real library + ears on the box; it has NOT happened. A second flavor
+  (harder 135+) is optional and unbuilt.
 
 ## M4 — taste: rank candidates from the owner's own judgments  **[built, opt-in]**
 
@@ -205,3 +228,40 @@ how the first LATTICE became archaeology.
 
 Completing M0–M6, each with its rig receipt, is what 0.9.997 claims to be.
 What follows it is 1.0.
+
+---
+
+## The rig receipt — the single consolidated validation that closes the program
+
+Feature work on this branch is DONE. The next work product is ONE Windows-rig
+receipt, run against the real library, committed to the branch. Only after that
+exact head is green does v0.9 go to `main`. The receipt must:
+
+1. Run the full repository gate suite (`python tests/run_gates.py`).
+2. Run `tests/manual/verify_workbench_dom.py` against BOTH package mode and
+   `dist/earcrate.py`, with zero console errors (settles the single-file DOM
+   drive the cloud env could not complete).
+3. Run `earcrate project acceptance --destination <empty scratch>`.
+4. Compile AND render a real-library project (not a synthetic fixture).
+5. Perform a real edit → undo → redo → restart → preview → render → export
+   through the browser.
+6. Prove undo restoration by the prior render's file hash (byte identity).
+7. `pip install allin1`, set `EARCRATE_BEATS=allin1`, re-analyze the real
+   library with `--force`, and record the measured downbeat-confidence / section
+   effect and any transition change (or honestly: no change).
+8. Render the same project with the default transform and with
+   `EARCRATE_TRANSFORM=rubberband` for the owner's listening verdict. Only after
+   that verdict flip the default and bump `ENGINE_VERSION` → `earcrate_v0910`.
+9. Produce the techno external-remix proof (a foreign vocal over a library-built
+   techno bed, kept by a human) — M3's audible definition of done.
+10. Run one real ranker experiment (`train-ranker` on real judgments →
+    `EARCRATE_RANKER=on` → compare selections) and one bounded `project piano`
+    session on the real library.
+11. Update THIS file's status ledger so the markers match the receipts.
+12. Open the PR to `main` only after that exact head is green.
+
+Items 1–6 and 10 are mechanical and scriptable on the box; 7–9 need the GPU /
+real audio / ears. After the receipt lands, the front-end designer takes the
+branch for the deferred M6 aesthetic layer (zoom + waveforms, rail semantics,
+inspector docking, replacement-atom audition, refusal UX, responsive hierarchy,
+transport integration) — backend wiring is complete; their remit is design.

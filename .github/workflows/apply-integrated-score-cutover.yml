@@ -33,19 +33,36 @@ jobs:
       - name: Apply the verified integration patch
         shell: bash
         run: |
-          set -euo pipefail
-          PATCH_B64=.agent/integrated-score-cutover.patch.gz.b64
-          if [[ ! -f "$PATCH_B64" ]]; then
-            echo "Patch already applied; nothing to do."
-            exit 0
-          fi
-          base64 --decode "$PATCH_B64" | gzip --decompress > /tmp/integrated-score-cutover.patch
-          echo "13c7aebed68c7d94dade8696184a234d44069ab397648338cbce7103318aa2b2  /tmp/integrated-score-cutover.patch" | sha256sum --check --strict
-          git apply --index --whitespace=error-all /tmp/integrated-score-cutover.patch
-          git rm "$PATCH_B64" .github/workflows/apply-integrated-score-cutover.yml
-          git diff --cached --check
-          python -m compileall -q earcrate
-          git config user.name "EarCrate integration bot"
-          git config user.email "actions@users.noreply.github.com"
-          git commit -m "Integrate immutable project authority across EarCrate"
-          git push origin HEAD:agent/integrated-score-cutover
+          set -uo pipefail
+          exec > >(tee /tmp/apply-integrated-score-cutover.log) 2>&1
+          set -x
+          status=0
+          (
+            set -euo pipefail
+            PATCH_B64=.agent/integrated-score-cutover.patch.gz.b64
+            if [[ ! -f "$PATCH_B64" ]]; then
+              echo "Patch already applied; nothing to do."
+              exit 0
+            fi
+            base64 --decode "$PATCH_B64" | gzip --decompress > /tmp/integrated-score-cutover.patch
+            echo "13c7aebed68c7d94dade8696184a234d44069ab397648338cbce7103318aa2b2  /tmp/integrated-score-cutover.patch" | sha256sum --check --strict
+            git apply --index --whitespace=error-all /tmp/integrated-score-cutover.patch
+            git rm "$PATCH_B64" .github/workflows/apply-integrated-score-cutover.yml
+            git diff --cached --check
+            python -m compileall -q earcrate
+            git config user.name "EarCrate integration bot"
+            git config user.email "actions@users.noreply.github.com"
+            git commit -m "Integrate immutable project authority across EarCrate"
+            git push origin HEAD:agent/integrated-score-cutover
+          ) || status=$?
+          echo "$status" > /tmp/apply-integrated-score-cutover.status
+          exit "$status"
+      - name: Upload apply log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apply-integrated-score-cutover-log
+          path: |
+            /tmp/apply-integrated-score-cutover.log
+            /tmp/apply-integrated-score-cutover.status
+          if-no-files-found: warn

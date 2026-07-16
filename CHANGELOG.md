@@ -1,6 +1,15 @@
 # EarCrate — CHANGELOG
 
 ## v0.9.997 — the v0.9.0 integrated release lands in the mainline repo
+- Adds the taste ranker (`earcrate/ear/taste_ranker.py`, CLI `train-ranker`): a
+  dependency-free, deterministic logistic-regression proposer trained on the
+  owner's own approve/reject judgments. Wired into `approved_atom_pool` right
+  after the CandidateRetriever seam, it REORDERS candidate preference — a stable,
+  membership-preserving permutation that never changes which candidates exist,
+  gate outcomes, or policy bounds. OFF by default (`EARCRATE_RANKER=on`); a
+  missing/drifted artifact is ignored, and training refuses a one-class or
+  too-small set. The measured judge still disposes; the model is only as good as
+  real judgments, so its value comes on the box.
 - Adds the BeatProvider seam (`earcrate/providers/beats.py`): an opt-in allin1
   beat/downbeat/section model behind a probe, wired into analysis
   (`compute_pcm_features`). The default is the unchanged librosa grid — no

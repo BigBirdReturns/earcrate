@@ -12,6 +12,7 @@ from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFA
 from earcrate.providers import get, stem_capability
 from earcrate.providers.transform import transform_capability, resolve_transform_provider, rubberband_time_stretch, rubberband_pitch_shift
 from earcrate.providers.beats import beat_capability, resolve_beat_provider
+from earcrate.ear.taste_ranker import train_ranker, save_ranker, load_ranker, ranker_path, rank_pool, ranker_enabled, FEATURES as TASTE_RANKER_FEATURES
 from earcrate.providers.workqueue import GpuWorkQueue, kind_capabilities
 
 # Byte ceiling for the L3 stem cache on the NVMe. The 4060's separations are the
@@ -3473,7 +3474,58 @@ class EarcrateCore:
         # unchanged — behavior is byte-identical to `return out`. A smarter
         # retriever (embedding recall, tempo/key pre-filter) can register alongside
         # and narrow the pool on a GPU box without touching this call site.
-        return get("retriever").retrieve(out)
+        pool = get("retriever").retrieve(out)
+        # M4 taste ranker: OPT-IN (EARCRATE_RANKER) reorder of the FULL pool by a
+        # model trained on the owner's own approve/reject calls. Proposer only —
+        # membership is unchanged (rank_pool is a stable permutation), gates and
+        # bounded search are untouched. Default OFF and identity-when-off: no env,
+        # no artifact -> `model` is None -> pool returned exactly as retrieved.
+        with contextlib.suppress(Exception):
+            if ranker_enabled(self.config):
+                model = load_ranker(ranker_path(self.ensure_config().agent_root, taste_profile))
+                if model is not None:
+                    pool = rank_pool(pool, model)
+        return pool
+
+    def train_taste_ranker(self, taste_profile: str = "girl_talk_v1", min_examples: int = 8) -> Dict[str, Any]:
+        """Train the opt-in taste ranker (M4) from the owner's own approve/reject
+        judgments for this persona and write a content-addressed model artifact +
+        receipt under agent_root/rankers/. Proposer only — enabling it (with
+        EARCRATE_RANKER=on) reorders candidate preference, never membership or
+        gates. Refuses to train on too little data or a one-class set."""
+        c = self.ensure_config()
+        rows = self.conn().execute(
+            """SELECT a.score,a.hook_score,a.bed_score,a.floor_score,a.bass_score,a.spark_score,
+                      a.intelligibility,a.low_share,a.mid_share,a.high_share,a.loopability,a.transient_density,
+                      COALESCE(ft.energy,0) energy, COALESCE(ft.vocal_likelihood,0) vocal_likelihood,
+                      j.status
+               FROM atom_judgments j JOIN ear_atoms a ON a.id=j.atom_id
+               JOIN files f ON f.id=a.file_id LEFT JOIN features ft ON ft.file_id=f.id
+               WHERE j.taste_profile=? AND j.status IN ('approved','rejected')""",
+            (taste_profile,),
+        ).fetchall()
+        samples: List[Dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            d["label"] = 1 if d.get("status") == "approved" else 0
+            samples.append(d)
+        n_pos = sum(1 for s in samples if s["label"] == 1)
+        n_neg = len(samples) - n_pos
+        if len(samples) < int(min_examples) or n_pos < 1 or n_neg < 1:
+            return {"ok": False, "taste_profile": taste_profile,
+                    "reason": (f"not enough judgments to train: have {n_pos} approved / {n_neg} rejected "
+                               f"(need >= {int(min_examples)} total with BOTH classes present). "
+                               f"Judge more atoms in the Library loop first.")}
+        model = train_ranker(samples)
+        path = ranker_path(c.agent_root, taste_profile)
+        save_ranker(model, path)
+        receipt = {"ok": True, "taste_profile": taste_profile, "model_sha": model["model_sha"],
+                   "n_approved": n_pos, "n_rejected": n_neg, "total_examples": len(samples),
+                   "artifact": str(path), "features": list(TASTE_RANKER_FEATURES),
+                   "enable_with": "EARCRATE_RANKER=on", "trained_at": now_utc()}
+        with contextlib.suppress(Exception):
+            (path.parent / f"{taste_profile}.receipt.json").write_text(json_dumps(receipt), encoding="utf-8")
+        return receipt
 
     def rank_crate(self, taste_profile: str = "girl_talk_v1", limit: int = 0) -> Dict[str, Any]:
         """Rank the approved ear crate by the persona's own selection priorities

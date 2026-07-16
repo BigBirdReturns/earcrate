@@ -119,22 +119,30 @@ is missing is the persona.
   passing the gate, kept by a human. The A/B receipt goes in the persona doc
   like the bake-off logs.
 
-## M4 — taste: rank candidates from the owner's own judgments
+## M4 — taste: rank candidates from the owner's own judgments  **[built, opt-in]**
 
 The judgments table is append-only training data the owner generates by using
 the product. Use it. **Proposer only — the measured judge still disposes.**
 
-- A small learn-to-rank model (logistic/GBDT over existing L1 features — NOT a
-  neural fine-tune, nothing to host) trained offline by a script that emits a
-  content-addressed model artifact + training receipt (rows used, seed,
-  metrics).
-- Plugs into the `CandidateRetriever` seam; changes candidate ORDER within the
-  bounded search, never gate outcomes, never policy bounds.
-- Gates: ranker-off is byte-identical to today; ranker-on changes ordering
-  only; training is reproducible from the receipt; a poisoned/empty judgments
-  table degrades to ranker-off loudly.
-- This is the flywheel with M6: every morning-triage keep/reject becomes
-  tomorrow's ranking signal.
+- **[done]** `earcrate/ear/taste_ranker.py`: a dependency-free L2-regularized
+  logistic regression over the existing atom features, trained by deterministic
+  zero-init gradient descent (no sklearn, no RNG — same judgments always yield
+  the same model). Content-addressed JSON artifact + receipt. `train_taste_ranker`
+  reads `atom_judgments`; CLI `earcrate train-ranker --profile X`. Refuses a
+  one-class / too-small set instead of emitting a degenerate model.
+- **[done]** Plugs in at `approved_atom_pool` (right after the
+  `CandidateRetriever` seam): `rank_pool` is a stable, membership-preserving
+  permutation of the FULL pool — changes candidate ORDER only, never membership,
+  gate outcomes, or policy bounds. OFF by default (`EARCRATE_RANKER=on` to
+  enable); a feature-drifted or missing artifact is ignored, not mis-scored.
+- **[done]** Gate `test_taste_ranker_trains_reproducibly_and_reorders_opt_in`
+  pins: reproducible training, one-class refusal, membership-preserving reorder,
+  artifact round-trip + drift rejection, and end-to-end that `approved_atom_pool`
+  is identity-when-off and a same-membership reorder when opted in.
+- **Remaining (rig — the payoff): the model is only as good as real judgments.**
+  Judge atoms in the Library loop (and via the M5 morning triage), then
+  `earcrate train-ranker`, set `EARCRATE_RANKER=on`, and compare selections.
+  This is the flywheel with M5/M6: every keep/reject becomes tomorrow's signal.
 
 ## M5 — the player piano  (the night shift)  **[built]**
 

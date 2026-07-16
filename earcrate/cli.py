@@ -156,6 +156,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         core = EarcrateCore()
         print(json.dumps(core.organize_and_retag({"apply": ns.apply, "limit": ns.limit}), ensure_ascii=False, indent=2))
         return 0
+    if argv and argv[0] == "train-ranker":
+        tp = argparse.ArgumentParser(prog="earcrate train-ranker", description="Train the opt-in taste ranker (M4) from your approve/reject judgments for a persona. Writes a model artifact + receipt; enable it with EARCRATE_RANKER=on.")
+        tp.add_argument("--profile", default="girl_talk_v1")
+        tp.add_argument("--min-examples", type=int, default=8, help="minimum labelled atoms (both classes) required to train")
+        ns = tp.parse_args(argv[1:])
+        core = EarcrateCore()
+        print(json.dumps(core.train_taste_ranker(ns.profile, min_examples=ns.min_examples), ensure_ascii=False, indent=2))
+        return 0
     if argv and argv[0] == "rank":
         rp = argparse.ArgumentParser(prog="earcrate rank", description="Rank the ear crate by the persona's selection priorities (curation surface)")
         rp.add_argument("--profile", default="girl_talk_v1")

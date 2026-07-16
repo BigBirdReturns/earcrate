@@ -4313,3 +4313,89 @@ def test_loop_contract_requires_real_periodicity_and_middle_cycle_crop():
     loop_score = core.score_arrangement({"params": {"loop_cycle_bars": 8}, "sections": repeated_sections})
     for field in ("source_diversity", "max_source_reuse", "layer_events", "duration_bars"):
         assert loop_score[field] == logical_score[field], (field, logical_score, loop_score)
+
+
+def test_taste_ranker_trains_reproducibly_and_reorders_opt_in():
+    """M4: the taste ranker learns the owner's approve/reject calls and reorders
+    candidate PREFERENCE — a proposer, never membership or a gate. Pins: training
+    is reproducible and refuses a one-class set; rank_pool is a
+    membership-preserving stable permutation; artifacts round-trip and reject
+    feature drift; the ranker is OFF by default; and wired into approved_atom_pool
+    it is identity-when-off and a same-membership reorder when opted in."""
+    import os, tempfile
+    from pathlib import Path
+    from unittest.mock import patch
+    from earcrate.ear.taste_ranker import (
+        train_ranker, rank_pool, score_atom, save_ranker, load_ranker,
+        ranker_enabled, ranker_path, FEATURES,
+    )
+
+    def atom(hook, base=0.4, **kw):
+        d = {k: base for k in FEATURES}
+        d["hook_score"] = hook
+        d.update(kw)
+        return d
+
+    # (1) reproducible training + learned signal + one-class refusal
+    samples = [{**atom(0.9), "label": 1} for _ in range(10)] + \
+              [{**atom(0.15), "label": 0} for _ in range(10)]
+    m1 = train_ranker(samples); m2 = train_ranker(samples)
+    assert m1["model_sha"] == m2["model_sha"], "training must be deterministic"
+    assert score_atom(m1, atom(0.9)) > score_atom(m1, atom(0.15)), "must learn the approve signal"
+    try:
+        train_ranker([{**atom(0.9), "label": 1}] * 4)
+        raise AssertionError("one-class training must be refused")
+    except ValueError:
+        pass
+
+    # (2) rank_pool: membership-preserving permutation; None is a no-op
+    pool = [dict(atom(h), id=f"x{i}") for i, h in enumerate((0.2, 0.95, 0.5))]
+    ranked = rank_pool(pool, m1)
+    assert sorted(a["id"] for a in ranked) == sorted(a["id"] for a in pool)
+    assert ranked[0]["id"] == "x1" and all("taste_rank_score" in a for a in ranked)
+    assert rank_pool(pool, None) is pool
+
+    # (3) artifact round-trip + feature-drift rejection
+    tmpp = Path(tempfile.mkdtemp()) / "r.json"
+    save_ranker(m1, tmpp)
+    assert load_ranker(tmpp)["model_sha"] == m1["model_sha"]
+    drifted = dict(m1); drifted["features"] = list(FEATURES)[:-1]
+    save_ranker(drifted, tmpp)
+    assert load_ranker(tmpp) is None, "a feature-drifted artifact must be ignored, not mis-scored"
+
+    # (4) end-to-end wiring in approved_atom_pool: off = identity, on = reorder
+    tmp = Path(tempfile.mkdtemp())
+    for sub in ("music", "work", "agent"):
+        (tmp / sub).mkdir()
+    with patch.dict(os.environ, {"EARCRATE_HOME": str(tmp)}):
+        core = EarcrateCore()
+        core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+        db = core.conn()
+        # 4 approved atoms: score DESCENDING (default pool order) but hook_score
+        # ASCENDING, so a ranker keyed on hook flips the order visibly.
+        for i in range(4):
+            db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
+                       (f"f{i}", str(tmp / "music" / f"s{i}.wav"), "master", 1, 1, "now"))
+            core._set_pcm(f"f{i}", f"pcm_fixture_{i}")
+            db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                       (f"l{i}", f"f{i}", 0, 4, 2, "vocal", 0.7, "now"))
+            db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,hook_score,status,metrics_json,created_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (f"a{i}", f"l{i}", f"f{i}", "girl_talk_v1", "VOX_HOOK", "vocal", 0, 4, 2, 0.8 - 0.1 * i, 0.1 * i, "approved", "{}", "now"))
+        db.commit()
+
+        os.environ.pop("EARCRATE_RANKER", None)
+        assert ranker_enabled(core.config) is False
+        default_order = [a["id"] for a in core.approved_atom_pool("girl_talk_v1")]
+        assert default_order == ["l0", "l1", "l2", "l3"], default_order  # score desc
+
+        # a ranker that prefers high hook_score (opposite of the score order)
+        hook_model = train_ranker([{**atom(0.9), "label": 1} for _ in range(8)] +
+                                  [{**atom(0.05), "label": 0} for _ in range(8)])
+        save_ranker(hook_model, ranker_path(core.ensure_config().agent_root, "girl_talk_v1"))
+
+        with patch.dict(os.environ, {"EARCRATE_RANKER": "on"}):
+            ranked_order = [a["id"] for a in core.approved_atom_pool("girl_talk_v1")]
+        assert sorted(ranked_order) == sorted(default_order), "membership must be identical"
+        assert ranked_order == ["l3", "l2", "l1", "l0"], f"ranker must reorder by learned taste, got {ranked_order}"
+        assert ranked_order != default_order, "opt-in ranker must actually change preference order"

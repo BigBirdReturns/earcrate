@@ -647,3 +647,98 @@ def project_acceptance(core: Any, destination: str) -> Dict[str, Any]:
     }
     _atomic_json(root / "acceptance_receipt.json", receipt)
     return receipt
+
+
+def project_piano(core: Any, *, personas: Optional[List[str]] = None,
+                  max_iterations: int = 8, max_keeps: int = 0, max_seconds: float = 0.0,
+                  target_seconds: float = 120.0, seed_base: int = 0,
+                  name_prefix: str = "Piano", run_id: str = "", resume: bool = True) -> Dict[str, Any]:
+    """The player piano: an unattended compile -> render -> keep/discard loop that
+    runs entirely through immutable project revisions.
+
+    Safe by construction on top of the v0.9 project authority: every attempt is a
+    durable, content-addressed project revision; publication is the existing
+    verification-gated render (a gate-refused set is DISCARDED, never a corrupt
+    WAV); source mutation is refused. The loop is BOUNDED (max_iterations, and
+    optionally max_keeps / max_seconds) and KILL-SAFE — the run receipt is
+    rewritten atomically after every iteration, so a power cut leaves valid
+    partial state and the next call with the same run_id RESUMES from where it
+    stopped instead of redoing work. It invents no renderer and lowers no gate;
+    it only decides which persona to compile next and records the verdict.
+    """
+    c = core.ensure_config()
+    personas = [str(p) for p in (personas or ["girl_talk_v1"]) if str(p)] or ["girl_talk_v1"]
+    max_iterations = max(1, int(max_iterations))
+    runs_dir = (c.working_root / "piano").resolve()
+    core.validate_not_master(runs_dir)
+    core.validate_path_in_root(runs_dir, c.working_root)
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    rid = str(run_id) or ("piano_" + ulidish())
+    receipt_path = runs_dir / f"{rid}.json"
+
+    attempts: List[Dict[str, Any]] = []
+    started_at = now_utc()
+    if resume and receipt_path.exists():
+        with contextlib.suppress(Exception):
+            prev = json.loads(receipt_path.read_text(encoding="utf-8"))
+            attempts = list(prev.get("attempts") or [])
+            started_at = str(prev.get("started_at") or started_at)
+
+    def _by(verdict: str) -> List[Dict[str, Any]]:
+        return [a for a in attempts if a.get("verdict") == verdict]
+
+    def _flush(stop_reason: str = "", complete: bool = False) -> Dict[str, Any]:
+        keeps = _by("kept")
+        payload = {
+            "ok": True, "type": "piano_run", "run_id": rid, "engine_version": ENGINE_VERSION,
+            "started_at": started_at, "updated_at": now_utc(),
+            "personas": personas, "max_iterations": max_iterations, "max_keeps": int(max_keeps),
+            "max_seconds": float(max_seconds), "target_seconds": float(target_seconds),
+            "attempted": len(attempts), "kept": len(keeps),
+            "discarded": len(_by("discarded")), "errored": len(_by("error")),
+            "keeps": [{"path": a.get("path"), "project_id": a.get("project_id"),
+                       "revision_sha": a.get("revision_sha"), "persona": a.get("persona")} for a in keeps],
+            "attempts": attempts,
+            "stop_reason": stop_reason, "complete": bool(complete),
+        }
+        _atomic_json(receipt_path, payload)
+        return payload
+
+    _flush()  # a valid receipt exists before the first potentially-slow render
+    t0 = time.time()
+    stop_reason = "max_iterations"
+    for i in range(len(attempts), max_iterations):
+        if max_keeps and len(_by("kept")) >= int(max_keeps):
+            stop_reason = "max_keeps"; break
+        if max_seconds and (time.time() - t0) >= float(max_seconds):
+            stop_reason = "max_seconds"; break
+        persona = personas[i % len(personas)]
+        seed = int(seed_base) + i
+        rec: Dict[str, Any] = {"iteration": i, "persona": persona, "seed": seed, "at": now_utc()}
+        try:
+            compiled = core.project_compile({
+                "taste_profile": persona, "target_seconds": float(target_seconds),
+                "name": f"{name_prefix} {rid[-6:]} #{i:03d}", "seed": seed,
+            })
+            rec["project_id"] = compiled["project_id"]
+            rec["revision_sha"] = compiled["revision_sha"]
+            result = core.project_render(compiled["project_id"])
+            if result.get("type") == "render_project" and result.get("path"):
+                rec["verdict"] = "kept"
+                rec["path"] = result["path"]
+                rec["report"] = result.get("report")
+                rec["revision_sha"] = str(result.get("revision_sha") or rec["revision_sha"])
+            else:
+                rec["verdict"] = "discarded"
+                rec["reason"] = str(result.get("failure_kind") or result.get("type") or "render rejected")
+        except ProjectValidationError as exc:
+            # A principled refusal (gate, mastering envelope, source identity) is a
+            # DISCARD, not an error — the loop is meant to throw sets away.
+            rec["verdict"] = "discarded"
+            rec["reason"] = f"refused: {exc}"
+        except Exception as exc:  # pragma: no cover - defensive; keeps the night shift alive
+            rec["verdict"] = "error"
+            rec["reason"] = f"{type(exc).__name__}: {exc}"
+        attempts.append(rec)
+        _flush()
+    return _flush(stop_reason=stop_reason, complete=True)

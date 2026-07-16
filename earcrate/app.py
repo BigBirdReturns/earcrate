@@ -7004,7 +7004,7 @@ EarcrateCore.execute_organize_copy = execute_organize_copy
 # The catalog, analyzer, EarAtoms, personas, providers, renderer and safety
 # executor remain the existing application. These methods make the L4 project
 # revision the authority that connects them.
-from earcrate.project.runtime import project_store, project_import_arrangement, project_compile, project_proposal, project_list, project_show, project_history, project_runs, project_edit, project_undo, project_redo, project_recompile, project_export, project_render, project_preview, project_acceptance, _project_output_path
+from earcrate.project.runtime import project_store, project_import_arrangement, project_compile, project_proposal, project_list, project_show, project_history, project_runs, project_edit, project_undo, project_redo, project_recompile, project_export, project_render, project_preview, project_acceptance, project_piano, _project_output_path
 EarcrateCore.project_store = project_store
 EarcrateCore.project_import_arrangement = project_import_arrangement
 EarcrateCore.project_compile = project_compile
@@ -7021,4 +7021,5 @@ EarcrateCore.project_export = project_export
 EarcrateCore.project_render = project_render
 EarcrateCore.project_preview = project_preview
 EarcrateCore.project_acceptance = project_acceptance
+EarcrateCore.project_piano = project_piano
 EarcrateCore._project_output_path = _project_output_path

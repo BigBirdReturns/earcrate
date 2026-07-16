@@ -35,6 +35,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         ip.add_argument("arrangement"); ip.add_argument("--name", default="Imported EarCrate Project"); ip.add_argument("--project-id", default="")
         ap = sub.add_parser("acceptance", help="drive the full integrated project lifecycle in an isolated workspace")
         ap.add_argument("--destination", required=True)
+        pn = sub.add_parser("piano", help="the player piano: an unattended, bounded, kill-safe compile->render->keep/discard loop over the configured library")
+        pn.add_argument("--personas", default="girl_talk_v1", help="comma-separated persona ids to rotate through")
+        pn.add_argument("--iterations", type=int, default=8, help="hard cap on compile/render attempts")
+        pn.add_argument("--keeps", type=int, default=0, help="stop early once this many sets pass the gate (0 = no keep cap)")
+        pn.add_argument("--seconds", type=float, default=0.0, help="stop early after this much wall-clock (0 = no time cap)")
+        pn.add_argument("--target-seconds", type=float, default=120.0, help="target length of each compiled set")
+        pn.add_argument("--seed", type=int, default=0, help="base seed; iteration i uses seed+i")
+        pn.add_argument("--run-id", default="", help="resume/append to a prior run receipt with this id")
+        pn.add_argument("--no-resume", action="store_true", help="ignore any prior receipt for this run-id and start fresh")
         ns = pp.parse_args(argv[1:])
         if ns.project_command == "acceptance":
             destination = Path(ns.destination).expanduser().resolve()
@@ -82,6 +91,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             arrangement = json.loads(Path(ns.arrangement).read_text(encoding="utf-8"))
             result = core.project_import_arrangement(arrangement, name=ns.name, project_id=ns.project_id,
                                                      created_by={"actor": "cli", "reason": "legacy_arrangement_import"})
+        elif ns.project_command == "piano":
+            result = core.project_piano(
+                personas=[p.strip() for p in str(ns.personas).split(",") if p.strip()],
+                max_iterations=ns.iterations, max_keeps=ns.keeps, max_seconds=ns.seconds,
+                target_seconds=ns.target_seconds, seed_base=ns.seed,
+                run_id=ns.run_id, resume=not ns.no_resume)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if argv and argv[0] == "judge":

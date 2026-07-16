@@ -1,6 +1,21 @@
 # EarCrate — CHANGELOG
 
 ## v0.9.997 — the v0.9.0 integrated release lands in the mainline repo
+- Adds the player piano (`earcrate project piano`): an unattended, bounded,
+  kill-safe compile → render → keep/discard loop over the configured library,
+  running entirely through immutable project revisions. Bounded by
+  max_iterations (optionally max_keeps / max_seconds); the run receipt is
+  rewritten atomically after every iteration so re-running the same run_id
+  resumes from where a kill stopped. Gate-refused sets are discarded (never a
+  corrupt WAV); every attempt is a durable project revision. Safe only because
+  the v0.9 project authority made it safe.
+- Adds the `remix_techno_v1` persona: hypnotic four-on-the-floor (128–134 BPM,
+  loops held far longer before turnover than Girl Talk's chop, kick-owned low
+  end, darker + steadier top) — the first persona purpose-built for the
+  external-remix "foreign vocal over a library-built bed" path in a techno
+  style.
+- The remaining M0–M6 roadmap that earns this version label lives in
+  `EARCRATE_0997_PLAN.md`.
 - Grafts the verified integrated-score-cutover release tree (release commit
   2fe1642, tag v0.9.0-integrated-score) onto the repository mainline at its
   declared base (5f62501) — the release previously existed only as an external

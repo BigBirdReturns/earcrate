@@ -420,3 +420,83 @@ def test_project_http_api_exposes_frontend_contract(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def _piano_patches(core: EarcrateCore, base_arrangement):
+    """Patch the crate-readiness + generative surface so project_compile runs for
+    real (building durable revisions and rendering real WAVs) without a fully
+    analyzed library — the same seams the bounded-candidate-search gate stubs."""
+    import copy
+
+    def compose(_pool, params, seed):
+        cand = copy.deepcopy(base_arrangement)
+        cand["seed"] = seed
+        cand["params"]["seed"] = seed
+        cand["params"]["taste_profile"] = params.get("taste_profile", "remix_prettylights_v1")
+        return cand
+
+    return [
+        patch.object(core, "taste_readiness", return_value={"ready": True, "crate_stale": False, "failures": []}),
+        patch.object(core, "approved_atom_pool", return_value=[{"id": "fixture"}]),
+        patch.object(core, "compose_taste_arrangement", side_effect=compose),
+        patch.object(core, "arrangement_preflight_gate", return_value={"passed": True, "failures": []}),
+        patch.object(core, "taste_arrangement_gate", return_value={"passed": True, "failures": []}),
+        patch.object(core, "score_arrangement", side_effect=lambda a: {"total": float(a["seed"] % 10)}),
+    ]
+
+
+def test_project_piano_is_bounded_killsafe_and_keeps_real_renders(tmp_path: Path):
+    """M5: the player piano runs an unattended compile -> render -> keep/discard
+    loop entirely through immutable project revisions. This gate pins its
+    contract: it is BOUNDED (stops at max_iterations), every KEPT set is a real
+    verification-gated WAV on disk bound to a durable project, the run receipt is
+    written and complete, and the loop is KILL-SAFE / RESUMABLE — re-running the
+    same run_id with a higher cap continues from where it stopped instead of
+    redoing the earlier iterations."""
+    import contextlib as _cl
+    core = configured_core(tmp_path)
+    base = _external_arrangement(tmp_path)
+
+    with _cl.ExitStack() as stack:
+        for p in _piano_patches(core, base):
+            stack.enter_context(p)
+
+        run = core.project_piano(personas=["remix_prettylights_v1"], max_iterations=3,
+                                 target_seconds=10.0, seed_base=100, run_id="gate_run")
+        # bounded + complete
+        assert run["complete"] is True and run["stop_reason"] == "max_iterations"
+        assert run["attempted"] == 3, run["attempted"]
+        assert run["kept"] >= 1, f"piano kept nothing: {run}"
+        assert run["kept"] + run["discarded"] + run["errored"] == 3
+        assert run["errored"] == 0, [a for a in run["attempts"] if a["verdict"] == "error"]
+        # every kept set is a real WAV bound to a durable project
+        listed = {p["project_id"] for p in core.project_list()["items"]}
+        for keep in run["keeps"]:
+            assert Path(keep["path"]).exists() and keep["path"].endswith(".wav")
+            assert keep["project_id"] in listed, f"kept project not durable: {keep['project_id']}"
+        # receipt persisted on disk
+        receipt = core.ensure_config().working_root / "piano" / "gate_run.json"
+        assert receipt.exists()
+        assert json.loads(receipt.read_text(encoding="utf-8"))["attempted"] == 3
+
+        # kill-safe / resume: same run_id, higher cap -> continues, keeps prior work
+        prior_iters = [a["iteration"] for a in run["attempts"]]
+        resumed = core.project_piano(personas=["remix_prettylights_v1"], max_iterations=5,
+                                     target_seconds=10.0, seed_base=100, run_id="gate_run")
+        assert resumed["attempted"] == 5, resumed["attempted"]
+        iters = [a["iteration"] for a in resumed["attempts"]]
+        assert iters == [0, 1, 2, 3, 4], iters
+        # the first three iterations are preserved verbatim (not recomputed anew)
+        assert [a["iteration"] for a in resumed["attempts"][:3]] == prior_iters
+
+    # max_keeps early-stop is honored
+    core2 = configured_core(tmp_path / "second")
+    base2 = _external_arrangement(tmp_path / "second")
+    with _cl.ExitStack() as stack:
+        for p in _piano_patches(core2, base2):
+            stack.enter_context(p)
+        capped = core2.project_piano(personas=["remix_prettylights_v1"], max_iterations=10,
+                                     max_keeps=1, target_seconds=10.0, seed_base=200, run_id="capped")
+        assert capped["kept"] >= 1
+        assert capped["stop_reason"] == "max_keeps"
+        assert capped["attempted"] < 10, "max_keeps must stop the loop before the iteration cap"

@@ -124,19 +124,27 @@ the product. Use it. **Proposer only — the measured judge still disposes.**
 - This is the flywheel with M6: every morning-triage keep/reject becomes
   tomorrow's ranking signal.
 
-## M5 — the player piano  (the night shift)
+## M5 — the player piano  (the night shift)  **[built]**
 
 Now safe because v0.9 made it safe: immutable revisions, verification-gated
 publication, refused source mutation, exact undo.
 
-- `earcrate piano --hours N --personas a,b,c [--external <vocal>]`: loop of
-  compile → render → judge → keep/discard, entirely through project revisions,
-  drawing work through the queue's warm lane (interactive always wins).
-- Bounded and kill-safe: disk budget, max keeps, resume from receipts after a
-  power cut, dry-run mode, every artifact traceable to its revision.
-- Gates: only gate-passing keeps survive; kill-mid-run leaves no corrupt
-  state; the run report is a receipt (attempted / kept / discarded / why).
-- Rig receipt: one real overnight run; the morning-after triage list.
+- **[done]** `earcrate project piano --personas a,b,c --iterations N
+  [--keeps K] [--seconds S] [--run-id ID]`: unattended compile → render →
+  keep/discard loop entirely through immutable project revisions
+  (`project_piano` in `earcrate/project/runtime.py`).
+- **[done]** Bounded (max_iterations, optional max_keeps / max_seconds) and
+  kill-safe: the run receipt is rewritten atomically after every iteration and
+  re-running the same run_id RESUMES from where it stopped. A gate-refused set
+  is DISCARDED (never a corrupt WAV); a precondition failure is recorded and
+  the loop stays alive. Every attempt is a durable project revision.
+- **[done]** Gate `test_project_piano_is_bounded_killsafe_and_keeps_real_renders`
+  pins: bounded+complete, kept sets are real WAVs on durable projects,
+  receipt persisted, resume preserves prior iterations, max_keeps early-stop.
+- **Remaining (rig):** draw work through the queue's warm lane so an
+  interactive request always preempts the night shift; then one real overnight
+  run on the library and the morning-after triage list. The loop itself is
+  done and green; only the real-library run and the warm-lane wiring are left.
 
 ## M6 — the UI rebuild, last, on the frozen contract
 

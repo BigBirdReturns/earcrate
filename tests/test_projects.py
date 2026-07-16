@@ -500,3 +500,64 @@ def test_project_piano_is_bounded_killsafe_and_keeps_real_renders(tmp_path: Path
         assert capped["kept"] >= 1
         assert capped["stop_reason"] == "max_keeps"
         assert capped["attempted"] < 10, "max_keeps must stop the loop before the iteration cap"
+
+
+def test_transform_provider_seam_default_stable_and_rubberband_higher_fidelity(tmp_path: Path):
+    """M2: the TransformProvider seam. The DEFAULT is the unchanged phase vocoder
+    (opt-in only, no ENGINE_VERSION bump); a box that requests Rubber Band without
+    the binary falls back honestly; and WHERE Rubber Band is available it must
+    preserve more high-frequency energy through a big stretch than the phase
+    vocoder (the whole point). Adding the seam must not regress the default
+    render. The Rubber Band assertions run only where the engine is installed
+    (demucs-style: unverified-until-the-box-has-it); the default-path and
+    fallback contract is verified everywhere."""
+    import numpy as np
+    import librosa
+    from earcrate.providers.transform import (
+        transform_capability, resolve_transform_provider,
+        rubberband_time_stretch, VALID_TRANSFORM_PROVIDERS,
+    )
+
+    # (1) probe shape + selection + honest fallback — always
+    cap = transform_capability()
+    assert {"pyrubberband", "rubberband_bin", "ready", "default", "providers"} <= set(cap)
+    assert cap["default"] == "phase_vocoder" and "phase_vocoder" in cap["providers"]
+    assert set(VALID_TRANSFORM_PROVIDERS) == {"phase_vocoder", "rubberband"}
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("EARCRATE_TRANSFORM", None)
+        assert resolve_transform_provider(None) == "phase_vocoder"
+    with patch.dict(os.environ, {"EARCRATE_TRANSFORM": "bogus"}):
+        assert resolve_transform_provider(None) == "phase_vocoder"
+    # requested-but-unavailable degrades to phase_vocoder, never crashes
+    with patch("earcrate.providers.transform.transform_capability", return_value={"ready": False}), \
+         patch.dict(os.environ, {"EARCRATE_TRANSFORM": "rubberband"}):
+        assert resolve_transform_provider(None) == "phase_vocoder"
+
+    # (2) the default render still works after adding the seam (no regression),
+    #     and the render resolves the default provider when nothing is opted in.
+    core = configured_core(tmp_path)
+    os.environ.pop("EARCRATE_TRANSFORM", None)
+    assert resolve_transform_provider(core.ensure_config()) == "phase_vocoder"
+    imported = _import_fixture(core, _external_arrangement(tmp_path))
+    rendered = core.project_render(imported["project"]["project_id"])
+    assert rendered["type"] == "render_project" and Path(rendered["path"]).exists()
+
+    # (3) fidelity — only where Rubber Band actually runs
+    if cap["ready"]:
+        sr = 22050
+        t = np.arange(sr * 2) / sr
+        bright = (0.3 * np.sin(2 * np.pi * 400 * t)
+                  + 0.3 * np.sin(2 * np.pi * 6000 * t)
+                  + 0.3 * np.sin(2 * np.pi * 9000 * t)).astype(np.float32)
+
+        def hf_share(x):
+            S = np.abs(np.fft.rfft(x)); f = np.fft.rfftfreq(len(x), 1 / sr)
+            return float(S[f >= 4000].sum() / max(1e-9, S.sum()))
+
+        pv = librosa.effects.time_stretch(bright, rate=1.5).astype(np.float32)
+        rb = rubberband_time_stretch(bright, sr, 1.5)
+        assert hf_share(rb) > hf_share(pv), \
+            f"rubberband must preserve more HF than phase vocoder ({hf_share(rb):.3f} !> {hf_share(pv):.3f})"
+        assert resolve_transform_provider(core.ensure_config()) == "phase_vocoder"  # still opt-in, not default
+        with patch.dict(os.environ, {"EARCRATE_TRANSFORM": "rubberband"}):
+            assert resolve_transform_provider(core.ensure_config()) == "rubberband"

@@ -1,6 +1,17 @@
 # EarCrate — CHANGELOG
 
 ## v0.9.997 — the v0.9.0 integrated release lands in the mainline repo
+- Adds the TransformProvider seam (`earcrate/providers/transform.py`): an
+  opt-in Rubber Band time-stretch/pitch-shift engine wired into the render hot
+  path. The default is the unchanged phase vocoder (librosa) — so no
+  ENGINE_VERSION bump and every banked render stays valid — and Rubber Band is
+  enabled per-box with `EARCRATE_TRANSFORM=rubberband` when the `rubberband` CLI
+  + pyrubberband are present (probed in `earcrate doctor`). A box that requests
+  it without the binary falls back to the phase vocoder honestly; the transform
+  cache key carries the effective provider so the two engines never collide.
+  Measured: on a 1.5× stretch the phase vocoder loses half its top-octave energy
+  while Rubber Band preserves it. Flipping the default (with the ENGINE_VERSION
+  bump) waits on an ears verdict on the box.
 - Adds the player piano (`earcrate project piano`): an unattended, bounded,
   kill-safe compile → render → keep/discard loop over the configured library,
   running entirely through immutable project revisions. Bounded by

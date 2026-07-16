@@ -10,6 +10,7 @@ from earcrate.materials.regions import propose_regions
 from earcrate.remix.external import remix_anchor, external_foreground_atom, external_vocal_window, external_remix_feasibility, fit_external_clip, external_edge_fades
 from earcrate.plan.math import readiness_need, sources_needed, target_bars, DEFAULT_SOURCE_SECONDS
 from earcrate.providers import get, stem_capability
+from earcrate.providers.transform import transform_capability, resolve_transform_provider, rubberband_time_stretch, rubberband_pitch_shift
 from earcrate.providers.workqueue import GpuWorkQueue, kind_capabilities
 
 # Byte ceiling for the L3 stem cache on the NVMe. The 4060's separations are the
@@ -1973,8 +1974,14 @@ class EarcrateCore:
         gpu_kinds = {}
         with contextlib.suppress(Exception):
             gpu_kinds = kind_capabilities()
+        # Transform (time/pitch) capability — informational, like stems: a box
+        # without Rubber Band is healthy, it just uses the default phase vocoder.
+        tcap = {}
+        with contextlib.suppress(Exception):
+            tcap = dict(transform_capability())
+            tcap["effective"] = resolve_transform_provider(c)
         return {"ok": all(x["ok"] for x in checks), "checks": checks, "config": c.as_dict(),
-                "stem_capability": cap, "gpu_work_kinds": gpu_kinds}
+                "stem_capability": cap, "transform_capability": tcap, "gpu_work_kinds": gpu_kinds}
 
     def startup_janitor(self) -> Dict[str, Any]:
         """Launch-time cleanup of everything old versions are known to leave behind.
@@ -5467,6 +5474,10 @@ class EarcrateCore:
     @_durable_render_attempt
     def render_mashup(self, mashup_id: str, dst: Path) -> Dict[str, Any]:
         c = self.ensure_config()
+        # Opt-in high-fidelity time/pitch engine (default phase_vocoder = unchanged
+        # librosa path). Resolved ONCE per render and carried into the transform
+        # cache key so a Rubber Band clip never collides with a phase-vocoder one.
+        transform_provider = resolve_transform_provider(c)
         db = self.conn()
         row = db.execute("SELECT * FROM mashups WHERE id=?", (mashup_id,)).fetchone()
         if not row:
@@ -5688,6 +5699,7 @@ class EarcrateCore:
                 "target_len": target_loop_len, "pitch_shift": round(float(ps), 4),
                 "role": role_name, "stem_source": stem_source, "sr": sr,
                 "quality_mode": quality_mode, "transform_policy": transform_policy,
+                "transform_provider": transform_provider,
                 "engine": ENGINE_VERSION,
             }))
             if cache_key in transform_cache:
@@ -5714,6 +5726,12 @@ class EarcrateCore:
                 report.setdefault("transform_policy", "varispeed_first_resample_then_small_residual_pitch")
             elif abs(float(rate) - 1.0) <= 0.015:
                 clip2 = resample_or_fit(clip2, target_loop_len).astype(np.float32)
+            elif transform_provider == "rubberband":
+                try:
+                    clip2 = rubberband_time_stretch(clip2, sr, float(rate))
+                except Exception as exc:
+                    raise RuntimeError(f"rubberband time_stretch failed: {exc}")
+                report.setdefault("transform_policy", "rubberband_time_pitch_v1")
             else:
                 try:
                     clip2 = librosa.effects.time_stretch(clip2, rate=rate).astype(np.float32)
@@ -5726,7 +5744,10 @@ class EarcrateCore:
                 clip2 = resample_or_fit(clip2, target_loop_len)
             if abs(float(ps)) > 1e-4:
                 try:
-                    clip2 = librosa.effects.pitch_shift(clip2, sr=sr, n_steps=float(ps)).astype(np.float32)
+                    if transform_provider == "rubberband":
+                        clip2 = rubberband_pitch_shift(clip2, sr, float(ps))
+                    else:
+                        clip2 = librosa.effects.pitch_shift(clip2, sr=sr, n_steps=float(ps)).astype(np.float32)
                 except Exception as exc:
                     raise RuntimeError(f"pitch_shift failed: {exc}")
                 diff = abs(clip2.size - target_loop_len) / max(1, target_loop_len)

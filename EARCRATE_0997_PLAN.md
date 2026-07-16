@@ -72,23 +72,28 @@ probe like `stem_provider`.
   confidence distribution, one transition plan that was previously refused and
   is now executable (or honestly: no change — say so).
 
-## M2 — render fidelity: Rubber Band time-stretch  (first ENGINE_VERSION bump)
+## M2 — render fidelity: Rubber Band time-stretch  **[seam built, opt-in]**
 
-The single biggest render-quality lever left. `pyrubberband` behind a
-`TransformProvider` seam in `deck/dsp.py`; current polyphase varispeed is the
-fallback. Requires the `rubberband` CLI binary — documented in
-`Install-Dependencies.cmd`, probed in doctor.
+The single biggest render-quality lever left. **[done]** `pyrubberband` behind a
+`TransformProvider` seam (`earcrate/providers/transform.py`), wired into the
+render hot path (`render_mashup`); the phase vocoder (librosa) is the untouched
+default. Requires the `rubberband` CLI binary + pyrubberband, both probed and
+surfaced in `earcrate doctor` (transform_capability).
 
-- Transform cache key includes the provider so old and new renders never
-  collide (same rule as stems).
-- **`ENGINE_VERSION` → `earcrate_v0910`.** Rendered bytes change; banked
-  renders and ear-crate engine stamps go stale honestly. This is the bump that
-  was deliberately NOT taken at 0.9.997-label time.
-- Gates: spectral A/B pins no top-octave loss at ±6% varispeed (extend the
-  v0.8.29 resampler gate); determinism; fallback-identity on a box without the
-  binary.
-- Rig receipt: the same arrangement rendered pre/post, spectral measurements,
-  and an ears verdict from the owner.
+- **[done]** Opt-in via `EARCRATE_TRANSFORM=rubberband`; a box without the
+  binary (or a bad value) resolves to `phase_vocoder`, honestly, never a crash.
+  The transform cache key carries the effective provider so a Rubber Band clip
+  and a phase-vocoder clip never collide.
+- **[done]** Default render is textually unchanged, so **no ENGINE_VERSION bump
+  yet** — banked renders stay valid. Verified: HF preservation on a 1.5×
+  stretch (phase vocoder drops top-octave share 0.67→0.34; Rubber Band holds
+  0.63), default render still green, import-safe without pyrubberband.
+  Gate `test_transform_provider_seam_default_stable_and_rubberband_higher_fidelity`.
+- **Remaining (rig, the ENGINE_VERSION bump):** flip the default to Rubber Band
+  and bump `ENGINE_VERSION` → `earcrate_v0910` ONLY after an ears verdict on the
+  box (same arrangement rendered pre/post + the owner's ears). That is a
+  deliberate, receipt-gated step — the seam is ready for it, the flip is not
+  taken unverified.
 
 ## M3 — the techno persona + the Beatles proof
 

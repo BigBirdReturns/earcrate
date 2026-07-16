@@ -12,3 +12,15 @@ mutagen>=1.47
 #     pip install demucs
 # Left OUT of this file on purpose — torch is a large, platform/CUDA-specific
 # dependency and the feature stays UNVERIFIED until a real GPU receipt exists.
+#
+# OPTIONAL — high-fidelity time-stretch / pitch-shift (TransformProvider seam,
+# earcrate/providers/transform.py). NOT installed by default: the shipped box
+# uses the phase vocoder (librosa) and every render is unchanged. To opt in,
+# install the Rubber Band CLI binary + pyrubberband, then set
+# EARCRATE_TRANSFORM=rubberband:
+#     # the 'rubberband' binary must be on PATH (e.g. apt install rubberband-cli,
+#     # brew install rubberband, or the Windows Rubber Band CLI build)
+#     pip install pyrubberband
+# Left OUT on purpose — it needs a native binary and the default-flip (with the
+# ENGINE_VERSION bump) waits on a real ears verdict on the box. Check readiness
+# with `earcrate doctor` (transform_capability).

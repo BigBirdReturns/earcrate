@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/integrated-score-cutover
+  pull_request:
+    branches:
+      - claude/presence-gate-and-reorg-fixes
 
 permissions:
   contents: read

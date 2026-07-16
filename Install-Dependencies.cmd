@@ -24,12 +24,23 @@ if errorlevel 1 (
 )
 type nul > ".deps_installed"
 echo.
+REM EarCrate needs BOTH ffmpeg.exe and ffprobe.exe on PATH. Check each: a
+REM partial install with ffmpeg but no ffprobe otherwise passes here and then
+REM fails later inside the app's doctor/self-test checks.
+set "_FFMISSING="
 where ffmpeg >nul 2>nul
+if errorlevel 1 set "_FFMISSING=ffmpeg"
+where ffprobe >nul 2>nul
 if errorlevel 1 (
-  echo [EarCrate] Python packages installed, but FFmpeg is still required.
-  echo Install FFmpeg and put ffmpeg.exe plus ffprobe.exe on PATH before launch.
+  if defined _FFMISSING (set "_FFMISSING=ffmpeg + ffprobe") else (set "_FFMISSING=ffprobe")
+)
+if defined _FFMISSING (
+  echo [EarCrate] Python packages installed, but FFmpeg is still required ^(missing: %_FFMISSING%^).
+  echo Install FFmpeg and put ffmpeg.exe AND ffprobe.exe on PATH before launch.
 ) else (
   echo [EarCrate] Python and FFmpeg dependencies are ready.
 )
+echo.
+echo [EarCrate] Verify your setup any time with:  python -m earcrate doctor
 echo You can now run Launch-EarCrate.cmd (or START_HERE.cmd).
 pause

@@ -531,6 +531,64 @@ def test_singlefile_cli_smoke():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_doctor_subcommand_reports_and_gates():
+    """The `doctor` subcommand is the documented 'is my box set up' check
+    (Install-Dependencies.cmd + the handoff both point at it). It must: run with
+    NO synthetic render, work BEFORE a workspace exists (still answer the ffmpeg
+    question on a fresh box), report ffmpeg/ffprobe/roots/sqlite, and — the
+    contract setup scripts/CI gate on — exit NON-ZERO when a required tool is
+    missing. Red the moment the subcommand disappears, crashes pre-config, or
+    stops honoring the exit code."""
+    import json as _json
+    import os, subprocess, sys, tempfile, shutil
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    py = sys.executable
+    env_base = dict(os.environ)
+    env_base["PYTHONPATH"] = str(root) + os.pathsep + env_base.get("PYTHONPATH", "")
+
+    d = Path(tempfile.mkdtemp())
+    try:
+        # 1) Unconfigured box: must NOT crash on ensure_config; must still report
+        #    the ffmpeg/ffprobe tool checks and mark itself unconfigured.
+        env = dict(env_base); env["EARCRATE_HOME"] = str(d / "fresh_home")
+        r = subprocess.run([py, "-m", "earcrate", "doctor"],
+                           capture_output=True, text=True, timeout=120, env=env, cwd=str(root))
+        assert "Traceback" not in (r.stdout + r.stderr), f"doctor crashed pre-config:\n{(r.stdout + r.stderr)[-800:]}"
+        rep = _json.loads(r.stdout)
+        assert rep.get("configured") is False
+        names = {c["name"] for c in rep["checks"]}
+        assert {"ffmpeg", "ffprobe"} <= names, f"tool checks missing pre-config: {names}"
+        # On a box with ffmpeg present (CI has it), unconfigured doctor is ok -> exit 0.
+        assert r.returncode == (0 if rep["ok"] else 1)
+
+        # 2) Exit-code contract: hide ffmpeg/ffprobe (empty PATH) -> ok False, exit 1.
+        empty = d / "emptybin"; empty.mkdir()
+        env_noff = dict(env); env_noff["PATH"] = str(empty)
+        r2 = subprocess.run([py, "-m", "earcrate", "doctor"],
+                            capture_output=True, text=True, timeout=120, env=env_noff, cwd=str(root))
+        rep2 = _json.loads(r2.stdout)
+        assert rep2["ok"] is False and r2.returncode == 1, \
+            f"doctor must exit 1 when a required tool is missing (got {r2.returncode}, ok={rep2['ok']})"
+
+        # 3) Configured workspace: full report incl. roots + sqlite; no render ran.
+        music = d / "music"; music.mkdir()
+        cfg = subprocess.run([py, "-m", "earcrate", "configure", "--music", str(music),
+                              "--workspace", str(d / "ws")],
+                             capture_output=True, text=True, timeout=120, env=env, cwd=str(root))
+        assert cfg.returncode == 0, f"configure failed:\n{cfg.stderr[-800:]}"
+        r3 = subprocess.run([py, "-m", "earcrate", "doctor"],
+                            capture_output=True, text=True, timeout=120, env=env, cwd=str(root))
+        rep3 = _json.loads(r3.stdout)
+        names3 = {c["name"] for c in rep3["checks"]}
+        assert {"master_root", "working_root", "agent_root", "sqlite_integrity"} <= names3, \
+            f"configured doctor missing workspace/sqlite checks: {names3}"
+        assert "stem_capability" in rep3, "configured doctor must report stem capability (informational)"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def test_fresh_clone_has_no_runtime_state():
     """Ledger #14: a fresh clone must adopt NOTHING implicitly. No runtime pointer
     (earcrate_workspace.json / any *_workspace.json), no config.json, no

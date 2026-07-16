@@ -38,9 +38,10 @@ has only ever passed its gates in cloud containers.
 - Close PR #29 (`agent/project-score-cli-rebuild`) and PR #30
   (`agent/integrated-score-cutover`) as superseded — their content is either
   discarded-by-design (the parallel engine) or landed via this branch.
-- Fix the handoff paper cuts: every doc that says `python -m earcrate doctor`
-  → `--self-test`; `Install-Dependencies.cmd` checks for ffmpeg/ffprobe and
-  says so honestly instead of letting doctor report false later.
+- Fix the handoff paper cuts: **[done]** `earcrate doctor` is now a real
+  subcommand (exposes the existing `doctor()` report, no render, works
+  pre-config, non-zero exit on failure); `Install-Dependencies.cmd` checks for
+  both ffmpeg.exe and ffprobe.exe and points at `earcrate doctor` to verify.
 - **The rig receipt (the only proof that counts):** on the Windows box, against
   the real library — `tests/run_gates.py` (194/194), `earcrate project
   acceptance --destination <scratch>`, one real `project compile --render`

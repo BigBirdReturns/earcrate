@@ -13,9 +13,16 @@
   `earcrate_v0900` on purpose — the render engine is unchanged and bumping
   its cache identity would falsely invalidate every banked ear crate, stem,
   and render. `release/` is kept frozen as the v0.9.0 release receipt.
-- Known doc fix: the release handoff said `python -m earcrate doctor`; that
-  subcommand does not exist. Use `python -m earcrate --self-test` (and note
-  ffmpeg/ffprobe must be on PATH or doctor checks report false).
+- Makes `python -m earcrate doctor` real. The release handoff referenced it but
+  the CLI never exposed the existing `doctor()` health report — only the heavier
+  `--self-test` (a full synthetic render). `doctor` now prints the environment +
+  workspace report (ffmpeg/ffprobe, roots, sqlite, stem/GPU capability), runs no
+  render, works before a workspace is configured (still answers the ffmpeg
+  question on a fresh box), and exits non-zero when a required check fails so
+  setup scripts and CI can gate on it.
+- `Install-Dependencies.cmd` now checks for BOTH ffmpeg.exe and ffprobe.exe
+  (previously only ffmpeg, so a partial install passed here and failed later in
+  doctor) and points at `earcrate doctor` as the verification step.
 
 ## v0.9.0 — immutable projects become the musical authority
 - Preserves the full EarCrate application while cutting ordinary sets, external remixes, Workbench plans, albums and bake-offs over to visible, content-addressed project revisions.

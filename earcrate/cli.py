@@ -247,6 +247,27 @@ def main(argv: Optional[List[str]] = None) -> int:
         core = EarcrateCore()
         print(json.dumps(core.rollback_identities({"journal": ns.journal, "apply": ns.apply}), ensure_ascii=False, indent=2))
         return 0
+    if argv and argv[0] == "doctor":
+        # Lightweight capability + workspace health report. Exits non-zero when a
+        # required check (ffmpeg/ffprobe, workspace roots, sqlite) fails, so setup
+        # scripts and CI can gate on it. Stem/GPU capability is reported but is
+        # informational only (a box with no GPU is healthy). Unlike --self-test,
+        # this runs NO synthetic render, and it works before a workspace exists.
+        dp = argparse.ArgumentParser(prog="earcrate doctor", description="Report environment + workspace health (ffmpeg, roots, sqlite, stem/GPU capability). Exits non-zero if a required check fails.")
+        dp.parse_args(argv[1:])
+        core = EarcrateCore()
+        try:
+            report = core.doctor()
+        except RuntimeError as exc:
+            # No workspace configured yet: still answer the first-run question
+            # ("is ffmpeg here?") instead of crashing on ensure_config().
+            tool_checks = [{"name": t, "ok": shutil.which(t) is not None, "detail": shutil.which(t) or "missing"}
+                           for t in ("ffmpeg", "ffprobe")]
+            report = {"ok": all(x["ok"] for x in tool_checks), "configured": False,
+                      "reason": str(exc), "checks": tool_checks,
+                      "hint": "run 'earcrate configure --music <folder>' to enable the workspace + sqlite checks"}
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report.get("ok") else 1
     parser = argparse.ArgumentParser(prog="earcrate", description="earcrate: local-first layered mashup engine; only auditioned material exists to the composer")
     parser.add_argument("--serve", action="store_true", help="start local UI server")
     parser.add_argument("--no-browser", action="store_true", help="do not open browser")

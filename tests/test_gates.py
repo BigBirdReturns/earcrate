@@ -3941,6 +3941,76 @@ def test_remix_personas_exist_with_distinct_spectral_targets():
     assert pl["spectral_target"]["high3000_share"]["floor_fail"] < GT_SPECTRAL_PROFILE["high3000_share"]["floor_fail"]
 
 
+def test_techno_persona_is_hypnotic_and_distinct(tmp_path):
+    """remix_techno_v1 must be a REAL persona, not a relabel of an existing one:
+    its identity is HYPNOTIC HOLD — a four-on-the-floor floor with loops held far
+    longer before turnover, a darker/steadier top than the bright Girl Talk
+    reference. This gate pins (a) the profile-level identity numbers, (b) that the
+    identity actually changes the ARRANGEMENT from the same pool (techno holds a
+    foreground source strictly longer than girl_talk's fast chop), and (c) that the
+    persona still PASSES its own taste-coverage gate (distinct AND valid, not
+    distinct by cheating its obligations)."""
+    import copy, statistics as st
+    from earcrate.tastespec.profiles import load_tastespec, available_profiles
+    from earcrate.judge.audio import GT_SPECTRAL_PROFILE
+    from earcrate.app import TASTE_PROFILES
+
+    # (a) profile-level identity
+    assert "remix_techno_v1" in set(available_profiles())
+    tc = load_tastespec("remix_techno_v1")
+    assert tc.get("mode") == "remix"
+    assert tc["tempo_target"]["bpm_low"] >= 125 and not tc["tempo_target"]["half_time_feel"], "techno is a driving four-on-floor grid"
+    gt_flat = TASTE_PROFILES["girl_talk_v1"]
+    assert TASTE_PROFILES["remix_techno_v1"]["max_source_run_s"] > gt_flat["max_source_run_s"], \
+        "techno must hold sources longer than girl_talk (hypnosis vs chop)"
+    # darker + steadier top than the bright Girl Talk reference
+    assert tc["spectral_target"]["high3000_share"]["target"] < GT_SPECTRAL_PROFILE["high3000_share"]["target"]
+    assert tc["spectral_target"]["rms_std_db"]["target"] < GT_SPECTRAL_PROFILE["rms_std_db"]["target"], \
+        "techno is steadier/more compressed (lower rms dynamic swing) than girl_talk"
+
+    # (b) the identity changes the arrangement from the SAME pool
+    for d in ("music", "work", "agent"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp_path / "music"), "working_root": str(tmp_path / "work"),
+                    "agent_root": str(tmp_path / "agent"), "workers": 1, "analysis_seconds": 8})
+    base = _v3_build_render_pool(core, core.conn(), tmp_path, bpm=120.0)
+    pool = []
+    for m in range(6):
+        for a in base:
+            b = copy.deepcopy(a); uid = f"{a['id']}_{m}"
+            b["id"] = uid; b["atom_id"] = uid; b["source_track_key"] = f"src_{uid}"
+            b["path"] = f"/fake/{uid}.wav"; b["title"] = f"Track {uid}"
+            pool.append(b)
+
+    def fg_run(pid):
+        arr = core.compose_taste_arrangement(list(pool), {"taste_profile": pid, "target_seconds": 120,
+              "bpm": 120.0, "quality_mode": "stable_deck"}, seed=5)
+        fg = [([l for l in s["layers"] if l.get("role") == "vocal"] or [{}])[0].get("source_track_key") for s in arr["sections"]]
+        runs = []; cur = None; n = 0
+        for k in fg:
+            if k == cur and k:
+                n += 1
+            else:
+                if cur:
+                    runs.append(n)
+                cur = k; n = 1 if k else 0
+        if cur:
+            runs.append(n)
+        return (st.mean(runs) if runs else 0), arr
+
+    techno_run, techno_arr = fg_run("remix_techno_v1")
+    gt_run, _ = fg_run("girl_talk_v1")
+    assert techno_run > gt_run, f"techno must hold a foreground source longer than girl_talk ({techno_run} !> {gt_run})"
+
+    # (c) distinct AND valid: techno passes its own taste-coverage gate
+    gate = core.taste_arrangement_gate(techno_arr)
+    prof = TASTE_PROFILES["remix_techno_v1"]
+    assert gate["passed"], f"techno taste gate failed: {gate['failures']} metrics={gate['metrics']}"
+    assert gate["metrics"]["floor_coverage"] >= prof["floor_coverage"]
+    assert gate["metrics"]["foreground_coverage"] >= prof["foreground_coverage"]
+
+
 def test_per_persona_gate_judges_a_warm_remix_on_its_own_aesthetic():
     """A vinyl-warm render (high3000 0.05) that FAILS the bright Girl Talk presence
     floor must PASS under the Pretty Lights profile -- judged on its own aesthetic,

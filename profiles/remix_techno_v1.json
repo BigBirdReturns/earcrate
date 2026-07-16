@@ -1,0 +1,187 @@
+{
+ "id": "remix_techno_v1",
+ "version": "1.0.0",
+ "name": "Remix — Techno v1",
+ "contract": "hypnotic four-on-the-floor: held loops over a relentless kick+bass floor, long beatmatched mixes, minimal layering, a single element hypnotized for bars before it turns over",
+ "mode": "remix",
+ "provenance": {
+  "basis": "documented techno/tech-house arrangement conventions (Detroit + minimal lineage: sustained loop hypnosis, four-on-floor grid, filter-swept long blends, kick-owned low end) — informed estimates, not a single transcribed set",
+  "scout": "genre-convention fan-out",
+  "note": "spectral/tempo/density are informed estimates; tune on the box against real techno GT once a reference set exists"
+ },
+ "permitted_roles": [
+  "DRUM_BREAK",
+  "BASS_RIFF",
+  "BED_CHORD",
+  "RIFF_ID",
+  "TEXTURE",
+  "VOX_HOOK",
+  "VOX_SHOUT",
+  "PICKUP_FILL",
+  "DROP_HIT",
+  "TRANSITION_TAIL"
+ ],
+ "role_salience": {
+  "DRUM_BREAK": {
+   "min_floor_score": 0.5
+  },
+  "BASS_RIFF": {
+   "min_bass_score": 0.5
+  },
+  "BED_CHORD": {
+   "min_bed_score": 0.44
+  },
+  "RIFF_ID": {
+   "min_score": 0.44
+  },
+  "VOX_HOOK": {
+   "min_score": 0.42,
+   "min_intelligibility": 0.35
+  }
+ },
+ "hard_constraints": {
+  "rails": [
+   "floor",
+   "foreground",
+   "spark"
+  ],
+  "require_transform_feasible_before_compose": true,
+  "forbid_silent_layer_drop": true,
+  "forbid_wav_on_gate_failure": true
+ },
+ "objective_weights": {
+  "danceability": 0.32,
+  "role_clarity": 0.24,
+  "deck_feasibility": 0.18,
+  "recognizability": 0.13,
+  "contrast": 0.13
+ },
+ "compatibility_relations": {
+  "vocal_over_bed": {
+   "min_score": 0.54
+  },
+  "bass_over_drums": {
+   "min_score": 0.54
+  },
+  "spark_into_phrase": {
+   "min_score": 0.54
+  },
+  "floor": {
+   "min_score": 0.54
+  },
+  "foreground": {
+   "min_score": 0.54
+  }
+ },
+ "min_edge_score": 0.54,
+ "transition_grammar": {
+  "allowed": [
+   "beatmatch_blend",
+   "hook_blend_over_bed",
+   "impact_drop",
+   "acapella_bridge",
+   "hard_cut_to_air"
+  ]
+ },
+ "transform_budgets": {
+  "default_stretch_pct": 8.0,
+  "default_pitch_semitones": 2,
+  "roles": {
+   "drum_anchor": {
+    "varispeed_pct": 8.0,
+    "residual_pitch": 0.75
+   },
+   "bass": {
+    "varispeed_pct": 8.5,
+    "residual_pitch": 0.9
+   },
+   "vocal": {
+    "varispeed_pct": 6.5,
+    "residual_pitch": 1.15
+   },
+   "harmony": {
+    "varispeed_pct": 8.5,
+    "residual_pitch": 1.25
+   },
+   "texture": {
+    "varispeed_pct": 8.5,
+    "residual_pitch": 1.0
+   },
+   "fx": {
+    "varispeed_pct": 8.5,
+    "residual_pitch": 1.0
+   },
+   "full": {
+    "varispeed_pct": 7.0,
+    "residual_pitch": 0.9
+   }
+  }
+ },
+ "coverage_obligations": {
+  "floor_coverage": 0.94,
+  "foreground_coverage": 0.42,
+  "first_foreground_s": 12.0,
+  "max_silent_gap_s": 1.0
+ },
+ "source_turnover": {
+  "source_seconds": 16.0,
+  "max_source_run_s": 48.0,
+  "foreground_max_share": 0.6,
+  "min_feasible_sources": 5
+ },
+ "density_model": {
+  "seconds_per_event": 10.0,
+  "sources_per_minute": 3.5,
+  "min_layers": 2,
+  "max_layers": 4
+ },
+ "tempo_target": {
+  "bpm_low": 128,
+  "bpm_high": 134,
+  "half_time_feel": false
+ },
+ "groove_target": {
+  "feel": "four_on_floor",
+  "swing": "none",
+  "syncopation": "low"
+ },
+ "spectral_target": {
+  "rms_std_db": {
+   "target": 2.8,
+   "floor": 1.8
+  },
+  "low200_share": {
+   "ceiling_fail": 0.48,
+   "ceiling_warn": 0.4,
+   "floor_warn": 0.14
+  },
+  "high3000_share": {
+   "target": 0.14,
+   "floor_warn": 0.08,
+   "floor_fail": 0.045
+  }
+ },
+ "endless_contract": {
+  "min_recycle_gap_s": 480.0,
+  "note": "the floor is relentless; loops turn over slowly — hypnosis before change"
+ },
+ "foreground_limits": {
+  "max_foreground_reuse": 10,
+  "max_foreground_duration_s": 90.0
+ },
+ "low_end_ownership": {
+  "max_simultaneous_bass_layers": 1,
+  "low_conflict_warn": 0.34,
+  "bass_ducking_required": true
+ },
+ "masking_intelligibility": {
+  "max_mid_mask": 0.62,
+  "min_vocal_intelligibility": 0.35
+ },
+ "acceptance_corpus_metrics": {
+  "hook_top5_recall": 0.6,
+  "pair_top10_min_approved_when_available": 2,
+  "deterministic_plan_hash": true,
+  "deterministic_render_hash": true
+ }
+}

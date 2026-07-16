@@ -1,0 +1,38 @@
+name: agent integrated source snapshot
+
+on:
+  push:
+    branches:
+      - agent/integrated-score-cutover
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create source snapshot
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root = Path('.').resolve()
+          out = root / 'earcrate-integrated-source.zip'
+          skip_parts = {'.git', '.pytest_cache', '__pycache__'}
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+              for path in sorted(root.rglob('*')):
+                  if not path.is_file() or any(part in skip_parts for part in path.parts):
+                      continue
+                  if path == out:
+                      continue
+                  zf.write(path, path.relative_to(root))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: earcrate-integrated-source
+          path: earcrate-integrated-source.zip
+          if-no-files-found: error

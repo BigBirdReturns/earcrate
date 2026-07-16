@@ -1,9 +1,34 @@
 from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.selftest import *
+
+
+def _pop_json_out(args: List[str]) -> str:
+    """Pull an optional `--json-out <path>` out of an argv slice so the caller's
+    argparse never sees it. This is a machine-result affordance for verification
+    tooling: the command's exact result dict is written to that file (in addition
+    to being printed), so a reader never has to scrape it out of noisy stdout."""
+    if "--json-out" in args:
+        i = args.index("--json-out")
+        val = args[i + 1] if i + 1 < len(args) else ""
+        del args[i:i + 2]
+        return val
+    return ""
+
+
+def _emit(result: Any, json_out: str) -> None:
+    text = json.dumps(result, ensure_ascii=False, indent=2)
+    if json_out:
+        p = Path(json_out).expanduser()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    print(text)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "project":
+        _json_out = _pop_json_out(argv)
         pp = argparse.ArgumentParser(prog="earcrate project", description="Compile, inspect, edit, render and export immutable EarCrate projects")
         sub = pp.add_subparsers(dest="project_command", required=True)
         cp = sub.add_parser("compile", help="compile the existing EarAtom crate through bounded candidate search")
@@ -57,7 +82,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     os.environ.pop("EARCRATE_HOME", None)
                 else:
                     os.environ["EARCRATE_HOME"] = old_home
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            _emit(result, _json_out)
             return 0
         core = EarcrateCore()
         if ns.project_command == "compile":
@@ -97,7 +122,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 max_iterations=ns.iterations, max_keeps=ns.keeps, max_seconds=ns.seconds,
                 target_seconds=ns.target_seconds, seed_base=ns.seed,
                 run_id=ns.run_id, resume=not ns.no_resume)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        _emit(result, _json_out)
         return 0
     if argv and argv[0] == "judge":
         jp = argparse.ArgumentParser(prog="earcrate judge", description="Judge a render against the v1.1 reference gates")
@@ -157,12 +182,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(core.organize_and_retag({"apply": ns.apply, "limit": ns.limit}), ensure_ascii=False, indent=2))
         return 0
     if argv and argv[0] == "train-ranker":
+        _json_out = _pop_json_out(argv)
         tp = argparse.ArgumentParser(prog="earcrate train-ranker", description="Train the opt-in taste ranker (M4) from your approve/reject judgments for a persona. Writes a model artifact + receipt; enable it with EARCRATE_RANKER=on.")
         tp.add_argument("--profile", default="girl_talk_v1")
         tp.add_argument("--min-examples", type=int, default=8, help="minimum labelled atoms (both classes) required to train")
         ns = tp.parse_args(argv[1:])
         core = EarcrateCore()
-        print(json.dumps(core.train_taste_ranker(ns.profile, min_examples=ns.min_examples), ensure_ascii=False, indent=2))
+        _emit(core.train_taste_ranker(ns.profile, min_examples=ns.min_examples), _json_out)
         return 0
     if argv and argv[0] == "rank":
         rp = argparse.ArgumentParser(prog="earcrate rank", description="Rank the ear crate by the persona's selection priorities (curation surface)")
@@ -276,6 +302,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         # scripts and CI can gate on it. Stem/GPU capability is reported but is
         # informational only (a box with no GPU is healthy). Unlike --self-test,
         # this runs NO synthetic render, and it works before a workspace exists.
+        _json_out = _pop_json_out(argv)
         dp = argparse.ArgumentParser(prog="earcrate doctor", description="Report environment + workspace health (ffmpeg, roots, sqlite, stem/GPU capability). Exits non-zero if a required check fails.")
         dp.parse_args(argv[1:])
         core = EarcrateCore()
@@ -289,7 +316,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             report = {"ok": all(x["ok"] for x in tool_checks), "configured": False,
                       "reason": str(exc), "checks": tool_checks,
                       "hint": "run 'earcrate configure --music <folder>' to enable the workspace + sqlite checks"}
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        _emit(report, _json_out)
         return 0 if report.get("ok") else 1
     parser = argparse.ArgumentParser(prog="earcrate", description="earcrate: local-first layered mashup engine; only auditioned material exists to the composer")
     parser.add_argument("--serve", action="store_true", help="start local UI server")

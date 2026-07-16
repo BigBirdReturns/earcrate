@@ -42,11 +42,21 @@ Run-Rig-Receipt.cmd ^
 ## Preflight (refuses rather than guesses)
 
 - **Refuses a dirty git tree** by default (`--allow-dirty` records the dirt).
-- Records branch, HEAD, upstream, Python, OS, CPU, RAM, GPU, CUDA, ffmpeg,
-  ffprobe, allin1, Rubber Band, pyrubberband, Demucs, Playwright, and the
-  configured provider env (`EARCRATE_BEATS/TRANSFORM/RANKER/STEMS`).
+- Records branch, HEAD, upstream, Python (+ executable path), OS, CPU, RAM, GPU,
+  CUDA, and — as **executable path + version string, not a bare boolean** —
+  ffmpeg, ffprobe, Rubber Band, plus versions for allin1, pyrubberband, Demucs,
+  Playwright, torch, numpy/scipy/librosa/soundfile/mutagen, and the configured
+  provider env (`EARCRATE_BEATS/TRANSFORM/RANKER/STEMS`).
+- **Resolves the configured `master_root` (the real music library) first, then
+  runs the scratch-safety check against it.** If `master_root` cannot be
+  resolved from `--workspace`, the run **refuses** (exit 1) — the safety check
+  cannot run against an unknown music root, so no crate-dependent stage may
+  proceed. Run `earcrate configure --music <folder>` in that workspace first.
 - **Requires an explicit scratch outside the music library** (refuses scratch ==
   music, scratch ⊂ music, or music ⊂ scratch).
+- The durable-state clone uses a **consistent SQLite backup** (`Connection.backup`
+  + `PRAGMA integrity_check`), never a raw file copy of a possibly-live DB; the
+  production workspace is never written and the real music stays read-only.
 - Does **not** install packages, does **not** persist env vars or config, does
   **not** push/merge/close PRs, delete outputs, or alter source audio.
 - Redacts user-home and token-bearing paths in the committable receipt.

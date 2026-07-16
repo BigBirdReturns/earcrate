@@ -12,17 +12,46 @@ fails on ANY console error. Also captures desktop + narrow-window screenshots.
 
 Exit 0 = every mode green with zero console errors.
 """
-import os, sys, json, time, tempfile, subprocess, re, signal
+import os, sys, json, time, tempfile, subprocess, re, signal, socket, glob
 from pathlib import Path
 import numpy as np, soundfile as sf
 
-os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
-CHROME = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
-SHOTS = Path(tempfile.mkdtemp(prefix="wb_shots_"))
+# Screenshots/receipt land in scratch when the rig harness passes WB_SHOTS_DIR;
+# otherwise a temp dir. Never hardcode a host path.
+SHOTS = Path(os.environ.get("WB_SHOTS_DIR") or tempfile.mkdtemp(prefix="wb_shots_"))
+SHOTS.mkdir(parents=True, exist_ok=True)
 BASE = Path(tempfile.mkdtemp(prefix="wb_dom_")); HOME = BASE / "home"; HOME.mkdir(parents=True)
+
+
+def _chromium_executable():
+    """Portable Chromium discovery: EARCRATE_CHROMIUM override first, then a few
+    well-known locations, else None so Playwright uses its own managed browser."""
+    override = os.environ.get("EARCRATE_CHROMIUM")
+    if override and Path(override).exists():
+        return override
+    for pat in ("/opt/pw-browsers/chromium-*/chrome-linux/chrome",
+                str(Path.home() / ".cache/ms-playwright/chromium-*/chrome-linux/chrome"),
+                str(Path.home() / "AppData/Local/ms-playwright/chromium-*/chrome-win/chrome.exe")):
+        hits = sorted(glob.glob(pat))
+        if hits:
+            return hits[-1]
+    return None  # let Playwright resolve its default install
+
+
+def _launch(p):
+    exe = _chromium_executable()
+    args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+            "--disable-extensions", "--js-flags=--max-old-space-size=256"]
+    return p.chromium.launch(executable_path=exe, args=args) if exe else p.chromium.launch(args=args)
+
+
+def _free_port():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+    return port
 
 
 def seed_project():
@@ -82,9 +111,7 @@ def drive(url, mode, shoot=False):
     errors = []
     steps = {}
     with sync_playwright() as p:
-        b = p.chromium.launch(executable_path=CHROME,
-                              args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
-                                    "--disable-extensions", "--js-flags=--max-old-space-size=256"])
+        b = _launch(p)
         pg = b.new_page(viewport={"width": 1440, "height": 900})
         pg.on("console", lambda m: errors.append(f"{m.type}: {m.text}") if m.type == "error" else None)
         pg.on("pageerror", lambda e: errors.append("PAGEERROR: " + str(e)))
@@ -156,23 +183,33 @@ def drive(url, mode, shoot=False):
 def main():
     pid = seed_project()
     print("seeded project", pid)
-    modes = [("package", [sys.executable, "-m", "earcrate"], 8770, True),
-             ("singlefile", [sys.executable, str(ROOT / "dist" / "earcrate.py")], 8771, False)]
+    modes = [("package", [sys.executable, "-m", "earcrate"], True),
+             ("singlefile", [sys.executable, str(ROOT / "dist" / "earcrate.py")], False)]
     only = os.environ.get("WB_MODE")
     if only:
         modes = [m for m in modes if m[0] == only]
     overall = True
     receipt = {"project_id": pid, "modes": {}}
-    for name, cmd, port, shoot in modes:
+    for name, cmd, shoot in modes:
+        port = _free_port()  # dynamic allocation — no fixed 8770/8771
         proc, url = boot(cmd, port)
-        if not url:
-            print(f"[{name}] SERVER FAILED"); overall = False; continue
         try:
+            if not url:
+                print(f"[{name}] SERVER FAILED"); overall = False
+                receipt["modes"][name] = {"ok": False, "console_errors": ["server failed to start"], "steps": {}}
+                continue
             steps, errors = drive(url, name, shoot=shoot)
         finally:
-            proc.send_signal(signal.SIGINT); time.sleep(1)
+            # guaranteed server cleanup regardless of how drive() exits
+            try:
+                proc.send_signal(getattr(signal, "SIGINT", signal.SIGTERM))
+            except Exception:
+                pass
+            time.sleep(1)
             if proc.poll() is None:
                 proc.kill()
+        if not url:
+            continue
         ok = (not errors) and all(v not in (False, 0) for v in steps.values())
         receipt["modes"][name] = {"ok": ok, "console_errors": errors, "steps": steps}
         overall = overall and ok

@@ -42,7 +42,7 @@ for _thread_var in (
 # never has a legitimate reason to write a real workspace pointer.
 os.environ["EARCRATE_HOME"] = tempfile.mkdtemp(prefix="earcrate_gates_home_")
 
-MODULES = ("test_gates", "test_tastespec_vertical", "test_first_minute_fixes", "test_reference_study", "test_stem_warmer", "test_transitions", "test_beat_features", "test_materials", "test_analysis_wiring", "test_album", "test_remix_builder", "test_reference_recall", "test_musicbrainz", "test_external_remix", "test_workqueue", "test_projects")
+MODULES = ("test_gates", "test_tastespec_vertical", "test_first_minute_fixes", "test_reference_study", "test_stem_warmer", "test_transitions", "test_beat_features", "test_materials", "test_analysis_wiring", "test_album", "test_remix_builder", "test_reference_recall", "test_musicbrainz", "test_external_remix", "test_workqueue", "test_projects", "test_rig_receipt")
 
 
 def _cases():

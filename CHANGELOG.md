@@ -1,6 +1,19 @@
 # EarCrate — CHANGELOG
 
 ## v0.9.997 — the v0.9.0 integrated release lands in the mainline repo
+- Adds the rig-receipt harness (`scripts/run_rig_receipt.py`, `Run-Rig-Receipt.cmd`,
+  `docs/RIG_RECEIPT_RUNBOOK.md`) — release-verification tooling only, no engine/
+  UI/default change. One command runs the mechanical and rig/human-dependent
+  validation stages against the real library, checkpoints atomically after every
+  stage, resumes by `run_id`, refuses a dirty tree / a different HEAD / an unsafe
+  scratch path, keeps the music library read-only, and emits a committable JSON +
+  Markdown receipt whose stage statuses (`passed`/`failed`/`skipped`/
+  `pending_manual`) and overall (`complete`/`failed`/`incomplete`, exit 0/1/2)
+  make it impossible to confuse code presence, cloud CI, rig execution, and a
+  human musical verdict. `tests/manual/verify_workbench_dom.py` is made portable
+  (Chromium discovery / `EARCRATE_CHROMIUM`, dynamic ports, guaranteed server
+  cleanup). Hermetic gates `tests/test_rig_receipt.py` pin the state machine,
+  resume, path safety, and failure classification.
 - Rebuilds the Workbench on the frozen `/api/projects` contract (functional
   pass; the LATTICE visual language is preserved, not redesigned). The old
   loose-arrangement path (`/api/timeline/propose`, `/api/render_plan`) is gone

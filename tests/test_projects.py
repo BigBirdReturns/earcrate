@@ -416,6 +416,33 @@ def test_project_http_api_exposes_frontend_contract(tmp_path):
         assert edl["format"] == "edl" and Path(edl["path"]).exists()
         history = request("GET", f"/api/projects/{encoded}/history")
         assert any(row["kind"] == "set_pan" for row in history["commands"])
+        sheet = request("POST", f"/api/projects/{encoded}/export/sheet", {})
+        assert sheet["format"] == "sheet" and Path(sheet["path"]).exists()
+
+        # piano runs endpoint (empty is fine) is part of the frontend contract
+        pruns = request("GET", "/api/piano/runs")
+        assert pruns.get("ok") and isinstance(pruns.get("items"), list)
+
+        # a policy-violating command WITHOUT override is a 4xx refusal, not a 500,
+        # and an unknown project is a 404 — the Workbench relies on this to show a
+        # clean refusal (and so a real refusal is not a console 500).
+        def status_of(method, path, body=None):
+            data = None if body is None else json.dumps(body).encode("utf-8")
+            req = urllib.request.Request(base + path, data=data, method=method,
+                                         headers={"X-JB-Token": token, "Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    return r.status
+            except urllib.error.HTTPError as e:
+                return e.code
+
+        refused = status_of("POST", f"/api/projects/{encoded}/commands", {
+            "actor": "human", "kind": "set_pan",
+            "payload": {"clip_id": clip["clip_id"], "pan": 0.99},  # outside persona pan, no override
+        })
+        assert 400 <= refused < 500, f"policy refusal must be 4xx, got {refused}"
+        missing = status_of("GET", "/api/projects/does-not-exist")
+        assert missing == 404, f"unknown project must be 404, got {missing}"
     finally:
         server.shutdown()
         server.server_close()
@@ -561,3 +588,79 @@ def test_transform_provider_seam_default_stable_and_rubberband_higher_fidelity(t
         assert resolve_transform_provider(core.ensure_config()) == "phase_vocoder"  # still opt-in, not default
         with patch.dict(os.environ, {"EARCRATE_TRANSFORM": "rubberband"}):
             assert resolve_transform_provider(core.ensure_config()) == "rubberband"
+
+
+def _seed_atom(core, db, fid, aid, ear, role, profile, path):
+    from earcrate.core.util import sha256_file
+    st = Path(path).stat()
+    db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,sha256,scanned_at) VALUES(?,?,?,?,?,?,?)",
+               (fid, str(path), "master", int(st.st_size), int(st.st_mtime_ns), sha256_file(Path(path)), "now"))
+    core._set_pcm(fid, "pcm_"+fid)
+    db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
+               ("l_"+aid, fid, 0.0, 4.0, 2, role, 0.7, "now"))
+    db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,status,metrics_json,created_at) "
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               (aid, "l_"+aid, fid, profile, ear, role, 0.0, 4.0, 2, 0.7, "approved", "{}", "now"))
+
+
+def test_piano_triage_feeds_m4_judgments(tmp_path: Path):
+    """M5→M4 flywheel: the morning-triage keep/reject on a piano attempt writes
+    THROUGH the atom-judgment path so it becomes taste-ranker training data. A keep
+    approves every atom the attempt used; a reject rejects them; the verdict is
+    recorded back on the run receipt. An attempt with no atom material judges
+    nothing and says so honestly."""
+    import json as _json
+    core = configured_core(tmp_path)
+    db = core.conn()
+    profile = "remix_prettylights_v1"
+    fpath, vpath, dur = _write_sources(tmp_path)
+    _seed_atom(core, db, "fa", "atom_A", "BED_CHORD", "harmony", profile, fpath)
+    _seed_atom(core, db, "fb", "atom_B", "VOX_HOOK", "vocal", profile, vpath)
+    db.commit()
+
+    # import a project whose arrangement layers carry those atom ids
+    arr = _external_arrangement(tmp_path)
+    arr["params"]["taste_profile"] = profile
+    ai = ["atom_A", "atom_B"]
+    for s in arr["sections"]:
+        for k, layer in enumerate(s["layers"]):
+            layer["atom_id"] = ai[k % 2]
+    imp = _import_fixture(core, arr)
+    pid = imp["project"]["project_id"]
+    rev_sha = imp["project"]["active_revision_sha"]
+
+    # write a piano run receipt with a kept attempt referencing the project
+    piano_dir = core.ensure_config().working_root / "piano"
+    piano_dir.mkdir(parents=True, exist_ok=True)
+    run = {"ok": True, "type": "piano_run", "run_id": "gate_run", "personas": [profile],
+           "attempted": 1, "kept": 1, "discarded": 0, "errored": 0,
+           "attempts": [{"iteration": 0, "persona": profile, "seed": 1, "verdict": "kept",
+                         "project_id": pid, "revision_sha": rev_sha, "path": "x.wav"}]}
+    (piano_dir / "gate_run.json").write_text(_json.dumps(run), encoding="utf-8")
+
+    # runs endpoint lists it
+    runs = core.project_piano_runs()
+    assert runs["items"] and runs["items"][0]["run_id"] == "gate_run"
+
+    # keep -> both atoms approved for the persona, verdict recorded, receipt updated
+    res = core.project_piano_triage("gate_run", 0, "keep")
+    assert res["ok"] and res["atoms_judged"] == 2 and res["status"] == "approved"
+    rows = {r[0]: r[1] for r in db.execute(
+        "SELECT atom_id,status FROM atom_judgments WHERE taste_profile=?", (profile,)).fetchall()}
+    assert rows.get("atom_A") == "approved" and rows.get("atom_B") == "approved"
+    updated = _json.loads((piano_dir / "gate_run.json").read_text(encoding="utf-8"))
+    assert updated["attempts"][0]["triage"]["verdict"] == "keep"
+
+    # reject flips them (append-only judgment path, latest wins)
+    res2 = core.project_piano_triage("gate_run", 0, "reject")
+    assert res2["status"] == "rejected"
+    rows2 = {r[0]: r[1] for r in db.execute(
+        "SELECT atom_id,status FROM atom_judgments WHERE taste_profile=?", (profile,)).fetchall()}
+    assert rows2.get("atom_A") == "rejected" and rows2.get("atom_B") == "rejected"
+
+    # bad verdict is refused (surfaces as a 4xx-mapped ProjectValidationError)
+    try:
+        core.project_piano_triage("gate_run", 0, "maybe")
+        raise AssertionError("bad verdict must be refused")
+    except ProjectValidationError:
+        pass

@@ -2,6 +2,20 @@ from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.app import *
 from earcrate.core.util import visible_app_dir
+from earcrate.project.model import ProjectValidationError, ProjectConcurrencyError, ProjectNotFoundError
+
+# A project command that violates the active TasteSpec, a stale-head concurrency
+# clash, or an unknown project is a CLIENT/POLICY condition, not a server fault —
+# it must surface as a 4xx so the Workbench can show a clean refusal instead of a
+# 500 (and so a legitimate refusal is not counted as a console error in tests).
+_PROJECT_ERROR_STATUS = ((ProjectNotFoundError, 404), (ProjectConcurrencyError, 409), (ProjectValidationError, 400))
+
+
+def _project_error_status(exc: Exception):
+    for cls, status in _PROJECT_ERROR_STATUS:
+        if isinstance(exc, cls):
+            return status
+    return None
 HTML_PAGE = (Path(__file__).resolve().parent / "static" / "index.html").read_text(encoding="utf-8")  # single-file build inlines this
 
 
@@ -214,6 +228,9 @@ class JBHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/projects":
                 self._json(200, self.core.project_list())
                 return
+            if parsed.path == "/api/piano/runs":
+                self._json(200, self.core.project_piano_runs())
+                return
             project_get = re.fullmatch(r"/api/projects/([^/]+)(?:/(history|runs))?", parsed.path)
             if project_get:
                 project_id = urllib.parse.unquote(project_get.group(1))
@@ -251,6 +268,10 @@ class JBHandler(BaseHTTPRequestHandler):
                 return
             self._json(404, {"error": "not found"})
         except Exception as exc:
+            status = _project_error_status(exc)
+            if status is not None:
+                self._json(status, {"ok": False, "error": str(exc)})
+                return
             if DEBUG_LOG.on:
                 DEBUG_LOG.write("ERROR  GET  " + self._safe_path() + "\n" + traceback.format_exc().rstrip())
             self._json(500, {"error": str(exc), "trace": traceback.format_exc()})
@@ -270,6 +291,10 @@ class JBHandler(BaseHTTPRequestHandler):
             path = urllib.parse.urlparse(self.path).path
             if path == "/api/projects/compile":
                 self._json(200, self.core.project_compile(data)); return
+            if path == "/api/piano/triage":
+                self._json(200, self.core.project_piano_triage(
+                    str(data.get("run_id") or ""), int(data.get("iteration") or 0),
+                    str(data.get("verdict") or ""))); return
             if path == "/api/projects/import":
                 self._json(200, self.core.project_import_arrangement(
                     data["arrangement"],
@@ -446,6 +471,10 @@ class JBHandler(BaseHTTPRequestHandler):
                 self._json(200, self.core.judge_render(str(data.get("path") or ""), str(data.get("ref") or "") or None, str(data.get("taste_profile") or ""))); return
             self._json(404, {"error": "not found"})
         except Exception as exc:
+            status = _project_error_status(exc)
+            if status is not None:
+                self._json(status, {"ok": False, "error": str(exc)})
+                return
             if DEBUG_LOG.on:
                 try:
                     body_preview = json.dumps(locals().get("data") or {}, ensure_ascii=False)[:800]

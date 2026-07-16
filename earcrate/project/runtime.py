@@ -742,3 +742,77 @@ def project_piano(core: Any, *, personas: Optional[List[str]] = None,
         attempts.append(rec)
         _flush()
     return _flush(stop_reason=stop_reason, complete=True)
+
+
+def project_piano_runs(core: Any) -> Dict[str, Any]:
+    """List player-piano run receipts (working_root/piano/*.json) newest first, so
+    the Workbench morning-triage view can show kept / discarded / refused attempts
+    without scanning anything by hand."""
+    c = core.ensure_config()
+    runs_dir = (c.working_root / "piano").resolve()
+    items: List[Dict[str, Any]] = []
+    if runs_dir.exists():
+        for path in sorted(runs_dir.glob("*.json"), key=lambda x: x.stat().st_mtime_ns, reverse=True):
+            try:
+                row = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(row, dict):
+                    row = dict(row)
+                    row["receipt_path"] = str(path)
+                    items.append(row)
+            except Exception as exc:
+                items.append({"receipt_path": str(path), "error": str(exc)})
+    return {"ok": True, "items": items}
+
+
+def _attempt_atom_ids(core: Any, project_id: str, revision_sha: str) -> List[str]:
+    """Every distinct approved-atom id that a piano attempt's revision actually
+    used, so a triage keep/reject can feed the exact material back as judgments.
+    The atom identity is carried on the arrangement layers (the bridge does not
+    copy it onto the canonical clip), so read it there."""
+    store = project_store(core)
+    revision = store.load_revision(project_id, revision_sha or None)
+    ids: List[str] = []
+    seen = set()
+    for section in (revision.arrangement.get("sections") or []):
+        for layer in (section.get("layers") or []):
+            aid = str(layer.get("atom_id") or "")
+            if aid and aid not in seen:
+                seen.add(aid)
+                ids.append(aid)
+    return ids
+
+
+def project_piano_triage(core: Any, run_id: str, iteration: int, verdict: str) -> Dict[str, Any]:
+    """Morning triage: keep/reject a piano attempt and write the judgment THROUGH
+    the existing atom-judgment path so it becomes M4 training data. A keep marks
+    every atom the attempt used approved; a reject marks them rejected. The verdict
+    is recorded back on the run receipt so the view reflects it and re-triage is
+    idempotent. Never fabricates: an attempt with no atom material judges nothing
+    and says so."""
+    verdict = str(verdict or "").lower()
+    if verdict not in {"keep", "reject"}:
+        raise ProjectValidationError("triage verdict must be 'keep' or 'reject'")
+    c = core.ensure_config()
+    receipt_path = (c.working_root / "piano" / f"{run_id}.json").resolve()
+    core.validate_path_in_root(receipt_path, c.working_root)
+    if not receipt_path.exists():
+        raise ProjectValidationError(f"piano run not found: {run_id}")
+    run = json.loads(receipt_path.read_text(encoding="utf-8"))
+    attempt = next((a for a in (run.get("attempts") or []) if int(a.get("iteration", -1)) == int(iteration)), None)
+    if attempt is None:
+        raise ProjectValidationError(f"attempt {iteration} not found in run {run_id}")
+    project_id = str(attempt.get("project_id") or "")
+    persona = str(attempt.get("persona") or "girl_talk_v1")
+    status = "approved" if verdict == "keep" else "rejected"
+    judged = 0
+    if project_id:
+        with contextlib.suppress(Exception):
+            for atom_id in _attempt_atom_ids(core, project_id, str(attempt.get("revision_sha") or "")):
+                core.set_atom_judgment(atom_id, persona, status, "", verdict == "keep", False, f"piano_triage:{run_id}#{iteration}")
+                judged += 1
+    attempt["triage"] = {"verdict": verdict, "status": status, "atoms_judged": judged, "at": now_utc()}
+    _atomic_json(receipt_path, run)
+    return {"ok": True, "run_id": run_id, "iteration": int(iteration), "verdict": verdict,
+            "status": status, "atoms_judged": judged, "persona": persona,
+            "note": ("fed M4 as %d atom judgment(s)" % judged) if judged else
+                    "attempt used no approved-atom material (e.g. an imported/external set) — verdict recorded, nothing to train on"}

@@ -166,19 +166,28 @@ publication, refused source mutation, exact undo.
   run on the library and the morning-after triage list. The loop itself is
   done and green; only the real-library run and the warm-lane wiring are left.
 
-## M6 — the UI rebuild, last, on the frozen contract
+## M6 — the project Workbench, on the frozen contract  **[functional pass done]**
 
-Deliberately last, exactly as `docs/PROJECT_API.md` intended. LATTICE (or its
-replacement — it may be thinner than what exists) consumes `/api/projects`
-only: active revision display, typed command dispatch, history/undo timeline,
-and the piano-roll triage view for M5's overnight keeps (whose keep/reject
-clicks feed M4).
+Rebuilt on `/api/projects` exclusively, inside the preserved LATTICE shell (no
+redesign — that's the on-box aesthetic pass). See `docs/M6_WORKBENCH.md`.
 
-- Rule: no loose-arrangement path survives in the UI. Every button is a typed
-  command against a revision.
-- Gates: headless Playwright drive of the full lifecycle (compile → edit →
-  undo → render → export) with zero console errors, same discipline as the
-  v0.8.8 fresh-download verification.
+- **[done]** Project list + compile/import, active header (revision/persona/
+  seed/BPM/duration/gate/head-currency), three-rail timeline showing every clip,
+  clip inspector with backend-policy ranges + typed commands, transition
+  inspector, undo/redo/recompile with full refresh, revision-bound preview/
+  render/export with receipts, history (ancestry) + runs views, and the M5
+  morning-triage view whose keep/reject feeds M4 through the atom-judgment path.
+- **[done]** No loose-arrangement path survives in the UI; project errors map to
+  4xx; no framework/network/second-state-model; single-file build byte-identical.
+- **[done]** `tests/manual/verify_workbench_dom.py` drives the full lifecycle
+  (compile/import → edit → undo → redo → preview → render → export → reopen after
+  restart) with ZERO console errors, package-mode green; single-file serves the
+  identical Workbench. Hermetic gates extend the HTTP contract + piano triage
+  (201/201). Screenshots at desktop + narrow widths captured.
+- **Remaining (on-box, deliberate): the aesthetic pass** — timeline zoom/scroll +
+  waveforms, rail colour semantics, inspector docking, `replace_clip` atom-picker
+  UX, refusal presentation, narrow-width header priority (the deferred list in
+  `docs/M6_WORKBENCH.md`). Left for the owner's eye on real compiled output.
 
 ---
 

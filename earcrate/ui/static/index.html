@@ -366,77 +366,355 @@ function renderReadiness(){
     +'<div style="margin-top:13px;padding-top:12px;border-top:1px solid var(--edge)"><div style="font-family:var(--disp);font-weight:700;font-size:26px;line-height:1;color:var(--acc)">'+(end.no_repeat_seconds!=null?hms(end.no_repeat_seconds):'—')+'</div><div style="font:500 8.5px/1.4 var(--mono);color:var(--faint);margin-top:4px">no-repeat runtime · bottleneck: <span style="color:var(--dim)">'+esc(end.bottleneck||'?')+'</span></div></div></div>';
 }
 
-/* ---------- WORKBENCH ---------- */
+/* ---------- WORKBENCH // immutable projects (frozen /api/projects contract) ----------
+   Loose-arrangement rendering (/api/timeline/propose, /api/render_plan) is GONE.
+   Every mutation is a typed command that advances active_revision_sha; the whole
+   project is refetched after each one because mastering authors a child revision.
+   The UI never posts an arbitrary arrangement to the renderer. */
+const RAILS = [["floor","Floor"],["foreground","Fgnd"],["spark","Spark"]];
+const CLIP_CMDS = ["set_gain","set_pan","trim_clip","replace_clip","set_stem","mute","solo","lock","unlock"];
+let WB = { pid:(localStorage.getItem('ec_pid')||null), proj:null, rev:null, sel:{type:null,id:null}, view:"timeline", run:null, receipt:null };
+function wbHead(){ return WB.proj && WB.rev && WB.rev.revision_sha===WB.proj.active_revision_sha; }
+function wbShort(s){ return s? String(s).slice(0,12) : '—'; }
+function wbBpm(){ return WB.rev? Number((WB.rev.arrangement||{}).bpm||0) : 0; }
+function wbTotalBars(){ const secs=((WB.rev||{}).arrangement||{}).sections||[]; return secs.reduce((m,s)=>Math.max(m,(s.bar_start||0)+(s.bars||0)),0)||1; }
+function wbDurationS(){ const b=wbTotalBars(), bpm=wbBpm()||120; return b*4*60/bpm; }
+function wbPersona(){ return (((WB.rev||{}).intent||{}).taste_profile||{}).id || '—'; }
+function wbSeed(){ const r=WB.rev||{}; const i=r.intent||{}, a=r.arrangement||{}; return (i.seed!=null?i.seed:(a.seed!=null?a.seed:((a.params||{}).seed))); }
+function wbGate(){ const g=((WB.rev||{}).static_gate_receipt)||{}; const pf=(g.preflight||{}).passed!==false, tg=(g.taste_gate||{}).passed!==false; return {pass:pf&&tg, pf, tg, failures:[].concat((g.preflight||{}).failures||[],(g.taste_gate||{}).failures||[])}; }
+function wbMixPolicy(){ return ((((WB.rev||{}).intent||{}).compiled_policy||{}).mix_policy)||{}; }
+function wbGainBounds(rail){ const g=(wbMixPolicy().role_gain_db||{})[rail]; return g?{min:g.min,target:g.target,max:g.max}:{min:-24,target:-8,max:6}; }
+function wbPanMax(){ const p=wbMixPolicy().pan_max_abs; return (p!=null?Number(p):0.35); }
+function wbLockedClips(){ const s=new Set(); ((WB.rev||{}).locks||[]).forEach(l=>{ if(l.target_type==='clip') s.add(String(l.target_id)); }); ((WB.rev||{}).tracks||[]).forEach(t=>(t.clips||[]).forEach(c=>{ if(c.locked) s.add(String(c.clip_id)); })); return s; }
+function wbLockedTrans(){ const s=new Set(); ((WB.rev||{}).locks||[]).forEach(l=>{ if(l.target_type==='transition') s.add(String(l.target_id)); }); return s; }
+function wbSourceLabel(ref){ const sr=((WB.rev||{}).source_registry||{})[ref]||{}; const p=sr.path?String(sr.path).split(/[\\/]/).pop():''; return p||sr.kind||ref||'—'; }
+
 async function renderWorkbench(){
   const scr=el('scr_workbench');
+  if(!WB.pid){ await wbRenderChooser(scr); return; }
+  try{ const j=await api('/api/projects/'+encodeURIComponent(WB.pid)); WB.proj=j.project; WB.rev=j.revision; }
+  catch(e){ WB.pid=null; localStorage.removeItem('ec_pid'); await wbRenderChooser(scr); toast('project unavailable: '+esc(e.message)); return; }
+  const tabs=[["timeline","Timeline"],["history","History"],["runs","Runs"],["triage","Piano triage"]].map(([id,nm])=>{
+    const on=WB.view===id; return '<span class="clk" onclick="wbGo(\''+id+'\')" style="font:600 9px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:'+(on?'var(--accink)':'var(--dim)')+';background:'+(on?'var(--acc)':'var(--panel2)')+';border:1px solid '+(on?'var(--acc)':'var(--edge2)')+';padding:8px 12px">'+nm+'</span>'; }).join('');
   scr.innerHTML =
-    '<div class="h1">Workbench <span style="color:var(--acc)">// compose</span></div>'
+    '<div style="display:flex;align-items:baseline;gap:16px"><span class="h1">Workbench <span style="color:var(--acc)">// project</span></span>'
+    +'<span class="clk" onclick="wbClose()" style="font:600 8.5px/1 var(--mono);color:var(--dim);border:1px solid var(--edge2);padding:7px 10px">‹ All projects</span>'
+    +'<span style="margin-left:auto;display:flex;gap:6px">'+tabs+'</span></div>'
+    +'<div id="wbHeader"></div>'
+    +'<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:460px" id="wbMain"></div><div style="width:340px;flex:0 0 auto" id="wbSide"></div></div>';
+  wbRenderHeader();
+  wbRenderView();
+}
+function wbGo(v){ WB.view=v; WB.sel={type:null,id:null}; wbRenderView(); }
+function wbClose(){ WB.pid=null; WB.proj=null; WB.rev=null; localStorage.removeItem('ec_pid'); renderWorkbench(); }
+async function wbOpen(pid){ WB.pid=pid; WB.view="timeline"; WB.sel={type:null,id:null}; localStorage.setItem('ec_pid',pid); renderWorkbench(); }
+async function wbRefresh(){ if(!WB.pid)return; try{ const j=await api('/api/projects/'+encodeURIComponent(WB.pid)); WB.proj=j.project; WB.rev=j.revision; wbRenderHeader(); wbRenderView(); }catch(e){ toast('refresh failed: '+esc(e.message)); } }
+
+async function wbRenderChooser(scr){
+  scr.innerHTML='<div class="h1">Workbench <span style="color:var(--acc)">// projects</span></div>'
     +'<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">'
-    +'<div style="width:250px;flex:0 0 auto" class="card"><div class="lbl" style="margin-bottom:10px">[ Pipeline // order is law ]</div><div id="wbPipe"></div></div>'
-    +'<div style="flex:1;min-width:420px" class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><span class="lbl">[ Three-rail plan ]</span><span id="wbPlanMeta" style="font:500 9px/1 var(--mono);color:var(--faint)">propose a plan</span></div><div id="wbPlan"><div class="lbl" style="color:var(--faint)">no plan yet</div></div>'
-    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--edge)"><button class="btn" onclick="proposePlan()">Propose plan</button><button class="btn" onclick="buildGraph()">Build pair graph</button><button class="btn" onclick="preflight()">Preflight</button><button class="btn" onclick="savePlan()">Save plan</button><button class="btn primary" onclick="renderMix()">Render ▸</button><span style="margin-left:auto;font:600 8px/1.2 var(--mono);color:var(--fault);border:1px solid var(--fault);padding:5px 8px">event that can\'t render ⇒ FAIL</span></div>'
-    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--edge)"><div class="lbl" style="margin-bottom:7px">[ Saved plans // load one back ]</div><div id="wbPlans" style="display:flex;gap:6px;flex-wrap:wrap"></div></div></div>'
-    +'<div style="width:280px;flex:0 0 auto" class="card"><div class="lbl" style="margin-bottom:9px">[ Gates ]</div>'
-    +'<div style="font:600 8px/1 var(--mono);color:var(--dim);margin-bottom:6px">PRE-RENDER · must pass to write</div><div id="wbPre" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px"></div>'
-    +'<div style="font:600 8px/1 var(--mono);color:var(--dim);margin-bottom:6px">POST-RENDER · audible truth</div><div style="display:flex;flex-wrap:wrap;gap:5px">'
-    +['rms_std ≥4.5','silence ≥1%','low200 ≥.48','≥4 pitch ctr','audible cov'].map(g=>'<span style="font:500 8.5px/1 var(--mono);color:var(--faint);border:1px dashed var(--edge2);padding:4px 7px">'+g+'</span>').join('')
-    +'</div><div style="font:400 8.5px/1.4 var(--mono);color:var(--faint);margin-top:9px">no WAV on gate failure · no fallback · fail ⇒ quarantine</div></div>'
+    +'<div style="width:360px;flex:0 0 auto" class="card"><div class="lbl" style="margin-bottom:11px">[ Compile a project ]</div><div id="wbCompileForm"></div></div>'
+    +'<div style="flex:1;min-width:380px"><div class="lbl" style="margin-bottom:9px">[ Projects // immutable revisions ]</div><div id="wbProjList"><div class="lbl" style="color:var(--faint)">loading…</div></div></div>'
     +'</div>';
-  renderPipe(null); renderPre([]); loadPlans();
+  // persona options from residents (personas)
+  let residents=DATA.residents; if(!residents||!residents.length){ try{ residents=(await api('/api/residents')).items||[]; DATA.residents=residents; }catch(e){ residents=[]; } }
+  const opts=(residents.length?residents:[{id:S.resident||'girl_talk_v1',name:S.resident||'girl_talk_v1'}]).map(r=>'<option value="'+esc(r.id)+'"'+((r.id===(S.resident||'girl_talk_v1'))?' selected':'')+'>'+esc(r.name||r.id)+'</option>').join('');
+  el('wbCompileForm').innerHTML=
+    '<label style="display:block;font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:4px">Persona</label>'
+    +'<select id="wbcPersona" style="width:100%;background:var(--panel2);border:1px solid var(--edge);padding:8px 9px;font:500 10px/1 var(--mono);color:var(--ink);margin-bottom:10px">'+opts+'</select>'
+    +'<label style="display:block;font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:4px">Name</label>'
+    +'<input id="wbcName" value="EarCrate Set" style="width:100%;background:var(--panel2);border:1px solid var(--edge);padding:8px 9px;font:500 10px/1 var(--mono);color:var(--ink);margin-bottom:10px">'
+    +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+      +wbField("wbcSeconds","Duration s","120",1)+wbField("wbcSeed","Seed","0",1)+'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px">'
+      +wbField("wbcCand","Candidates","0",1)+wbField("wbcBpm","BPM (0=auto)","0",1)+'</div>'
+    +'<button class="btn primary" style="width:100%" onclick="wbCompile()">Compile project ▸</button>'
+    +'<div style="font:400 8.5px/1.4 var(--mono);color:var(--faint);margin-top:9px">bounded deterministic candidate search over the approved crate. The result is a sealed, content-addressed revision — never a loose arrangement.</div>'
+    +'<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--edge)"><div class="lbl" style="margin-bottom:6px">[ Compatibility import ]</div><div style="display:flex;gap:6px"><input id="wbImportPath" placeholder="arrangement .json path" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--edge);padding:7px 9px;font:500 9px/1 var(--mono);color:var(--ink)"><button class="btn" onclick="wbImport()">Import</button></div></div>';
+  wbLoadProjList();
 }
-async function savePlan(){ if(!window.__plan){toast('Propose a plan first');return;} const name=prompt('Save plan as:','set '+new Date().toISOString().slice(0,10)); if(!name)return; try{ const j=await post('/api/timeline/save',{name, plan:window.__plan, taste_profile:S.resident}); toast(j.ok!==false?('Saved "'+name+'" · '+String(j.plan_hash||'').slice(0,8)):(j.error||'save failed')); loadPlans(); }catch(e){} }
-async function loadPlans(){ const host=el('wbPlans'); if(!host)return; try{ const j=await api('/api/timeline/list'); window.__plans=j.items||[]; host.innerHTML=window.__plans.length? window.__plans.map((p,i)=>'<span class="btn clk" onclick="loadPlan('+i+')">'+esc(p.name||'plan')+' ·'+String(p.plan_hash||'').slice(0,6)+'</span>').join('') : '<span style="font:500 9px/1 var(--mono);color:var(--faint)">no saved plans yet</span>'; }catch(e){ host.innerHTML='<span style="font:500 9px/1 var(--mono);color:var(--faint)">plans unavailable</span>'; } }
-async function loadPlan(i){ const p=(window.__plans||[])[i]; if(!p)return; try{ const j=await post('/api/timeline/load',{plan_hash:p.plan_hash}); if(j.ok!==false){ window.__plan=j.plan||j.arrangement; window.__planSeed=(window.__plan&&window.__plan.params&&window.__plan.params.seed)||j.seed; window.__planFailed=false; renderPlanRails(window.__plan); el('wbPlanMeta').textContent='loaded "'+esc(j.name||p.name||'')+'" — Render to compile it'; toast('Loaded plan "'+(j.name||p.name||'')+'"'); } else toast(j.error||'load failed'); }catch(e){} }
-async function preflight(){ toast('Preflight…'); try{ const j=await post('/api/preflight',{taste_profile:S.resident, target_seconds:120}); const ok=j.ok!==false && j.ready!==false; const why=(j.warnings&&j.warnings[0])||j.error||'crate not ready'; toast('Preflight: '+(ok?('READY to render'+(j.pool_size!=null?(' · '+j.pool_size+' loops'):'')):('NOT READY — '+why))); }catch(e){} }
-function renderPipe(active){
-  const steps=[['Scan','sources'],['Analyze','bpm · key · downbeats'],['Extract','loops ≤12/track'],['Ear crate','auditioned atoms'],['Graph','typed edges'],['Choose deck','feasible sources'],['Compose rails','floor · fgnd · spark'],['Pre-gates','must pass'],['Render','write wav'],['Post-gate','audible truth']];
-  el('wbPipe').innerHTML=steps.map((s,i)=>{
-    const on = active!=null && i===active;
-    return '<div style="display:flex;gap:9px;align-items:flex-start;padding:6px 6px;background:'+(on?'color-mix(in srgb, var(--acc) 9%, transparent)':'transparent')+'"><span style="flex:0 0 auto;width:14px;height:14px;border:1.5px solid '+(on?'var(--acc)':'var(--edge2)')+';background:'+(on?'var(--acc)':'transparent')+';display:flex;align-items:center;justify-content:center;font:700 7px/1 var(--mono);color:var(--accink);margin-top:1px">'+(i+1)+'</span><div style="min-width:0"><div style="font:600 10.5px/1.1 var(--mono);color:'+(on?'var(--ink)':'var(--dim)')+'">'+s[0]+'</div><div style="font:500 8px/1.2 var(--mono);color:var(--faint);margin-top:1px">'+s[1]+'</div></div></div>';
-  }).join('');
+function wbField(id,label,val,short){ return '<div style="flex:1"><label style="display:block;font:600 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:4px">'+esc(label)+'</label><input id="'+id+'" value="'+esc(val)+'" style="width:100%;background:var(--panel2);border:1px solid var(--edge);padding:8px 9px;font:500 10px/1 var(--mono);color:var(--ink)"></div>'; }
+async function wbLoadProjList(){
+  const host=el('wbProjList'); if(!host)return;
+  try{ const j=await api('/api/projects'); const items=j.items||[];
+    host.innerHTML=items.length? items.map(p=>{
+      const meta=p.metadata||{}; const persona=(meta.taste_profile&&(meta.taste_profile.id||meta.taste_profile))||'—';
+      return '<div class="clk" onclick="wbOpen(\''+esc(p.project_id)+'\')" style="display:flex;align-items:center;gap:13px;background:var(--panel);border:1px solid var(--edge);border-left:3px solid var(--edge2);padding:11px 13px;margin-bottom:7px">'
+        +'<div style="min-width:0;flex:1"><div style="font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.02em;color:var(--ink);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name||p.project_id)+'</div>'
+        +'<div style="font:500 8.5px/1.3 var(--mono);color:var(--faint);margin-top:3px">'+esc(p.project_id)+' · '+esc(persona)+' · rev '+wbShort(p.active_revision_sha)+' · '+((p.revision_history||[]).length)+' revs</div></div>'
+        +'<span style="font:600 9px/1 var(--mono);color:var(--acc)">OPEN ▸</span></div>';
+    }).join('') : '<div class="lbl" style="color:var(--faint)">no projects yet — compile one, or import an arrangement</div>';
+  }catch(e){ host.innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; }
 }
-function renderPre(fails){
-  const names=['feasibility','floor','fgnd','first-fg','turnover','gap'];
-  el('wbPre').innerHTML=names.map(g=>{ const bad=fails.some(f=>String(f).toLowerCase().indexOf(g.split(' ')[0])>=0);
-    return '<span style="font:500 8.5px/1 var(--mono);color:'+(bad?'var(--fault)':'var(--acc)')+';background:color-mix(in srgb, '+(bad?'var(--fault)':'var(--acc)')+' 10%, transparent);border:1px solid color-mix(in srgb, '+(bad?'var(--fault)':'var(--acc)')+' 40%, transparent);padding:4px 7px">'+g+' '+(bad?'✕':'✓')+'</span>';
-  }).join('');
+async function wbCompile(){
+  const body={ taste_profile:el('wbcPersona').value, name:el('wbcName').value||'EarCrate Set',
+    target_seconds:parseFloat(el('wbcSeconds').value)||120 };
+  const seed=parseInt(el('wbcSeed').value); if(seed) body.seed=seed;
+  const cand=parseInt(el('wbcCand').value); if(cand) body.candidate_count=cand;
+  const bpm=parseFloat(el('wbcBpm').value); if(bpm) body.bpm=bpm;
+  toast('Compiling project…');
+  try{ const j=await post('/api/projects/compile',body); toast('Compiled '+esc(j.project_id)+' · rev '+wbShort(j.revision_sha)); wbOpen(j.project_id); }catch(e){}
 }
-async function proposePlan(){
-  el('wbPlanMeta').textContent='composing…';
-  try{ const j=await post('/api/timeline/propose',{target_seconds:120, taste_profile:S.resident});
-    if(!j.ok){ el('wbPlanMeta').textContent=j.error||'refused'; el('wbPlan').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(j.error||'refused')+'</div>'; return; }
-    window.__plan=j.arrangement; window.__planSeed=j.seed; window.__planFailed=(((j.taste_gate||{}).failures)||[]).length>0; const fails=((j.taste_gate||{}).failures)||[];
-    el('wbPlanMeta').textContent=(j.seed!=null?'seed '+j.seed:'')+' · '+(j.arrangement.bpm||0).toFixed(1)+' BPM · '+(fails.length?'REFUSED':'PASSES');
-    renderPlanRails(j.arrangement); renderPre(fails); renderPipe(6);
-  }catch(e){ el('wbPlanMeta').textContent='error'; }
+async function wbImport(){
+  const raw=(el('wbImportPath').value||'').trim(); if(!raw){toast('Paste an arrangement JSON object (compatibility import)');return;}
+  let arrangement; try{ arrangement=JSON.parse(raw); }catch(e){ toast('Import expects an arrangement JSON object. For a file on disk use the CLI: earcrate project import <path>'); return; }
+  toast('Importing arrangement as an immutable project…');
+  // Compatibility path only. The arrangement is sealed into a revision by the
+  // backend; it is NEVER handed to the renderer as a loose arrangement.
+  try{ const j=await post('/api/projects/import',{arrangement, name:(arrangement.params&&arrangement.params.name)||'Imported Project'}); wbOpen(j.project.project_id); }catch(e){}
 }
-function renderPlanRails(arr){
-  if(!arr||!arr.sections){ el('wbPlan').innerHTML='<div class="lbl" style="color:var(--faint)">no plan</div>'; return; }
-  const total=arr.sections.reduce((a,s)=>a+(s.bars||0),0)||1;
-  const rails={floor:[],fgnd:[],spark:[]};
-  arr.sections.forEach(s=>{ const w=(s.bars/total*100);
-    const pick=(bk)=> (s.layers||[]).find(x=>ROLE_BUCKET[bk].indexOf(x.ear_role||x.role)>=0);
-    ['floor','fgnd','spark'].forEach(bk=>{ const l=pick(bk); rails[bk].push({w, role:l?(l.ear_role||l.role):'', src:l?(l.source_track_key||''):''}); });
-  });
-  const railRow=(nm,bk)=> '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px"><div style="width:70px;flex:0 0 auto;display:flex;flex-direction:column;justify-content:center"><span style="font-family:var(--disp);font-weight:700;font-size:13px;color:var(--dim);text-transform:uppercase">'+nm+'</span></div><div style="flex:1;display:flex;gap:3px;height:44px">'
-    +rails[bk].map(c=>{ const live=!!c.role; return '<div style="flex:'+c.w.toFixed(2)+';background:'+(live?'color-mix(in srgb, var(--acc) 9%, transparent)':'var(--panel2)')+';border:1px solid '+(live?'var(--acc)':'var(--edge)')+';padding:5px 7px;overflow:hidden;min-width:0"><div style="font:600 7px/1 var(--mono);color:'+(live?'var(--acc)':'var(--dim)')+'">'+esc(c.role||'—')+'</div><div style="font:500 8.5px/1.1 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">'+esc(c.src||'')+'</div></div>'; }).join('')
+
+function wbRenderHeader(){
+  const host=el('wbHeader'); if(!host||!WB.rev)return;
+  const g=wbGate(); const head=wbHead();
+  const cell=(lbl,val,ink)=>'<div style="padding:0 14px;border-left:1px solid var(--edge)"><div style="font:600 8px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)">'+esc(lbl)+'</div><div style="font:600 12px/1.2 var(--mono);color:'+(ink||'var(--ink)')+';margin-top:5px">'+esc(val)+'</div></div>';
+  host.innerHTML='<div class="card" style="display:flex;align-items:stretch;flex-wrap:wrap;gap:10px 0;padding:13px 4px">'
+    +'<div style="padding:0 14px;flex:1;min-width:180px"><div style="font:600 8px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)">Project</div>'
+      +'<div style="font-family:var(--disp);font-weight:700;font-size:20px;color:var(--ink);text-transform:uppercase;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(WB.proj.name||WB.proj.project_id)+'</div>'
+      +'<div style="font:500 8.5px/1 var(--mono);color:var(--faint);margin-top:3px">'+esc(WB.proj.project_id)+'</div></div>'
+    +cell("Active rev",wbShort(WB.proj.active_revision_sha))
+    +cell("Showing rev",wbShort(WB.rev.revision_sha), head?'var(--acc)':'var(--fault)')
+    +cell("Parent",wbShort(WB.rev.parent_revision_sha))
+    +cell("Persona",wbPersona())
+    +cell("Seed",(wbSeed()!=null?wbSeed():'—'))
+    +cell("BPM",wbBpm()?wbBpm().toFixed(1):'—')
+    +cell("Duration",mmss(wbDurationS()))
+    +cell("Gate",g.pass?'PASS':'REFUSED', g.pass?'var(--acc)':'var(--fault)')
+    +cell("Head",head?'CURRENT':'STALE VIEW', head?'var(--acc)':'var(--fault)')
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px">'
+    +'<button class="btn" onclick="wbUndo()">↶ Undo</button>'
+    +'<button class="btn" onclick="wbRedo()">↷ Redo</button>'
+    +'<button class="btn" onclick="wbRecompile()">⟳ Recompile unlocked</button>'
+    +'<span style="width:1px;height:20px;background:var(--edge2)"></span>'
+    +'<button class="btn" onclick="wbPreview()">Preview crop</button>'
+    +'<button class="btn primary" onclick="wbRender()">Render ▸</button>'
+    +'<span style="width:1px;height:20px;background:var(--edge2)"></span>'
+    +'<button class="btn" onclick="wbExport(\'edl\')">EDL</button>'
+    +'<button class="btn" onclick="wbExport(\'rpp\')">Reaper</button>'
+    +'<button class="btn" onclick="wbExport(\'sheet\')">Sheet</button>'
+    +(head?'':'<span style="margin-left:auto;font:600 8px/1.3 var(--mono);color:var(--fault);border:1px solid var(--fault);padding:5px 8px">viewing a non-head revision — edits apply to the head</span>')
+    +'</div>';
+}
+
+function wbRenderView(){
+  const main=el('wbMain'), side=el('wbSide'); if(!main||!side)return;
+  if(WB.view==='timeline'){ wbRenderTimeline(main); wbRenderInspector(side); return; }
+  side.innerHTML='';
+  if(WB.view==='history'){ wbRenderHistory(main); return; }
+  if(WB.view==='runs'){ wbRenderRuns(main); return; }
+  if(WB.view==='triage'){ wbRenderTriage(main); return; }
+}
+
+/* --- three-rail timeline: every clip, never reduced to the first layer --- */
+function wbRenderTimeline(main){
+  const arr=(WB.rev||{}).arrangement||{}; const secs=arr.sections||[]; const total=wbTotalBars();
+  const lockedC=wbLockedClips(); const lockedT=wbLockedTrans();
+  const tickRow='<div style="display:flex;gap:8px;margin-bottom:8px"><div style="width:74px;flex:0 0 auto"></div><div style="flex:1;position:relative;height:14px;border-bottom:1px solid var(--edge)">'
+    + secs.map(s=>{ const left=(s.bar_start/total*100); return '<span style="position:absolute;left:'+left.toFixed(2)+'%;top:0;font:500 7.5px/1 var(--mono);color:var(--faint)">'+esc(String(s.type||'').slice(0,6))+'·'+(s.bar_start||0)+'</span>'; }).join('')
+    +'<span style="position:absolute;right:0;top:0;font:500 7.5px/1 var(--mono);color:var(--faint)">'+total+' bars</span></div></div>';
+  // transition boundary markers (selectable) sit above the rails
+  const transRow='<div style="display:flex;gap:8px;margin-bottom:4px"><div style="width:74px;flex:0 0 auto;font:600 8px/1 var(--mono);color:var(--faint);display:flex;align-items:center">TRANS</div><div style="flex:1;position:relative;height:22px">'
+    + secs.map(s=>{ const tr=(s.transition_in||{}); const tid=tr.transition_id; if(!tid) return ''; const left=(s.bar_start/total*100);
+        const on=WB.sel.type==='transition'&&WB.sel.id===tid; const lk=lockedT.has(String(tid));
+        return '<span class="clk" onclick="wbSelTransition(\''+esc(tid)+'\')" title="'+esc(tr.type||tr.technique||'')+'" style="position:absolute;left:'+left.toFixed(2)+'%;top:0;transform:translateX(-50%);font:600 7.5px/1 var(--mono);color:'+(on?'var(--accink)':(lk?'var(--acc)':'var(--dim)'))+';background:'+(on?'var(--acc)':'var(--panel2)')+';border:1px solid '+(on?'var(--acc)':'var(--edge2)')+';padding:4px 6px;white-space:nowrap">'+(lk?'⛒':'')+esc((tr.type||tr.technique||'cut')).slice(0,10)+'</span>'; }).join('')
     +'</div></div>';
-  const secs=Math.round(total*4/(arr.bpm||120)*60);
-  el('wbPlan').innerHTML='<div style="display:flex;gap:8px;margin-bottom:10px"><div style="width:70px;flex:0 0 auto"></div><div style="flex:1;display:flex;justify-content:space-between;font:500 8.5px/1 var(--mono);color:var(--faint);border-bottom:1px solid var(--edge);padding-bottom:4px"><span>0:00</span><span>'+mmss(secs/2)+'</span><span>'+mmss(secs)+'</span></div></div>'
-    +railRow('Floor','floor')+railRow('Fgnd','fgnd')+railRow('Spark','spark');
+  const railRow=([rail,nm])=>{
+    // gather every layer on this rail across all sections (do NOT reduce to first)
+    let blocks='';
+    secs.forEach(s=>{ (s.layers||[]).forEach(l=>{ if((l.rail||wbRailOf(l))!==rail) return;
+      const bar=(s.bar_start||0)+(l.bar_offset||0); const len=(l.bar_len||1);
+      const left=(bar/total*100), w=Math.max(1.5,len/total*100);
+      const cid=l.clip_id; const on=WB.sel.type==='clip'&&WB.sel.id===cid; const lk=lockedC.has(String(cid));
+      const mut=l.muted, solo=l.solo;
+      const stem=(l.stem_choice&&l.stem_choice.choice)||'mix';
+      const src=wbSourceLabel(l.source_ref_id);
+      blocks+='<div class="clk" onclick="wbSelClip(\''+esc(cid)+'\')" style="position:absolute;left:'+left.toFixed(2)+'%;width:'+w.toFixed(2)+'%;top:2px;bottom:2px;overflow:hidden;background:'+(on?'color-mix(in srgb,var(--acc) 20%,transparent)':(mut?'var(--panel2)':'color-mix(in srgb,var(--acc) 7%,transparent)'))+';border:1px solid '+(on?'var(--acc)':(lk?'var(--acc)':'var(--edge2)'))+';padding:3px 5px">'
+        +'<div style="font:600 7px/1 var(--mono);color:'+(on?'var(--ink)':'var(--dim)')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(lk?'⛒ ':'')+(solo?'◎ ':'')+(mut?'⊘ ':'')+esc(l.ear_role||l.role||'')+'</div>'
+        +'<div style="font:500 8px/1.1 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">'+esc(src)+'</div>'
+        +'<div style="font:500 7px/1 var(--mono);color:var(--faint);margin-top:2px">'+(l.gain_db!=null?Number(l.gain_db).toFixed(1)+'dB':'')+(l.pan?(' · pan '+Number(l.pan).toFixed(2)):'')+' · '+esc(stem)+'</div></div>';
+    }); });
+    if(!blocks) blocks='<span style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font:500 8.5px/1 var(--mono);color:var(--faint)">no clips on this rail</span>';
+    return '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px"><div style="width:74px;flex:0 0 auto;display:flex;align-items:center"><span style="font-family:var(--disp);font-weight:700;font-size:14px;color:var(--dim);text-transform:uppercase">'+nm+'</span></div>'
+      +'<div style="flex:1;position:relative;height:58px;background:var(--panel);border:1px solid var(--edge)">'+blocks+'</div></div>';
+  };
+  const n=secs.reduce((a,s)=>a+(s.layers||[]).length,0);
+  main.innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><span class="lbl">[ Three-rail timeline · '+n+' clips ]</span><span style="font:500 9px/1 var(--mono);color:var(--faint)">click a clip or transition to inspect</span></div>'
+    +tickRow+transRow+RAILS.map(railRow).join('')
+    +'<div style="font:400 8px/1.4 var(--mono);color:var(--faint);margin-top:8px">every executable layer is shown — a section is never collapsed to its first clip. ⛒ locked · ⊘ muted · ◎ solo</div></div>';
 }
-async function buildGraph(){ toast('Building pair graph…'); try{ const j=await post('/api/taste/graph',{taste_profile:S.resident}); toast(j.ok?('Graph: '+j.edges+' edges'):(j.error||'graph failed')); }catch(e){} }
-async function renderMix(){
-  // Render the EXACT plan shown in the Workbench when there is one; only fall back
-  // to a fresh auto-compose (one_click) when nothing is loaded.
-  if(window.__plan && window.__plan.sections){
-    if(window.__planFailed){ toast('This plan was REFUSED by the taste gate — propose again or adjust the crate'); return; }
-    toast('Rendering the shown plan — watch Activity…');
-    try{ await post('/api/render_plan',{arrangement:window.__plan, seed:window.__planSeed, taste_profile:S.resident}); go('activity'); }catch(e){}
-    return;
-  }
-  toast('Composing + rendering a fresh set — watch Activity…');
-  try{ await post('/api/one_click_bg',{taste_profile:S.resident}); go('activity'); }catch(e){}
+function wbRailOf(l){ const b={DRUM_BREAK:"floor",BED_CHORD:"floor",TEXTURE:"floor",VOX_HOOK:"foreground",VOX_VERSE:"foreground",VOX_SHOUT:"foreground",RIFF_ID:"foreground",DROP_HIT:"spark",PICKUP_FILL:"spark",TRANSITION_TAIL:"spark",BASS_RIFF:"spark"}; return b[l.ear_role]||"floor"; }
+function wbSelClip(id){ WB.sel={type:'clip',id}; wbRenderTimeline(el('wbMain')); wbRenderInspector(el('wbSide')); }
+function wbSelTransition(id){ WB.sel={type:'transition',id}; wbRenderTimeline(el('wbMain')); wbRenderInspector(el('wbSide')); }
+
+/* --- clip + transition inspectors: typed commands, backend-provided ranges --- */
+function wbFindClip(id){ for(const s of ((WB.rev||{}).arrangement||{}).sections||[]) for(const l of (s.layers||[])) if(String(l.clip_id)===String(id)) return l; return null; }
+function wbFindTransition(id){ for(const t of (WB.rev||{}).transitions||[]) if(String(t.transition_id)===String(id)) return t; return null; }
+function wbRenderInspector(side){
+  if(!side)return;
+  if(WB.sel.type==='clip'){ return wbClipInspector(side, wbFindClip(WB.sel.id)); }
+  if(WB.sel.type==='transition'){ return wbTransitionInspector(side, wbFindTransition(WB.sel.id)); }
+  side.innerHTML='<div class="card lbl" style="color:var(--faint)">select a clip or transition on the timeline</div>';
+}
+function wbClipInspector(side, l){
+  if(!l){ side.innerHTML='<div class="card lbl" style="color:var(--faint)">clip not found</div>'; return; }
+  const rail=l.rail||wbRailOf(l); const gb=wbGainBounds(rail); const pmax=wbPanMax();
+  const locked=wbLockedClips().has(String(l.clip_id));
+  const stems=["mix","vocals","no_vocals","drums","bass","other","external_target"];
+  const cur=(l.stem_choice&&l.stem_choice.choice)||'mix';
+  side.innerHTML='<div class="card"><div class="lbl" style="margin-bottom:9px">[ Clip // '+esc(rail)+' ]</div>'
+    +'<div style="font-family:var(--disp);font-weight:700;font-size:17px;color:var(--ink);text-transform:uppercase">'+esc(l.ear_role||l.role||'clip')+'</div>'
+    +'<div style="font:500 8.5px/1.4 var(--mono);color:var(--faint);margin-top:3px">'+esc(l.clip_id)+'<br>src '+esc(wbSourceLabel(l.source_ref_id))+(l.atom_id?(' · atom '+esc(String(l.atom_id).slice(0,10))):'')+'</div>'
+    +(locked?'<div style="font:600 8px/1 var(--mono);color:var(--acc);margin-top:8px">⛒ LOCKED — unlock to edit</div>':'')
+    +'<label style="display:flex;align-items:center;gap:7px;margin-top:10px;font:600 8px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);cursor:pointer"><input type="checkbox" id="wbOv"> override persona policy (deliberate out-of-range / structural)</label>'
+    // gain
+    +'<div style="margin-top:13px"><div style="display:flex;justify-content:space-between;font:600 8px/1 var(--mono);color:var(--faint)"><span>GAIN dB · range ['+gb.min+','+gb.max+']</span><span id="wbGainVal" style="color:var(--ink)">'+(l.gain_db!=null?Number(l.gain_db).toFixed(1):'0.0')+'</span></div>'
+      +'<input id="wbGain" type="range" min="'+gb.min+'" max="'+gb.max+'" step="0.1" value="'+(l.gain_db!=null?l.gain_db:gb.target)+'" oninput="el(\'wbGainVal\').textContent=(+this.value).toFixed(1)" '+(locked?'disabled':'')+' style="width:100%;margin-top:6px"><button class="btn" '+(locked?'disabled':'')+' onclick="wbCmd(\'set_gain\',{clip_id:\''+esc(l.clip_id)+'\',gain_db:parseFloat(el(\'wbGain\').value)})" style="width:100%;margin-top:6px">Apply gain</button></div>'
+    // pan
+    +'<div style="margin-top:11px"><div style="display:flex;justify-content:space-between;font:600 8px/1 var(--mono);color:var(--faint)"><span>PAN · ±'+pmax.toFixed(2)+'</span><span id="wbPanVal" style="color:var(--ink)">'+(l.pan!=null?Number(l.pan).toFixed(2):'0.00')+'</span></div>'
+      +'<input id="wbPan" type="range" min="'+(-pmax)+'" max="'+pmax+'" step="0.01" value="'+(l.pan!=null?l.pan:0)+'" oninput="el(\'wbPanVal\').textContent=(+this.value).toFixed(2)" '+(locked?'disabled':'')+' style="width:100%;margin-top:6px"><button class="btn" '+(locked?'disabled':'')+' onclick="wbCmd(\'set_pan\',{clip_id:\''+esc(l.clip_id)+'\',pan:parseFloat(el(\'wbPan\').value)})" style="width:100%;margin-top:6px">Apply pan</button></div>'
+    // trim
+    +'<div style="margin-top:11px"><div style="font:600 8px/1 var(--mono);color:var(--faint);margin-bottom:5px">TRIM source window (s)</div><div style="display:flex;gap:6px">'
+      +'<input id="wbTrimA" value="'+(l.source_start_s!=null?l.source_start_s:0)+'" '+(locked?'disabled':'')+' style="flex:1;background:var(--panel2);border:1px solid var(--edge);padding:6px 8px;font:500 9px/1 var(--mono);color:var(--ink)">'
+      +'<input id="wbTrimB" value="'+(l.source_end_s!=null?l.source_end_s:1)+'" '+(locked?'disabled':'')+' style="flex:1;background:var(--panel2);border:1px solid var(--edge);padding:6px 8px;font:500 9px/1 var(--mono);color:var(--ink)">'
+      +'<button class="btn" '+(locked?'disabled':'')+' onclick="wbCmd(\'trim_clip\',{clip_id:\''+esc(l.clip_id)+'\',source_start_s:parseFloat(el(\'wbTrimA\').value),source_end_s:parseFloat(el(\'wbTrimB\').value)})">Trim</button></div></div>'
+    // stem
+    +'<div style="margin-top:11px"><div style="font:600 8px/1 var(--mono);color:var(--faint);margin-bottom:5px">STEM</div><div style="display:flex;gap:6px"><select id="wbStem" '+(locked?'disabled':'')+' style="flex:1;background:var(--panel2);border:1px solid var(--edge);padding:6px 8px;font:500 9px/1 var(--mono);color:var(--ink)">'+stems.map(s=>'<option value="'+s+'"'+(s===cur?' selected':'')+'>'+s+'</option>').join('')+'</select><button class="btn" '+(locked?'disabled':'')+' onclick="wbCmd(\'set_stem\',{clip_id:\''+esc(l.clip_id)+'\',stem:el(\'wbStem\').value})">Set</button></div></div>'
+    // mute/solo/lock
+    +'<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">'
+      +'<button class="btn" '+(locked?'disabled':'')+' onclick="wbCmd(\'mute\',{clip_id:\''+esc(l.clip_id)+'\',muted:'+(!l.muted)+'})">'+(l.muted?'Unmute':'Mute')+'</button>'
+      +'<button class="btn" '+(locked?'disabled':'')+' onclick="wbCmd(\'solo\',{clip_id:\''+esc(l.clip_id)+'\',solo:'+(!l.solo)+'})">'+(l.solo?'Unsolo':'Solo')+'</button>'
+      +(locked
+         ?'<button class="btn" style="border-color:var(--acc);color:var(--acc)" onclick="wbCmd(\'unlock\',{target_type:\'clip\',target_id:\''+esc(l.clip_id)+'\'})">Unlock</button>'
+         :'<button class="btn" onclick="wbCmd(\'lock\',{target_type:\'clip\',target_id:\''+esc(l.clip_id)+'\'})">Lock</button>')
+      +'<button class="btn" onclick="wbReplaceClip(\''+esc(l.clip_id)+'\')">Replace…</button>'
+    +'</div>'
+    +'<div style="font:400 8px/1.4 var(--mono);color:var(--faint);margin-top:9px">ranges above are the persona\'s compiled policy (mix_policy) — not UI constants. Out-of-range needs override.</div></div>';
+}
+async function wbReplaceClip(cid){
+  const src=prompt('Replace clip source — paste replacement clip JSON (advanced), or Cancel:'); if(!src)return;
+  let rep; try{ rep=JSON.parse(src); }catch(e){ toast('replacement must be JSON'); return; }
+  wbCmd('replace_clip',{clip_id:cid, replacement:rep});
+}
+function wbTransitionInspector(side, t){
+  if(!t){ side.innerHTML='<div class="card lbl" style="color:var(--faint)">transition not found</div>'; return; }
+  const locked=wbLockedTrans().has(String(t.transition_id));
+  const params=t.parameters||{}; const alts=(t.alternatives||wbTransAlts(t.transition_id));
+  const rej=t.rejected_because||[]; const caps=t.required_capabilities||[];
+  const techniques=["start","hard_cut","hard_cut_pickup","hard_cut_to_air","beatmatch_blend","hook_blend_over_bed","acapella_bridge","impact_drop"];
+  const cur=t.type||t.technique||'';
+  side.innerHTML='<div class="card"><div class="lbl" style="margin-bottom:9px">[ Transition // section '+(t.section_index!=null?t.section_index:'?')+' ]</div>'
+    +'<div style="font-family:var(--disp);font-weight:700;font-size:17px;color:var(--ink);text-transform:uppercase">'+esc(cur||'—')+'</div>'
+    +'<div style="font:500 8.5px/1.4 var(--mono);color:var(--faint);margin-top:3px">'+esc(t.transition_id)+'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:8px">'
+      +'<span style="font:600 8px/1 var(--mono);color:'+(t.renderable!==false?'var(--acc)':'var(--fault)')+';border:1px solid '+(t.renderable!==false?'var(--acc)':'var(--fault)')+';padding:5px 8px">'+(t.renderable!==false?'EXECUTABLE':'NOT EXECUTABLE')+'</span>'
+      +(locked?'<span style="font:600 8px/1 var(--mono);color:var(--acc);border:1px solid var(--acc);padding:5px 8px">⛒ LOCKED</span>':'')+'</div>'
+    +'<div style="margin-top:11px"><div style="font:600 8px/1 var(--mono);color:var(--faint);margin-bottom:5px">EXECUTABLE PARAMETERS</div>'
+      +'<div style="font:500 9px/1.5 var(--mono);color:var(--dim);background:var(--panel2);border:1px solid var(--edge);padding:8px 10px;white-space:pre-wrap;word-break:break-word">'+esc(JSON.stringify(params,null,1))+'</div></div>'
+    +(caps.length?('<div style="margin-top:9px"><div style="font:600 8px/1 var(--mono);color:var(--faint);margin-bottom:4px">REQUIRED CAPABILITIES</div><div style="font:500 9px/1.4 var(--mono);color:var(--dim)">'+caps.map(esc).join(' · ')+'</div></div>'):'')
+    +(rej.length?('<div style="margin-top:9px"><div style="font:600 8px/1 var(--mono);color:var(--fault);margin-bottom:4px">REJECTION REASONS</div><div style="font:500 9px/1.4 var(--mono);color:var(--fault)">'+rej.map(esc).join('<br>')+'</div></div>'):'')
+    +'<div style="margin-top:11px"><div style="font:600 8px/1 var(--mono);color:var(--faint);margin-bottom:4px">ALTERNATIVES</div><div style="font:500 9px/1.4 var(--mono);color:var(--dim)">'+((alts&&alts.length)?alts.map(a=>esc(typeof a==='string'?a:(a.technique||a.type||JSON.stringify(a)))).join(' · '):'—')+'</div></div>'
+    +'<div style="margin-top:12px"><div style="font:600 8px/1 var(--mono);color:var(--faint);margin-bottom:5px">SET TECHNIQUE</div><div style="display:flex;gap:6px"><select id="wbTech" '+(locked?'disabled':'')+' style="flex:1;background:var(--panel2);border:1px solid var(--edge);padding:6px 8px;font:500 9px/1 var(--mono);color:var(--ink)">'+techniques.map(x=>'<option value="'+x+'"'+(x===cur?' selected':'')+'>'+x+'</option>').join('')+'</select>'
+      +'<button class="btn" '+(locked?'disabled':'')+' onclick="wbSetTransition(\''+esc(t.transition_id)+'\')">Set</button></div></div>'
+    +'<div style="display:flex;gap:6px;margin-top:10px">'+(locked
+        ?'<button class="btn" style="border-color:var(--acc);color:var(--acc)" onclick="wbCmd(\'unlock\',{target_type:\'transition\',target_id:\''+esc(t.transition_id)+'\'})">Unlock</button>'
+        :'<button class="btn" onclick="wbCmd(\'lock\',{target_type:\'transition\',target_id:\''+esc(t.transition_id)+'\'})">Lock</button>')+'</div></div>';
+}
+function wbTransAlts(tid){ for(const d of (WB.rev||{}).decisions||[]) if(d.kind==='transition'&&String(d.decision_id)===String(tid)) return d.alternatives||[]; return []; }
+function wbSetTransition(tid){ wbCmd('set_transition',{transition_id:tid, type:el('wbTech').value}); }
+
+/* --- typed command dispatch: refresh the WHOLE project after each --- */
+async function wbCmd(kind, payload){
+  // map UI names to backend command kinds
+  const K={mute:'mute_clip', solo:'solo_clip'}[kind]||kind;
+  payload=payload||{};
+  // honor the clip inspector's explicit override toggle (backend feature; only
+  // clip mutations carry it — lock/unlock never gate).
+  const ov=el('wbOv'); if(ov&&ov.checked&&['set_gain','set_pan','trim_clip','replace_clip','set_stem','mute_clip','solo_clip','move_clip'].indexOf(K)>=0) payload.override_policy=true;
+  try{ await post('/api/projects/'+encodeURIComponent(WB.pid)+'/commands',{actor:'human', kind:K, payload:payload}); toast('✓ '+K+' — new revision'); await wbRefresh(); }
+  catch(e){ /* toast already shown by post(); a policy refusal is expected feedback */ await wbRefresh(); }
+}
+async function wbUndo(){ try{ await post('/api/projects/'+encodeURIComponent(WB.pid)+'/undo',{}); toast('↶ undone'); await wbRefresh(); }catch(e){} }
+async function wbRedo(){ try{ await post('/api/projects/'+encodeURIComponent(WB.pid)+'/redo',{}); toast('↷ redone'); await wbRefresh(); }catch(e){} }
+async function wbRecompile(){ toast('Recompiling around human locks…'); try{ await post('/api/projects/'+encodeURIComponent(WB.pid)+'/recompile',{}); toast('⟳ recompiled — new revision'); await wbRefresh(); }catch(e){} }
+
+async function wbPreview(){
+  toast('Rendering a revision-bound preview crop…');
+  try{ const j=await post('/api/projects/'+encodeURIComponent(WB.pid)+'/preview',{start_beat:0,duration_beats:8});
+    if(j.type==='project_preview'&&j.path){ setPlayer(j.path); toast('Preview ready · rev '+wbShort(j.revision_sha)); WB.receipt={kind:'preview',data:j}; }
+    else toast('preview: '+esc(j.failure_kind||j.type||'refused'));
+    await wbRefresh(); }catch(e){}
+}
+async function wbRender(){
+  toast('Rendering the active revision (premaster → mastering child → verify)…');
+  try{ const j=await post('/api/projects/'+encodeURIComponent(WB.pid)+'/render',{});
+    if(j.type==='render_project'&&j.path){ setPlayer(j.path); toast('✓ Rendered · rev '+wbShort(j.revision_sha)); WB.receipt={kind:'render',data:j}; }
+    else toast('render refused: '+esc(j.failure_kind||j.type||'rejected'));
+    await wbRefresh(); }catch(e){}
+}
+async function wbExport(fmt){
+  try{ const j=await post('/api/projects/'+encodeURIComponent(WB.pid)+'/export/'+fmt,{});
+    toast(fmt.toUpperCase()+' exported'+(j.path?': '+String(j.path).split(/[\\/]/).pop():'')); WB.receipt={kind:'export',fmt:fmt,data:j};
+    wbRenderView(); }catch(e){}
+}
+
+/* --- history: revision ancestry, not a flat activity log --- */
+async function wbRenderHistory(main){
+  main.innerHTML='<div class="card"><div class="lbl" style="margin-bottom:10px">[ Revision history // ancestry ]</div><div id="wbHistBody"><div class="lbl" style="color:var(--faint)">loading…</div></div></div>';
+  try{ const j=await api('/api/projects/'+encodeURIComponent(WB.pid)+'/history'); const cmds=j.commands||[]; const active=(j.project||{}).active_revision_sha;
+    const rows=cmds.map((c,i)=>{ const to=c.to_revision_sha, isHead=to===active;
+      return '<div style="display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--edge)">'
+        +'<div style="width:16px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center"><span style="width:9px;height:9px;border-radius:50%;background:'+(isHead?'var(--acc)':'var(--edge2)')+'"></span>'+(i<cmds.length-1?'<span style="width:1px;flex:1;min-height:18px;background:var(--edge2);margin-top:3px"></span>':'')+'</div>'
+        +'<div style="min-width:0;flex:1"><div style="font:600 11px/1.2 var(--mono);color:var(--ink)">'+esc(c.kind||'')+(isHead?' <span style="color:var(--acc)">· HEAD</span>':'')+'</div>'
+        +'<div style="font:500 8.5px/1.4 var(--mono);color:var(--faint);margin-top:2px">'+esc(c.actor||'')+' · '+esc(c.created_at||'')+'</div>'
+        +'<div style="font:500 8px/1.4 var(--mono);color:var(--dim);margin-top:2px">'+wbShort(c.from_revision_sha)+' → '+wbShort(to)+(c.payload&&Object.keys(c.payload).length?(' · '+esc(JSON.stringify(c.payload)).slice(0,80)):'')+'</div></div></div>';
+    }).join('');
+    el('wbHistBody').innerHTML=rows||'<div class="lbl" style="color:var(--faint)">no commands yet</div>';
+  }catch(e){ el('wbHistBody').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; }
+}
+
+/* --- runs: revision-bound render receipts --- */
+async function wbRenderRuns(main){
+  main.innerHTML='<div class="card"><div class="lbl" style="margin-bottom:10px">[ Runs // revision-bound render receipts ]</div><div id="wbRunsBody"><div class="lbl" style="color:var(--faint)">loading…</div></div></div>';
+  try{ const j=await api('/api/projects/'+encodeURIComponent(WB.pid)+'/runs'); const items=j.items||[];
+    el('wbRunsBody').innerHTML=items.length? items.map(r=>{
+      if(r.error) return '<div style="padding:8px 0;border-top:1px solid var(--edge);font:500 9px/1.4 var(--mono);color:var(--fault)">corrupt receipt: '+esc(r.error)+'</div>';
+      const ri=r.render_integrity||{}; const ok=ri.passed!==false;
+      const fin=r.finishing||{};
+      return '<div style="padding:10px 0;border-top:1px solid var(--edge)"><div style="display:flex;align-items:center;gap:10px">'
+        +'<span style="font:600 8px/1 var(--mono);color:'+(ok?'var(--acc)':'var(--fault)')+';border:1px solid '+(ok?'var(--acc)':'var(--fault)')+';padding:5px 8px">'+(ok?'VERIFIED':'REJECTED')+'</span>'
+        +'<div style="min-width:0;flex:1"><div style="font:600 10px/1.2 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc((r.path||'').split(/[\\/]/).pop()||r.type||'render')+'</div>'
+        +'<div style="font:500 8px/1.4 var(--mono);color:var(--faint);margin-top:2px">rev '+wbShort(r.revision_sha)+' · score '+wbShort(r.score_sha)+' · '+(r.seconds!=null?r.seconds+'s':'')+' · '+(r.layers!=null?r.layers+' layers':'')+'</div></div>'
+        +(r.path?'<span class="btn clk" onclick=\'setPlayer('+JSON.stringify(r.path)+')\'>PLAY ▸</span>':'')+'</div>'
+        +'<div style="font:500 8px/1.5 var(--mono);color:var(--dim);margin-top:6px">executed clips '+(ri.executed_layer_count!=null?ri.executed_layer_count:(r.layers!=null?r.layers:'?'))+' · executed transitions '+(ri.executed_transition_count!=null?ri.executed_transition_count:'?')+'/'+(ri.planned_transition_count!=null?ri.planned_transition_count:'?')+' · mastering actions '+((fin.actions||[]).length)+'</div></div>';
+    }).join('') : '<div class="lbl" style="color:var(--faint)">no renders yet — Render the project</div>';
+  }catch(e){ el('wbRunsBody').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; }
+}
+
+/* --- M5 morning triage: keep/reject piano attempts → M4 training data --- */
+async function wbRenderTriage(main){
+  main.innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><span class="lbl">[ Piano triage // overnight keeps ]</span><button class="btn" onclick="wbRenderTriage(el(\'wbMain\'))">Refresh</button></div><div id="wbTriBody"><div class="lbl" style="color:var(--faint)">loading…</div></div></div>';
+  try{ const j=await api('/api/piano/runs'); const runs=j.items||[];
+    if(!runs.length){ el('wbTriBody').innerHTML='<div class="lbl" style="color:var(--faint)">no piano runs — <code>earcrate project piano</code> writes them</div>'; return; }
+    el('wbTriBody').innerHTML=runs.map(run=>{
+      const atts=(run.attempts||[]);
+      const head='<div style="display:flex;gap:12px;align-items:baseline;margin:6px 0 8px"><span style="font:600 11px/1 var(--mono);color:var(--ink)">'+esc(run.run_id||'')+'</span><span style="font:500 8.5px/1 var(--mono);color:var(--faint)">'+((run.personas||[]).join(', '))+' · kept '+(run.kept||0)+' · discarded '+(run.discarded||0)+' · errored '+(run.errored||0)+'</span></div>';
+      const rows=atts.map(a=>{
+        const v=a.verdict||'?'; const ink=v==='kept'?'var(--acc)':(v==='discarded'?'var(--dim)':'var(--fault)');
+        const tri=a.triage;
+        const acts=(v==='kept'&&a.project_id)?('<span class="btn clk" onclick="wbTriage(\''+esc(run.run_id)+'\','+a.iteration+',\'keep\')" style="border-color:var(--acc);color:var(--acc)">✓ keep→train</span><span class="btn clk" onclick="wbTriage(\''+esc(run.run_id)+'\','+a.iteration+',\'reject\')" style="border-color:var(--fault);color:var(--fault)">✕ reject→train</span>'+(a.path?'<span class="btn clk" onclick=\'setPlayer('+JSON.stringify(a.path)+')\'>PLAY</span>':'')):'';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--edge)">'
+          +'<span style="width:70px;flex:0 0 auto;font:600 8px/1 var(--mono);color:'+ink+'">#'+a.iteration+' '+esc(v)+'</span>'
+          +'<div style="min-width:0;flex:1"><div style="font:600 9.5px/1.2 var(--mono);color:var(--ink)">'+esc(a.persona||'')+' · rev '+wbShort(a.revision_sha)+'</div>'
+          +'<div style="font:500 8px/1.4 var(--mono);color:var(--faint);margin-top:2px">'+esc(a.reason||(a.path?String(a.path).split(/[\\/]/).pop():''))+(tri?(' · triaged: '+esc(tri.verdict)+' ('+tri.atoms_judged+' atoms)'):'')+'</div></div>'
+          +'<span style="display:flex;gap:5px">'+acts+'</span></div>';
+      }).join('');
+      return '<div style="margin-bottom:14px">'+head+rows+'</div>';
+    }).join('');
+  }catch(e){ el('wbTriBody').innerHTML='<div class="lbl" style="color:var(--fault)">'+esc(e.message)+'</div>'; }
+}
+async function wbTriage(run_id, iteration, verdict){
+  try{ const j=await post('/api/piano/triage',{run_id, iteration, verdict}); toast('Triage '+verdict+': '+esc(j.note||'')); wbRenderTriage(el('wbMain')); }catch(e){}
 }
 
 /* ---------- SESSIONS ---------- */

@@ -1,6 +1,22 @@
 # EarCrate — CHANGELOG
 
 ## v0.9.997 — the v0.9.0 integrated release lands in the mainline repo
+- Rebuilds the Workbench on the frozen `/api/projects` contract (functional
+  pass; the LATTICE visual language is preserved, not redesigned). The old
+  loose-arrangement path (`/api/timeline/propose`, `/api/render_plan`) is gone
+  from the UI — it can no longer post an arbitrary arrangement to the renderer.
+  New surface: project list + compile/import, an active-revision header
+  (persona/seed/BPM/duration/gate/optimistic-concurrency head), a three-rail
+  timeline showing EVERY clip, a clip inspector emitting typed commands with
+  ranges from the persona's compiled policy (plus an explicit override toggle), a
+  transition inspector (technique/params/alternatives/rejections/executability),
+  undo/redo/recompile with full refresh after every revision-changing op,
+  revision-bound preview/render/export with run receipts, history (ancestry) +
+  runs views, and an M5 morning-triage view whose keep/reject writes through the
+  atom-judgment path to feed M4. Adds `GET /api/piano/runs` + `POST
+  /api/piano/triage`; project policy/validation/concurrency errors now map to
+  4xx instead of 500. No framework/network/second-state-model; the single-file
+  build serves byte-identical UI. See `docs/M6_WORKBENCH.md`.
 - Adds the taste ranker (`earcrate/ear/taste_ranker.py`, CLI `train-ranker`): a
   dependency-free, deterministic logistic-regression proposer trained on the
   owner's own approve/reject judgments. Wired into `approved_atom_pool` right

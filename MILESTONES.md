@@ -1,5 +1,10 @@
 # EarCrate — order of work
 
+> **Superseded by `EARCRATE_0997_PLAN.md`** (post-v0.9 roadmap). §3's
+> editable-project slice shipped as the v0.9 immutable-project cutover; the
+> remaining open themes here (perceptual validation, consumer polish, the §5.3
+> teardown) are re-sequenced there. Kept for lineage.
+
 The control question for any change: **can it prove, on the real machine and the
 real library, that EarCrate produces better audio, a smoother listening
 experience, or meaningful creative control over a musical decision?** Gate count

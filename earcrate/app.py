@@ -3704,40 +3704,13 @@ class EarcrateCore:
 
     @_durable_compile_attempt
     def propose_taste_mashup(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        c = self.ensure_config()
-        taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
-        target_seconds = float(params.get("target_seconds") or 120)
-        readiness = self.taste_readiness(taste_profile, target_seconds)
-        if readiness.get("crate_stale") and not params.get("allow_stale_crate"):
-            raise RuntimeError("STALE CRATE: " + str(readiness.get("crate_stale_reason") or "engine/analyzer version bumped since this crate was built"))
-        if not readiness.get("ready"):
-            raise RuntimeError("TasteSpec crate is not ready: " + "; ".join(readiness.get("failures") or []))
-        pool = self.approved_atom_pool(taste_profile)
-        name = safe_name(str(params.get("name") or "EarCrate Set"), "EarCrate Set")
-        explicit_seed = params.get("seed") not in (None, "", 0, "0")
-        seed = int(params.get("seed")) if explicit_seed else self.next_render_seed(c.seed)
-        params = dict(params)
-        params.update({"seed": seed, "taste_profile": taste_profile, "quality_mode": "stable_deck", "post_render_gate": True, "mix_mode": "tastespec_graph"})
-        arrangement = self.compose_taste_arrangement(pool, params, seed)
-        preflight = self.arrangement_preflight_gate(arrangement)
-        taste_gate = self.taste_arrangement_gate(arrangement)
-        arrangement["candidate_search"] = {"count": 1, "selected_seed": seed, "selected_score": self.score_arrangement(arrangement), "selected_preflight": preflight, "taste_gate": taste_gate, "render_policy": "TasteSpec graph compiler: render only after crate, compatibility, and style-contract gates"}
-        arr_sha = arrangement_sha(arrangement)
-        if not preflight.get("passed") or not taste_gate.get("passed"):
-            failures = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
-            raise PlanRejectedError("TasteSpec pre-render gate refused theater: " + "; ".join(failures), arrangement, arr_sha)
-        mashup_id = ulidish()
-        # Persona belongs in the filename: the same set rendered under different
-        # TasteSpecs is a DIFFERENT mashup, and on disk you must be able to tell a
-        # girl_talk collage from a notorious album-marriage at a glance.
-        render_name = render_output_name(name, taste_profile, ENGINE_VERSION, arr_sha, seed)
-        dst = c.working_root / "renders" / render_name
-        self.conn().execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
-        self.conn().commit()
-        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
-        manifest = self.write_manifest("tastespec", seed, f"Render TasteSpec mashup '{name}'", [op])
-        return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement, "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
-            "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "readiness": readiness}
+        """Compile a bounded candidate search into an immutable project revision.
+
+        The public entry point is retained for every existing caller, but its
+        output is now a project-backed manifest. No loose arrangement is
+        registered for publication.
+        """
+        return self.project_proposal(dict(params))
 
     @_durable_compile_attempt
     def propose_external_remix(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -3832,18 +3805,26 @@ class EarcrateCore:
         if not preflight.get("passed"):
             raise PlanRejectedError("external remix preflight refused theater: "
                                     + "; ".join(preflight.get("failures") or []), arrangement, arr_sha)
-        name = title
-        mashup_id = ulidish()
-        render_name = render_output_name(f"{name}-remix", taste_profile, ENGINE_VERSION, arr_sha, seed)
-        dst = c.working_root / "renders" / render_name
-        self.conn().execute("INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)", (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
-        self.conn().commit()
-        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
-        manifest = self.write_manifest("external_remix", seed, f"Render external remix of '{title}' in {taste_profile} style", [op])
-        return {"ok": True, "mashup_id": mashup_id, "manifest": manifest, "arrangement": arrangement,
-                "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
+        imported = self.project_import_arrangement(
+            arrangement,
+            name=title,
+            project_id=str(params.get("project_id") or ""),
+            created_by={"actor": "compiler", "reason": "external_remix", "compiler_version": "integrated_score_v1"},
+            static_gate_receipt={"preflight": preflight, "taste_gate": taste_gate, "external_feasibility": feasibility},
+            compiler_receipt={"anchor": anchor, "external_feasibility": feasibility, "candidate_search": arrangement["candidate_search"]},
+        )
+        revision = ScoreRevision.from_dict(imported["revision"])
+        dst = self._project_output_path(revision, f"{title}-remix")
+        op = {"op_id": ulidish(), "type": "render_project",
+              "args": {"project_id": revision.project_id, "revision_sha": revision.revision_sha, "dst": str(dst)},
+              "preconditions": {"dst_absent": True}}
+        manifest = self.write_manifest("external_remix_project", seed,
+                                       f"Render external remix project '{title}' in {taste_profile} style", [op])
+        return {"ok": True, "project_id": revision.project_id, "revision_sha": revision.revision_sha,
+                "score_sha": revision.score_sha, "manifest": manifest, "arrangement": revision.arrangement,
+                "dst": str(dst), "engine_version": ENGINE_VERSION, "arrangement_sha": arrangement_sha(revision.arrangement),
                 "anchor": anchor, "feasibility": feasibility, "taste_gate": taste_gate,
-                "tastespec": profile_summary(taste_profile)}
+                "tastespec": revision.intent["taste_profile"]}
 
     def compose_taste_arrangement(self, pool: List[Dict[str, Any]], params: Dict[str, Any], seed: int) -> Dict[str, Any]:
         rng = random.Random(seed)
@@ -4415,7 +4396,7 @@ class EarcrateCore:
             render_path = None
             rejected = []
             for item in executed.get("done", []):
-                if item.get("type") == "render_mashup" and item.get("path"):
+                if item.get("type") in {"render_mashup", "render_project"} and item.get("path"):
                     render_path = item.get("path")
                 elif item.get("type") == "render_rejected":
                     rejected.append(item)
@@ -5237,7 +5218,21 @@ class EarcrateCore:
             if op_type not in VALID_OPS:
                 raise ValueError(f"executor rejects op type {op_type!r}")
             args = op.get("args") or {}
-            if op_type == "render_mashup":
+            if op_type == "render_project":
+                dst = self.validate_not_master(Path(args["dst"])).resolve()
+                self.validate_path_in_root(dst, c.working_root / "renders")
+                if (op.get("preconditions") or {}).get("dst_absent") and dst.exists():
+                    raise ValueError(f"destination exists: {dst}")
+                revision = self.project_store().load_revision(str(args.get("project_id") or ""), str(args.get("revision_sha") or "") or None)
+                plan.append({
+                    "index": idx, "op_id": op.get("op_id"), "type": op_type,
+                    "project_id": revision.project_id, "revision_sha": revision.revision_sha,
+                    "score_sha": revision.score_sha,
+                    "would_write": [str(dst), str(dst.with_suffix(".render_report.json"))],
+                    "rollback_inverse": {"type": "archive_move", "src": str(dst), "reason": "rollback project render output"},
+                    "preconditions": op.get("preconditions") or {},
+                })
+            elif op_type == "render_mashup":
                 dst = self.validate_not_master(Path(args["dst"])).resolve()
                 self.validate_path_in_root(dst, c.working_root / "renders")
                 if (op.get("preconditions") or {}).get("dst_absent") and dst.exists():
@@ -5311,7 +5306,13 @@ class EarcrateCore:
         for idx, op in enumerate(ops):
             rec_base = {"ulid": ulidish(), "ts": now_utc(), "manifest_id": manifest.get("manifest_id"), "manifest_sha256": manifest_sha, "op_id": op.get("op_id"), "type": op.get("type")}
             try:
-                if op["type"] == "render_mashup":
+                if op["type"] == "render_project":
+                    dst = Path(op["args"]["dst"]).resolve()
+                    inverse = {**rec_base, "inverse": {"type": "archive_move", "src": str(dst), "reason": "rollback project render output"}}
+                    fsync_append_jsonl(c.agent_root / "rollback.jsonl", inverse)
+                    out = self.project_render(str(op["args"]["project_id"]), dst, str(op["args"].get("revision_sha") or ""))
+                    done.append(out)
+                elif op["type"] == "render_mashup":
                     dst = Path(op["args"]["dst"]).resolve()
                     inverse = {**rec_base, "inverse": {"type": "archive_move", "src": str(dst), "reason": "rollback render output"}}
                     fsync_append_jsonl(c.agent_root / "rollback.jsonl", inverse)
@@ -5341,7 +5342,7 @@ class EarcrateCore:
                 self.set_status(f"executed {idx+1}/{len(ops)}", (idx + 1) / max(1, len(ops)), True)
         last_render = None
         for item in done:
-            if isinstance(item, dict) and item.get("type") == "render_mashup" and item.get("path"):
+            if isinstance(item, dict) and item.get("type") in {"render_mashup", "render_project"} and item.get("path"):
                 last_render = item.get("path")
         with self.status_lock:
             if last_render:
@@ -5472,10 +5473,16 @@ class EarcrateCore:
             raise RuntimeError("mashup not found")
         arrangement = json.loads(row["arrangement_json"])
         arr_sha = arrangement_sha(arrangement)
+        render_params = dict(arrangement.get("params") or {})
+        project_mode = str(render_params.get("project_render_mode") or "")
+        project_info = dict(arrangement.get("project") or {})
         bpm = float(arrangement["bpm"])
         sr = c.sample_rate
         sections = list(arrangement.get("sections") or [])
-        loop_ids = sorted({layer["loop_id"] for sec in sections for layer in sec.get("layers", [])})
+        loop_ids = sorted({
+            layer["loop_id"] for sec in sections for layer in sec.get("layers", [])
+            if not layer.get("external_ref")
+        })
         loops: Dict[str, Dict[str, Any]] = {}
         for lid in loop_ids:
             r = db.execute("""SELECT l.*, f.path, f.sha256 AS file_sha256,
@@ -5548,7 +5555,7 @@ class EarcrateCore:
         for sec in sections:
             total_bars = max(total_bars, int(sec["bar_start"]) + int(sec["bars"]))
         total_len = int(math.ceil(total_bars * 4 * 60.0 / bpm * sr))
-        mix = np.zeros(total_len, dtype=np.float32)
+        mix = np.zeros((total_len, 2), dtype=np.float32) if project_mode else np.zeros(total_len, dtype=np.float32)
         audio_cache: Dict[str, np.ndarray] = {}
         external_identity_cache: Dict[str, str] = {}
         transform_cache: Dict[str, np.ndarray] = {}
@@ -5560,19 +5567,50 @@ class EarcrateCore:
         transform_cache_dir.mkdir(parents=True, exist_ok=True)
         max_tail_decks = max(1, min(6, int((arrangement.get("params") or {}).get("max_aux_decks") or 3)))
         stem_policy = str((arrangement.get("params") or {}).get("stem_policy") or "separated")
-        report: Dict[str, Any] = {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "bpm": bpm, "render_timestamp": now_utc(), "stem_policy": stem_policy, "dj_compiler": arrangement.get("dj_compiler") or {}, "world_model": arrangement.get("world_model") or {}, "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "candidate_search": arrangement.get("candidate_search") or {}, "deck_model": {"version": "v0.5.17", "model": "varispeed_lattice_dry_multideck_tail_overlay", "max_aux_decks": max_tail_decks, "rule": "incoming downbeat stays on grid; only dry, role-approved outgoing decks overhang into the transition window"}, "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0}, "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0}
+        report: Dict[str, Any] = {
+            "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha,
+            "seed": arrangement.get("seed"), "bpm": bpm,
+            "render_timestamp": now_utc(),
+            "artifact_timestamp": str(project_info.get("revision_created_at") or now_utc()),
+            "stem_policy": stem_policy,
+            "project_render_mode": project_mode or None,
+            "project_id": project_info.get("project_id"),
+            "project_revision_sha": project_info.get("revision_sha"),
+            "project_score_sha": project_info.get("score_sha"),
+            "project_parent_revision_sha": project_info.get("parent_revision_sha"),
+            "project_execution_selection": arrangement.get("project_execution_selection") or {},
+            "dj_compiler": arrangement.get("dj_compiler") or {},
+            "world_model": arrangement.get("world_model") or {},
+            "tastespec": arrangement.get("tastespec") or profile_summary(str(render_params.get("taste_profile") or "girl_talk_v1")),
+            "candidate_search": arrangement.get("candidate_search") or {},
+            "deck_model": {"version": "v0.9.0", "model": "immutable_score_varispeed_multideck_tail_overlay", "max_aux_decks": max_tail_decks,
+                           "rule": "the score seals every source, stem, gain and transition; the renderer executes or refuses"},
+            "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0},
+            "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0,
+        }
+
+        def project_pan(signal: np.ndarray, pan: float) -> np.ndarray:
+            """Apply the score's equal-power pan; legacy renders stay mono."""
+            mono = np.asarray(signal, dtype=np.float32)
+            if not project_mode:
+                return mono
+            p = max(-1.0, min(1.0, float(pan)))
+            angle = (p + 1.0) * math.pi / 4.0
+            left = mono * (math.cos(angle) * math.sqrt(2.0))
+            right = mono * (math.sin(angle) * math.sqrt(2.0))
+            return np.stack([left, right], axis=1).astype(np.float32)
 
         def transition_xfade_samples(sec_obj: Dict[str, Any], sec_len_samples: int) -> int:
             transition = dict(sec_obj.get("transition_in") or {})
             xfade_beats = float(transition.get("xfade_beats") or 0)
             typ = str(transition.get("type") or "")
-            if typ in ("", "start", "impact_drop", "hard_cut_to_air", "hard_cut_pickup", "bed_ride"):
+            if typ in ("", "start", "impact_drop", "hard_cut", "hard_cut_to_air", "hard_cut_pickup", "bed_ride"):
                 return 0
             n = int(round(xfade_beats * 60.0 / bpm * sr))
             return max(0, min(n, max(0, sec_len_samples // 2)))
 
         def blend_decks(out_seg: np.ndarray, in_seg: np.ndarray, transition: Dict[str, Any], xfade_len: int) -> np.ndarray:
-            n = min(int(xfade_len), out_seg.size, in_seg.size)
+            n = min(int(xfade_len), int(out_seg.shape[0]), int(in_seg.shape[0]))
             if n <= 0:
                 return in_seg[:0].astype(np.float32)
             out_seg = out_seg[:n].astype(np.float32, copy=False)
@@ -5587,11 +5625,14 @@ class EarcrateCore:
                     blended = hi + lo * 0.25
             else:
                 inc, outc = dj_fade_curves(n, curve)
+                if out_seg.ndim == 2:
+                    inc, outc = inc[:, None], outc[:, None]
                 blended = out_seg * outc + in_seg * inc
             peak = float(np.max(np.abs(blended))) if blended.size else 0.0
             if peak > 0.96:
                 blended = blended * (0.96 / peak)
             return blended.astype(np.float32)
+
 
         def select_tail_decks(transition: Dict[str, Any], tails: List[Dict[str, Any]], xfade_len: int) -> List[Dict[str, Any]]:
             """Dry-deck tail budget. Multideck is available, but the default mix is not a cave."""
@@ -5776,8 +5817,8 @@ class EarcrateCore:
             deck_len = sec_len + max(0, int(tail_len))
             vocal_present = any(layer.get("role") == "vocal" for layer in sec.get("layers", []))
             section_has_bass = any(layer.get("role") == "bass" for layer in sec.get("layers", []))
-            section_deck = np.zeros(deck_len, dtype=np.float32)
-            section_vox = np.zeros(deck_len, dtype=np.float32)
+            section_deck = np.zeros((deck_len, 2), dtype=np.float32) if project_mode else np.zeros(deck_len, dtype=np.float32)
+            section_vox = np.zeros((deck_len, 2), dtype=np.float32) if project_mode else np.zeros(deck_len, dtype=np.float32)
             tail_parts: Dict[str, np.ndarray] = {}
             for layer in sec.get("layers", []):
                 lid = layer.get("loop_id")
@@ -5791,11 +5832,7 @@ class EarcrateCore:
                 if ext_ref:
                     try:
                         epath = str(ext_ref.get("path") or "")
-                        # Verify the dropped file still IS the take that was proposed —
-                        # a library source is identity-checked twice before render, and
-                        # the external target deserves the same honesty: a file swapped
-                        # between propose and render must not ship under the old receipt.
-                        expected_pcm = str(ext_ref.get("pcm_sha") or "")
+                        expected_pcm = str(ext_ref.get("pcm_sha") or ext_ref.get("pcm_sha256") or "")
                         if expected_pcm and epath not in external_identity_cache:
                             try:
                                 external_identity_cache[epath] = decoded_audio_sha256(
@@ -5803,51 +5840,78 @@ class EarcrateCore:
                             except Exception as exc:
                                 external_identity_cache[epath] = f"unreadable:{exc}"
                         if expected_pcm and external_identity_cache.get(epath) != expected_pcm:
-                            report["drops"].append({**drop_base, "reason": "external target changed since propose; re-propose the remix"}); continue
+                            report["drops"].append({**drop_base, "reason": "external target changed since score compilation"}); continue
                         if epath not in audio_cache:
                             audio_cache[epath] = decode_audio(Path(epath), sr)
                         esrc = audio_cache[epath]
-                        wa = max(0, int(float(ext_ref.get("start_s") or 0.0) * sr))
-                        wlen = ext_ref.get("len_s")
-                        wb = esrc.size if wlen is None else min(esrc.size, wa + int(float(wlen) * sr))
-                        clip = esrc[wa:wb].astype(np.float32, copy=True)
-                        if clip.size < 256:
-                            report["drops"].append({**drop_base, "reason": "external vocal window empty"}); continue
-                        # external layers declare their role; assuming "vocal"
-                        # made external BEDS get vocal filtering/leveling.
+                        start_s = float(layer.get("source_start_s", ext_ref.get("start_s") or 0.0))
+                        if layer.get("source_end_s") is not None:
+                            end_s = float(layer.get("source_end_s"))
+                        else:
+                            wlen = ext_ref.get("len_s")
+                            end_s = (esrc.size / sr) if wlen is None else start_s + float(wlen)
+                        wa = max(0, int(round(start_s * sr)))
+                        wb = min(esrc.size, int(round(end_s * sr)))
+                        active_raw = esrc[wa:wb].astype(np.float32, copy=True)
+                        if active_raw.size < 256:
+                            report["drops"].append({**drop_base, "reason": "external source window empty"}); continue
                         role_name = str(layer.get("role") or "vocal")
                         layer_bar_offset = max(0, int(layer.get("bar_offset") or 0))
-                        active_bars = min(max(1, int(layer.get("bar_len") or sec["bars"])), int(sec["bars"]) - layer_bar_offset)
                         if layer_bar_offset >= int(sec["bars"]):
                             report["drops"].append({**drop_base, "reason": "bar_offset outside section"}); continue
+                        active_bars = min(max(1, int(layer.get("bar_len") or sec["bars"])), int(sec["bars"]) - layer_bar_offset)
                         active_start = int(round(layer_bar_offset * 4 * 60.0 / bpm * sr))
                         active_len = max(512, int(round(active_bars * 4 * 60.0 / bpm * sr)))
-                        # Fit the take's window to the grid WITHOUT tiling (a short final
-                        # window must NOT stutter-echo the last words — the bed carries
-                        # the rest), then the same band filter + RMS match a library
-                        # vocal gets. Fades only at the take's true edges, never at
-                        # interior section seams (a 14ms dip in a held word every 4 bars).
-                        clip = fit_external_clip(clip, active_len)
+                        reaches_section_end = active_start + active_len >= sec_len - 8
+                        tail_participates = bool(tail_len > 32 and reaches_section_end)
+                        active_clip = fit_external_clip(active_raw, active_len)
+                        if tail_participates:
+                            tail_end = min(esrc.size, wb + tail_len)
+                            tail_raw = esrc[wb:tail_end].astype(np.float32, copy=True)
+                            if tail_raw.size < tail_len:
+                                report["drops"].append({**drop_base, "reason": f"external source lacks {tail_len} samples of required transition tail"}); continue
+                            tail_clip = tail_raw[:tail_len]
+                            clip = np.concatenate([active_clip, tail_clip]).astype(np.float32)
+                        else:
+                            clip = active_clip
                         clip = simple_fft_filter(clip, sr, role_name, vocal_present, section_has_bass)
                         clip = normalize_layer_rms(clip, role_name)
-                        _fi, _fo = external_edge_fades(active_start, sidx,
-                                                       float(ext_ref.get("start_s") or 0.0),
-                                                       float(ext_ref.get("len_s") or 0.0),
-                                                       float(ext_ref.get("duration_s") or 0.0))
-                        clip = apply_edge_fades(clip, sr, fade_in=_fi, fade_out=_fo, fade_ms=14)
-                        layer_gain_db = cap_overlay_gain_db(float(layer.get("gain_db", -6.5)), role_name, active_bars)
+                        _fi, _fo = external_edge_fades(active_start, sidx, start_s, max(0.0, end_s - start_s), float(ext_ref.get("duration_s") or 0.0))
+                        fade_ms = int(round(max(float(layer.get("fade_in_ms") or 14.0), float(layer.get("fade_out_ms") or 14.0))))
+                        clip = apply_edge_fades(clip, sr, fade_in=_fi, fade_out=(_fo and not tail_participates), fade_ms=fade_ms)
+                        layer_gain_db = float(layer.get("gain_db", -6.5)) if project_mode else cap_overlay_gain_db(float(layer.get("gain_db", -6.5)), role_name, active_bars)
                         gain = 10 ** (layer_gain_db / 20.0)
                         active_end = min(deck_len, active_start + clip.size)
-                        if active_end > active_start:
-                            _rendered_ext = clip[: active_end - active_start] * gain
-                            section_deck[active_start:active_end] += _rendered_ext
-                            if role_name == "vocal":
-                                section_vox[active_start:active_end] += _rendered_ext
-                            report["layers"].append({**drop_base, "stretch_rate": 1.0, "stretch_pct": 0.0, "pitch_shift": 0.0, "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": "external", "source_track_key": "external", "stem_source": "external_target", "stem_identity": ext_ref.get("pcm_sha"), "transform_mode": "identity_anchor", "external_window_s": [ext_ref.get("start_s"), ext_ref.get("len_s")]})
-                        else:
-                            report["drops"].append({**drop_base, "reason": "external render window is empty"})
+                        if active_end <= active_start:
+                            report["drops"].append({**drop_base, "reason": "external render window is empty"}); continue
+                        pan = float(layer.get("pan") or 0.0)
+                        rendered_ext = project_pan(clip[: active_end - active_start] * gain, pan)
+                        section_deck[active_start:active_end] += rendered_ext
+                        if role_name == "vocal":
+                            section_vox[active_start:active_end] += rendered_ext
+                        if tail_participates:
+                            tail_audio = clip[active_len:active_len + tail_len] * gain
+                            if tail_audio.size != tail_len:
+                                report["drops"].append({**drop_base, "reason": "external transition tail did not render exactly"}); continue
+                            tail_audio = project_pan(tail_audio, pan)
+                            group = deck_group_for_role(role_name)
+                            if group not in tail_parts:
+                                tail_parts[group] = np.zeros((tail_len, 2), dtype=np.float32) if project_mode else np.zeros(tail_len, dtype=np.float32)
+                            tail_parts[group][:] += tail_audio.astype(np.float32)
+                        report["layers"].append({
+                            **drop_base, "clip_id": layer.get("clip_id"), "source_ref_id": layer.get("source_ref_id"),
+                            "stretch_rate": 1.0, "stretch_pct": 0.0, "pitch_shift": 0.0,
+                            "gain_db": layer_gain_db, "score_gain_db": float(layer.get("gain_db", layer_gain_db)),
+                            "pan": float(layer.get("pan") or 0.0),
+                            "bar_offset": layer_bar_offset, "bar_len": active_bars,
+                            "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name),
+                            "world": "external", "source_track_key": layer.get("source_track_key") or "external",
+                            "tail_participates": tail_participates, "stem_source": "external_target",
+                            "stem_identity": expected_pcm or None, "stem_choice": layer.get("stem_choice"),
+                            "transform_mode": "identity_anchor", "external_window_s": [start_s, max(0.0, end_s - start_s)],
+                        })
                     except Exception as exc:
-                        report["drops"].append({**drop_base, "reason": f"external vocal render error: {exc}"})
+                        report["drops"].append({**drop_base, "reason": f"external source render error: {exc}"})
                     continue
                 info = loops.get(lid)
                 if not info:
@@ -5863,59 +5927,58 @@ class EarcrateCore:
                     report["drops"].append({**drop_base, "reason": "source identity is stale; run Analyze and recompile before rendering"}); continue
                 try:
                     path = info["path"]
-                    # v3 §5.2: a vocal layer prefers a REAL vocals stem when a
-                    # StemProvider can produce one (GPU box). The no-op default
-                    # returns None, so we fall back to the full-mix decode below —
-                    # byte-identical to today. Record which source fed the layer.
+                    # A project revision seals the stem choice at compile time.
+                    # Legacy loose arrangements retain the historical visible fallback.
                     stem_source = "mix"
                     stem_reason = None
                     stem_identity = None
                     source = None
                     _ear = str(layer.get("ear_role") or "")
                     _role = str(layer.get("role") or info.get("role") or "")
-                    if stem_policy == "intact_mix":
-                        # This is an authored source choice, not a runtime
-                        # fallback: it is hashed in arrangement.params and
-                        # surfaced on every layer receipt.
-                        stem_reason = "arrangement stem_policy=intact_mix"
-                    elif _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
-                        pcm_sha = info.get("audio_sha256")
-                        if pcm_sha:
-                            stem_arr, stem_reason, stem_identity = separated_stem_source(str(pcm_sha), path, "vocals")
-                            if stem_arr is not None:
-                                source = stem_arr
-                                stem_source = "vocals"
-                                stem_reason = None
+                    if project_mode:
+                        selected_stem = str((layer.get("stem_choice") or {}).get("choice") or "mix")
+                        if selected_stem == "mix":
+                            stem_reason = str((layer.get("stem_choice") or {}).get("reason") or "score selected mix")
+                        elif selected_stem in {"vocals", "no_vocals"}:
+                            pcm_sha = info.get("audio_sha256")
+                            if not pcm_sha:
+                                report["drops"].append({**drop_base, "reason": "score-selected stem lacks verified PCM identity"}); continue
+                            stem_arr, stem_reason, stem_identity = separated_stem_source(str(pcm_sha), path, selected_stem)
+                            if stem_arr is None:
+                                report["drops"].append({**drop_base, "reason": f"score-selected stem {selected_stem!r} unavailable: {stem_reason}"}); continue
+                            source = stem_arr
+                            stem_source = "vocals" if selected_stem == "vocals" else "instrumental"
+                            stem_reason = None
+                        else:
+                            report["drops"].append({**drop_base, "reason": f"renderer cannot execute sealed stem choice {selected_stem!r}"}); continue
+                    else:
+                        if stem_policy == "intact_mix":
+                            stem_reason = "arrangement stem_policy=intact_mix"
+                        elif _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
+                            pcm_sha = info.get("audio_sha256")
+                            if pcm_sha:
+                                stem_arr, stem_reason, stem_identity = separated_stem_source(str(pcm_sha), path, "vocals")
+                                if stem_arr is not None:
+                                    source = stem_arr; stem_source = "vocals"; stem_reason = None
+                                else:
+                                    report["stem_reason"] = stem_reason
                             else:
-                                # Visible fallback: record why this vocal layer
-                                # used the mix instead of a verified stem.
+                                stem_reason = "verified full-track audio identity missing; run Analyze before stem separation"
                                 report["stem_reason"] = stem_reason
                         else:
-                            stem_reason = "verified full-track audio identity missing; run Analyze before stem separation"
-                            report["stem_reason"] = stem_reason
-                    else:
-                        # Bed layers (drums/bass/harmony) ride the INSTRUMENTAL stem
-                        # (demucs no_vocals) when a provider can produce one, so a
-                        # foreign acapella sits over a CLEAN instrumental instead of
-                        # song B's FULL MIX — which still carries B's own vocals and
-                        # muddies the bed. The no-op default returns None here, so a
-                        # non-GPU box FALLS BACK to the full-mix decode below,
-                        # byte-identical to the pre-seam path.
-                        pcm_sha = info.get("audio_sha256")
-                        if pcm_sha:
-                            stem_arr, inst_reason, inst_identity = separated_stem_source(str(pcm_sha), path, "no_vocals")
-                            if stem_arr is not None:
-                                source = stem_arr
-                                stem_source = "instrumental"
-                                stem_identity = inst_identity
-                            else:
-                                report.setdefault("stem_reason_instrumental", inst_reason)
+                            pcm_sha = info.get("audio_sha256")
+                            if pcm_sha:
+                                stem_arr, inst_reason, inst_identity = separated_stem_source(str(pcm_sha), path, "no_vocals")
+                                if stem_arr is not None:
+                                    source = stem_arr; stem_source = "instrumental"; stem_identity = inst_identity
+                                else:
+                                    report.setdefault("stem_reason_instrumental", inst_reason)
                     if source is None:
                         if path not in audio_cache:
                             audio_cache[path] = decode_audio(Path(path), sr)
                         source = audio_cache[path]
-                    a = max(0, int(float(info["start_s"]) * sr))
-                    b = min(source.size, int(float(info["end_s"]) * sr))
+                    a = max(0, int(float(layer.get("source_start_s", info["start_s"])) * sr))
+                    b = min(source.size, int(float(layer.get("source_end_s", info["end_s"])) * sr))
                     clip = source[a:b].astype(np.float32, copy=True)
                     if clip.size < 256:
                         report["drops"].append({**drop_base, "reason": "clip too short"}); continue
@@ -5964,12 +6027,14 @@ class EarcrateCore:
                         for nl in nxt.get("layers", []):
                             if nl.get("loop_id") == layer.get("loop_id") and int(nl.get("bar_offset") or 0) == 0:
                                 fade_out = False; break
-                    clip = apply_edge_fades(clip, sr, fade_in=fade_in, fade_out=fade_out, fade_ms=14)
-                    layer_gain_db = cap_overlay_gain_db(float(layer.get("gain_db", -8.0)), role_name, active_bars)
+                    fade_ms = int(round(max(float(layer.get("fade_in_ms") or 14.0), float(layer.get("fade_out_ms") or 14.0))))
+                    clip = apply_edge_fades(clip, sr, fade_in=fade_in, fade_out=fade_out, fade_ms=fade_ms)
+                    layer_gain_db = float(layer.get("gain_db", -8.0)) if project_mode else cap_overlay_gain_db(float(layer.get("gain_db", -8.0)), role_name, active_bars)
                     gain = 10 ** (layer_gain_db / 20.0)
                     active_end = min(deck_len, active_start + clip.size)
                     if active_end > active_start:
-                        rendered = clip[: active_end - active_start] * gain
+                        pan = float(layer.get("pan") or 0.0)
+                        rendered = project_pan(clip[: active_end - active_start] * gain, pan)
                         section_deck[active_start:active_end] += rendered
                         if role_name == "vocal":
                             section_vox[active_start:active_end] += rendered
@@ -5977,12 +6042,13 @@ class EarcrateCore:
                             tail_start = max(0, sec_len - active_start)
                             tail_audio = clip[tail_start:tail_start + tail_len] * gain
                             if tail_audio.size > 32:
+                                tail_audio = project_pan(tail_audio, pan)
                                 group = deck_group_for_role(role_name)
                                 if group not in tail_parts:
-                                    tail_parts[group] = np.zeros(tail_len, dtype=np.float32)
-                                n_tail = min(tail_len, tail_audio.size)
+                                    tail_parts[group] = np.zeros((tail_len, 2), dtype=np.float32) if project_mode else np.zeros(tail_len, dtype=np.float32)
+                                n_tail = min(tail_len, int(tail_audio.shape[0]))
                                 tail_parts[group][:n_tail] += tail_audio[:n_tail].astype(np.float32)
-                        report["layers"].append({**drop_base, "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "stem_source": stem_source, "stem_identity": stem_identity, "stem_reason": stem_reason, "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
+                        report["layers"].append({**drop_base, "clip_id": layer.get("clip_id"), "source_ref_id": layer.get("source_ref_id"), "stretch_rate": rate, "stretch_pct": stretch_pct, "pitch_shift": round(float(ps), 4), "gain_db": layer_gain_db, "score_gain_db": float(layer.get("gain_db", layer_gain_db)), "pan": pan, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": layer.get("world"), "source_track_key": layer.get("source_track_key"), "dry_high3000_share": layer.get("dry_high3000_share"), "dry_quality_score": layer.get("dry_quality_score"), "tail_participates": tail_participates, "stem_source": stem_source, "stem_identity": stem_identity, "stem_reason": stem_reason, "stem_choice": layer.get("stem_choice"), "transform_mode": layer.get("transform_mode"), "speed_ratio": layer.get("speed_ratio"), "varispeed_pct": layer.get("varispeed_pct"), "natural_pitch_shift": layer.get("natural_pitch_shift"), "desired_key_shift": layer.get("desired_key_shift"), "residual_pitch_shift": layer.get("residual_pitch_shift"), "artifact_risk": layer.get("artifact_risk")})
                     else:
                         report["drops"].append({**drop_base, "reason": "render window is empty"})
                 except Exception as exc:
@@ -5990,12 +6056,14 @@ class EarcrateCore:
                     continue
             tail_decks_out = []
             for group, audio in tail_parts.items():
-                if audio.size > 32 and float(np.max(np.abs(audio))) > 1e-7:
-                    tail_decks_out.append({"deck_group": group, "audio": audio.astype(np.float32), "samples": int(audio.size)})
+                frames = int(audio.shape[0])
+                if frames > 32 and float(np.max(np.abs(audio))) > 1e-7:
+                    tail_decks_out.append({"deck_group": group, "audio": audio.astype(np.float32), "samples": frames})
             if not tail_decks_out and tail_len > 32:
                 summed_tail = section_deck[sec_len:sec_len + tail_len].astype(np.float32)
-                if summed_tail.size > 32 and float(np.max(np.abs(summed_tail))) > 1e-7:
-                    tail_decks_out.append({"deck_group": "mixed", "audio": summed_tail, "samples": int(summed_tail.size)})
+                frames = int(summed_tail.shape[0])
+                if frames > 32 and float(np.max(np.abs(summed_tail))) > 1e-7:
+                    tail_decks_out.append({"deck_group": "mixed", "audio": summed_tail, "samples": frames})
             # VOCAL-KEYED BED DUCKING (opt-in via params.vocal_bed_ducking):
             # the missing integration layer — without it an external vocal sits
             # ON the mix like narration instead of IN it. Musical sidechain:
@@ -6023,9 +6091,11 @@ class EarcrateCore:
                 # gets the render rejected for darkness). LR4 split, causal.
                 from scipy.signal import butter as _btr, sosfilt as _sosf
                 _sos = _btr(2, 3000.0, btype="lowpass", fs=sr, output="sos")
-                bed_lo = _sosf(_sos, _sosf(_sos, bed)).astype(np.float32)
+                axis = 0 if bed.ndim == 2 else -1
+                bed_lo = _sosf(_sos, _sosf(_sos, bed, axis=axis), axis=axis).astype(np.float32)
                 bed_hi = bed - bed_lo
-                section_deck = bed_lo * duck + bed_hi + section_vox
+                duck_shape = duck[:, None] if bed.ndim == 2 else duck
+                section_deck = bed_lo * duck_shape + bed_hi + section_vox
                 report.setdefault("vocal_bed_ducking", []).append(
                     {"section_index": sidx, "max_duck_db": round(float(-np.min(duck_db)), 2)})
             return section_deck[:sec_len].astype(np.float32), tail_decks_out
@@ -6041,21 +6111,27 @@ class EarcrateCore:
             section_mix, outgoing_tails = render_section_deck(sidx, sec, next_tail_len)
             transition = dict(sec.get("transition_in") or {})
             xfade_len = transition_xfade_samples(sec, sec_len)
-            xfade_len = min(xfade_len, section_mix.size)
+            xfade_len = min(xfade_len, int(section_mix.shape[0]))
             usable_tails = select_tail_decks(transition, tail_decks, xfade_len)
-            applied_transition = {**transition, "section_index": sidx, "xfade_samples": int(xfade_len), "applied": False, "deck_model": "varispeed_lattice_dry_multideck_tail_overlay", "overlap_side": "tail", "incoming_downbeat_error_ms": None, "outgoing_energy_zero_before_boundary": None, "tail_deck_count": len(usable_tails)}
+            transition_type = str(transition.get("type") or "start")
+            zero_overlap = transition_type in {"", "start", "impact_drop", "hard_cut", "hard_cut_to_air", "hard_cut_pickup", "bed_ride"}
+            applied_transition = {**transition, "section_index": sidx, "xfade_samples": int(xfade_len), "applied": False,
+                                  "executed": bool(zero_overlap), "execution_mechanism": "zero_overlap_cut" if zero_overlap else None,
+                                  "deck_model": "immutable_score_varispeed_multideck_tail_overlay", "overlap_side": "tail",
+                                  "incoming_downbeat_error_ms": 0.0 if zero_overlap else None,
+                                  "outgoing_energy_zero_before_boundary": None, "tail_deck_count": len(usable_tails)}
             if xfade_len > 32 and usable_tails:
-                outgoing = np.zeros(xfade_len, dtype=np.float32)
+                outgoing = np.zeros((xfade_len, 2), dtype=np.float32) if project_mode else np.zeros(xfade_len, dtype=np.float32)
                 for deck in usable_tails:
                     outgoing[:xfade_len] += deck["audio"][:xfade_len]
                 in_seg = section_mix[:xfade_len].copy()
                 blended = blend_decks(outgoing, in_seg, transition, xfade_len)
-                end_blend = min(total_len, sec_start + blended.size)
+                end_blend = min(total_len, sec_start + int(blended.shape[0]))
                 if end_blend > sec_start:
                     mix[sec_start:end_blend] += blended[: end_blend - sec_start]
                 rest = section_mix[xfade_len:]
                 rest_start = sec_start + xfade_len
-                rest_end = min(total_len, rest_start + rest.size)
+                rest_end = min(total_len, rest_start + int(rest.shape[0]))
                 if rest_end > rest_start:
                     mix[rest_start:rest_end] += rest[: rest_end - rest_start]
                 # Measure, do not assert. In the overlay model the incoming section audio
@@ -6067,9 +6143,9 @@ class EarcrateCore:
                 actual_downbeat = sec_start
                 downbeat_err_ms = round(abs(actual_downbeat - intended_downbeat) / sr * 1000.0, 3)
                 # Measure whether the outgoing tail actually reached zero energy by the boundary.
-                boundary_tail = outgoing[-min(64, outgoing.size):] if outgoing.size else np.zeros(1, dtype=np.float32)
+                boundary_tail = outgoing[-min(64, int(outgoing.shape[0])):] if outgoing.shape[0] else np.zeros((1, 2), dtype=np.float32) if project_mode else np.zeros(1, dtype=np.float32)
                 outgoing_zero = bool(float(np.max(np.abs(boundary_tail))) < 1e-4)
-                applied_transition.update({"applied": True, "tail_deck_count": len(usable_tails), "incoming_downbeat_error_ms": downbeat_err_ms, "transition_window_start_sample": sec_start, "transition_window_end_sample": end_blend, "source_tail_sections": [int(d.get("section_index")) for d in usable_tails], "source_tail_decks": [str(d.get("deck_group") or d.get("deck")) for d in usable_tails], "outgoing_energy_zero_before_boundary": outgoing_zero})
+                applied_transition.update({"applied": True, "executed": True, "execution_mechanism": "outgoing_tail_overlap", "tail_deck_count": len(usable_tails), "incoming_downbeat_error_ms": downbeat_err_ms, "transition_window_start_sample": sec_start, "transition_window_end_sample": end_blend, "source_tail_sections": [int(d.get("section_index")) for d in usable_tails], "source_tail_decks": [str(d.get("deck_group") or d.get("deck")) for d in usable_tails], "outgoing_energy_zero_before_boundary": outgoing_zero})
                 tail_decks = []
             else:
                 end = min(total_len, sec_start + sec_len)
@@ -6100,28 +6176,40 @@ class EarcrateCore:
             loop_receipt = periodic_cycle_receipt(mix, loop_cycle_samples)
             report["loop_contract"] = loop_receipt
 
-        # Run mastering on all repeated context first. Cropping before the linear
-        # finishing filters would reintroduce edge conditions at the loop seam.
-        prof_spec = self._persona_spectral_profile(
-            str((arrangement.get("params") or {}).get("taste_profile") or "")
-        )
-        mix, finishing_receipt = stable_presence_restore(mix, sr, return_receipt=True, spectral_profile=prof_spec)
-        report["finishing"] = finishing_receipt
-        mix = integrated_lufs_normalize(mix, sr, -14.0)
+        # Mastering is score data for project renders. Premaster mode performs no
+        # finishing; final mode applies the sealed actions exactly and never solves,
+        # clamps, substitutes or normalizes behind the revision's back. Legacy loose
+        # arrangements retain the existing measured finishing path.
+        prof_spec = self._persona_spectral_profile(str(render_params.get("taste_profile") or ""))
+        if project_mode == "premaster":
+            finishing_receipt = {"policy": "project_premaster_v1", "passed": True, "actions": [], "modifies_audio": False}
+            report["finishing"] = finishing_receipt
+        elif project_mode == "final":
+            mix, finishing_receipt = apply_project_master_actions(mix, sr, list(render_params.get("project_master_actions") or []))
+            report["finishing"] = finishing_receipt
+        else:
+            mix, finishing_receipt = stable_presence_restore(mix, sr, return_receipt=True, spectral_profile=prof_spec)
+            report["finishing"] = finishing_receipt
+            mix = integrated_lufs_normalize(mix, sr, -14.0)
         if loop_receipt is not None and loop_receipt.get("passed"):
             mix = mix[loop_cycle_samples:2 * loop_cycle_samples].copy()
-            report["loop_contract"]["published_samples"] = int(mix.size)
-            report["loop_contract"]["published_seconds"] = float(mix.size) / float(sr)
+            report["loop_contract"]["published_samples"] = int(mix.shape[0])
+            report["loop_contract"]["published_seconds"] = float(mix.shape[0]) / float(sr)
         target_seconds = float((arrangement.get("params") or {}).get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
         report["quality_gate"] = drydeck_quality_gate(drydeck_metrics(mix, sr), target_seconds, prof_spec)
         if not finishing_receipt.get("passed", False):
-            demanded = float(finishing_receipt.get("required_high_boost_db") or 0.0)
-            cap = float(finishing_receipt.get("high_boost_cap_db") or 0.0)
-            report["quality_gate"]["failures"].append(
-                "presence would require %.2f dB broad high boost (cap %.2f dB); "
-                "refusing to promote hiss, fuzz, or transform residue into a spectral pass"
-                % (demanded, cap)
-            )
+            if project_mode:
+                report["quality_gate"]["failures"].append(
+                    "explicit project mastering action execution failed: " + str(finishing_receipt.get("error") or finishing_receipt.get("refusal") or "unknown failure")
+                )
+            else:
+                demanded = float(finishing_receipt.get("required_high_boost_db") or 0.0)
+                cap = float(finishing_receipt.get("high_boost_cap_db") or 0.0)
+                report["quality_gate"]["failures"].append(
+                    "presence would require %.2f dB broad high boost (cap %.2f dB); "
+                    "refusing to promote hiss, fuzz, or transform residue into a spectral pass"
+                    % (demanded, cap)
+                )
             report["quality_gate"]["passed"] = False
         if loop_receipt is not None and not loop_receipt.get("passed"):
             report["quality_gate"]["failures"].append(
@@ -6174,9 +6262,20 @@ class EarcrateCore:
         report["drop_count"] = len(report["drops"])
         report["selected_layer_count"] = selected_layers
         report["rendered_layer_count"] = len(report["layers"])
+        transition_failures = [
+            t for t in report["transitions"]
+            if project_mode and not bool(t.get("executed"))
+        ]
+        if transition_failures:
+            report["quality_gate"].setdefault("failures", []).append(
+                "project transition(s) did not execute: " + ", ".join(str(t.get("transition_id") or t.get("type")) for t in transition_failures)
+            )
+            report["quality_gate"]["passed"] = False
         report["render_integrity"] = {
-            "passed": selected_layers > 0 and report["drop_count"] == 0 and len(report["layers"]) == selected_layers,
-            "rule": "at least one layer must be selected and every selected layer must execute before a WAV may be published",
+            "passed": selected_layers > 0 and report["drop_count"] == 0 and len(report["layers"]) == selected_layers and not transition_failures,
+            "rule": "every selected score clip and transition must execute exactly before a WAV may be published",
+            "planned_transition_count": len(report["transitions"]),
+            "executed_transition_count": sum(1 for t in report["transitions"] if t.get("executed")),
         }
         # Close the preflight-to-decode race: a sync/tagger can replace a source
         # after the first hash but while this render is mixing. Re-hash every
@@ -6215,7 +6314,8 @@ class EarcrateCore:
                 + "; ".join(post_decode_errors[:12])
             )
         dst = dst.resolve()
-        self.validate_path_in_root(dst, c.working_root / "renders")
+        output_root = (c.working_root / "projects") if project_mode == "premaster" else (c.working_root / "renders")
+        self.validate_path_in_root(dst, output_root)
         self.validate_not_master(dst)
         dst.parent.mkdir(parents=True, exist_ok=True)
         report_path = dst.with_suffix(".render_report.json")
@@ -6233,8 +6333,8 @@ class EarcrateCore:
             q_report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
             db.execute("UPDATE mashups SET render_path=NULL, engine_version=?, arrangement_sha=?, render_report_path=? WHERE id=?", (ENGINE_VERSION, arr_sha, str(q_report), mashup_id))
             db.commit()
-            return {"type": "render_rejected", "path": None, "report": str(q_report), "quality_gate": report.get("quality_gate"), "drop_count": report["drop_count"], "failure_kind": "selected_layer_render_failure", "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": selected_layers, "presented": False}
-        gate_required = target_seconds >= 60 or loop_cycle_bars > 0
+            return {"type": "render_rejected", "path": None, "report": str(q_report), "quality_gate": report.get("quality_gate"), "drop_count": report["drop_count"], "failure_kind": "selected_layer_render_failure", "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(int(mix.shape[0]) / sr, 3), "sections": len(sections), "layers": selected_layers, "presented": False}
+        gate_required = (target_seconds >= 60 or loop_cycle_bars > 0) and project_mode != "premaster"
         if bool((arrangement.get("params") or {}).get("post_render_gate", True)) and gate_required and not report.get("quality_gate", {}).get("passed", True):
             # The gate has already judged the in-memory mix. Persist the receipt,
             # never the rejected audio: a failed TasteSpec must not become a WAV.
@@ -6249,82 +6349,58 @@ class EarcrateCore:
             q_report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
             db.execute("UPDATE mashups SET render_path=NULL, engine_version=?, arrangement_sha=?, render_report_path=? WHERE id=?", (ENGINE_VERSION, arr_sha, str(q_report), mashup_id))
             db.commit()
-            return {"type": "render_rejected", "path": None, "report": str(q_report), "quality_gate": report.get("quality_gate"), "drop_count": report["drop_count"], "failure_kind": "post_render_quality_gate", "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": selected_layers, "presented": False}
+            return {"type": "render_rejected", "path": None, "report": str(q_report), "quality_gate": report.get("quality_gate"), "drop_count": report["drop_count"], "failure_kind": "post_render_quality_gate", "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(int(mix.shape[0]) / sr, 3), "sections": len(sections), "layers": selected_layers, "presented": False}
         sf.write(str(dst), mix, sr, subtype="PCM_24")
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        write_wav_info_chunk(dst, {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "params_sha": sha256_text(json_dumps(arrangement.get("params") or {})), "analyzer_version": ANALYZER_VERSION, "render_timestamp": report["render_timestamp"]})
+        write_wav_info_chunk(dst, {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "params_sha": sha256_text(json_dumps(arrangement.get("params") or {})), "analyzer_version": ANALYZER_VERSION, "render_timestamp": report["artifact_timestamp"] if project_mode else report["render_timestamp"], "project_id": project_info.get("project_id"), "revision_sha": project_info.get("revision_sha"), "score_sha": project_info.get("score_sha")})
         db.execute("UPDATE mashups SET render_path=?, engine_version=?, arrangement_sha=?, render_report_path=? WHERE id=?", (str(dst), ENGINE_VERSION, arr_sha, str(report_path), mashup_id))
         db.commit()
-        return {"type": "render_mashup", "path": str(dst), "report": str(report_path), "drop_count": report["drop_count"], "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": sum(len(s.get("layers", [])) for s in sections), "presented": True}
+        return {"type": "render_project" if project_mode else "render_mashup", "path": str(dst), "report": str(report_path), "drop_count": report["drop_count"], "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "project_id": project_info.get("project_id"), "revision_sha": project_info.get("revision_sha"), "score_sha": project_info.get("score_sha"), "seconds": round(int(mix.shape[0]) / sr, 3), "sections": len(sections), "layers": sum(len(s.get("layers", [])) for s in sections), "presented": True}
 
 
     @_durable_compile_attempt
     def propose_plan(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Compose an arrangement for the timeline surface WITHOUT writing a
-        manifest, mashup row, or WAV. Pure planning: same composer, same
-        judgments, same receipts — a plan you can look at, save, and only then
-        decide to render."""
-        taste_profile = str(params.get("taste_profile") or "girl_talk_v1")
-        pool = self.approved_atom_pool(taste_profile)
-        if not pool:
-            return {"ok": False, "error": "ear crate is empty — run Analyze, Extract Loops, and Ear Crate first"}
-        p = {"taste_profile": taste_profile,
-             "target_seconds": float(params.get("target_seconds") or 120),
-             "bpm": float(params.get("bpm") or 0.0),
-             "stretch_budget": float(params.get("stretch_budget") or 8.0),
-             "pitch_shift_budget": int(params.get("pitch_shift_budget") or 2),
-             # Explicit composition policy, carried into the arrangement hash.
-             # ``intact_mix`` is useful for sample-collage plans whose selected
-             # atoms were analyzed on the source mix and must not silently turn
-             # into spectrally different separated stems at render time.
-             "stem_policy": str(params.get("stem_policy") or "separated")}
-        seed = int(params.get("seed") or 0) or self.next_render_seed(self.ensure_config().seed)
+        """Compile and persist the exact project shown by the timeline surface."""
         try:
-            arrangement = self.compose_taste_arrangement(pool, p, seed)
+            result = self.project_compile(dict(params))
         except RuntimeError as exc:
             return {"ok": False, "error": str(exc)}
-        score = self.score_arrangement(arrangement)
-        gate = self.taste_arrangement_gate(arrangement)
-        return {"ok": True, "arrangement": arrangement, "score": score, "taste_gate": gate, "seed": seed}
+        revision = ScoreRevision.from_dict(result["revision"])
+        return {
+            "ok": True,
+            "project_id": revision.project_id,
+            "revision_sha": revision.revision_sha,
+            "score_sha": revision.score_sha,
+            "arrangement": revision.arrangement,
+            "score": revision.compiler_receipt.get("candidate_search", {}).get("selected_score"),
+            "taste_gate": revision.static_gate_receipt.get("taste_gate") or {},
+            "seed": revision.intent.get("seed"),
+        }
 
     def render_plan(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Render the EXACT arrangement the Workbench is showing — not a fresh
-        compose. propose_plan produced this arrangement for the timeline surface;
-        rendering it directly (register a mashup row from the arrangement, then
-        execute its render_mashup manifest) guarantees the WAV IS the plan you saw,
-        with no re-harvest and no seed/param-parity guesswork. The same pre-render
-        gates as propose_taste_mashup apply, so a refused plan never writes theater."""
-        c = self.ensure_config()
+        """Render a project revision; import legacy Workbench JSON once if needed."""
+        project_id = str(data.get("project_id") or "")
+        if project_id:
+            return self.project_render(project_id, Path(data["dst"]).resolve() if data.get("dst") else None,
+                                       str(data.get("revision_sha") or ""))
         arrangement = data.get("arrangement")
         if not arrangement or not arrangement.get("sections"):
-            return {"ok": False, "error": "no arrangement to render — propose or load a plan first"}
+            return {"ok": False, "error": "no project_id or arrangement to render"}
         preflight = self.arrangement_preflight_gate(arrangement)
         taste_gate = self.taste_arrangement_gate(arrangement)
-        # RECONSTRUCTION MODE: the structural gates encode persona-set
-        # aesthetics (density, turnover, brightness). A source reconstruction
-        # mirrors a REFERENCE, which may legitimately be sparse and dark —
-        # those verdicts become advisory (recorded, never vetoing) and
-        # reference fidelity is the binding contract instead.
-        _recon = str((arrangement.get("params") or {}).get("composition_mode") or "") == "reconstruction"
-        if (not preflight.get("passed") or not taste_gate.get("passed")) and not _recon:
-            fails = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
-            return {"ok": False, "error": "plan failed the pre-render gate: " + "; ".join(fails)}
-        params = arrangement.get("params") or {}
-        seed = int(params.get("seed") or data.get("seed") or c.seed)
-        name = safe_name(str(data.get("name") or params.get("name") or "EarCrate Set"), "EarCrate Set")
-        arr_sha = arrangement_sha(arrangement)
-        mashup_id = ulidish()
-        render_name = f"{name}-{ENGINE_VERSION}-{arr_sha[:8]}-{seed}.wav"
-        dst = c.working_root / "renders" / render_name
-        self.conn().execute(
-            "INSERT INTO mashups(id,name,seed,params_json,arrangement_json,render_path,created_at,engine_version,arrangement_sha) VALUES(?,?,?,?,?,?,?,?,?)",
-            (mashup_id, name, seed, json.dumps(params, ensure_ascii=False), json.dumps(arrangement, ensure_ascii=False), str(dst), now_utc(), ENGINE_VERSION, arr_sha))
-        self.conn().commit()
-        op = {"op_id": ulidish(), "type": "render_mashup", "args": {"mashup_id": mashup_id, "dst": str(dst)}, "preconditions": {"dst_absent": True}}
-        manifest = self.write_manifest("tastespec", seed, f"Render Workbench plan '{name}'", [op])
-        result = self.execute_manifest(manifest, apply=True)
-        return {"ok": result.get("ok", True) if isinstance(result, dict) else True,
-                "manifest": manifest, "arrangement_sha": arr_sha, "render": result}
+        reconstruction = str((arrangement.get("params") or {}).get("composition_mode") or "") == "reconstruction"
+        if (not preflight.get("passed") or not taste_gate.get("passed")) and not reconstruction:
+            failures = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
+            return {"ok": False, "error": "plan failed the pre-render gate: " + "; ".join(failures)}
+        imported = self.project_import_arrangement(
+            arrangement,
+            name=str(data.get("name") or (arrangement.get("params") or {}).get("name") or "Imported Workbench Plan"),
+            created_by={"actor": "compatibility_importer", "reason": "legacy_workbench_arrangement"},
+            static_gate_receipt={"preflight": preflight, "taste_gate": taste_gate},
+            compiler_receipt={"compatibility_import": "legacy_arrangement_v1"},
+        )
+        return self.project_render(str(imported["project"]["project_id"]),
+                                   Path(data["dst"]).resolve() if data.get("dst") else None)
 
     def render_album(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Autonomous 'drop an album' run: compose + render MANY mashups across
@@ -6923,3 +6999,26 @@ EarcrateCore.rollback_reorganize = rollback_reorganize
 EarcrateCore._prune_empty_dirs = _prune_empty_dirs
 EarcrateCore.execute_ingest_copy = execute_ingest_copy
 EarcrateCore.execute_organize_copy = execute_organize_copy
+
+# --- immutable project/score attachment --------------------------------------
+# The catalog, analyzer, EarAtoms, personas, providers, renderer and safety
+# executor remain the existing application. These methods make the L4 project
+# revision the authority that connects them.
+from earcrate.project.runtime import project_store, project_import_arrangement, project_compile, project_proposal, project_list, project_show, project_history, project_runs, project_edit, project_undo, project_redo, project_recompile, project_export, project_render, project_preview, project_acceptance, _project_output_path
+EarcrateCore.project_store = project_store
+EarcrateCore.project_import_arrangement = project_import_arrangement
+EarcrateCore.project_compile = project_compile
+EarcrateCore.project_proposal = project_proposal
+EarcrateCore.project_list = project_list
+EarcrateCore.project_show = project_show
+EarcrateCore.project_history = project_history
+EarcrateCore.project_runs = project_runs
+EarcrateCore.project_edit = project_edit
+EarcrateCore.project_undo = project_undo
+EarcrateCore.project_redo = project_redo
+EarcrateCore.project_recompile = project_recompile
+EarcrateCore.project_export = project_export
+EarcrateCore.project_render = project_render
+EarcrateCore.project_preview = project_preview
+EarcrateCore.project_acceptance = project_acceptance
+EarcrateCore._project_output_path = _project_output_path

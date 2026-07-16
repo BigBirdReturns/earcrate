@@ -32,24 +32,26 @@ def dj_fade_curves(length: int, curve: str = "equal_power") -> Tuple[np.ndarray,
 
 
 def fft_low_high_split(y: np.ndarray, sr: int, cutoff_hz: float = 170.0) -> Tuple[np.ndarray, np.ndarray]:
-    """Split a short transition segment into low and high bands deterministically."""
+    """Split a mono or frames×channels transition segment deterministically."""
     y = np.asarray(y, dtype=np.float32)
-    if y.size < 32:
+    frames = int(y.shape[0]) if y.ndim else 0
+    if frames < 32:
         z = np.zeros_like(y, dtype=np.float32)
         return z, y.copy()
-    n = int(2 ** math.ceil(math.log2(max(32, y.size))))
-    spec = np.fft.rfft(y, n=n)
+    n = int(2 ** math.ceil(math.log2(max(32, frames))))
+    spec = np.fft.rfft(y, n=n, axis=0)
     freqs = np.fft.rfftfreq(n, 1.0 / sr)
     # Smoothish logistic crossover avoids the nastiest brick-wall zippering.
     width = max(18.0, cutoff_hz * 0.18)
     lo_mask = 1.0 / (1.0 + np.exp(np.clip((freqs - cutoff_hz) / width, -60.0, 60.0)))
-    low = np.fft.irfft(spec * lo_mask, n=n)[: y.size].astype(np.float32)
+    shaped_mask = lo_mask if y.ndim == 1 else lo_mask[:, None]
+    low = np.fft.irfft(spec * shaped_mask, n=n, axis=0)[:frames].astype(np.float32)
     return low, (y - low).astype(np.float32)
 
 
 def dj_bass_swap_blend(old_seg: np.ndarray, in_seg: np.ndarray, sr: int, cutoff_hz: float, curve: str) -> np.ndarray:
-    """Blend mids/highs across the transition, but transfer sub/kick ownership late."""
-    n = min(old_seg.size, in_seg.size)
+    """Blend mono or stereo mids/highs while transferring low ownership late."""
+    n = min(int(old_seg.shape[0]), int(in_seg.shape[0]))
     if n <= 0:
         return old_seg.astype(np.float32)
     old_seg = old_seg[:n].astype(np.float32, copy=False)
@@ -58,10 +60,10 @@ def dj_bass_swap_blend(old_seg: np.ndarray, in_seg: np.ndarray, sr: int, cutoff_
     old_lo, old_hi = fft_low_high_split(old_seg, sr, cutoff_hz)
     in_lo, in_hi = fft_low_high_split(in_seg, sr, cutoff_hz)
     x = np.linspace(0.0, 1.0, n, dtype=np.float32)
-    # DJs normally do not run two basslines at full weight. Keep outgoing low
-    # authority until the last quarter, then hand the floor to the incoming deck.
     lo_in = np.clip((x - 0.72) / 0.28, 0.0, 1.0)
     lo_out = np.clip((0.88 - x) / 0.28, 0.0, 1.0)
+    if old_seg.ndim == 2:
+        inc, out, lo_in, lo_out = (v[:, None] for v in (inc, out, lo_in, lo_out))
     return (old_hi * out + in_hi * inc + old_lo * lo_out + in_lo * lo_in).astype(np.float32)
 
 

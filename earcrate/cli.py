@@ -3,6 +3,87 @@ from earcrate.core.deps import _dt
 from earcrate.selftest import *
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "project":
+        pp = argparse.ArgumentParser(prog="earcrate project", description="Compile, inspect, edit, render and export immutable EarCrate projects")
+        sub = pp.add_subparsers(dest="project_command", required=True)
+        cp = sub.add_parser("compile", help="compile the existing EarAtom crate through bounded candidate search")
+        cp.add_argument("--profile", default="girl_talk_v1")
+        cp.add_argument("--seconds", type=float, default=120.0)
+        cp.add_argument("--name", default="EarCrate Set")
+        cp.add_argument("--seed", type=int, default=0)
+        cp.add_argument("--bpm", type=float, default=0.0)
+        cp.add_argument("--candidate-count", type=int, default=0)
+        cp.add_argument("--render", action="store_true", help="execute the resulting guarded project manifest")
+        sub.add_parser("list", help="list visible project records")
+        sp = sub.add_parser("show", help="show a project and revision")
+        sp.add_argument("project_id"); sp.add_argument("--revision", default="")
+        hp = sub.add_parser("history", help="show append-only project command history")
+        hp.add_argument("project_id")
+        ep = sub.add_parser("edit", help="apply a typed immutable project command")
+        ep.add_argument("project_id"); ep.add_argument("--command", required=True, help="command JSON file")
+        up = sub.add_parser("undo"); up.add_argument("project_id")
+        rp2 = sub.add_parser("redo"); rp2.add_argument("project_id")
+        rcp = sub.add_parser("recompile", help="recompile unlocked decisions around human locks")
+        rcp.add_argument("project_id"); rcp.add_argument("--seed", type=int, default=0); rcp.add_argument("--candidate-count", type=int, default=0)
+        rnp = sub.add_parser("render", help="render the active or named revision through explicit premaster/master stages")
+        rnp.add_argument("project_id"); rnp.add_argument("--revision", default=""); rnp.add_argument("--dst", default="")
+        pvp = sub.add_parser("preview", help="audition an exact beat-range crop from the verified project render")
+        pvp.add_argument("project_id"); pvp.add_argument("--revision", default=""); pvp.add_argument("--start-beat", type=float, default=0.0); pvp.add_argument("--duration-beats", type=float, default=16.0); pvp.add_argument("--dst", default="")
+        xp = sub.add_parser("export", help="export EDL, Reaper RPP and the live score sheet")
+        xp.add_argument("project_id"); xp.add_argument("--revision", default=""); xp.add_argument("--destination", default="")
+        ip = sub.add_parser("import", help="import a legacy arrangement JSON as a first-class project")
+        ip.add_argument("arrangement"); ip.add_argument("--name", default="Imported EarCrate Project"); ip.add_argument("--project-id", default="")
+        ap = sub.add_parser("acceptance", help="drive the full integrated project lifecycle in an isolated workspace")
+        ap.add_argument("--destination", required=True)
+        ns = pp.parse_args(argv[1:])
+        if ns.project_command == "acceptance":
+            destination = Path(ns.destination).expanduser().resolve()
+            old_home = os.environ.get("EARCRATE_HOME")
+            os.environ["EARCRATE_HOME"] = str(destination / "home")
+            try:
+                core = EarcrateCore()
+                result = core.project_acceptance(str(destination))
+            finally:
+                if old_home is None:
+                    os.environ.pop("EARCRATE_HOME", None)
+                else:
+                    os.environ["EARCRATE_HOME"] = old_home
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        core = EarcrateCore()
+        if ns.project_command == "compile":
+            data = {"taste_profile": ns.profile, "target_seconds": ns.seconds, "name": ns.name}
+            if ns.seed: data["seed"] = ns.seed
+            if ns.bpm: data["bpm"] = ns.bpm
+            if ns.candidate_count: data["candidate_count"] = ns.candidate_count
+            result = core.project_proposal(data)
+            if ns.render:
+                result["execute"] = core.execute_manifest(result["manifest"], apply=True)
+        elif ns.project_command == "list": result = core.project_list()
+        elif ns.project_command == "show": result = core.project_show(ns.project_id, ns.revision)
+        elif ns.project_command == "history": result = core.project_history(ns.project_id)
+        elif ns.project_command == "edit":
+            result = core.project_edit(ns.project_id, json.loads(Path(ns.command).read_text(encoding="utf-8")))
+        elif ns.project_command == "undo": result = core.project_undo(ns.project_id)
+        elif ns.project_command == "redo": result = core.project_redo(ns.project_id)
+        elif ns.project_command == "recompile":
+            data = {}
+            if ns.seed: data["seed"] = ns.seed
+            if ns.candidate_count: data["candidate_count"] = ns.candidate_count
+            result = core.project_recompile(ns.project_id, data)
+        elif ns.project_command == "render":
+            result = core.project_render(ns.project_id, Path(ns.dst).resolve() if ns.dst else None, ns.revision)
+        elif ns.project_command == "preview":
+            result = core.project_preview(ns.project_id, start_beat=ns.start_beat, duration_beats=ns.duration_beats,
+                                          dst=Path(ns.dst).resolve() if ns.dst else None, revision_sha=ns.revision)
+        elif ns.project_command == "export":
+            result = core.project_export(ns.project_id, ns.destination, ns.revision)
+        elif ns.project_command == "import":
+            arrangement = json.loads(Path(ns.arrangement).read_text(encoding="utf-8"))
+            result = core.project_import_arrangement(arrangement, name=ns.name, project_id=ns.project_id,
+                                                     created_by={"actor": "cli", "reason": "legacy_arrangement_import"})
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
     if argv and argv[0] == "judge":
         jp = argparse.ArgumentParser(prog="earcrate judge", description="Judge a render against the v1.1 reference gates")
         jp.add_argument("render")

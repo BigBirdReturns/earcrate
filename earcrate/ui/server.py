@@ -211,6 +211,21 @@ class JBHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/capabilities":
                 self._json(200, self.core.machine_capabilities())
                 return
+            if parsed.path == "/api/projects":
+                self._json(200, self.core.project_list())
+                return
+            project_get = re.fullmatch(r"/api/projects/([^/]+)(?:/(history|runs))?", parsed.path)
+            if project_get:
+                project_id = urllib.parse.unquote(project_get.group(1))
+                resource = project_get.group(2) or "project"
+                q = urllib.parse.parse_qs(parsed.query)
+                if resource == "history":
+                    self._json(200, self.core.project_history(project_id))
+                elif resource == "runs":
+                    self._json(200, self.core.project_runs(project_id))
+                else:
+                    self._json(200, self.core.project_show(project_id, (q.get("revision") or [""])[0]))
+                return
             if parsed.path == "/api/audio":
                 q = urllib.parse.parse_qs(parsed.query)
                 raw = (q.get("path") or [""])[0]
@@ -253,6 +268,58 @@ class JBHandler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length") or 0)
             data = json.loads(self.rfile.read(n).decode("utf-8") or "{}") if n else {}
             path = urllib.parse.urlparse(self.path).path
+            if path == "/api/projects/compile":
+                self._json(200, self.core.project_compile(data)); return
+            if path == "/api/projects/import":
+                self._json(200, self.core.project_import_arrangement(
+                    data["arrangement"],
+                    name=str(data.get("name") or ""),
+                    project_id=str(data.get("project_id") or ""),
+                    created_by=dict(data.get("created_by") or {"actor": "human", "reason": "api_import"}),
+                    static_gate_receipt=dict(data.get("static_gate_receipt") or {}),
+                    compiler_receipt=dict(data.get("compiler_receipt") or {}),
+                )); return
+            project_post = re.fullmatch(
+                r"/api/projects/([^/]+)/(commands|undo|redo|recompile|preview|render|export|export/(?:rpp|edl|sheet))",
+                path,
+            )
+            if project_post:
+                project_id = urllib.parse.unquote(project_post.group(1))
+                action = project_post.group(2)
+                if action == "commands":
+                    self._json(200, self.core.project_edit(project_id, data)); return
+                if action == "undo":
+                    self._json(200, self.core.project_undo(project_id)); return
+                if action == "redo":
+                    self._json(200, self.core.project_redo(project_id)); return
+                if action == "recompile":
+                    self._json(200, self.core.project_recompile(project_id, data)); return
+                if action == "preview":
+                    dst = Path(str(data["dst"])).expanduser().resolve() if data.get("dst") else None
+                    self._json(200, self.core.project_preview(
+                        project_id,
+                        start_beat=float(data.get("start_beat") or 0.0),
+                        duration_beats=float(data.get("duration_beats") or 16.0),
+                        dst=dst,
+                        revision_sha=str(data.get("revision_sha") or ""),
+                    )); return
+                if action == "render":
+                    dst = Path(str(data["dst"])).expanduser().resolve() if data.get("dst") else None
+                    self._json(200, self.core.project_render(
+                        project_id, dst, str(data.get("revision_sha") or "")
+                    )); return
+                exported = self.core.project_export(
+                    project_id,
+                    str(data.get("destination") or ""),
+                    str(data.get("revision_sha") or ""),
+                )
+                if action == "export/rpp":
+                    exported = {**exported, "format": "rpp", "path": exported.get("rpp")}
+                elif action == "export/edl":
+                    exported = {**exported, "format": "edl", "path": exported.get("edl")}
+                elif action == "export/sheet":
+                    exported = {**exported, "format": "sheet", "path": exported.get("sheet")}
+                self._json(200, exported); return
             if path == "/api/config":
                 self._json(200, self.core.configure(data)); return
             if path == "/api/ingest":

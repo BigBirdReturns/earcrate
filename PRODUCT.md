@@ -42,9 +42,10 @@ the wiring exists but the runtime is unproven — it is NOT "done".
 | Retrieval seam (`CandidateRetriever`, full-scan default) | functional (behavior-preserving) | call routes through the seam; not yet scalable (no query/limit) |
 | **Stem separation (vocal-on-instrumental)** | **infrastructure only — OFF/unverified** | call site in render; `_run_demucs` is a stub; no provider selection; provider/renderer use different stores; no GPU receipt |
 | LATTICE UI (7 modes, transport, skins) | functional | drives live data, 0 console errors headless |
-| Editable Workbench (project + command model) | **not started** | Workbench proposes/visualizes/saves/loads/renders; rail blocks are display, not editable clips |
+| Immutable project + command model (CLI) | **functional (gated)** | automatic sets, external remixes and compatibility imports create revision-backed projects; typed edits, locks, undo/redo, preview, exports and explicit mastering are exercised end to end |
+| Editable Workbench UI | **partial** | existing rail view and compatibility import remain; full clip inspector/drag editing is intentionally outside this CLI cutover |
 | Listener polish (durable queue/playhead, fast search, gapless, install/updater) | **not started** | prototype `.cmd` installer; browser `<audio>` playback |
-| Real-time preview/transport engine | **not started** | offline WAV render + `<audio>` only |
+| Real-time preview/transport engine | **not started** | exact server-rendered project preview is functional; low-latency transport remains absent |
 | Perceptual validation (A/B listening ledger) | **not started** | no musical-quality evidence yet |
 | Autonomous engine ↔ edits reciprocity | **partial** | locks/vetoes/favorites exist; listener/creator behavior not yet fed back |
 | §5.3 monolith table teardown | not started (intentionally last) | invariants gated; extraction should follow the project model, not precede it |

@@ -1,5 +1,14 @@
 # EarCrate — CHANGELOG
 
+## v0.9.0 — immutable projects become the musical authority
+- Preserves the full EarCrate application while cutting ordinary sets, external remixes, Workbench plans, albums and bake-offs over to visible, content-addressed project revisions.
+- Runs bounded deterministic candidate search over the existing TasteSpec composer and all runtime personas; the selected arrangement is sealed with source PCM identities, explicit stem choices, gains, transitions, decisions, locks and gates.
+- Adds guarded `render_project` manifests, premaster artifacts, explicit persona-bounded mastering child revisions, verification-only publication gates, typed project commands, undo/redo, unlocked recompilation, exact beat-range preview, and EDL/RPP/live-sheet exports.
+- Fixes the external-source transition gap: project external clips provide real outgoing source tails, and every hard cut or overlap reports `executed`; a named transition that cannot execute prevents WAV publication.
+- Keeps scan/analyze/EarAtoms, librarian operations, identify/reorganize/deep-clean/migration, provider seams, GPU work queue, reference study, all profiles, the existing UI, and the single-file build. The user-runnable `earcrate project acceptance` command drives the integrated lifecycle in an isolated workspace. See `docs/BUFFALO_MAP.md`.
+- Exposes the complete immutable project lifecycle to the existing loopback server under `/api/projects`: compile/import, list/show/history/runs, typed commands, undo/redo, unlocked recompile, exact preview/render, and revision-bound EDL/RPP/sheet exports. The static LATTICE UI is intentionally unchanged so the next UI pass consumes one documented backend contract (`docs/PROJECT_API.md`).
+- Final integrated authority: 194/194 executable gates, package build/self-test, package-mode project acceptance, and built single-file project acceptance.
+
 ## v0.8.30 — the performance chapter + the GPU multi-tool seam + the treble fix
 - Rebuilds the perf campaign from the hot-path audit's verified findings (the
   original implementation died unpushed with its session container):

@@ -2,16 +2,22 @@ from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.ear.readiness import *
 from scipy import optimize
-def drydeck_metrics(y: np.ndarray, sr: int) -> Dict[str, float]:
-    """Post-render audio metrics with an absolute audible-coverage floor.
+def _metric_mono(y: np.ndarray) -> np.ndarray:
+    """Downmix frames×channels for scalar spectral/timeline metrics."""
+    x = np.asarray(y, dtype=np.float32)
+    if x.ndim == 1:
+        return x
+    if x.ndim == 2:
+        return np.mean(x, axis=1, dtype=np.float64).astype(np.float32)
+    raise ValueError(f"audio must be mono or frames x channels, got {x.shape}")
 
-    v0.5.16 measured silence relative to the median frame RMS. That let a nearly
-    empty two-minute file pass because the median was microscopic noise, not music.
-    This gate now asks the user-facing question: how much of the render contains
-    audible program material above a real floor?
-    """
-    y = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
-    if y.size == 0:
+
+def drydeck_metrics(y: np.ndarray, sr: int) -> Dict[str, float]:
+    """Post-render metrics over mono or stereo audio with an absolute floor."""
+    full = np.nan_to_num(np.asarray(y, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    mono = _metric_mono(full)
+    frames = int(mono.shape[0])
+    if frames == 0:
         return {
             "duration_s": 0.0, "rms_std_db": 0.0, "silence_ratio": 1.0,
             "active_coverage_ratio": 0.0, "audible_seconds": 0.0,
@@ -21,21 +27,15 @@ def drydeck_metrics(y: np.ndarray, sr: int) -> Dict[str, float]:
             "audible_rms_floor": 0.0,
         }
     frame = max(512, int(5.0 * sr))
-    vals = []
-    for i in range(0, max(1, y.size - frame + 1), frame):
-        vals.append(rms_value(y[i:i+frame]))
+    vals = [rms_value(mono[i:i + frame]) for i in range(0, max(1, frames - frame + 1), frame)]
     vals_db = 20 * np.log10(np.asarray(vals, dtype=np.float64) + 1e-9)
 
     hop_s = 0.05
     hop = max(512, int(hop_s * sr))
-    rms_frames = []
-    for i in range(0, max(1, y.size - hop), hop):
-        rms_frames.append(rms_value(y[i:i+hop]))
+    rms_frames = [rms_value(mono[i:i + hop]) for i in range(0, max(1, frames - hop), hop)]
     arr = np.asarray(rms_frames, dtype=np.float64)
-    peak = float(np.max(np.abs(y))) if y.size else 0.0
-    global_rms = rms_value(y)
-    # Absolute plus relative floor. This catches the exact failure where the file
-    # contains tiny dither/noise for 110 seconds and nine seconds of real material.
+    peak = float(np.max(np.abs(full))) if full.size else 0.0
+    global_rms = float(np.sqrt(np.mean(np.square(full.astype(np.float64))) + 1e-12))
     audible_floor = max(1e-4, peak * 0.010, global_rms * 0.18)
     active = arr >= audible_floor if arr.size else np.zeros(0, dtype=bool)
     active_coverage = float(np.mean(active)) if active.size else 0.0
@@ -44,13 +44,10 @@ def drydeck_metrics(y: np.ndarray, sr: int) -> Dict[str, float]:
         active_idx = np.flatnonzero(active)
         first_audible_s = float(active_idx[0] * hop_s)
         last_audible_s = float((active_idx[-1] + 1) * hop_s)
-        # Longest consecutive inactive span in seconds.
-        longest = 0
-        cur = 0
+        longest = cur = 0
         for flag in active:
             if flag:
-                longest = max(longest, cur)
-                cur = 0
+                longest = max(longest, cur); cur = 0
             else:
                 cur += 1
         longest = max(longest, cur)
@@ -58,22 +55,21 @@ def drydeck_metrics(y: np.ndarray, sr: int) -> Dict[str, float]:
     else:
         first_audible_s = None
         last_audible_s = None
-        largest_gap_s = float(y.size / max(1, sr))
-    audible_seconds = float(active_coverage * y.size / max(1, sr))
+        largest_gap_s = float(frames / max(1, sr))
+    audible_seconds = float(active_coverage * frames / max(1, sr))
 
     n_fft = 4096
     hop_len = 2048
     try:
-        stft = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=hop_len)) ** 2
+        stft = np.abs(librosa.stft(mono, n_fft=n_fft, hop_length=hop_len)) ** 2
         freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
         total = float(np.sum(stft) + 1e-12)
         low200 = float(np.sum(stft[freqs < 200]) / total)
         high3000 = float(np.sum(stft[freqs > 3000]) / total)
     except Exception:
-        low200 = 0.0
-        high3000 = 0.0
+        low200 = high3000 = 0.0
     return {
-        "duration_s": float(y.size / max(1, sr)),
+        "duration_s": float(frames / max(1, sr)),
         "rms_std_db": float(np.std(vals_db)),
         "silence_ratio": float(silence_ratio),
         "active_coverage_ratio": float(active_coverage),
@@ -194,10 +190,9 @@ def drydeck_quality_gate(metrics: Dict[str, float], target_seconds: float,
     return {"passed": not failures, "failures": failures, "warnings": warnings, "metrics": metrics}
 
 def _band_shares(x: np.ndarray, sr: int) -> Tuple[float, float, float]:
-    """(low200_share, high3000_share, total_power) with the SAME spectral
-    definition the post-render gate uses (drydeck_metrics: |STFT 4096/2048|^2),
-    so a finish pass that targets these shares is targeting the judge's ruler."""
-    stft = np.abs(librosa.stft(x, n_fft=4096, hop_length=2048)) ** 2
+    """(low200, high3000, power) on the judge's mono downmix ruler."""
+    mono = _metric_mono(x)
+    stft = np.abs(librosa.stft(mono, n_fft=4096, hop_length=2048)) ** 2
     freqs = librosa.fft_frequencies(sr=sr, n_fft=4096)
     total = float(np.sum(stft) + 1e-12)
     low = float(np.sum(stft[freqs < 200]) / total)
@@ -390,7 +385,7 @@ def stable_presence_restore(y: np.ndarray, sr: int, return_receipt: bool = False
         """Per-frequency-bin power (summed over time frames), same STFT
         definition _band_shares uses, so the solver predicts against the exact
         ruler the gate measures with."""
-        stft = np.abs(librosa.stft(x, n_fft=4096, hop_length=2048)) ** 2
+        stft = np.abs(librosa.stft(_metric_mono(x), n_fft=4096, hop_length=2048)) ** 2
         freqs = librosa.fft_frequencies(sr=sr, n_fft=4096)
         return freqs, stft.sum(axis=1)
 
@@ -457,6 +452,232 @@ def stable_presence_restore(y: np.ndarray, sr: int, return_receipt: bool = False
     return (out, receipt) if return_receipt else out
 
 
+
+def _project_master_action_id(kind: str, parameters: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+    return "master_" + sha256_text(json_dumps({"kind": kind, "parameters": parameters, "evidence": evidence}))[:24]
+
+
+def _apply_project_eq_action(x: np.ndarray, sr: int, action: Dict[str, Any]) -> np.ndarray:
+    kind = str(action.get("kind") or "")
+    params = dict(action.get("parameters") or {})
+    audio = np.asarray(x, dtype=np.float32)
+    frames = int(audio.shape[0])
+    n = int(2 ** math.ceil(math.log2(max(32, frames))))
+    spec = np.fft.rfft(audio, n=n, axis=0)
+    freqs = np.fft.rfftfreq(n, 1 / sr)
+    gain = np.ones_like(freqs, dtype=np.float64)
+    if kind == "low_shelf":
+        gain *= _smooth_band_gain(freqs, 0.0, 200.0, 10.0 ** (float(params["gain_db"]) / 20.0))
+        gain[freqs < 30] *= 0.60
+    elif kind == "presence_shelf":
+        gain *= _presence_shelf_gain(
+            freqs, float(params["gain_db"]),
+            float(params.get("lower_knee_hz") or 3000.0),
+            float(params.get("upper_knee_hz") or 4000.0),
+        )
+    else:
+        raise ValueError(f"not an EQ master action: {kind}")
+    shaped = gain if audio.ndim == 1 else gain[:, None]
+    return np.fft.irfft(spec * shaped, n=n, axis=0)[:frames].astype(np.float32)
+
+
+
+def _integrated_lufs_value(y: np.ndarray, sr: int) -> float:
+    if y.size < sr // 2 or float(np.max(np.abs(y))) < 1e-9:
+        return -180.0
+    try:
+        meter = pyln.Meter(sr)
+        value = float(meter.integrated_loudness(y.astype(np.float64)))
+        return value if np.isfinite(value) else -180.0
+    except Exception:
+        return -180.0
+
+
+def resolve_project_master_actions(y: np.ndarray, sr: int,
+                                   compiled_policy: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve the complete project mastering plan without hiding a DSP choice.
+
+    The resolver works on a premaster, mutating only a private working copy so it
+    can solve sequential actions. The returned actions are immutable score data;
+    the publication renderer later applies exactly these values and refuses any
+    drift. Legacy non-project rendering continues through stable_presence_restore.
+    """
+    x = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    spectral = dict(compiled_policy.get("spectral_profile") or GT_SPECTRAL_PROFILE)
+    policy = dict(compiled_policy.get("mastering_policy") or {})
+    before_low, before_high, _ = _band_shares(x, sr) if x.size else (0.0, 0.0, 0.0)
+    actions: List[Dict[str, Any]] = []
+    receipt: Dict[str, Any] = {
+        "policy": "explicit_project_mastering_v1",
+        "before_low200_share": before_low,
+        "before_high3000_share": before_high,
+        "passed": True,
+        "refusal": None,
+        "actions": actions,
+    }
+    if x.size < sr // 2:
+        receipt.update({"after_low200_share": before_low, "after_high3000_share": before_high})
+        return receipt
+
+    low_cfg = dict(policy.get("low_shelf") or {})
+    low_warn = float(low_cfg.get("ceiling_warn", spectral["low200_share"].get("ceiling_warn", 0.34)))
+    low_target = float(low_cfg.get("target_share", spectral["low200_share"].get("target", 0.20)))
+    max_cut_db = float(low_cfg.get("max_cut_db", 14.0))
+    if bool(low_cfg.get("allowed", True)) and before_low > low_warn:
+        share = min(max(before_low, 1e-6), 1.0 - 1e-6)
+        target = min(max(low_target, 1e-6), 1.0 - 1e-6)
+        power_gain = (target * (1.0 - share)) / (share * (1.0 - target))
+        gain_db = 10.0 * math.log10(max(power_gain, 1e-12))
+        gain_db = max(-abs(max_cut_db), min(0.0, gain_db))
+        params = {"gain_db": gain_db, "low_hz": 0.0, "high_hz": 200.0}
+        evidence = {
+            "before_low200_share": before_low,
+            "target_low200_share": low_target,
+            "ceiling_warn": low_warn,
+            "max_cut_db": max_cut_db,
+        }
+        action = {"kind": "low_shelf", "parameters": params, "evidence": evidence}
+        action["action_id"] = _project_master_action_id("low_shelf", params, evidence)
+        actions.append(action)
+        x = _apply_project_eq_action(x, sr, action)
+
+    low_after, high_after_low, _ = _band_shares(x, sr)
+    hi_cfg = dict(policy.get("presence_shelf") or {})
+    high_floor = float(hi_cfg.get("floor_warn", spectral["high3000_share"].get("floor_warn", 0.15)))
+    high_target = float(hi_cfg.get("target_share", min(high_floor + 0.01, 1.0)))
+    high_floor_fail = float(hi_cfg.get("floor_fail", spectral["high3000_share"].get("floor_fail", high_floor * 0.6)))
+    persona_reach_db = _log_odds_gain_db(high_target, high_floor_fail)
+    cap_db = min(float(hi_cfg.get("system_ceiling_db", SYSTEM_PRESENCE_CEILING_DB)), persona_reach_db)
+    if bool(hi_cfg.get("allowed", True)) and high_after_low < high_floor:
+        stft = np.abs(librosa.stft(_metric_mono(x), n_fft=4096, hop_length=2048)) ** 2
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=4096)
+        required_db = _solve_presence_shelf_db(
+            freqs,
+            stft.sum(axis=1),
+            high_target,
+            max_db=cap_db,
+            boundary_hz=3000.0,
+            shelf_lo_hz=float(hi_cfg.get("lower_knee_hz", 3000.0)),
+            shelf_hi_hz=float(hi_cfg.get("upper_knee_hz", 4000.0)),
+        )
+        if required_db is None:
+            uncapped = _solve_presence_shelf_db(
+                freqs,
+                stft.sum(axis=1),
+                high_target,
+                max_db=float(hi_cfg.get("system_ceiling_db", SYSTEM_PRESENCE_CEILING_DB)) * 4.0,
+                boundary_hz=3000.0,
+                shelf_lo_hz=float(hi_cfg.get("lower_knee_hz", 3000.0)),
+                shelf_hi_hz=float(hi_cfg.get("upper_knee_hz", 4000.0)),
+            )
+            receipt["passed"] = False
+            receipt["refusal"] = {
+                "kind": "presence_cap_exceeded",
+                "required_high_boost_db": float(uncapped) if uncapped is not None else float(hi_cfg.get("system_ceiling_db", 6.0)) * 4.0,
+                "high_boost_cap_db": cap_db,
+            }
+        elif required_db > 1e-4:
+            params = {
+                "gain_db": float(required_db),
+                "lower_knee_hz": float(hi_cfg.get("lower_knee_hz", 3000.0)),
+                "upper_knee_hz": float(hi_cfg.get("upper_knee_hz", 4000.0)),
+            }
+            evidence = {
+                "before_high3000_share": high_after_low,
+                "target_high3000_share": high_target,
+                "required_high_boost_db": float(required_db),
+                "persona_reach_db": persona_reach_db,
+                "high_boost_cap_db": cap_db,
+                "response": "lower-knee log-frequency C2 smootherstep",
+            }
+            action = {"kind": "presence_shelf", "parameters": params, "evidence": evidence}
+            action["action_id"] = _project_master_action_id("presence_shelf", params, evidence)
+            actions.append(action)
+            x = _apply_project_eq_action(x, sr, action)
+
+    target_lufs = float(policy.get("integrated_lufs", -14.0))
+    measured_lufs = _integrated_lufs_value(x, sr)
+    loudness_gain_db = 0.0 if measured_lufs <= -170.0 else min(target_lufs - measured_lufs, 1.5)
+    params = {"gain_db": loudness_gain_db, "target_lufs": target_lufs}
+    evidence = {"measured_lufs": measured_lufs, "target_lufs": target_lufs, "upward_makeup_cap_db": 1.5}
+    action = {"kind": "loudness_normalize", "parameters": params, "evidence": evidence}
+    action["action_id"] = _project_master_action_id("loudness_normalize", params, evidence)
+    actions.append(action)
+    x = (x.astype(np.float64) * (10.0 ** (loudness_gain_db / 20.0))).astype(np.float32)
+
+    ceiling = float(policy.get("peak_ceiling", 0.891))
+    peak = float(np.max(np.abs(x))) if x.size else 0.0
+    peak_gain_db = 0.0 if peak <= ceiling or peak <= 0 else 20.0 * math.log10(ceiling / peak)
+    params = {"gain_db": peak_gain_db, "ceiling": ceiling}
+    evidence = {"peak_before": peak, "ceiling": ceiling}
+    action = {"kind": "peak_guard", "parameters": params, "evidence": evidence}
+    action["action_id"] = _project_master_action_id("peak_guard", params, evidence)
+    actions.append(action)
+    x = (x.astype(np.float64) * (10.0 ** (peak_gain_db / 20.0))).astype(np.float32)
+
+    final_low, final_high, _ = _band_shares(x, sr)
+    receipt.update({
+        "after_low200_share": final_low,
+        "after_high3000_share": final_high,
+        "persona_reach_db": persona_reach_db,
+        "high_boost_cap_db": cap_db,
+        "action_count": len(actions),
+        "predicted_integrated_lufs": _integrated_lufs_value(x, sr),
+        "predicted_peak": float(np.max(np.abs(x))) if x.size else 0.0,
+    })
+    if final_high < high_floor - 1e-4:
+        receipt["passed"] = False
+        receipt["refusal"] = receipt.get("refusal") or {
+            "kind": "presence_verification_failed",
+            "after_high3000_share": final_high,
+            "floor_warn": high_floor,
+        }
+    return receipt
+
+
+def apply_project_master_actions(y: np.ndarray, sr: int,
+                                 actions: List[Dict[str, Any]]) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Apply exactly the actions sealed into a score revision.
+
+    This function never solves, clamps, substitutes or chooses an action. Any
+    malformed or unsupported action is a hard render failure.
+    """
+    x = np.nan_to_num(y.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    executions: List[Dict[str, Any]] = []
+    for action in actions:
+        kind = str(action.get("kind") or "")
+        params = dict(action.get("parameters") or {})
+        before_low, before_high, _ = _band_shares(x, sr) if x.size else (0.0, 0.0, 0.0)
+        before_peak = float(np.max(np.abs(x))) if x.size else 0.0
+        before_lufs = _integrated_lufs_value(x, sr)
+        if kind in {"low_shelf", "presence_shelf"}:
+            x = _apply_project_eq_action(x, sr, action)
+        elif kind in {"loudness_normalize", "peak_guard"}:
+            gain_db = float(params["gain_db"])
+            x = (x.astype(np.float64) * (10.0 ** (gain_db / 20.0))).astype(np.float32)
+        else:
+            raise ValueError(f"unsupported project master action: {kind}")
+        after_low, after_high, _ = _band_shares(x, sr) if x.size else (0.0, 0.0, 0.0)
+        executions.append({
+            "action_id": str(action.get("action_id") or ""),
+            "kind": kind,
+            "parameters": params,
+            "executed": True,
+            "before": {"low200_share": before_low, "high3000_share": before_high, "peak": before_peak, "integrated_lufs": before_lufs},
+            "after": {"low200_share": after_low, "high3000_share": after_high,
+                      "peak": float(np.max(np.abs(x))) if x.size else 0.0,
+                      "integrated_lufs": _integrated_lufs_value(x, sr)},
+        })
+    return np.nan_to_num(x.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0), {
+        "policy": "explicit_project_mastering_v1",
+        "action_count": len(actions),
+        "actions": json.loads(json.dumps(actions, ensure_ascii=False)),
+        "executions": executions,
+        "passed": len(executions) == len(actions),
+        "modifies_audio": bool(actions),
+    }
+
+
 def periodic_cycle_receipt(y: np.ndarray, cycle_samples: int) -> Dict[str, Any]:
     """Verify repeated render context before publishing a seamless middle cycle.
 
@@ -467,11 +688,12 @@ def periodic_cycle_receipt(y: np.ndarray, cycle_samples: int) -> Dict[str, Any]:
     file boundary, with a full cycle of DSP context on either side.
     """
     n = int(cycle_samples)
-    if n <= 0 or y.size < n * 4:
+    frames = int(np.asarray(y).shape[0])
+    if n <= 0 or frames < n * 4:
         return {
             "passed": False,
             "cycle_samples": n,
-            "available_samples": int(y.size),
+            "available_samples": frames,
             "repeat_error_db": 0.0,
             "reason": "seamless loop verification requires four complete rendered cycles",
         }
@@ -483,7 +705,7 @@ def periodic_cycle_receipt(y: np.ndarray, cycle_samples: int) -> Dict[str, Any]:
     return {
         "passed": error_db <= -60.0,
         "cycle_samples": n,
-        "available_samples": int(y.size),
+        "available_samples": frames,
         "repeat_error_db": error_db,
         "threshold_db": -60.0,
         "crop_start_sample": n,

@@ -1,5 +1,22 @@
 # EarCrate — CHANGELOG
 
+## v0.9.997 — the v0.9.0 integrated release lands in the mainline repo
+- Grafts the verified integrated-score-cutover release tree (release commit
+  2fe1642, tag v0.9.0-integrated-score) onto the repository mainline at its
+  declared base (5f62501) — the release previously existed only as an external
+  ZIP/bundle handoff. Tree verified byte-identical to the release: 232-file
+  SHA256SUMS ledger checked, 194/194 gates re-run independently, single-file
+  self-test passed, live /api/projects HTTP contract exercised.
+- Version relabel only on top of that graft: `ENGINE_DISPLAY_VERSION` and
+  `__version__` (stale at 0.8.29 since two releases back) move to 0.9.997;
+  the single-file artifact is rebuilt to match. `ENGINE_VERSION` stays
+  `earcrate_v0900` on purpose — the render engine is unchanged and bumping
+  its cache identity would falsely invalidate every banked ear crate, stem,
+  and render. `release/` is kept frozen as the v0.9.0 release receipt.
+- Known doc fix: the release handoff said `python -m earcrate doctor`; that
+  subcommand does not exist. Use `python -m earcrate --self-test` (and note
+  ffmpeg/ffprobe must be on PATH or doctor checks report false).
+
 ## v0.9.0 — immutable projects become the musical authority
 - Preserves the full EarCrate application while cutting ordinary sets, external remixes, Workbench plans, albums and bake-offs over to visible, content-addressed project revisions.
 - Runs bounded deterministic candidate search over the existing TasteSpec composer and all runtime personas; the selected arrangement is sealed with source PCM identities, explicit stem choices, gains, transitions, decisions, locks and gates.

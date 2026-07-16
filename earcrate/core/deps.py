@@ -70,7 +70,7 @@ except Exception as exc:  # pragma: no cover
 
 AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wv"}
 ENGINE_VERSION = "earcrate_v0900"
-ENGINE_DISPLAY_VERSION = "v0.9.0"   # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
+ENGINE_DISPLAY_VERSION = "v0.9.997" # bump this EVERY shipped batch so the header visibly changes; keep in step with CHANGELOG
 BUILD_STAMP = "__BUILD_STAMP__"     # sentinel; the single-file builder replaces it with the package content hash
 ANALYZER_VERSION = "gt-v0.7.0-beatstate"
 APP_NAME = "JukebreakerGT"

@@ -274,14 +274,21 @@ class _FakeCtx:
         self.root = Path(tmp_path)
         self.logs_dir = self.scratch / "logs"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
+        self.run_root = self.scratch / "runs" / "runT"
         self._sub = dict(sub or {})
         self._helper = dict(helper or {})
         self.calls = []
+        self.sub_envs = {}     # key -> env passed to run_subprocess (for baseline assertions)
         self.state = _FakeState()
         self.state.data["scratch_workspace"] = ({"ok": True, "home": str(self.scratch / "home")}
                                                  if scratch_ok else {"ok": False, "reason": "no clone"})
         if project_id:
             self.state.data["real_project_id"] = project_id
+
+    def run_dir(self, *parts):
+        p = self.run_root.joinpath(*parts)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
 
     def _rel(self, p):
         return None if p is None else str(p)
@@ -302,6 +309,7 @@ class _FakeCtx:
 
     def run_subprocess(self, key, cmd, env=None, cwd=None, timeout=None, json_out=False):
         self.calls.append(("sub", key))
+        self.sub_envs[key] = dict(env or {})
         return self._mk(key, self._sub.get(key), json_out)
 
     def run_helper(self, key, src, argv, env=None, timeout=None):
@@ -492,13 +500,14 @@ def test_rubberband_verdict_skips_when_mechanical_not_green(tmp_path):
 # ---- techno MECHANICAL + VERDICT --------------------------------------------
 def _techno_result(tmp_path, **over):
     render = _wav(tmp_path / "renders" / "techno.wav")
+    report = _wav(tmp_path / "renders" / "techno.report.json")
     edl = _wav(tmp_path / "exports" / "t.edl"); rpp = _wav(tmp_path / "exports" / "t.rpp")
     sheet = _wav(tmp_path / "exports" / "t.sheet")
     import hashlib
     def sh(p):
         return hashlib.sha256(Path(p).read_bytes()).hexdigest()
     base = {"render_ok": True, "render_path": render, "render_sha256": sh(render),
-            "report_path": _wav(tmp_path / "renders" / "techno.report.json"),
+            "report_path": report, "report_sha256": sh(report),
             "external_source_identity_matched": True, "identity_match_kind": "pcm_sha256",
             "external_pcm_sha256": "extpcmsha", "seed": 42,
             "export_ok": True, "export_paths": {"edl": edl, "rpp": rpp, "sheet": sheet},
@@ -764,7 +773,7 @@ def _run_args(tmp_path, scratch):
 def _patched_run(tmp_path, cfg, scratch, monkey):
     """Run run() with env/git/stage-exec stubbed so only the preflight logic runs."""
     saved = {name: getattr(R, name) for name in
-             ("resolve_workspace_config", "_preflight_env", "git_head", "execute_stages",
+             ("read_workspace_config_readonly", "_preflight_env", "git_head", "execute_stages",
               "_prepare_scratch_workspace", "_write_receipts")}
     ran = {"stages": False}
 
@@ -772,7 +781,7 @@ def _patched_run(tmp_path, cfg, scratch, monkey):
         ran["stages"] = True
         return R.COMPLETE
 
-    R.resolve_workspace_config = lambda ctx: cfg
+    R.read_workspace_config_readonly = lambda workspace: cfg
     R._preflight_env = lambda args: {}
     R.git_head = lambda root: {"head": "deadbeef", "branch": "b", "upstream": "", "upstream_sha": "",
                                "dirty": False, "dirty_files": []}
@@ -1132,3 +1141,138 @@ def test_spectral_ab_detects_difference_after_32768_samples(tmp_path):
     assert res["ok"] and res["spectral_l1"] > 1e-4
     assert res["first_differing_chunk"] is not None
     assert res["first_differing_chunk"]["start_sample"] >= 32768   # detected in the tail, not the prefix
+
+
+# ==========================================================================
+# RELEASE-SAFETY PASS: read-only preflight, per-run isolation, explicit A/B
+# baseline, and the execution report bound into the techno identity.
+# ==========================================================================
+
+# ---- 1. preflight config discovery is strictly read-only ----------------------
+def test_preflight_config_discovery_creates_nothing_in_production(tmp_path):
+    from test_projects import configured_core
+    _ = configured_core(tmp_path)          # writes pointer + config.json + sqlite under tmp_path
+
+    def snap(root):
+        out = {}
+        for p in sorted(Path(root).rglob("*")):
+            if p.is_file():
+                st = p.stat()
+                out[str(p.relative_to(root))] = (st.st_size, st.st_mtime_ns)
+        return out
+
+    before = snap(tmp_path)
+    cfg = R.read_workspace_config_readonly(tmp_path)   # the actual preflight discovery
+    after = snap(tmp_path)
+    # it found the real library WITHOUT constructing core / opening a writable DB
+    assert cfg.get("master_root") and Path(cfg["master_root"]).name == "music"
+    assert before == after, "read-only config discovery mutated the production workspace"
+    new_files = set(after) - set(before)
+    assert not new_files, f"preflight created files in production: {new_files}"
+    assert not any(k.endswith(("-wal", "-shm", ".sqlite")) for k in new_files)
+
+
+def test_readonly_config_returns_empty_on_missing_pointer(tmp_path):
+    assert R.read_workspace_config_readonly(tmp_path / "nope") == {}
+    # a pointer that names a missing config is not a valid discovery
+    (tmp_path / "earcrate_workspace.json").write_text(json.dumps({"config_json": "/nope/config.json"}))
+    assert R.read_workspace_config_readonly(tmp_path) == {}
+
+
+def test_run_refuses_dirty_tree_before_probing_workspace(tmp_path):
+    # the dirty refusal must fire BEFORE the workspace is read: prove the read-only
+    # discovery is never even called when the tree is dirty.
+    saved = {n: getattr(R, n) for n in ("git_head", "read_workspace_config_readonly", "_preflight_env")}
+    probed = {"hit": False}
+
+    def _probe(ws):
+        probed["hit"] = True
+        return {}
+
+    R.git_head = lambda root: {"head": "h", "branch": "b", "upstream": "", "upstream_sha": "",
+                               "dirty": True, "dirty_files": ["x"]}
+    R.read_workspace_config_readonly = _probe
+    R._preflight_env = lambda args: {}
+    try:
+        code = R.run(_Args(workspace=str(tmp_path / "ws"), scratch=str(tmp_path / "s"), run_id="r1"))
+    finally:
+        for n, f in saved.items():
+            setattr(R, n, f)
+    assert code == R.EXIT_FAILED
+    assert probed["hit"] is False, "the production workspace was probed despite a dirty tree"
+
+
+# ---- 2. two run IDs under one scratch are disjoint ----------------------------
+def test_two_run_ids_have_disjoint_scratch_paths(tmp_path):
+    def mk(rid):
+        st = R.RunState.new(tmp_path / rid / "s.json", rid, "H", {}, _meta())
+        return R.Ctx(_Args(run_id=rid), st, tmp_path, tmp_path / "logs")
+    a = mk("rig_AAAA"); b = mk("rig_BBBB")
+    assert a.run_root != b.run_root
+    for part in ("ws", "ws_home", "acc_home", "workbench_dom"):
+        assert a.run_dir(part) != b.run_dir(part)
+        assert str(a.run_dir(part)).startswith(str(a.run_root))
+    # a render/acceptance/cache under run A never lands under run B's root
+    assert not str(a.run_root).startswith(str(b.run_root))
+    assert not str(b.run_root).startswith(str(a.run_root))
+    # resume of the SAME run_id keeps the SAME root
+    assert mk("rig_AAAA").run_root == a.run_root
+
+
+# ---- 3. the A/B transform baseline is pinned explicitly, never inherited ------
+def test_ab_baseline_is_pinned_explicitly_not_inherited(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(), rb_default_ok=True, rb_rb_ok=True)
+    status, _ = R.stage_rubberband_mechanical(ctx)
+    assert status == R.PASSED
+    assert ctx.sub_envs["rb_default"]["EARCRATE_TRANSFORM"] == "phase_vocoder"
+    assert ctx.sub_envs["rb_rubberband"]["EARCRATE_TRANSFORM"] == "rubberband"
+
+
+def test_parent_rubberband_cannot_contaminate_default_report(tmp_path):
+    # A REAL render: the parent env starts with Rubber Band enabled, the harness pins
+    # the default side to phase_vocoder, and the render RECEIPT still records
+    # phase_vocoder. (item 3)
+    core, pid = _renderable_project(tmp_path)
+    del core
+    inside = tmp_path / "work" / "renders" / "def_side.wav"
+    result_json = tmp_path / "def_render.json"
+    parent = dict(os.environ, EARCRATE_HOME=str(tmp_path), EARCRATE_TRANSFORM="rubberband")  # owner's shell
+    child = dict(parent, EARCRATE_TRANSFORM="phase_vocoder")                                  # harness default side
+    p = subprocess.run([sys.executable, "-m", "earcrate", "project", "render", pid,
+                        "--dst", str(inside), "--json-out", str(result_json)],
+                       cwd=str(_REPO_ROOT), env=child, capture_output=True, text=True, timeout=600)
+    assert p.returncode == 0, f"render failed: {p.stderr[-800:]}"
+    res = json.loads(result_json.read_text(encoding="utf-8"))
+    report = json.loads(Path(res["report"]).read_text(encoding="utf-8"))
+    assert report["transform_provider"] == "phase_vocoder", "parent EARCRATE_TRANSFORM contaminated the default side"
+
+
+# ---- 4. the techno execution report is part of both identities ----------------
+def test_techno_mechanical_fails_without_report_hash(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal)),
+                   helper={"techno": _techno_result(tmp_path, report_path=None, report_sha256=None)})
+    status, detail = R.stage_techno_mechanical(ctx)
+    assert status == R.FAILED and detail["report_present_and_hashed"] is False
+
+
+def test_techno_verdict_rejects_modified_report(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
+                   helper={"techno": _techno_result(tmp_path),
+                           "techno_reidentity": {"result": {"external_pcm_sha256": "extpcmsha"}}})
+    md = _seed_techno_mechanical(ctx, tmp_path)
+    # the WAV is untouched but the execution report is edited overnight
+    Path(md["report_path"]).write_text("TAMPERED REPORT", encoding="utf-8")
+    status, detail = R.stage_techno_verdict(ctx)
+    assert status == R.FAILED and detail["report_unchanged"] is False and detail.get("verdict") is None
+
+
+def test_techno_verdict_rejects_missing_report(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
+                   helper={"techno": _techno_result(tmp_path),
+                           "techno_reidentity": {"result": {"external_pcm_sha256": "extpcmsha"}}})
+    md = _seed_techno_mechanical(ctx, tmp_path)
+    Path(md["report_path"]).unlink()
+    assert R.stage_techno_verdict(ctx)[0] == R.FAILED

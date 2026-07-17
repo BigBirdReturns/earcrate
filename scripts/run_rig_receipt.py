@@ -273,6 +273,16 @@ class Ctx:
         self.python = sys.executable
         self.root = ROOT
         self._seq = 0
+        # Every MUTABLE scratch artifact (scratch workspace, caches, acceptance,
+        # browser receipts, renders) lives under a per-run_id root so a new
+        # HEAD/run_id can never inherit another run's evidence, and a resume of the
+        # SAME run_id keeps using the same root. (item 2)
+        self.run_root = scratch / "runs" / str(state.data.get("run_id") or "unknown")
+
+    def run_dir(self, *parts: str) -> Path:
+        p = self.run_root.joinpath(*parts)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
 
     def run_subprocess(self, key: str, cmd: List[str], env: Optional[Dict[str, str]] = None,
                        cwd: Optional[Path] = None, timeout: Optional[int] = None,
@@ -388,16 +398,36 @@ STAGE_META: List[Dict[str, Any]] = [
 ]
 
 
+def read_workspace_config_readonly(workspace: Path) -> Dict[str, Any]:
+    """STRICTLY read-only discovery of the production workspace config.
+
+    Parses ONLY the workspace pointer file (`<workspace>/earcrate_workspace.json`)
+    and the config.json it names. It NEVER constructs EarcrateCore, opens SQLite,
+    creates directories, runs writable-path probes, adopts legacy state, seeds
+    machine defaults, or performs migrations — so a preflight can discover where the
+    real library lives without touching a byte of production durable state. Mirrors
+    the EARCRATE_HOME override contract (the pointer may live only under the given
+    workspace). Returns {} on any absence/parse failure.
+    """
+    home = Path(workspace).expanduser()
+    pointer = home / "earcrate_workspace.json"     # visible_app_dir()/pointer name under EARCRATE_HOME
+    try:
+        pdata = json.loads(pointer.read_text(encoding="utf-8"))
+        raw_cfg = Path(str(pdata["config_json"])).expanduser()
+        cfg_path = raw_cfg if raw_cfg.is_absolute() else (pointer.parent / raw_cfg)
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not all(cfg.get(k) for k in ("master_root", "working_root", "agent_root")):
+        return {}
+    return {k: cfg.get(k) for k in ("master_root", "working_root", "agent_root",
+                                    "stems_root", "playlists_root", "sample_rate", "stem_provider")}
+
+
 def resolve_workspace_config(ctx: Ctx) -> Dict[str, Any]:
-    """Read the production workspace config (master_root, agent_root, working_root)
-    via `earcrate doctor --json-out` — the exact result file, never a stdout
-    scrape. Never writes to the production workspace. Returns {} on any failure."""
-    rec = ctx.run_subprocess("cfg_probe", [ctx.python, "-m", "earcrate", "doctor"],
-                             env={"EARCRATE_HOME": str(Path(ctx.args.workspace).expanduser())},
-                             timeout=180, json_out=True)
-    if rec.get("result_readable") and isinstance(rec.get("result"), dict):
-        return rec["result"].get("config") or {}
-    return {}
+    """Preflight config discovery — pure read of the pointer/config, no subprocess,
+    no EarcrateCore, no production writes (see read_workspace_config_readonly)."""
+    return read_workspace_config_readonly(Path(ctx.args.workspace))
 
 
 def _backup_sqlite(src: Path, dst: Path) -> None:
@@ -433,10 +463,8 @@ def _prepare_scratch_workspace(ctx: Ctx) -> Dict[str, Any]:
     agent = cfg.get("agent_root")
     if not master or not Path(master).expanduser().exists():
         return {"ok": False, "reason": f"could not resolve a real music library (master_root) from --workspace ({ctx.args.workspace}); run `earcrate configure` there first"}
-    ws = ctx.scratch / "ws"
-    ws_home = ctx.scratch / "ws_home"
-    for d in (ws, ws_home):
-        d.mkdir(parents=True, exist_ok=True)
+    ws = ctx.run_dir("ws")            # per-run_id: <scratch>/runs/<run_id>/ws
+    ws_home = ctx.run_dir("ws_home")
     rec = ctx.run_subprocess("ws_configure",
                              [ctx.python, "-m", "earcrate", "configure", "--music", str(master), "--workspace", str(ws)],
                              env={"EARCRATE_HOME": str(ws_home)}, timeout=300, json_out=True)
@@ -560,8 +588,7 @@ def stage_verify_package(ctx):
 
 
 def stage_workbench_dom(ctx):
-    shots = ctx.scratch / "workbench_dom"
-    shots.mkdir(parents=True, exist_ok=True)
+    shots = ctx.run_dir("workbench_dom")   # per-run_id browser receipts + screenshots
     env = {"WB_SHOTS_DIR": str(shots)}
     if ctx.args.chromium:
         env["EARCRATE_CHROMIUM"] = ctx.args.chromium
@@ -585,12 +612,12 @@ def stage_workbench_dom(ctx):
 
 
 def stage_acceptance(ctx):
-    dest = ctx.scratch / "acceptance"
+    dest = ctx.run_root / "acceptance"    # per-run_id acceptance workspace
     if dest.exists():
         shutil.rmtree(dest, ignore_errors=True)
     rec = ctx.run_subprocess("acceptance",
                              [ctx.python, "-m", "earcrate", "project", "acceptance", "--destination", str(dest)],
-                             env={"EARCRATE_HOME": str(ctx.scratch / "acc_home")}, timeout=1800, json_out=True)
+                             env={"EARCRATE_HOME": str(ctx.run_dir("acc_home"))}, timeout=1800, json_out=True)
     fail, d = _fail_if_unreadable(rec, {"destination": str(dest)})
     if fail:
         return fail, d
@@ -847,9 +874,13 @@ def stage_rubberband_mechanical(ctx):
     out_dir = Path(working_root) / "renders" / "rubberband_ab"
     out_dir.mkdir(parents=True, exist_ok=True)
     dflt = out_dir / "default.wav"; rbw = out_dir / "rubberband.wav"
+    # BOTH sides pin EARCRATE_TRANSFORM EXPLICITLY so the owner's shell (which may
+    # have EARCRATE_TRANSFORM=rubberband exported) can never mislabel the baseline:
+    # default is always phase_vocoder, comparison is always rubberband. (item 3)
+    def_env = dict(env); def_env["EARCRATE_TRANSFORM"] = "phase_vocoder"
+    rb_env = dict(env); rb_env["EARCRATE_TRANSFORM"] = "rubberband"
     r_def = ctx.run_subprocess("rb_default", [ctx.python, "-m", "earcrate", "project", "render", pid, "--dst", str(dflt)],
-                               env=env, timeout=1800, json_out=True)
-    rb_env = dict(env); rb_env["EARCRATE_TRANSFORM"] = "rubberband"   # child-process override only
+                               env=def_env, timeout=1800, json_out=True)
     r_rb = ctx.run_subprocess("rb_rubberband", [ctx.python, "-m", "earcrate", "project", "render", pid, "--dst", str(rbw)],
                               env=rb_env, timeout=1800, json_out=True)
     prov = ctx.run_helper("rb_provider", _RESOLVE_TRANSFORM_SRC, [], env=rb_env, timeout=120)
@@ -966,11 +997,16 @@ def stage_techno_mechanical(ctx):
     identity_ok = bool(r.get("external_source_identity_matched"))
     export_ok = bool(r.get("export_ok")) and {"edl", "rpp", "sheet"} <= set((r.get("export_sha256") or {}))
     render_ok = bool(r.get("render_ok")) and bool(r.get("render_sha256"))
-    mech = render_ok and identity_ok and export_ok
+    # The execution REPORT is part of the mechanical identity: fail unless it exists
+    # on disk and is hashed. (item 4)
+    report_ok = bool(r.get("report_path")) and bool(r.get("report_sha256")) and Path(str(r.get("report_path"))).exists()
+    detail["report_present_and_hashed"] = report_ok
+    mech = render_ok and identity_ok and export_ok and report_ok
     if not mech:
         return FAILED, dict(detail, reason=r.get("reason") or
-                            "render failed, external source identity did not EXACTLY match a registry entry, "
-                            "or the score export/hash was incomplete")
+                            ("render report missing/unhashed" if not report_ok else
+                             "render failed, external source identity did not EXACTLY match a registry entry, "
+                             "or the score export/hash was incomplete"))
     return PASSED, dict(detail, mechanical_ok=True)
 
 
@@ -984,14 +1020,25 @@ def stage_techno_verdict(ctx):
         return SKIPPED, {"reason": "techno_mechanical did not produce a green render to judge",
                          "mechanical_status": m["status"]}
     render_path = md.get("render_path"); prior_render_sha = md.get("render_sha256")
+    report_path = md.get("report_path"); prior_report_sha = md.get("report_sha256")
     detail = {"render_path": render_path, "prior_render_sha256": prior_render_sha,
+              "report_path": report_path, "prior_report_sha256": prior_report_sha,
               "revision_sha": md.get("revision_sha"), "score_sha": md.get("score_sha"), "seed": md.get("seed"),
-              "note": "verdict bound to the exact rendered WAV + score/export identities; no recompile/re-render"}
+              "note": "verdict bound to the exact rendered WAV + execution report + score exports; no recompile/re-render"}
     if not (render_path and Path(render_path).exists() and prior_render_sha):
         return FAILED, dict(detail, reason="the mechanical render WAV is missing or unhashed at verdict time")
+    # The execution REPORT is re-hashed alongside the WAV (item 4): a verdict may
+    # only bind if the report that describes HOW the WAV was made is unchanged too.
+    if not (report_path and prior_report_sha):
+        return FAILED, dict(detail, reason="the mechanical render report was never hashed; cannot bind a verdict")
+    if not Path(report_path).exists():
+        return FAILED, dict(detail, reason="the render report is missing at verdict time")
     cur_render_sha = sha256_file(Path(render_path))
+    cur_report_sha = sha256_file(Path(report_path))
     detail["current_render_sha256"] = cur_render_sha
+    detail["current_report_sha256"] = cur_report_sha
     detail["render_unchanged"] = (cur_render_sha == prior_render_sha)
+    detail["report_unchanged"] = (cur_report_sha == prior_report_sha)
     # exports must still hash to the stored values
     export_paths = md.get("export_paths") or {}
     prior_exports = md.get("export_sha256") or {}
@@ -1011,6 +1058,9 @@ def stage_techno_verdict(ctx):
         detail["external_pcm_identity_rebound"] = identity_rebound
     if not detail["render_unchanged"]:
         return FAILED, dict(detail, reason="the techno render WAV changed since the mechanical render (hash mismatch)")
+    if not detail["report_unchanged"]:
+        return FAILED, dict(detail, reason="the techno render REPORT changed since the mechanical render "
+                            "(hash mismatch); the execution record no longer matches the WAV")
     if not exports_unchanged:
         return FAILED, dict(detail, reason="a techno score export changed since the mechanical render (hash mismatch)")
     if identity_rebound is False:
@@ -1018,7 +1068,7 @@ def stage_techno_verdict(ctx):
     v = ctx.args.verdict_techno
     if v in ("keep", "reject"):
         return PASSED, dict(detail, verdict=v, verdict_bound_to={"render_sha256": cur_render_sha,
-                            "revision_sha": md.get("revision_sha")})
+                            "report_sha256": cur_report_sha, "revision_sha": md.get("revision_sha")})
     return PENDING_MANUAL, dict(detail, verdict=None, how="audition, then --verdict-techno keep|reject")
 
 
@@ -1402,54 +1452,45 @@ def run(args) -> int:
     head_now = git_head(ROOT)
 
     # ========================================================================
-    # PREFLIGHT — runs ENTIRELY in an OS-temp directory. Nothing is created
-    # under scratch until master_root is resolved AND the scratch path is proven
-    # safe against the ACTUAL music library. An unsafe scratch (inside the music
-    # library) must therefore leave ZERO files behind. (Item 2.)
+    # PREFLIGHT. Order matters: refuse a dirty tree BEFORE touching the production
+    # workspace; discover the config STRICTLY READ-ONLY (no EarcrateCore, no
+    # SQLite, no dir creation, no migration); and create nothing under scratch
+    # until master_root is resolved AND the scratch path is proven safe against the
+    # ACTUAL music library. An unsafe scratch leaves ZERO files behind. (items 1, 2)
     # ========================================================================
+    if head_now["dirty"] and not args.allow_dirty:
+        print("REFUSING: git working tree is dirty. Commit/stash, or pass --allow-dirty. "
+              "(Refused BEFORE probing the production workspace.)", file=sys.stderr)
+        return EXIT_FAILED
+
     env_info = _preflight_env(args)
-    preflight_dir = Path(tempfile.mkdtemp(prefix="rigreceipt_preflight_"))
-    try:
-        probe_state = RunState.new(preflight_dir / "state.json", args.run_id, head_now["head"],
-                                   _args_snapshot(args), STAGE_META)   # in-memory only (never .save()d)
-        probe_ctx = Ctx(args, probe_state, scratch, preflight_dir)
-        cfg = resolve_workspace_config(probe_ctx)   # `earcrate doctor` probe → OS-temp logs
-        master = cfg.get("master_root")
-        master_resolved = bool(master) and Path(master).expanduser().exists()
-        scratch_safe = None    # tri-state: only True/False once a real music root exists to check against
-        scratch_error: Optional[str] = None
-        if master_resolved:
-            scratch_safe = True
-            try:
-                assert_scratch_safe(scratch, Path(master))    # against the ACTUAL music library
-            except Exception as exc:
-                scratch_safe = False; scratch_error = str(exc)
+    cfg = read_workspace_config_readonly(Path(args.workspace))   # pure pointer/config read
+    master = cfg.get("master_root")
+    master_resolved = bool(master) and Path(master).expanduser().exists()
+    scratch_safe = None    # tri-state: only True/False once a real music root exists to check against
+    scratch_error: Optional[str] = None
+    if master_resolved:
+        scratch_safe = True
+        try:
+            assert_scratch_safe(scratch, Path(master))    # against the ACTUAL music library
+        except Exception as exc:
+            scratch_safe = False; scratch_error = str(exc)
+    if not master_resolved:
+        print("REFUSING: could not resolve master_root (the real music library) from --workspace "
+              f"({args.workspace}). The read-only config lookup found no valid workspace pointer/config, "
+              "so no crate-dependent stage may proceed — and nothing is written under scratch. Run "
+              "`earcrate configure --music <folder>` in that workspace first, then re-run.", file=sys.stderr)
+        return EXIT_FAILED
+    if not scratch_safe:
+        print(f"REFUSING: scratch is unsafe vs the resolved music library: {scratch_error}. "
+              "Nothing was written under scratch.", file=sys.stderr)
+        return EXIT_FAILED
 
-        # Refuse BEFORE creating anything under scratch.
-        if head_now["dirty"] and not args.allow_dirty:
-            print("REFUSING: git working tree is dirty. Commit/stash, or pass --allow-dirty.", file=sys.stderr)
-            return EXIT_FAILED
-        if not master_resolved:
-            print("REFUSING: could not resolve master_root (the real music library) from --workspace "
-                  f"({args.workspace}). The scratch-safety check cannot run against an unknown music root, "
-                  "so no crate-dependent stage may proceed — and nothing is written under scratch. Run "
-                  "`earcrate configure --music <folder>` in that workspace first, then re-run.", file=sys.stderr)
-            return EXIT_FAILED
-        if not scratch_safe:
-            print(f"REFUSING: scratch is unsafe vs the resolved music library: {scratch_error}. "
-                  "Nothing was written under scratch.", file=sys.stderr)
-            return EXIT_FAILED
-
-        # ---- scratch is PROVEN safe: only now create anything under it ----
-        run_dir = validated_run_dir                    # already proven under <scratch>/receipt
-        state_path = run_dir / "state.json"
-        logs_dir = run_dir / "logs"
-        logs_dir.mkdir(parents=True, exist_ok=True)
-        # retain the preflight probe log under the (now-safe) scratch for auditability
-        with contextlib.suppress(Exception):
-            shutil.copytree(preflight_dir, logs_dir / "preflight", dirs_exist_ok=True)
-    finally:
-        shutil.rmtree(preflight_dir, ignore_errors=True)
+    # ---- scratch is PROVEN safe: only now create anything under it ----
+    run_dir = validated_run_dir                    # already proven under <scratch>/receipt
+    state_path = run_dir / "state.json"
+    logs_dir = run_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- resume vs new + HEAD guard (a different HEAD ALWAYS needs a new run_id) ----
     if state_path.exists():
@@ -1471,7 +1512,7 @@ def run(args) -> int:
     state.data["workspace_config"] = cfg
     state.data["preflight"] = {"git": head_now, "checked_at": utcnow(),
                                "master_root_resolved": master_resolved, "scratch_safe": scratch_safe,
-                               "config_resolved_in_os_temp": True,
+                               "config_discovery": "read_only_pointer_config",
                                "dirty_refused": bool(head_now["dirty"] and not args.allow_dirty)}
     state.save()
 

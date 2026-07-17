@@ -50,11 +50,19 @@ Run-Rig-Receipt.cmd ^
 - **GPU driver comes from `nvidia-smi`** (real installed driver version), never
   from `torch.version.cuda` — that is only the CUDA toolkit a torch wheel was
   built against and is recorded separately as `torch_built_cuda_toolkit`.
-- **Config resolution runs entirely in an OS-temp directory.** The `master_root`
-  is resolved and the scratch path validated BEFORE anything is created under
-  scratch, so an unsafe scratch leaves zero files behind. If `master_root`
-  cannot be resolved from `--workspace`, the run **refuses** (exit 1) and no
-  crate-dependent stage proceeds. Run `earcrate configure --music <folder>` first.
+- **The dirty-tree refusal fires BEFORE the production workspace is touched.**
+- **Config discovery is strictly read-only.** It parses only the workspace
+  pointer + `config.json` — it never constructs the engine, opens SQLite,
+  creates directories, runs writable-path probes, adopts legacy state, seeds
+  defaults, or migrates. The `master_root` is resolved and the scratch path
+  validated BEFORE anything is created under scratch, so an unsafe scratch
+  leaves zero files behind. If `master_root` cannot be resolved from
+  `--workspace`, the run **refuses** (exit 1) and no crate-dependent stage
+  proceeds. Run `earcrate configure --music <folder>` first.
+- **Every mutable artifact is scoped by `run_id`** under
+  `<scratch>/runs/<run_id>/` (scratch workspace, transform cache, renders,
+  acceptance, browser receipts, models). A new HEAD/`run_id` never inherits
+  another run's evidence; a resume of the same `run_id` reuses the same root.
 - **Requires an explicit scratch outside the music library** (refuses scratch ==
   music, scratch ⊂ music, or music ⊂ scratch).
 - The durable-state clone uses a **consistent SQLite backup** (`Connection.backup`

@@ -219,12 +219,18 @@ def test_write_receipts_redacted_and_classified(tmp_path):
 def test_stage_registry_is_complete():
     meta_keys = [m["key"] for m in R.STAGE_META]
     assert set(meta_keys) == set(R.STAGE_FUNCS), "every STAGE_META key needs a function and vice versa"
-    assert len(meta_keys) == 12
+    assert len(meta_keys) == 14
     required = {m["key"] for m in R.STAGE_META if m["required"]}
     assert {"gates", "verify_package", "workbench_dom", "acceptance", "real_project",
             "edit_undo_redo", "ranker", "piano"} <= required
     not_required = {m["key"] for m in R.STAGE_META if not m["required"]}
-    assert {"allin1", "rubberband", "techno"} <= not_required
+    # listening-dependent stages are split into mechanical + verdict
+    assert {"allin1", "rubberband_mechanical", "rubberband_verdict",
+            "techno_mechanical", "techno_verdict"} <= not_required
+    # verdict stages sit in the human tier; mechanical in gpu; a verdict is never required-mechanical
+    tiers = {m["key"]: m["tier"] for m in R.STAGE_META}
+    assert tiers["rubberband_verdict"] == R.TIER_HUMAN and tiers["rubberband_mechanical"] == R.TIER_GPU
+    assert tiers["techno_verdict"] == R.TIER_HUMAN
 
 
 # ==========================================================================
@@ -404,100 +410,174 @@ def _rb_ctx(tmp_path, args, rb_default_ok, rb_rb_ok, resolved="rubberband",
                        "rb_spectral": {"result": {"ok": True, "spectral_l1": spectral_l1}},
                    })
     ctx.state.data["scratch_workspace"]["working_root"] = str(working_root)
+    ctx.state.data["scratch_workspace"]["agent_root"] = str(tmp_path / "ws_agent")
     return ctx
 
 
-def test_rubberband_verdict_cannot_pass_a_failed_render(tmp_path):
-    # rubberband render FAILED (no artifact) but a keep-verdict is supplied
-    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"), rb_default_ok=True, rb_rb_ok=False)
-    status, detail = R.stage_rubberband(ctx)
-    assert status == R.FAILED, "a supplied verdict must not rescue a failed render"
-    assert detail.get("verdict") is None
+# ---- Rubber Band MECHANICAL: renders once, persists the exact A/B evidence -----
+def test_rubberband_mechanical_fails_when_a_render_fails(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(), rb_default_ok=True, rb_rb_ok=False)
+    status, detail = R.stage_rubberband_mechanical(ctx)
+    assert status == R.FAILED and not detail.get("mechanical_ok")
 
 
-def test_rubberband_pending_without_verdict_when_mechanical_green(tmp_path):
-    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband=None), rb_default_ok=True, rb_rb_ok=True)
-    status, detail = R.stage_rubberband(ctx)
-    assert status == R.PENDING_MANUAL and detail["provider_resolved_in_env"] == "rubberband"
+def test_rubberband_mechanical_passes_and_persists_hashes(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(), rb_default_ok=True, rb_rb_ok=True)
+    status, detail = R.stage_rubberband_mechanical(ctx)
+    assert status == R.PASSED and detail["mechanical_ok"] is True
     assert detail["renders_contained_under"].endswith("renders/rubberband_ab")   # containment
     assert detail["rubberband_real_transform_calls"] == 2
+    assert detail["default_sha256"] and detail["rubberband_sha256"]              # persisted for binding
+    assert detail["report_default_sha256"] and detail["report_rubberband_sha256"]
+    assert detail["cache_namespace_cleared"] in (True, False)                    # cache isolation recorded
 
 
-def test_rubberband_verdict_completes_green_mechanical(tmp_path):
-    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"), rb_default_ok=True, rb_rb_ok=True)
-    status, detail = R.stage_rubberband(ctx)
-    assert status == R.PASSED and detail["verdict"] == "rubberband"
-    assert detail["report_rubberband_provider"] == "rubberband"       # from the RECEIPT
-    assert detail["spectral"]["spectral_l1"] > 0
+def test_rubberband_mechanical_fails_when_receipt_provider_wrong(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(), rb_default_ok=True, rb_rb_ok=True, rb_provider="phase_vocoder")
+    assert R.stage_rubberband_mechanical(ctx)[0] == R.FAILED
 
 
-def test_rubberband_fails_when_provider_did_not_resolve(tmp_path):
-    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"),
-                  rb_default_ok=True, rb_rb_ok=True, resolved="default")
-    assert R.stage_rubberband(ctx)[0] == R.FAILED
-
-
-def test_rubberband_fails_when_receipt_provider_is_not_rubberband(tmp_path):
-    # resolver says rubberband, but the render RECEIPT shows phase_vocoder actually ran
-    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"),
-                  rb_default_ok=True, rb_rb_ok=True, rb_provider="phase_vocoder")
-    assert R.stage_rubberband(ctx)[0] == R.FAILED
-
-
-def test_rubberband_fails_when_no_nonunity_transform(tmp_path):
-    # zero real rubberband transform calls -> the A/B proves nothing
-    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"),
-                  rb_default_ok=True, rb_rb_ok=True, rb_calls=0)
-    status, detail = R.stage_rubberband(ctx)
+def test_rubberband_mechanical_fails_when_no_nonunity_transform(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(), rb_default_ok=True, rb_rb_ok=True, rb_calls=0)
+    status, detail = R.stage_rubberband_mechanical(ctx)
     assert status == R.FAILED and "NON-UNITY" in detail["reason"]
 
 
-def test_rubberband_fails_when_spectral_identical(tmp_path):
-    # renders + provider + non-unity ok, but the two outputs are spectrally identical
-    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"),
-                  rb_default_ok=True, rb_rb_ok=True, spectral_l1=0.0)
-    status, detail = R.stage_rubberband(ctx)
+def test_rubberband_mechanical_fails_when_spectral_identical(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(), rb_default_ok=True, rb_rb_ok=True, spectral_l1=0.0)
+    status, detail = R.stage_rubberband_mechanical(ctx)
     assert status == R.FAILED and "spectral" in detail["reason"]
 
 
-def _techno_result(**over):
-    base = {"render_ok": True, "external_source_identity_matched": True, "identity_match_kind": "content_sha256",
-            "export_ok": True, "export_sha256": {"edl": "a", "rpp": "b", "sheet": "c"},
-            "project_id": "pt", "revision_sha": "rv", "external_vocal_basename": "vox.wav"}
+# ---- Rubber Band VERDICT: never renders; binds to the exact stored WAV pair -----
+def _seed_rb_mechanical(ctx, tmp_path):
+    """Run the real mechanical stage so its evidence is persisted in state."""
+    status, detail = R.stage_rubberband_mechanical(ctx)
+    assert status == R.PASSED
+    ctx.state.stage("rubberband_mechanical")["status"] = R.PASSED
+    ctx.state.stage("rubberband_mechanical")["detail"] = detail
+    return detail
+
+
+def test_rubberband_verdict_pending_without_verdict(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband=None), rb_default_ok=True, rb_rb_ok=True)
+    _seed_rb_mechanical(ctx, tmp_path)
+    status, detail = R.stage_rubberband_verdict(ctx)
+    assert status == R.PENDING_MANUAL and detail["pair_unchanged"] is True
+
+
+def test_rubberband_verdict_binds_to_exact_pair(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"), rb_default_ok=True, rb_rb_ok=True)
+    _seed_rb_mechanical(ctx, tmp_path)
+    status, detail = R.stage_rubberband_verdict(ctx)
+    assert status == R.PASSED and detail["verdict"] == "rubberband"
+    assert detail["verdict_bound_to"]["rubberband_sha256"] == detail["current_rubberband_sha256"]
+
+
+def test_rubberband_verdict_rejects_substituted_audio(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"), rb_default_ok=True, rb_rb_ok=True)
+    md = _seed_rb_mechanical(ctx, tmp_path)
+    # the owner "hears" it, but overnight the rubberband WAV is replaced
+    Path(md["rubberband_path"]).write_bytes(b"REPLACED-DIFFERENT-AUDIO")
+    status, detail = R.stage_rubberband_verdict(ctx)
+    assert status == R.FAILED and detail["pair_unchanged"] is False and detail.get("verdict") is None
+
+
+def test_rubberband_verdict_skips_when_mechanical_not_green(tmp_path):
+    ctx = _rb_ctx(tmp_path, _Args(verdict_rubberband="rubberband"), rb_default_ok=True, rb_rb_ok=True)
+    # mechanical never ran (still pending) -> verdict has nothing to bind
+    assert R.stage_rubberband_verdict(ctx)[0] == R.SKIPPED
+
+
+# ---- techno MECHANICAL + VERDICT --------------------------------------------
+def _techno_result(tmp_path, **over):
+    render = _wav(tmp_path / "renders" / "techno.wav")
+    edl = _wav(tmp_path / "exports" / "t.edl"); rpp = _wav(tmp_path / "exports" / "t.rpp")
+    sheet = _wav(tmp_path / "exports" / "t.sheet")
+    import hashlib
+    def sh(p):
+        return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+    base = {"render_ok": True, "render_path": render, "render_sha256": sh(render),
+            "report_path": _wav(tmp_path / "renders" / "techno.report.json"),
+            "external_source_identity_matched": True, "identity_match_kind": "pcm_sha256",
+            "external_pcm_sha256": "extpcmsha", "seed": 42,
+            "export_ok": True, "export_paths": {"edl": edl, "rpp": rpp, "sheet": sheet},
+            "export_sha256": {"edl": sh(edl), "rpp": sh(rpp), "sheet": sh(sheet)},
+            "project_id": "pt", "revision_sha": "rv", "score_sha": "sv", "external_vocal_basename": "vox.wav"}
     base.update(over)
     return {"result": base}
 
 
-def test_techno_verdict_cannot_pass_a_failed_render(tmp_path):
+def test_techno_mechanical_cannot_pass_a_failed_render(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal)),
+                   helper={"techno": _techno_result(tmp_path, render_ok=False, render_sha256=None, reason="render failed")})
+    status, detail = R.stage_techno_mechanical(ctx)
+    assert status == R.FAILED and not detail.get("mechanical_ok")
+
+
+def test_techno_mechanical_fails_on_inexact_identity(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal)),
+                   helper={"techno": _techno_result(tmp_path, external_source_identity_matched=False, identity_match_kind=None)})
+    assert R.stage_techno_mechanical(ctx)[0] == R.FAILED
+
+
+def test_techno_mechanical_fails_when_export_incomplete(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal)),
+                   helper={"techno": _techno_result(tmp_path, export_ok=False, export_sha256={"edl": "a"})})
+    assert R.stage_techno_mechanical(ctx)[0] == R.FAILED
+
+
+def test_techno_mechanical_records_fixed_seed(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal)), helper={"techno": _techno_result(tmp_path)})
+    status, detail = R.stage_techno_mechanical(ctx)
+    assert status == R.PASSED and detail["mechanical_ok"] is True
+    # the fixed seed passed to the helper is derived from run_id (reproducible)
+    assert isinstance(detail["seed"], int)
+
+
+def _seed_techno_mechanical(ctx, tmp_path):
+    status, detail = R.stage_techno_mechanical(ctx)
+    assert status == R.PASSED
+    ctx.state.stage("techno_mechanical")["status"] = R.PASSED
+    ctx.state.stage("techno_mechanical")["detail"] = detail
+    return detail
+
+
+def test_techno_verdict_binds_to_render_and_exports(tmp_path):
     vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
     ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
-                   helper={"techno": _techno_result(render_ok=False, reason="render failed")})
-    status, detail = R.stage_techno(ctx)
-    assert status == R.FAILED and detail.get("verdict") is None
-
-
-def test_techno_fails_on_basename_only_match(tmp_path):
-    # identity NOT exactly matched (a basename substring is not proof) -> FAIL
-    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
-    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
-                   helper={"techno": _techno_result(external_source_identity_matched=False, identity_match_kind=None)})
-    assert R.stage_techno(ctx)[0] == R.FAILED
-
-
-def test_techno_fails_when_export_incomplete(tmp_path):
-    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
-    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
-                   helper={"techno": _techno_result(export_ok=False, export_sha256={"edl": "a"})})
-    assert R.stage_techno(ctx)[0] == R.FAILED
-
-
-def test_techno_verdict_completes_green_mechanical(tmp_path):
-    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
-    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
-                   helper={"techno": _techno_result()})
-    status, detail = R.stage_techno(ctx)
+                   helper={"techno": _techno_result(tmp_path),
+                           "techno_reidentity": {"result": {"external_pcm_sha256": "extpcmsha"}}})
+    _seed_techno_mechanical(ctx, tmp_path)
+    status, detail = R.stage_techno_verdict(ctx)
     assert status == R.PASSED and detail["verdict"] == "keep"
-    assert detail["identity_match_kind"] == "content_sha256"
+    assert detail["render_unchanged"] and detail["exports_unchanged"]
+    assert detail["external_pcm_identity_rebound"] is True
+
+
+def test_techno_verdict_rejects_rerendered_wav(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
+                   helper={"techno": _techno_result(tmp_path),
+                           "techno_reidentity": {"result": {"external_pcm_sha256": "extpcmsha"}}})
+    md = _seed_techno_mechanical(ctx, tmp_path)
+    Path(md["render_path"]).write_bytes(b"RERENDERED-DIFFERENT")   # a re-render overnight
+    status, detail = R.stage_techno_verdict(ctx)
+    assert status == R.FAILED and detail["render_unchanged"] is False and detail.get("verdict") is None
+
+
+def test_techno_verdict_rejects_changed_external_identity(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno="keep"),
+                   helper={"techno": _techno_result(tmp_path),
+                           "techno_reidentity": {"result": {"external_pcm_sha256": "A-DIFFERENT-SOURCE"}}})
+    _seed_techno_mechanical(ctx, tmp_path)
+    status, detail = R.stage_techno_verdict(ctx)
+    assert status == R.FAILED and detail["external_pcm_identity_rebound"] is False
 
 
 # ---- item 4: allin1 decoder signature + backend; honest metric names; a real
@@ -545,12 +625,29 @@ def test_allin1_stage_passes_with_real_backend_and_transition_probe(tmp_path):
     assert detail["transition_probe"]["result"] == "transition_plan_changed"
 
 
+def test_allin1_stage_passes_on_measured_no_change(tmp_path):
+    ctx = _FakeCtx(tmp_path, _Args(), helper={
+        "allin1": {"result": {"ok": True, "capability": {"ready": True}, "tracks_sampled": 2,
+                              "transition_probe": {"pair": ["a", "b"], "changed": False,
+                                                   "result": "measured_no_change"}}}})
+    assert R.stage_allin1(ctx)[0] == R.PASSED
+
+
 def test_allin1_stage_fails_without_transition_probe(tmp_path):
     # a confidence delta alone (no real transition probe) is not sufficient evidence
     ctx = _FakeCtx(tmp_path, _Args(), helper={
         "allin1": {"result": {"ok": True, "capability": {"ready": True}, "tracks_sampled": 3,
                               "mean_bpm_confidence_delta": 0.2}}})   # no transition_probe
-    assert R.stage_allin1(ctx)[0] == R.FAILED
+    assert R.stage_allin1(ctx)[0] == R.SKIPPED   # inconclusive probe is a SKIP, never a pass
+
+
+def test_allin1_one_track_sample_does_not_pass(tmp_path):
+    # a one-track sample cannot form a transition pair -> SKIP, never PASS (item 5)
+    ctx = _FakeCtx(tmp_path, _Args(), helper={
+        "allin1": {"result": {"ok": True, "capability": {"ready": True}, "tracks_sampled": 1,
+                              "transition_probe": {"pair": None, "result": "insufficient_tracks_for_pair"}}}})
+    status, detail = R.stage_allin1(ctx)
+    assert status == R.SKIPPED and status != R.PASSED
 
 
 # ---- item 8: edit must be a real (non-no-op) change with undo/redo identity ----
@@ -841,3 +938,197 @@ def test_project_render_dst_containment_guard_is_real(tmp_path):
     assert r["type"] == "render_project" and Path(r["path"]).exists()
     outside = tmp_path / "rubberband_ab" / "escape.wav"   # NOT under working_root/renders
     _raises(ValueError, core.project_render, pid, outside)
+
+
+# ==========================================================================
+# FINAL PASS: verdicts are cryptographically bound to the exact audio; the
+# mechanical stage is never re-run on resume; run_id is path-safe; the external
+# vocal path never reaches the committable receipt; the spectral test covers the
+# whole render (not a 32k prefix).
+# ==========================================================================
+_RB_META = [{"key": "rubberband_mechanical", "name": "rb mech", "tier": R.TIER_GPU, "required": False},
+            {"key": "rubberband_verdict", "name": "rb verdict", "tier": R.TIER_HUMAN, "required": False}]
+_TECHNO_META = [{"key": "techno_mechanical", "name": "tk mech", "tier": R.TIER_GPU, "required": False},
+                {"key": "techno_verdict", "name": "tk verdict", "tier": R.TIER_HUMAN, "required": False}]
+
+
+def _real_state(tmp_path, meta, **data):
+    st = R.RunState.new(tmp_path / "state.json", "rid1", "HEAD", {}, meta)
+    st.data.update(data)
+    return st
+
+
+def test_rubberband_mechanical_then_verdict_resume_warm_cache(tmp_path):
+    # Pending mechanical run, then a verdict resume: the mechanical stage is NOT
+    # re-rendered (its A/B + warm transform cache are frozen), and the verdict
+    # binds to the exact stored WAV pair. (control question)
+    working_root = tmp_path / "ws_work"
+    out = working_root / "renders" / "rubberband_ab"
+    _wav(out / "default.wav"); _wav(out / "rubberband.wav")
+    rep_def = _report_file(tmp_path / "reports" / "def.json", "phase_vocoder")
+    rep_rb = _report_file(tmp_path / "reports" / "rb.json", "rubberband", rb_calls=2)
+    ctx = _FakeCtx(tmp_path, _Args(verdict_rubberband=None), project_id="p1",
+                   sub={"rb_default": {"result": {"type": "render_project", "report": rep_def}},
+                        "rb_rubberband": {"result": {"type": "render_project", "report": rep_rb}}},
+                   helper={"rubberband_probe": {"result": {"ready": True}},
+                           "rb_provider": {"result": {"effective": "rubberband"}},
+                           "rb_spectral": {"result": {"ok": True, "spectral_l1": 0.5}}})
+    st = _real_state(tmp_path, _RB_META, real_project_id="p1",
+                     scratch_workspace={"ok": True, "home": str(tmp_path / "h"),
+                                        "working_root": str(working_root), "agent_root": str(tmp_path / "agent")})
+    ctx.state = st
+    funcs = {"rubberband_mechanical": R.stage_rubberband_mechanical, "rubberband_verdict": R.stage_rubberband_verdict}
+
+    overall1 = R.execute_stages(ctx, st, _RB_META, funcs)
+    assert st.stage("rubberband_mechanical")["status"] == R.PASSED
+    assert st.stage("rubberband_verdict")["status"] == R.PENDING_MANUAL
+    assert overall1 == R.INCOMPLETE
+    renders_after_1 = sum(1 for c in ctx.calls if c[:2] == ("sub", "rb_default"))
+    assert renders_after_1 == 1
+
+    # ---- resume tomorrow with the verdict; mechanical must NOT re-render ----
+    ctx.args.verdict_rubberband = "rubberband"
+    overall2 = R.execute_stages(ctx, st, _RB_META, funcs)
+    renders_after_2 = sum(1 for c in ctx.calls if c[:2] == ("sub", "rb_default"))
+    assert renders_after_2 == renders_after_1, "mechanical was re-rendered on resume (must be frozen)"
+    vd = st.stage("rubberband_verdict")
+    assert vd["status"] == R.PASSED and vd["detail"]["verdict"] == "rubberband"
+    assert vd["detail"]["pair_unchanged"] is True
+    assert vd["detail"]["verdict_bound_to"]["rubberband_sha256"]
+
+
+def test_techno_mechanical_then_verdict_resume_identity_unchanged(tmp_path):
+    vocal = tmp_path / "vox.wav"; vocal.write_bytes(b"vox")
+    tk = _techno_result(tmp_path)["result"]
+    ctx = _FakeCtx(tmp_path, _Args(external_vocal=str(vocal), verdict_techno=None),
+                   helper={"techno": {"result": tk},
+                           "techno_reidentity": {"result": {"external_pcm_sha256": tk["external_pcm_sha256"]}}})
+    st = _real_state(tmp_path, _TECHNO_META,
+                     scratch_workspace={"ok": True, "home": str(tmp_path / "h"),
+                                        "working_root": str(tmp_path / "w"), "agent_root": str(tmp_path / "agent")})
+    ctx.state = st
+    funcs = {"techno_mechanical": R.stage_techno_mechanical, "techno_verdict": R.stage_techno_verdict}
+
+    R.execute_stages(ctx, st, _TECHNO_META, funcs)
+    assert st.stage("techno_mechanical")["status"] == R.PASSED
+    assert st.stage("techno_verdict")["status"] == R.PENDING_MANUAL
+    renders_after_1 = sum(1 for c in ctx.calls if c[:2] == ("helper", "techno"))
+    prior_rev = st.stage("techno_mechanical")["detail"]["revision_sha"]
+    prior_seed = st.stage("techno_mechanical")["detail"]["seed"]
+
+    ctx.args.verdict_techno = "keep"
+    R.execute_stages(ctx, st, _TECHNO_META, funcs)
+    renders_after_2 = sum(1 for c in ctx.calls if c[:2] == ("helper", "techno"))
+    assert renders_after_2 == renders_after_1, "techno was re-rendered/recompiled on resume"
+    vd = st.stage("techno_verdict")
+    assert vd["status"] == R.PASSED and vd["detail"]["verdict"] == "keep"
+    assert vd["detail"]["render_unchanged"] and vd["detail"]["exports_unchanged"]
+    # seed + revision identity is unchanged across the resume
+    assert st.stage("techno_mechanical")["detail"]["revision_sha"] == prior_rev
+    assert st.stage("techno_mechanical")["detail"]["seed"] == prior_seed
+
+
+# ---- real_render_verdict is bound to real_project.render_sha256 ----------------
+def _rrv_ctx(tmp_path, verdict, tamper=False):
+    wav = tmp_path / "renders" / "real.wav"; _wav(wav)
+    import hashlib
+    sha = hashlib.sha256(wav.read_bytes()).hexdigest()
+    ctx = _FakeCtx(tmp_path, _Args(verdict_real_render=verdict))
+    ctx.state._stages["real_project"] = {"detail": {"render_path": str(wav), "render_sha256": sha}}
+    if tamper:
+        wav.write_bytes(b"REPLACED-OVERNIGHT")
+    return ctx
+
+
+def test_real_render_verdict_binds_to_wav_hash(tmp_path):
+    ctx = _rrv_ctx(tmp_path, "keep")
+    status, detail = R.stage_real_render_verdict(ctx)
+    assert status == R.PASSED and detail["wav_unchanged"] is True
+    assert detail["verdict_bound_to_sha256"] == detail["current_render_sha256"]
+
+
+def test_real_render_verdict_rejects_after_wav_replacement(tmp_path):
+    ctx = _rrv_ctx(tmp_path, "keep", tamper=True)
+    status, detail = R.stage_real_render_verdict(ctx)
+    assert status == R.FAILED and detail["wav_unchanged"] is False and detail.get("verdict") is None
+
+
+def test_real_render_verdict_pending_without_verdict(tmp_path):
+    ctx = _rrv_ctx(tmp_path, None)
+    assert R.stage_real_render_verdict(ctx)[0] == R.PENDING_MANUAL
+
+
+# ---- item 3: run_id must be a bounded, path-safe token -------------------------
+def test_validate_run_id_accepts_safe_token(tmp_path):
+    d = R.validate_run_id("rig_abc123_deadbe", tmp_path)
+    assert d == (tmp_path / "receipt" / "rig_abc123_deadbe").resolve()
+
+
+def test_validate_run_id_rejects_traversal_and_separators(tmp_path):
+    for bad in ("../escape", "a/b", "a\\b", "..", ".", "-rf", "x" * 129, "", "with space"):
+        _raises(ValueError, R.validate_run_id, bad, tmp_path)
+
+
+def test_validate_run_id_rejects_absolute_and_drive(tmp_path):
+    for bad in ("/etc/passwd", "/abs", "C:\\Windows", "C:/Windows"):
+        _raises(ValueError, R.validate_run_id, bad, tmp_path)
+
+
+def test_run_refuses_unsafe_run_id_before_any_path(tmp_path):
+    # run() must refuse a traversal run_id before creating anything under scratch
+    scratch = tmp_path / "scratch"
+    args = _Args(workspace=str(tmp_path / "ws"), scratch=str(scratch), run_id="../pwn")
+    code = R.run(args)
+    assert code == R.EXIT_FAILED
+    assert not (scratch / "receipt").exists()
+
+
+# ---- item 4: the external-vocal path never reaches receipt.json / receipt.md ---
+def test_external_vocal_path_absent_from_committable_receipt(tmp_path):
+    secret = "/home/owner/Music/COPYRIGHTED - Secret Vocal.wav"
+    st = R.RunState.new(tmp_path / "run" / "state.json", "runV", "HEAD",
+                        {"external_vocal": secret}, _meta())
+    # simulate a subprocess command that captured the raw vocal path (as run_helper would)
+    st.data["log_ledger"] = [{"key": "techno", "command": f"python helper.py /out {secret} 120 42",
+                              "exit_code": 0, "log": "logs/techno.log", "log_sha256": "e" * 64}]
+    st.stage("a")["status"] = R.PASSED
+    st.stage("b")["status"] = R.PASSED
+    st.stage("c")["status"] = R.SKIPPED
+    st.data["stages"][0]["detail"] = {"external_vocal_basename": "COPYRIGHTED - Secret Vocal.wav"}
+    st.save()
+    run_dir = tmp_path / "run"
+    R._write_receipts(st, tmp_path, run_dir, overall=R.INCOMPLETE, external_vocal=secret)
+    j = (run_dir / "receipt.json").read_text(encoding="utf-8")
+    md = (run_dir / "receipt.md").read_text(encoding="utf-8")
+    # the full EXECUTION PATH (directory + file) must be gone from both artifacts
+    assert secret not in j and secret not in md
+    assert "/home/owner/Music" not in j and "/home/owner/Music" not in md
+    assert R._EXTERNAL_VOCAL_PLACEHOLDER in j
+    # a bare basename is allowed to remain for provenance; the placeholder replaces the path
+    parsed = json.loads(j)
+    assert parsed["external_vocal"]["basename"] == "COPYRIGHTED - Secret Vocal.wav"
+    assert parsed["external_vocal"]["path"] == R._EXTERNAL_VOCAL_PLACEHOLDER
+
+
+# ---- item 6: the spectral test covers a transform AFTER the first 32,768 samples
+def test_spectral_ab_detects_difference_after_32768_samples(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    sr = 16000
+    n = 80000               # > 32768 so the tail is beyond the old prefix window
+    base = (0.2 * np.sin(2 * np.pi * 220.0 * np.arange(n) / sr)).astype(np.float32)
+    a = base.copy()
+    b = base.copy()
+    # identical for the first 40,000 samples; a transformed clip appears AFTER that
+    b[40000:] += (0.2 * np.sin(2 * np.pi * 660.0 * np.arange(n - 40000) / sr)).astype(np.float32)
+    ap = tmp_path / "a.wav"; bp = tmp_path / "b.wav"
+    sf.write(str(ap), a, sr); sf.write(str(bp), b, sr)
+    out = tmp_path / "spec.json"
+    # run the helper source exactly as the harness would (argv: out, a, b)
+    import subprocess as _sp, sys as _sys
+    helper = tmp_path / "spec_helper.py"; helper.write_text(R._SPECTRAL_AB_SRC, encoding="utf-8")
+    _sp.run([_sys.executable, str(helper), str(out), str(ap), str(bp)], check=True)
+    res = json.loads(out.read_text(encoding="utf-8"))
+    assert res["ok"] and res["spectral_l1"] > 1e-4
+    assert res["first_differing_chunk"] is not None
+    assert res["first_differing_chunk"]["start_sample"] >= 32768   # detected in the tail, not the prefix

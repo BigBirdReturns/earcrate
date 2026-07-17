@@ -62,7 +62,22 @@ Run-Rig-Receipt.cmd ^
   production workspace is never written and the real music stays read-only.
 - Does **not** install packages, does **not** persist env vars or config, does
   **not** push/merge/close PRs, delete outputs, or alter source audio.
-- Redacts user-home and token-bearing paths in the committable receipt.
+- **`--run-id` is validated as a bounded, path-safe token** (`[A-Za-z0-9._-]`,
+  ≤128 chars) before any path is built; separators, `..`, absolute and
+  drive-qualified forms are refused and the resolved run dir must stay under
+  `<scratch>/receipt`.
+- Redacts user-home and token-bearing paths, and **withholds the `--external-vocal`
+  execution path** from the committable receipt (only a placeholder, basename,
+  and content identity are committed; the raw path stays in scratch state).
+
+### Verdicts are bound to the exact audio
+
+Every listening-dependent stage is split into a **mechanical** stage (renders
+once, persists exact hashes) and a **verdict** stage that **never renders** — it
+re-hashes the stored artifact and refuses the verdict if it changed. So after the
+owner hears an artifact and resumes tomorrow, the receipt proves the harness
+neither re-rendered it, substituted another seed, reused a different cache state,
+nor attached the verdict to a different file.
 
 ## Stages (in order)
 
@@ -73,13 +88,15 @@ Run-Rig-Receipt.cmd ^
 | 3 | Workbench DOM lifecycle (package + single-file) | rig mechanical | yes | zero console errors required, both modes |
 | 4 | project acceptance (scratch) | rig mechanical | yes | self-contained scratch workspace |
 | 5 | compile + render a real-library project | real library | yes | FAILS unless show, render report, EDL, RPP and sheet all exist on disk and are hashed |
-| 6 | human keep/reject on the real render | human listening | yes | `pending_manual` until a verdict; gate success is NEVER inferred as a keep |
+| 6 | human keep/reject on the real render | human listening | yes | verdict is **hash-bound**: re-hashes the WAV and refuses if it changed since stage 5; `pending_manual` until a verdict; gate success is NEVER inferred as a keep |
 | 7 | edit → render → undo → PCM identity → redo → restart | real library | yes | proves undo restores prior decoded-PCM identity + edited head reopens |
 | 8 | ranker training + off/on order | real library | yes | insufficient/one-class data → honest `skipped_insufficient_data`, not a pass |
 | 9 | bounded piano session | real library | yes | records attempted/kept/discarded/errored/stop_reason within the iteration cap |
-| 10 | allin1 before/after on real tracks | gpu/provider | no | honest `bpm_confidence` distributions (not relabelled downbeat conf) + a REAL transition candidate run through both analyses (records a concrete plan change or a measured no-change); silent librosa fallback FAILS |
-| 11 | Rubber Band A/B render + listening verdict | gpu/provider | no | both renders CONTAINED under the scratch `working_root/renders`; effective provider + real per-engine invocation counts read from the render RECEIPT; requires a non-unity transform actually run through Rubber Band + a measured spectral A/B difference; child-process `EARCRATE_TRANSFORM` override only; never flips the default or bumps `ENGINE_VERSION` |
-| 12 | techno external-vocal proof + verdict | human listening | no | needs `--external-vocal`; verifies EXACT source identity (content sha256 / resolved path, not a basename substring), exports the score and hashes EDL/RPP/sheet; the copyrighted source is never copied into the repo/receipt |
+| 10 | allin1 before/after on real tracks | gpu/provider | no | honest `bpm_confidence` distributions + a REAL transition candidate run through both analyses; a one-track sample (`insufficient_tracks_for_pair`) is a SKIP, never a pass; silent librosa fallback FAILS |
+| 11 | Rubber Band A/B render — **mechanical** | gpu/provider | no | isolates the transform cache (`EARCRATE_CACHE_ROOT`), clears its own namespace before the A/B, renders both CONTAINED under `working_root/renders`, and persists exact WAV/report hashes + provider identities + invocation counts + a whole-render (chunked) spectral receipt |
+| 12 | Rubber Band A/B — **listening verdict** | human listening | no | NEVER renders; re-hashes the stored A/B pair and refuses if it changed, then binds default/rubberband/tie to that exact pair |
+| 13 | techno external-vocal render — **mechanical** | gpu/provider | no | needs `--external-vocal`; fixes+records the seed; verifies EXACT decoded-PCM identity; persists project/revision/score + render/report/export hashes; the copyrighted source is never copied into the repo/receipt |
+| 14 | techno — **listening verdict** | human listening | no | NEVER recompiles/rerenders; re-verifies the render WAV + export hashes (and, if the vocal is re-supplied, its PCM identity) before binding keep/reject |
 
 ## Status + exit-code semantics
 

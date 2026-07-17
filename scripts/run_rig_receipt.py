@@ -400,14 +400,25 @@ def _prepare_scratch_workspace(ctx: Ctx) -> Dict[str, Any]:
                              env={"EARCRATE_HOME": str(ws_home)}, timeout=300, json_out=True)
     if rec["exit_code"] != 0 or not rec.get("result_readable"):
         return {"ok": False, "reason": f"could not configure scratch workspace (see {rec['log']})", "master_root": master}
-    scratch_agent = ws / "agent"; scratch_agent.mkdir(parents=True, exist_ok=True)
+    # Use the ACTUAL configured roots (derive_workspace_paths decides them), never a
+    # hardcoded ws/agent — otherwise the backed-up DB lands where nothing reads it.
+    scratch_cfg = (rec["result"] or {}).get("config") or {}
+    scratch_agent = Path(scratch_cfg.get("agent_root") or (ws / "agent"))
+    scratch_working = scratch_cfg.get("working_root") or str(ws / "work")
+    scratch_agent.mkdir(parents=True, exist_ok=True)
     backed_up: List[str] = []
     backup_errors: List[str] = []
     if agent and Path(agent).exists():
         # back up only the primary DB files (skip -wal/-shm; .backup captures WAL)
         for db in Path(agent).glob("*.sqlite"):
+            dst = scratch_agent / db.name
+            # drop any stale WAL/SHM the fresh configure left beside the empty DB so
+            # the consistent backup is the only truth for this file
+            for side in (dst.with_name(dst.name + "-wal"), dst.with_name(dst.name + "-shm")):
+                with contextlib.suppress(Exception):
+                    side.unlink()
             try:
-                _backup_sqlite(db, scratch_agent / db.name); backed_up.append(db.name)
+                _backup_sqlite(db, dst); backed_up.append(db.name)
             except Exception as exc:
                 backup_errors.append(f"{db.name}: {exc}")
     if not backed_up:
@@ -415,6 +426,7 @@ def _prepare_scratch_workspace(ctx: Ctx) -> Dict[str, Any]:
                 "reason": "no analysis DB could be consistently backed up from the production agent dir "
                           + (f"(errors: {backup_errors})" if backup_errors else f"(looked in {agent})")}
     return {"ok": True, "home": str(ws_home), "workspace": str(ws), "master_root": master,
+            "working_root": scratch_working, "agent_root": str(scratch_agent),
             "backed_up_db": backed_up, "backup_errors": backup_errors,
             "note": "durable-state clone via consistent SQLite backup; production workspace untouched; music read-only"}
 
@@ -535,15 +547,37 @@ def stage_real_project(ctx):
     if rj.get("type") != "render_project" or not rj.get("path") or not Path(rj["path"]).exists():
         return FAILED, dict(d, reason="render did not publish a WAV")
     d["render_sha256"] = sha256_file(Path(rj["path"]))
+    # The render REPORT must exist on disk and be hashed — a render result that
+    # points at a missing report is not a completed publication.
+    report_p = rj.get("report")
+    if not report_p or not Path(report_p).exists():
+        return FAILED, dict(d, reason="render result names no on-disk report")
+    d["report_sha256"] = sha256_file(Path(report_p))
+    # show MUST be readable and carry the active revision.
     show = ctx.run_subprocess("real_show", [ctx.python, "-m", "earcrate", "project", "show", pid],
                               env=env, timeout=300, json_out=True)
-    if show.get("result_readable"):
-        d["active_revision_sha"] = ((show["result"] or {}).get("project") or {}).get("active_revision_sha")
+    if not show.get("result_readable"):
+        return FAILED, dict(d, reason="project show returned no readable result")
+    active = ((show["result"] or {}).get("project") or {}).get("active_revision_sha")
+    d["active_revision_sha"] = active
+    if not active:
+        return FAILED, dict(d, reason="project show carried no active_revision_sha")
+    # export MUST produce EDL + RPP + sheet, all present on disk, all hashed.
     ex = ctx.run_subprocess("real_export", [ctx.python, "-m", "earcrate", "project", "export", pid],
                             env=env, timeout=600, json_out=True)
-    if ex.get("result_readable"):
-        for fmt in ("edl", "rpp", "sheet"):
-            d[f"export_{fmt}"] = (ex["result"] or {}).get(fmt)
+    if not ex.get("result_readable"):
+        return FAILED, dict(d, reason="project export returned no readable result")
+    exj = ex["result"] or {}
+    missing = []
+    for fmt in ("edl", "rpp", "sheet"):
+        p = exj.get(fmt)
+        d[f"export_{fmt}"] = p
+        if not p or not Path(p).exists():
+            missing.append(fmt)
+        else:
+            d[f"export_{fmt}_sha256"] = sha256_file(Path(p))
+    if missing:
+        return FAILED, dict(d, reason=f"export did not produce on-disk artifact(s): {', '.join(missing)}")
     return PASSED, d
 
 
@@ -590,12 +624,26 @@ def stage_ranker(ctx):
     if cmp["exit_code"] != 0 or not cmp.get("result_readable"):
         return FAILED, {"log": cmp["log"], "reason": "ranker off/on comparison helper failed"}
     c = cmp["result"] or {}
+    membership_identical = c.get("membership_identical")
+    order_changed = c.get("order_changed")
+    # Classify the observed effect EXPLICITLY. "reordered" is only claimed when the
+    # on/off orders actually differ; identical orders are recorded as "no_effect",
+    # never dressed up as a change. A membership change is a hard failure.
+    if membership_identical is not True:
+        effect = "membership_changed"
+    elif order_changed is True:
+        effect = "reordered"
+    elif order_changed is False:
+        effect = "no_effect"
+    else:
+        effect = "unknown"
     detail = {"model_sha": res.get("model_sha"), "n_approved": res.get("n_approved"), "n_rejected": res.get("n_rejected"),
-              "pool_size": c.get("pool_size"), "membership_identical": c.get("membership_identical"),
-              "order_changed": c.get("order_changed"), "off_order_head": c.get("off_order_head"),
-              "on_order_head": c.get("on_order_head")}
-    ok = bool(c.get("ok")) and c.get("membership_identical") is True and (c.get("pool_size") or 0) > 0
-    return (PASSED if ok else FAILED), dict(detail, reason=None if ok else "ranker changed pool MEMBERSHIP (must be a pure reorder) or pool was empty")
+              "pool_size": c.get("pool_size"), "membership_identical": membership_identical,
+              "order_changed": order_changed, "ranker_effect": effect,
+              "off_order_head": c.get("off_order_head"), "on_order_head": c.get("on_order_head")}
+    ok = bool(c.get("ok")) and membership_identical is True and (c.get("pool_size") or 0) > 0 and effect in ("reordered", "no_effect")
+    return (PASSED if ok else FAILED), dict(detail, reason=None if ok else
+            "ranker changed pool MEMBERSHIP (must be a pure reorder), pool was empty, or the effect could not be classified")
 
 
 def stage_piano(ctx):
@@ -620,11 +668,19 @@ def stage_piano(ctx):
     b = r2["result"] or {}
     second = b.get("attempts") or []
     preserved = second[:len(first)] == first
+
+    def _attempt_row(a_rec):
+        # attempt-level provenance retained verbatim in the committable receipt:
+        # project id, revision sha, output path, verdict, and refusal/error reason.
+        return {k: a_rec.get(k) for k in ("iteration", "persona", "seed", "project_id",
+                                          "revision_sha", "path", "verdict", "reason", "report")}
+
     detail = {"run_id": rid, "cap": cap,
               "run1": {k: a.get(k) for k in ("attempted", "kept", "discarded", "errored", "stop_reason", "complete")},
               "resume": {k: b.get(k) for k in ("attempted", "kept", "discarded", "errored", "stop_reason", "complete")},
               "prior_attempts_preserved_verbatim": preserved,
-              "resumed_at_least_prior": (b.get("attempted") or 0) >= (a.get("attempted") or 0)}
+              "resumed_at_least_prior": (b.get("attempted") or 0) >= (a.get("attempted") or 0),
+              "attempts": [_attempt_row(x) for x in second]}   # full attempt-level ledger
     ok = bool(b.get("complete")) and preserved and (b.get("attempted") or 0) <= cap + 2
     return (PASSED if ok else FAILED), dict(detail, reason=None if ok else "resume did not preserve prior attempts verbatim, or exceeded the cap")
 
@@ -642,10 +698,11 @@ def stage_allin1(ctx):
                          "note": "the stub-based gate is adapter SHAPE only — NOT model validation"}
     if r.get("reason"):   # e.g. silent librosa fallback detected
         return FAILED, {"reason": r["reason"], "log": rec["log"]}
-    ok = bool(r.get("ok")) and (r.get("tracks_sampled") or 0) > 0
-    return (PASSED if ok else FAILED), {k: r.get(k) for k in
-            ("tracks_sampled", "librosa_downbeat_conf", "allin1_downbeat_conf", "mean_conf_delta",
-             "transition_feasibility_change")}
+    ok = bool(r.get("ok")) and (r.get("tracks_sampled") or 0) > 0 and bool(r.get("transition_probe"))
+    return (PASSED if ok else FAILED), dict({k: r.get(k) for k in
+            ("tracks_sampled", "librosa_bpm_confidence", "allin1_bpm_confidence",
+             "mean_bpm_confidence_delta", "transition_probe")},
+            reason=None if ok else "allin1 sample produced no honest metrics or no transition probe")
 
 
 def stage_rubberband(ctx):
@@ -659,7 +716,15 @@ def stage_rubberband(ctx):
                          "note": "default transform is UNCHANGED; this script never flips the default or bumps ENGINE_VERSION"}
     if env is None or not pid:
         return SKIPPED, {"reason": "no real project to A/B; render one first"}
-    out_dir = ctx.scratch / "rubberband_ab"; out_dir.mkdir(parents=True, exist_ok=True)
+    # CONTAINMENT: project_render only permits an explicit --dst under the scratch
+    # workspace's working_root/renders. Writing to <scratch>/rubberband_ab escapes
+    # that root and the path guard REJECTS it. Render both A/B inside renders/.
+    prep = ctx.state.data.get("scratch_workspace") or {}
+    working_root = prep.get("working_root")
+    if not working_root:
+        return SKIPPED, {"reason": "scratch workspace exposed no working_root; cannot contain the A/B renders"}
+    out_dir = Path(working_root) / "renders" / "rubberband_ab"
+    out_dir.mkdir(parents=True, exist_ok=True)
     dflt = out_dir / "default.wav"; rbw = out_dir / "rubberband.wav"
     r_def = ctx.run_subprocess("rb_default", [ctx.python, "-m", "earcrate", "project", "render", pid, "--dst", str(dflt)],
                                env=env, timeout=1800, json_out=True)
@@ -668,11 +733,31 @@ def stage_rubberband(ctx):
                               env=rb_env, timeout=1800, json_out=True)
     prov = ctx.run_helper("rb_provider", _RESOLVE_TRANSFORM_SRC, [], env=rb_env, timeout=120)
     resolved = (prov.get("result") or {}).get("effective")
+
+    def _report_provider(rec):
+        """Effective provider + actual per-engine invocation counts read from the
+        render RECEIPT (the report file), not merely from the resolver."""
+        rp = (rec.get("result") or {}).get("report")
+        if not rp or not Path(rp).exists():
+            return {}
+        with contextlib.suppress(Exception):
+            return json.loads(Path(rp).read_text(encoding="utf-8"))
+        return {}
+
+    rep_def = _report_provider(r_def)
+    rep_rb = _report_provider(r_rb)
+    inv_rb = (rep_rb.get("transform_invocations") or {})
+    rb_real_calls = int(inv_rb.get("rubberband_time_stretch", 0)) + int(inv_rb.get("rubberband_pitch_shift", 0))
     detail = {"default_log": r_def["log"], "rubberband_log": r_rb["log"],
+              "renders_contained_under": str(out_dir),
               "note": "child-process EARCRATE_TRANSFORM override only; default not changed",
               "provider_resolved_in_env": resolved,
               "report_default": (r_def.get("result") or {}).get("report"),
-              "report_rubberband": (r_rb.get("result") or {}).get("report")}
+              "report_rubberband": (r_rb.get("result") or {}).get("report"),
+              "report_default_provider": rep_def.get("transform_provider"),
+              "report_rubberband_provider": rep_rb.get("transform_provider"),
+              "rubberband_transform_invocations": inv_rb,
+              "rubberband_real_transform_calls": rb_real_calls}
 
     def rok(rec, dst):
         return bool(rec.get("result_readable") and (rec["result"] or {}).get("type") == "render_project" and Path(dst).exists())
@@ -682,9 +767,26 @@ def stage_rubberband(ctx):
     if rbw.exists():
         detail["rubberband_sha256"] = sha256_file(rbw)
     detail["hashes_differ"] = detail.get("default_sha256") != detail.get("rubberband_sha256")
-    mech = rok(r_def, dflt) and rok(r_rb, rbw) and resolved == "rubberband"
-    if not mech:
-        return FAILED, dict(detail, reason="a render failed, an artifact/report was missing, or the provider did not resolve to rubberband")
+
+    renders_ok = rok(r_def, dflt) and rok(r_rb, rbw)
+    provider_ok = (resolved == "rubberband"
+                   and rep_rb.get("transform_provider") == "rubberband"
+                   and rep_def.get("transform_provider") == "phase_vocoder")
+    if not (renders_ok and provider_ok):
+        return FAILED, dict(detail, reason="a render failed/escaped containment, or the render RECEIPT did not show "
+                            "phase_vocoder (default) vs rubberband providers")
+    if rb_real_calls <= 0:
+        # A/B with zero real Rubber Band transform calls proves nothing — the project
+        # had no non-unity time/pitch clip for the engine to act on.
+        return FAILED, dict(detail, reason="no NON-UNITY transform exercised Rubber Band (0 real rubberband calls); "
+                            "the A/B cannot prove a provider difference — compile a project that stretches/pitches a clip")
+    # SPECTRAL A/B: prove the two engines produced audibly different audio.
+    spec = ctx.run_helper("rb_spectral", _SPECTRAL_AB_SRC, [str(dflt), str(rbw)], timeout=300)
+    sres = spec.get("result") or {}
+    detail["spectral"] = sres
+    spectral_ok = bool(sres.get("ok")) and float(sres.get("spectral_l1") or 0.0) > 1e-4
+    if not spectral_ok:
+        return FAILED, dict(detail, reason="spectral A/B measured no meaningful difference between the two renders")
     v = ctx.args.verdict_rubberband
     if v in ("default", "rubberband", "tie"):
         return PASSED, dict(detail, verdict=v)   # verdict ON TOP of a green mechanical result
@@ -707,13 +809,23 @@ def stage_techno(ctx):
         return FAILED, {"log": rec["log"], "reason": "techno helper wrote no readable result"}
     r = rec["result"] or {}
     detail = {"external_vocal_basename": r.get("external_vocal_basename"),   # basename only; never the path/file
-              "external_vocal_in_registry": r.get("external_vocal_in_registry"),
+              "external_source_identity_matched": r.get("external_source_identity_matched"),
+              "identity_match_kind": r.get("identity_match_kind"),   # "content_sha256" | "resolved_path"
               "render_type": r.get("render_type"), "render_ok": r.get("render_ok"),
               "project_id": r.get("project_id"), "revision_sha": r.get("revision_sha"),
-              "note": "external source referenced, never bundled"}
-    mech = bool(r.get("render_ok")) and bool(r.get("external_vocal_in_registry"))
+              "export_ok": r.get("export_ok"), "export_sha256": r.get("export_sha256"),
+              "note": "external source referenced by content identity, never bundled"}
+    # EXACT identity (content sha256 or resolved-path equality), NOT a basename
+    # substring; a completed publication must also EXPORT the score with hashed
+    # EDL/RPP/sheet artifacts.
+    identity_ok = bool(r.get("external_source_identity_matched"))
+    export_ok = bool(r.get("export_ok")) and bool((r.get("export_sha256") or {}).get("edl")) \
+        and bool((r.get("export_sha256") or {}).get("rpp")) and bool((r.get("export_sha256") or {}).get("sheet"))
+    mech = bool(r.get("render_ok")) and identity_ok and export_ok
     if not mech:
-        return FAILED, dict(detail, reason=r.get("reason") or "render failed, or the external vocal is not present in the revision's source registry")
+        return FAILED, dict(detail, reason=r.get("reason") or
+                            "render failed, external source identity did not EXACTLY match a registry entry, "
+                            "or the score export/hash was incomplete")
     v = ctx.args.verdict_techno
     if v in ("keep", "reject"):
         return PASSED, dict(detail, verdict=v)
@@ -834,11 +946,26 @@ from earcrate.app import EarcrateCore
 from earcrate.analyze.decode import decode_audio
 from earcrate.analyze.features import compute_pcm_features
 from earcrate.providers.beats import beat_capability
+from earcrate.plan.transitions import best_transition
 out = sys.argv[1]; seconds = float(sys.argv[2]) if len(sys.argv) > 2 else 60.0
 res = {"ok": False, "tracks_sampled": 0}
 def dist(v):
     return {"n": len(v), "mean": round(st.mean(v), 4), "min": round(min(v), 4),
             "max": round(max(v), 4), "stdev": round(st.pstdev(v), 4)} if v else None
+def _to_list(x):
+    try: return [float(t) for t in list(x)]
+    except Exception: return []
+def track_dict(tid, feats, seconds):
+    return {"id": tid, "bpm": float(feats.get("bpm") or 0.0),
+            "bpm_confidence": float(feats.get("bpm_confidence") or 0.0),
+            "beats": _to_list(feats.get("beats")), "downbeats": _to_list(feats.get("downbeats")),
+            "sections": feats.get("sections") or [], "duration_s": float(seconds)}
+def plan_view(p):
+    if p is None: return None
+    return {"technique": getattr(p, "technique", None), "a_exit_beat": getattr(p, "a_exit_beat", None),
+            "b_entry_beat": getattr(p, "b_entry_beat", None), "duration_bars": getattr(p, "duration_bars", None),
+            "total_score": round(float(getattr(p, "total_score", 0.0)), 4),
+            "confidence": round(float(getattr(p, "confidence", 0.0)), 4)}
 try:
     cap = beat_capability(); res["capability"] = cap
     if not cap.get("ready"):
@@ -846,6 +973,7 @@ try:
     core = EarcrateCore(); core.load_config_if_present()
     rows = core.conn().execute("SELECT path FROM files WHERE COALESCE(present,1)=1 LIMIT 8").fetchall()
     sr = 22050; lib = []; al = []
+    lib_feats = []; al_feats = []; states = {"lib": [], "al": []}; ids = []
     for r in rows:
         p = r[0]
         try:
@@ -861,30 +989,89 @@ try:
             res["reason"] = f"allin1 requested but backend was {A.get('beat_backend')} (silent fallback)"
             Path(out).write_text(json.dumps(res)); sys.exit(0)
         lib.append(float(L.get("bpm_confidence") or 0.0)); al.append(float(A.get("bpm_confidence") or 0.0))
+        tid = os.path.basename(str(p))
+        ids.append(tid); lib_feats.append(L); al_feats.append(A)
+        states["lib"].append(L.get("beat_state")); states["al"].append(A.get("beat_state"))
         res["tracks_sampled"] += 1
     if res["tracks_sampled"] == 0:
         res["reason"] = "no decodable tracks in the library sample"; Path(out).write_text(json.dumps(res)); sys.exit(0)
-    res["librosa_downbeat_conf"] = dist(lib); res["allin1_downbeat_conf"] = dist(al)
-    res["mean_conf_delta"] = round(st.mean(al) - st.mean(lib), 4)
-    res["transition_feasibility_change"] = ("no_change" if abs(res["mean_conf_delta"]) < 1e-6 else
-        {"direction": "up" if res["mean_conf_delta"] > 0 else "down", "mean_downbeat_conf_delta": res["mean_conf_delta"],
-         "basis": "downbeat-confidence distribution shift (the input to transition feasibility)"})
+    # HONEST metric names: these ARE bpm_confidence distributions, not downbeat confidence.
+    res["librosa_bpm_confidence"] = dist(lib); res["allin1_bpm_confidence"] = dist(al)
+    res["mean_bpm_confidence_delta"] = round(st.mean(al) - st.mean(lib), 4)
+    # REAL transition probe: run an actual transition candidate through BOTH analyses
+    # for a track pair and report the concrete plan change (or a measured no-change).
+    if res["tracks_sampled"] >= 2:
+        a_lib = track_dict(ids[0], lib_feats[0], seconds); b_lib = track_dict(ids[1], lib_feats[1], seconds)
+        a_al = track_dict(ids[0], al_feats[0], seconds); b_al = track_dict(ids[1], al_feats[1], seconds)
+        p_lib = plan_view(best_transition(a_lib, b_lib, a_state=states["lib"][0], b_state=states["lib"][1]))
+        p_al = plan_view(best_transition(a_al, b_al, a_state=states["al"][0], b_state=states["al"][1]))
+        changed = p_lib != p_al
+        res["transition_probe"] = {"pair": [ids[0], ids[1]], "librosa_plan": p_lib, "allin1_plan": p_al,
+                                   "changed": changed,
+                                   "result": ("transition_plan_changed" if changed else "measured_no_change")}
+    else:
+        res["transition_probe"] = {"pair": None, "result": "insufficient_tracks_for_pair",
+                                   "note": "only one decodable track; cannot build a transition pair"}
     res["ok"] = True
 except Exception as exc:
     import traceback
-    res["error"] = f"{type(exc).__name__}: {exc}"
+    res["error"] = f"{type(exc).__name__}: {exc}"; res["trace"] = traceback.format_exc()[-2000:]
+Path(out).write_text(json.dumps(res))
+'''
+
+_SPECTRAL_AB_SRC = r'''
+import json, sys
+from pathlib import Path
+import numpy as np
+import soundfile as sf
+out, a_path, b_path = sys.argv[1], sys.argv[2], sys.argv[3]
+res = {"ok": False}
+def mono(path):
+    y, sr = sf.read(str(path), dtype="float32", always_2d=True)
+    return np.mean(y, axis=1).astype(np.float32), int(sr)
+def mag_spectrum(y):
+    n = 1 << 15
+    if y.size < n: y = np.pad(y, (0, n - y.size))
+    Y = np.abs(np.fft.rfft(y[:n]))
+    return Y / (np.sum(Y) + 1e-12)
+def centroid(Y, sr):
+    f = np.fft.rfftfreq((len(Y) - 1) * 2, d=1.0 / sr)
+    return float(np.sum(f * Y) / (np.sum(Y) + 1e-12))
+try:
+    a, sra = mono(a_path); b, srb = mono(b_path)
+    Ya = mag_spectrum(a); Yb = mag_spectrum(b)
+    res["spectral_l1"] = round(float(np.sum(np.abs(Ya - Yb))), 6)         # normalized-magnitude L1
+    res["spectral_centroid_default_hz"] = round(centroid(Ya, sra), 3)
+    res["spectral_centroid_rubberband_hz"] = round(centroid(Yb, srb), 3)
+    res["rms_default"] = round(float(np.sqrt(np.mean(a * a))), 6)
+    res["rms_rubberband"] = round(float(np.sqrt(np.mean(b * b))), 6)
+    res["samples_default"] = int(a.size); res["samples_rubberband"] = int(b.size)
+    res["ok"] = True
+except Exception as exc:
+    import traceback
+    res["error"] = f"{type(exc).__name__}: {exc}"; res["trace"] = traceback.format_exc()[-1500:]
 Path(out).write_text(json.dumps(res))
 '''
 
 _TECHNO_SRC = r'''
-import json, os, sys
+import json, os, sys, hashlib
 from pathlib import Path
 from earcrate.app import EarcrateCore
 out, vocal = sys.argv[1], sys.argv[2]
 seconds = float(sys.argv[3]) if len(sys.argv) > 3 else 120.0
 res = {"ok": False}
+def file_sha256(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 try:
     core = EarcrateCore(); core.load_config_if_present()
+    resolved_vocal = str(Path(vocal).expanduser().resolve())
+    vocal_sha = None
+    try: vocal_sha = file_sha256(resolved_vocal)
+    except Exception: pass
     prop = core.propose_external_remix({"target_path": vocal, "taste_profile": "remix_techno_v1",
                                         "target_seconds": seconds})
     arr = prop.get("arrangement") or prop.get("plan")
@@ -896,16 +1083,44 @@ try:
     pid = imp["project"]["project_id"]
     show = core.project_show(pid)
     reg = show["revision"].get("source_registry") or {}
-    base = os.path.basename(vocal)
-    in_registry = any(base in str(v.get("path", "")) for v in reg.values())
+    # EXACT source identity: match a registry entry by content sha256 (preferred) or
+    # by resolved absolute path — NEVER a basename substring.
+    match_kind = None
+    for v in reg.values():
+        entry_sha = str(v.get("file_sha256") or "")
+        if vocal_sha and entry_sha and entry_sha == vocal_sha:
+            match_kind = "content_sha256"; break
+        try:
+            if str(Path(str(v.get("path") or "")).resolve()) == resolved_vocal:
+                match_kind = "resolved_path"; break
+        except Exception:
+            pass
+    identity_matched = match_kind is not None
     rr = core.project_render(pid)
+    render_ok = rr.get("type") == "render_project" and bool(rr.get("path")) and Path(str(rr.get("path"))).exists()
+    # EXPORT the score and HASH each artifact (edl/rpp/sheet).
+    export_ok = False; export_sha = {}
+    try:
+        ex = core.project_export(pid)
+        for fmt in ("edl", "rpp", "sheet"):
+            fp = ex.get(fmt)
+            if fp and Path(fp).exists():
+                export_sha[fmt] = file_sha256(fp)
+        export_ok = bool(ex.get("ok")) and set(export_sha) >= {"edl", "rpp", "sheet"}
+    except Exception as exc:
+        res["export_error"] = f"{type(exc).__name__}: {exc}"
     res.update({"project_id": pid, "revision_sha": imp["project"]["active_revision_sha"],
-                "external_vocal_basename": base, "external_vocal_in_registry": in_registry,
-                "render_type": rr.get("type"), "render_path": rr.get("path"),
-                "render_ok": rr.get("type") == "render_project" and bool(rr.get("path")) and Path(str(rr.get("path"))).exists()})
-    if not in_registry:
-        res["reason"] = "external vocal not found in the imported revision's source registry"
-    res["ok"] = bool(res["render_ok"]) and in_registry
+                "external_vocal_basename": os.path.basename(vocal),
+                "external_source_identity_matched": identity_matched, "identity_match_kind": match_kind,
+                "render_type": rr.get("type"), "render_path": rr.get("path"), "render_ok": render_ok,
+                "export_ok": export_ok, "export_sha256": export_sha})
+    if not identity_matched:
+        res["reason"] = "external source identity did not EXACTLY match any registry entry (content sha / resolved path)"
+    elif not render_ok:
+        res["reason"] = "render did not publish a WAV"
+    elif not export_ok:
+        res["reason"] = "score export/hash incomplete (need edl+rpp+sheet on disk)"
+    res["ok"] = bool(render_ok and identity_matched and export_ok)
 except Exception as exc:
     import traceback
     res["error"] = f"{type(exc).__name__}: {exc}"; res["trace"] = traceback.format_exc()[-2000:]
@@ -952,11 +1167,57 @@ def execute_stages(ctx: "Ctx", state: RunState, stage_meta: List[Dict[str, Any]]
 
 def run(args) -> int:
     scratch = Path(args.scratch).expanduser().resolve()
-    run_dir = scratch / "receipt" / args.run_id
-    state_path = run_dir / "state.json"
-    logs_dir = run_dir / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
     head_now = git_head(ROOT)
+
+    # ========================================================================
+    # PREFLIGHT — runs ENTIRELY in an OS-temp directory. Nothing is created
+    # under scratch until master_root is resolved AND the scratch path is proven
+    # safe against the ACTUAL music library. An unsafe scratch (inside the music
+    # library) must therefore leave ZERO files behind. (Item 2.)
+    # ========================================================================
+    env_info = _preflight_env(args)
+    preflight_dir = Path(tempfile.mkdtemp(prefix="rigreceipt_preflight_"))
+    try:
+        probe_state = RunState.new(preflight_dir / "state.json", args.run_id, head_now["head"],
+                                   _args_snapshot(args), STAGE_META)   # in-memory only (never .save()d)
+        probe_ctx = Ctx(args, probe_state, scratch, preflight_dir)
+        cfg = resolve_workspace_config(probe_ctx)   # `earcrate doctor` probe → OS-temp logs
+        master = cfg.get("master_root")
+        master_resolved = bool(master) and Path(master).expanduser().exists()
+        scratch_safe = None    # tri-state: only True/False once a real music root exists to check against
+        scratch_error: Optional[str] = None
+        if master_resolved:
+            scratch_safe = True
+            try:
+                assert_scratch_safe(scratch, Path(master))    # against the ACTUAL music library
+            except Exception as exc:
+                scratch_safe = False; scratch_error = str(exc)
+
+        # Refuse BEFORE creating anything under scratch.
+        if head_now["dirty"] and not args.allow_dirty:
+            print("REFUSING: git working tree is dirty. Commit/stash, or pass --allow-dirty.", file=sys.stderr)
+            return EXIT_FAILED
+        if not master_resolved:
+            print("REFUSING: could not resolve master_root (the real music library) from --workspace "
+                  f"({args.workspace}). The scratch-safety check cannot run against an unknown music root, "
+                  "so no crate-dependent stage may proceed — and nothing is written under scratch. Run "
+                  "`earcrate configure --music <folder>` in that workspace first, then re-run.", file=sys.stderr)
+            return EXIT_FAILED
+        if not scratch_safe:
+            print(f"REFUSING: scratch is unsafe vs the resolved music library: {scratch_error}. "
+                  "Nothing was written under scratch.", file=sys.stderr)
+            return EXIT_FAILED
+
+        # ---- scratch is PROVEN safe: only now create anything under it ----
+        run_dir = scratch / "receipt" / args.run_id
+        state_path = run_dir / "state.json"
+        logs_dir = run_dir / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        # retain the preflight probe log under the (now-safe) scratch for auditability
+        with contextlib.suppress(Exception):
+            shutil.copytree(preflight_dir, logs_dir / "preflight", dirs_exist_ok=True)
+    finally:
+        shutil.rmtree(preflight_dir, ignore_errors=True)
 
     # ---- resume vs new + HEAD guard (a different HEAD ALWAYS needs a new run_id) ----
     if state_path.exists():
@@ -974,43 +1235,13 @@ def run(args) -> int:
         print(f"new run {args.run_id} at HEAD {head_now['head'][:12]}")
 
     ctx = Ctx(args, state, scratch, logs_dir)
-
-    # ---- preflight: env, then RESOLVE master_root and check scratch safety against
-    # the ACTUAL music library. The safety check is only meaningful once the real
-    # music root is known, so an UNRESOLVED master_root is a refusal — we never
-    # accept a scratch path (or run any crate-dependent stage) on an unverified
-    # location. Item 1: resolve master_root, run assert_scratch_safe against it,
-    # refuse if it cannot be resolved, and never reach execute_stages otherwise. ----
-    state.data["environment"] = _preflight_env(args)
-    cfg = resolve_workspace_config(ctx)
+    state.data["environment"] = env_info
     state.data["workspace_config"] = cfg
-    master = cfg.get("master_root")
-    master_resolved = bool(master) and Path(master).expanduser().exists()
-    pf: Dict[str, Any] = {"git": head_now, "checked_at": utcnow(), "master_root_resolved": master_resolved}
-    scratch_safe = None    # tri-state: only True/False once we have a real music root to check against
-    if master_resolved:
-        scratch_safe = True
-        try:
-            assert_scratch_safe(scratch, Path(master))    # against the ACTUAL music library
-        except Exception as exc:
-            scratch_safe = False; pf["scratch_error"] = str(exc)
-    pf["scratch_safe"] = scratch_safe
-    pf["dirty_refused"] = bool(head_now["dirty"] and not args.allow_dirty)
-    state.data["preflight"] = pf
+    state.data["preflight"] = {"git": head_now, "checked_at": utcnow(),
+                               "master_root_resolved": master_resolved, "scratch_safe": scratch_safe,
+                               "config_resolved_in_os_temp": True,
+                               "dirty_refused": bool(head_now["dirty"] and not args.allow_dirty)}
     state.save()
-
-    if head_now["dirty"] and not args.allow_dirty:
-        print("REFUSING: git working tree is dirty. Commit/stash, or pass --allow-dirty.", file=sys.stderr)
-        return EXIT_FAILED
-    if not master_resolved:
-        print("REFUSING: could not resolve master_root (the real music library) from --workspace "
-              f"({args.workspace}). The scratch-safety check cannot run against an unknown music root, "
-              "so no crate-dependent stage may proceed. Run `earcrate configure --music <folder>` in "
-              "that workspace first, then re-run.", file=sys.stderr)
-        return EXIT_FAILED
-    if not scratch_safe:
-        print(f"REFUSING: scratch is unsafe vs the resolved music library: {pf.get('scratch_error')}", file=sys.stderr)
-        return EXIT_FAILED
 
     # ---- durable-state clone (consistent SQLite backup). master_root unresolved ->
     # ok=False -> crate-dependent stages skip honestly rather than pollute/crash. ----
@@ -1067,6 +1298,33 @@ def _pkg_version(mod: str) -> Optional[str]:
         return None
 
 
+def _nvidia_smi() -> Dict[str, Any]:
+    """The ACTUAL NVIDIA driver + GPU from nvidia-smi. torch.version.cuda is the
+    CUDA TOOLKIT a torch wheel was built against — NOT the installed driver — so it
+    must never be labelled as the driver. Returns {} when nvidia-smi is absent."""
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return {}
+    with contextlib.suppress(Exception):
+        out = subprocess.run(
+            [exe, "--query-gpu=driver_version,name,memory.total",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=20)
+        line = (out.stdout or "").strip().splitlines()
+        if line:
+            parts = [p.strip() for p in line[0].split(",")]
+            info: Dict[str, Any] = {"nvidia_smi": exe}
+            if len(parts) >= 1 and parts[0]:
+                info["driver_version"] = parts[0]      # the real installed NVIDIA driver
+            if len(parts) >= 2 and parts[1]:
+                info["name"] = parts[1]
+            if len(parts) >= 3 and parts[2]:
+                info["memory_total_mib"] = parts[2]
+            info["gpus"] = len(line)
+            return info
+    return {"nvidia_smi": exe, "driver_version": None, "note": "nvidia-smi present but query failed"}
+
+
 def _preflight_env(args) -> Dict[str, Any]:
     env: Dict[str, Any] = {
         "python": sys.version.split()[0],
@@ -1086,13 +1344,25 @@ def _preflight_env(args) -> Dict[str, Any]:
     with contextlib.suppress(Exception):
         import psutil  # optional
         env["ram_gb"] = round(psutil.virtual_memory().total / 1e9, 1)
+    # The real NVIDIA driver comes from nvidia-smi, NOT torch.version.cuda.
+    gpu = _nvidia_smi()
+    if gpu:
+        env["gpu"] = {"name": gpu.get("name"), "driver_version": gpu.get("driver_version"),
+                      "memory_total_mib": gpu.get("memory_total_mib"), "count": gpu.get("gpus"),
+                      "source": "nvidia-smi"}
     with contextlib.suppress(Exception):
         import torch  # type: ignore
+        # cuda_version here is the TOOLKIT the torch wheel was built against —
+        # explicitly labelled so it is never confused with the driver above.
         env["cuda"] = {"available": bool(torch.cuda.is_available()),
-                       "cuda_version": getattr(getattr(torch, "version", None), "cuda", None)}
+                       "torch_built_cuda_toolkit": getattr(getattr(torch, "version", None), "cuda", None)}
         if torch.cuda.is_available():
-            env["gpu"] = {"name": torch.cuda.get_device_name(0),
-                          "driver": getattr(getattr(torch, "version", None), "cuda", None)}
+            env.setdefault("gpu", {})
+            env["gpu"].setdefault("name", torch.cuda.get_device_name(0))
+            env["gpu"]["torch_sees_cuda"] = True
+            if not env["gpu"].get("driver_version"):
+                env["gpu"]["driver_version"] = None
+                env["gpu"]["driver_note"] = "nvidia-smi unavailable; real driver version not captured"
     return env
 
 
@@ -1162,9 +1432,12 @@ def _markdown(receipt: Dict[str, Any]) -> str:
     for s in receipt["stages"]:
         d = s.get("detail") or {}
         notable = {k: d[k] for k in ("discovered", "passed", "dist_sha256", "project_id", "render_sha256",
-                                     "edited_pcm_differs", "pcm_identity_restored", "reopened_head_matches",
-                                     "model_sha", "membership_identical", "order_changed", "prior_attempts_preserved_verbatim",
-                                     "provider_resolved_in_env", "external_vocal_in_registry", "tracks_sampled",
+                                     "report_sha256", "edited_pcm_differs", "pcm_identity_restored", "reopened_head_matches",
+                                     "model_sha", "membership_identical", "order_changed", "ranker_effect",
+                                     "prior_attempts_preserved_verbatim", "provider_resolved_in_env",
+                                     "report_rubberband_provider", "rubberband_real_transform_calls",
+                                     "external_source_identity_matched", "identity_match_kind", "export_ok",
+                                     "tracks_sampled", "mean_bpm_confidence_delta",
                                      "reason", "verdict", "install", "how") if k in d}
         if notable:
             L.append(f"- **{s['key']}** ({s['status']}): " + ", ".join(f"{k}=`{v}`" for k, v in notable.items()))

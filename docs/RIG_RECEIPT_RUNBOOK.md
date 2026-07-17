@@ -42,16 +42,19 @@ Run-Rig-Receipt.cmd ^
 ## Preflight (refuses rather than guesses)
 
 - **Refuses a dirty git tree** by default (`--allow-dirty` records the dirt).
-- Records branch, HEAD, upstream, Python (+ executable path), OS, CPU, RAM, GPU,
-  CUDA, and — as **executable path + version string, not a bare boolean** —
-  ffmpeg, ffprobe, Rubber Band, plus versions for allin1, pyrubberband, Demucs,
-  Playwright, torch, numpy/scipy/librosa/soundfile/mutagen, and the configured
-  provider env (`EARCRATE_BEATS/TRANSFORM/RANKER/STEMS`).
-- **Resolves the configured `master_root` (the real music library) first, then
-  runs the scratch-safety check against it.** If `master_root` cannot be
-  resolved from `--workspace`, the run **refuses** (exit 1) — the safety check
-  cannot run against an unknown music root, so no crate-dependent stage may
-  proceed. Run `earcrate configure --music <folder>` in that workspace first.
+- Records branch, HEAD, upstream, Python (+ executable path), OS, CPU, RAM, and —
+  as **executable path + version string, not a bare boolean** — ffmpeg, ffprobe,
+  Rubber Band, plus versions for allin1, pyrubberband, Demucs, Playwright, torch,
+  numpy/scipy/librosa/soundfile/mutagen, and the configured provider env
+  (`EARCRATE_BEATS/TRANSFORM/RANKER/STEMS`).
+- **GPU driver comes from `nvidia-smi`** (real installed driver version), never
+  from `torch.version.cuda` — that is only the CUDA toolkit a torch wheel was
+  built against and is recorded separately as `torch_built_cuda_toolkit`.
+- **Config resolution runs entirely in an OS-temp directory.** The `master_root`
+  is resolved and the scratch path validated BEFORE anything is created under
+  scratch, so an unsafe scratch leaves zero files behind. If `master_root`
+  cannot be resolved from `--workspace`, the run **refuses** (exit 1) and no
+  crate-dependent stage proceeds. Run `earcrate configure --music <folder>` first.
 - **Requires an explicit scratch outside the music library** (refuses scratch ==
   music, scratch ⊂ music, or music ⊂ scratch).
 - The durable-state clone uses a **consistent SQLite backup** (`Connection.backup`
@@ -69,14 +72,14 @@ Run-Rig-Receipt.cmd ^
 | 2 | VERIFY_PACKAGE + build single-file | rig mechanical | yes | records the built `dist/earcrate.py` SHA-256 |
 | 3 | Workbench DOM lifecycle (package + single-file) | rig mechanical | yes | zero console errors required, both modes |
 | 4 | project acceptance (scratch) | rig mechanical | yes | self-contained scratch workspace |
-| 5 | compile + render a real-library project | real library | yes | records project/revision/score/render/report/EDL/RPP/sheet + hashes |
+| 5 | compile + render a real-library project | real library | yes | FAILS unless show, render report, EDL, RPP and sheet all exist on disk and are hashed |
 | 6 | human keep/reject on the real render | human listening | yes | `pending_manual` until a verdict; gate success is NEVER inferred as a keep |
 | 7 | edit → render → undo → PCM identity → redo → restart | real library | yes | proves undo restores prior decoded-PCM identity + edited head reopens |
 | 8 | ranker training + off/on order | real library | yes | insufficient/one-class data → honest `skipped_insufficient_data`, not a pass |
 | 9 | bounded piano session | real library | yes | records attempted/kept/discarded/errored/stop_reason within the iteration cap |
-| 10 | allin1 before/after on real tracks | gpu/provider | no | probes the real model; if absent → incomplete + exact install/rerun command; never claims the stub as validation |
-| 11 | Rubber Band A/B render + listening verdict | gpu/provider | no | child-process `EARCRATE_TRANSFORM` override only; never flips the default or bumps `ENGINE_VERSION` |
-| 12 | techno external-vocal proof + verdict | human listening | no | needs `--external-vocal`; the copyrighted source is never copied into the repo/receipt |
+| 10 | allin1 before/after on real tracks | gpu/provider | no | honest `bpm_confidence` distributions (not relabelled downbeat conf) + a REAL transition candidate run through both analyses (records a concrete plan change or a measured no-change); silent librosa fallback FAILS |
+| 11 | Rubber Band A/B render + listening verdict | gpu/provider | no | both renders CONTAINED under the scratch `working_root/renders`; effective provider + real per-engine invocation counts read from the render RECEIPT; requires a non-unity transform actually run through Rubber Band + a measured spectral A/B difference; child-process `EARCRATE_TRANSFORM` override only; never flips the default or bumps `ENGINE_VERSION` |
+| 12 | techno external-vocal proof + verdict | human listening | no | needs `--external-vocal`; verifies EXACT source identity (content sha256 / resolved path, not a basename substring), exports the score and hashes EDL/RPP/sheet; the copyrighted source is never copied into the repo/receipt |
 
 ## Status + exit-code semantics
 

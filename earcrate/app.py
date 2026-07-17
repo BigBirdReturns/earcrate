@@ -5657,8 +5657,20 @@ class EarcrateCore:
             "deck_model": {"version": "v0.9.0", "model": "immutable_score_varispeed_multideck_tail_overlay", "max_aux_decks": max_tail_decks,
                            "rule": "the score seals every source, stem, gain and transition; the renderer executes or refuses"},
             "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0},
+            # EVIDENCE (additive; no behaviour/default change): the EFFECTIVE
+            # transform provider this render resolved to, and a count of how many
+            # clips ACTUALLY ran each transform engine. A resolver that merely says
+            # "rubberband" proves nothing; a non-zero rubberband_time_stretch /
+            # rubberband_pitch_shift count proves a clip really used Rubber Band.
+            "transform_provider": transform_provider,
+            "transform_invocations": {"rubberband_time_stretch": 0, "rubberband_pitch_shift": 0,
+                                      "phase_vocoder_time_stretch": 0, "phase_vocoder_pitch_shift": 0,
+                                      "near_unity_resample": 0, "dry_varispeed": 0},
             "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0,
         }
+
+        def _bump_transform(kind: str) -> None:
+            report["transform_invocations"][kind] = report["transform_invocations"].get(kind, 0) + 1
 
         def project_pan(signal: np.ndarray, pan: float) -> np.ndarray:
             """Apply the score's equal-power pan; legacy renders stay mono."""
@@ -5784,19 +5796,23 @@ class EarcrateCore:
                 # watery cave artifacts caused by phase-vocoder stretching.
                 clip2 = resample_or_fit(clip2, target_loop_len).astype(np.float32)
                 report.setdefault("transform_policy", "varispeed_first_resample_then_small_residual_pitch")
+                _bump_transform("dry_varispeed")
             elif abs(float(rate) - 1.0) <= 0.015:
                 clip2 = resample_or_fit(clip2, target_loop_len).astype(np.float32)
+                _bump_transform("near_unity_resample")
             elif transform_provider == "rubberband":
                 try:
                     clip2 = rubberband_time_stretch(clip2, sr, float(rate))
                 except Exception as exc:
                     raise RuntimeError(f"rubberband time_stretch failed: {exc}")
                 report.setdefault("transform_policy", "rubberband_time_pitch_v1")
+                _bump_transform("rubberband_time_stretch")
             else:
                 try:
                     clip2 = librosa.effects.time_stretch(clip2, rate=rate).astype(np.float32)
                 except Exception as exc:
                     raise RuntimeError(f"time_stretch failed: {exc}")
+                _bump_transform("phase_vocoder_time_stretch")
             diff = abs(clip2.size - target_loop_len) / max(1, target_loop_len)
             if diff > 0.005:
                 raise RuntimeError(f"post-stretch length mismatch {diff:.4f}")
@@ -5806,8 +5822,10 @@ class EarcrateCore:
                 try:
                     if transform_provider == "rubberband":
                         clip2 = rubberband_pitch_shift(clip2, sr, float(ps))
+                        _bump_transform("rubberband_pitch_shift")
                     else:
                         clip2 = librosa.effects.pitch_shift(clip2, sr=sr, n_steps=float(ps)).astype(np.float32)
+                        _bump_transform("phase_vocoder_pitch_shift")
                 except Exception as exc:
                     raise RuntimeError(f"pitch_shift failed: {exc}")
                 diff = abs(clip2.size - target_loop_len) / max(1, target_loop_len)

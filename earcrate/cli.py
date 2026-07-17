@@ -216,6 +216,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(core.build_compatibility_graph(ns.profile, ns.seconds, ns.bpm), ensure_ascii=False, indent=2))
         return 0
     if argv and argv[0] == "configure":
+        _json_out = _pop_json_out(argv)
         cp = argparse.ArgumentParser(prog="earcrate configure", description="Set the music folder + workspace (persists; run this once before scan/organize/deepclean)")
         cp.add_argument("--music", required=True, help="your music/source folder (read-only source)")
         cp.add_argument("--workspace", default="", help="workspace folder; default is a visible sibling of the music folder")
@@ -226,7 +227,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if ns.workers is not None: data["workers"] = ns.workers
         if ns.analysis_seconds: data["analysis_seconds"] = ns.analysis_seconds
         core = EarcrateCore()
-        print(json.dumps(core.configure_workspace(data), ensure_ascii=False, indent=2))
+        _emit(core.configure_workspace(data), _json_out)
         return 0
     if argv and argv[0] == "scan":
         core = EarcrateCore()

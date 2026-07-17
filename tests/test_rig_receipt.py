@@ -1276,3 +1276,178 @@ def test_techno_verdict_rejects_missing_report(tmp_path):
     md = _seed_techno_mechanical(ctx, tmp_path)
     Path(md["report_path"]).unlink()
     assert R.stage_techno_verdict(ctx)[0] == R.FAILED
+
+
+# ==========================================================================
+# FINAL VERIFICATION PASS: allin1 never falls back to production; the DOM
+# harness is run-scoped and Windows-deterministic (bounded startup wait); real
+# startup gates for both server forms; corrected path scoping.
+# ==========================================================================
+
+# ---- 1. allin1 without a scratch clone SKIPS and never touches production -----
+def test_allin1_skips_without_scratch_and_leaves_production_untouched(tmp_path):
+    from test_projects import configured_core
+    core = configured_core(tmp_path)     # a REAL production workspace with a live sqlite
+    core.conn().execute("SELECT 1").fetchone()   # ensure the DB file family exists
+    del core
+
+    def snap(root):
+        return {str(p.relative_to(root)): (p.stat().st_size, p.stat().st_mtime_ns)
+                for p in sorted(Path(root).rglob("*")) if p.is_file()}
+
+    before = snap(tmp_path)
+    st = R.RunState.new(tmp_path / "rr" / "state.json", "rigX", "H", {}, R.STAGE_META)
+    st.data["scratch_workspace"] = {"ok": False, "reason": "clone failed"}   # scratch NOT trusted
+    args = _Args(workspace=str(tmp_path), scratch=str(tmp_path / "scr"), run_id="rigX")
+    ctx = R.Ctx(args, st, tmp_path / "scr", tmp_path / "rr" / "logs")   # the REAL Ctx: a helper call would spawn a process
+    status, detail = R.stage_allin1(ctx)
+    assert status == R.SKIPPED and "production" in detail["reason"]
+    assert st.data["log_ledger"] == [], "the allin1 helper was invoked despite no scratch clone"
+    after = snap(tmp_path)
+    # remove the harness's own state dir from the comparison; production must be identical
+    prod_before = {k: v for k, v in before.items() if not k.startswith("rr/")}
+    prod_after = {k: v for k, v in after.items() if not k.startswith(("rr/", "scr/"))}
+    assert prod_before == prod_after, "production files changed (DB/WAL/SHM must be untouched)"
+
+
+def test_allin1_stage_source_has_no_production_fallback():
+    import inspect
+    src = inspect.getsource(R.stage_allin1)
+    assert "args.workspace" not in src, "stage_allin1 must never construct an env from --workspace"
+    assert "SKIPPED" in src.split("run_helper")[0], "the no-clone SKIP must come before any helper call"
+
+
+# ---- 2+3. DOM harness: run-scoped workspace, unbuffered, bounded startup ------
+_WB_SRC = (_REPO_ROOT / "tests" / "manual" / "verify_workbench_dom.py").read_text(encoding="utf-8")
+
+
+def test_workbench_harness_is_run_scoped_and_bounded():
+    # workspace comes from WB_BASE_DIR when the rig harness supplies it
+    assert 'os.environ.get("WB_BASE_DIR")' in _WB_SRC
+    # the child server can never buffer its token line
+    assert 'env["PYTHONUNBUFFERED"] = "1"' in _WB_SRC
+    # bounded startup: a background reader + queue with per-get timeouts, never a
+    # bare blocking readline loop
+    assert "queue.Queue" in _WB_SRC and "threading.Thread" in _WB_SRC
+    assert "lines.get(timeout=" in _WB_SRC
+    boot_body = _WB_SRC.split("def boot(")[1].split("\ndef ")[0]
+    assert "proc.stdout.readline()" not in boot_body, "boot still block-reads the pipe directly"
+    # unconditional server cleanup survives
+    assert "finally:" in _WB_SRC and "proc.kill()" in _WB_SRC
+
+
+def test_workbench_stage_scopes_all_paths_under_run_root(tmp_path):
+    ctx = _FakeCtx(tmp_path, _Args(), sub={"workbench_dom": {"exit_code": 0}})
+    shots = ctx.run_dir("workbench_dom")
+    (shots / "receipt.json").write_text(json.dumps(
+        {"modes": {"package": {"ok": True, "console_errors": []},
+                   "singlefile": {"ok": True, "console_errors": []}}}), encoding="utf-8")
+    _wav(shots / "package_desktop_timeline.png")
+    status, detail = R.stage_workbench_dom(ctx)
+    assert status == R.PASSED
+    env = ctx.sub_envs["workbench_dom"]
+    root = str(ctx.run_root)
+    assert env["WB_SHOTS_DIR"].startswith(root), "screenshots/receipt escaped the run root"
+    assert env["WB_BASE_DIR"].startswith(root), "browser workspace escaped the run root"
+    assert env["PYTHONUNBUFFERED"] == "1"
+    assert str(shots).startswith(root)          # the receipt the stage reads is under the run root too
+
+
+def _boot_server(cmd, port, home, timeout=45.0):
+    """The same bounded startup mechanism the DOM harness uses: stdout piped,
+    background reader, hard deadline. Returns (proc, url)."""
+    import threading as _th, queue as _qu
+    env = dict(os.environ, EARCRATE_HOME=str(home), PYTHONUNBUFFERED="1")
+    proc = subprocess.Popen(cmd + ["--serve", "--no-browser", "--port", str(port)],
+                            cwd=str(_REPO_ROOT), env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    q = _qu.Queue()
+
+    def _pump(stream):
+        try:
+            for line in iter(stream.readline, ""):
+                q.put(line)
+        finally:
+            q.put(None)
+
+    _th.Thread(target=_pump, args=(proc.stdout,), daemon=True).start()
+    url = None
+    deadline = __import__("time").time() + timeout
+    while __import__("time").time() < deadline:
+        try:
+            line = q.get(timeout=1.0)
+        except Exception:
+            if proc.poll() is not None:
+                break
+            continue
+        if line is None:
+            break
+        import re as _re
+        m = _re.search(r"(http://127\.0\.0\.1:%d/\?token=[^\s]+)" % port, line)
+        if m:
+            url = m.group(1); break
+    return proc, url
+
+
+def _free_port():
+    import socket as _so
+    s = _so.socket(_so.AF_INET, _so.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+    return port
+
+
+def _shutdown(proc):
+    import signal as _sig, time as _t
+    with __import__("contextlib").suppress(Exception):
+        proc.send_signal(getattr(_sig, "SIGINT", _sig.SIGTERM))
+    for _ in range(20):
+        if proc.poll() is not None:
+            return proc.returncode
+        _t.sleep(0.5)
+    proc.kill()
+    proc.wait(timeout=10)
+    return proc.returncode
+
+
+def test_server_startup_package_mode_yields_token_and_terminates(tmp_path):
+    port = _free_port()
+    proc, url = _boot_server([sys.executable, "-m", "earcrate"], port, tmp_path / "home")
+    try:
+        assert url and f":{port}/?token=" in url, "package-mode server printed no token URL within the bound"
+    finally:
+        rc = _shutdown(proc)
+    assert rc is not None, "package-mode server did not terminate cleanly"
+
+
+def test_server_startup_singlefile_yields_token_and_terminates(tmp_path):
+    dist = _REPO_ROOT / "dist" / "earcrate.py"
+    if not dist.exists():   # deterministic build; VERIFY_PACKAGE does the same
+        subprocess.run([sys.executable, str(_REPO_ROOT / "build" / "make_singlefile.py")],
+                       cwd=str(_REPO_ROOT), check=True, capture_output=True, timeout=300)
+    port = _free_port()
+    proc, url = _boot_server([sys.executable, str(dist)], port, tmp_path / "home")
+    try:
+        assert url and f":{port}/?token=" in url, "single-file server printed no token URL within the bound"
+    finally:
+        rc = _shutdown(proc)
+    assert rc is not None, "single-file server did not terminate cleanly"
+
+
+# ---- the single-file bundle must contain every provider-seam module -----------
+def test_singlefile_bundle_is_complete():
+    # providers/transform+beats and ear/taste_ranker were once missing from the
+    # bundler ORDER: package-mode gates stayed green while every single-file
+    # preview/render NameError'd at call time (doctor swallowed it). Pin both the
+    # rebuilt bundle's symbols and the bundler's refuse-to-build guard.
+    dist = _REPO_ROOT / "dist" / "earcrate.py"
+    if not dist.exists():
+        subprocess.run([sys.executable, str(_REPO_ROOT / "build" / "make_singlefile.py")],
+                       cwd=str(_REPO_ROOT), check=True, capture_output=True, timeout=300)
+    src = dist.read_text(encoding="utf-8")
+    for sym in ("def resolve_transform_provider", "def transform_capability",
+                "def beat_capability", "def resolve_beat_provider",
+                "def train_ranker", "def rank_pool",
+                "TASTE_RANKER_FEATURES = FEATURES"):   # aliased import survives the strip
+        assert sym in src, f"single-file bundle is missing: {sym}"
+    builder = (_REPO_ROOT / "build" / "make_singlefile.py").read_text(encoding="utf-8")
+    assert "missing from the single-file ORDER" in builder, "bundler lost its completeness guard"

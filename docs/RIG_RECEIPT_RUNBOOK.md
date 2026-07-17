@@ -153,8 +153,8 @@ never read as *milestone complete*:
    cloud-CI figure).
 2. **rig mechanical** — stages 1–4.
 3. **real library** — stages 5, 7, 8, 9.
-4. **gpu/provider** — stages 10, 11.
-5. **human listening** — stages 6, 11, 12.
+4. **gpu/provider** — stages 10, 11, 13 (allin1, Rubber Band mechanical, techno mechanical).
+5. **human listening** — stages 6, 12, 14 (real-render, Rubber Band, and techno verdicts).
 
 A green mechanical run does **not** assert a musical verdict, and an outstanding
 allin1/Rubber Band/listening stage keeps the overall status `incomplete`. Only

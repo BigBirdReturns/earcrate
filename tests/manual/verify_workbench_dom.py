@@ -12,7 +12,7 @@ fails on ANY console error. Also captures desktop + narrow-window screenshots.
 
 Exit 0 = every mode green with zero console errors.
 """
-import os, sys, json, time, tempfile, subprocess, re, signal, socket, glob
+import os, sys, json, time, tempfile, subprocess, re, signal, socket, glob, threading, queue
 from pathlib import Path
 import numpy as np, soundfile as sf
 
@@ -23,7 +23,11 @@ ROOT = Path(__file__).resolve().parents[2]
 # otherwise a temp dir. Never hardcode a host path.
 SHOTS = Path(os.environ.get("WB_SHOTS_DIR") or tempfile.mkdtemp(prefix="wb_shots_"))
 SHOTS.mkdir(parents=True, exist_ok=True)
-BASE = Path(tempfile.mkdtemp(prefix="wb_dom_")); HOME = BASE / "home"; HOME.mkdir(parents=True)
+# The browser WORKSPACE (seeded project + home) is run-scoped when the rig harness
+# passes WB_BASE_DIR; a temp dir only when run by hand.
+BASE = Path(os.environ.get("WB_BASE_DIR") or tempfile.mkdtemp(prefix="wb_dom_"))
+BASE.mkdir(parents=True, exist_ok=True)
+HOME = BASE / "home"; HOME.mkdir(parents=True, exist_ok=True)
 
 
 def _chromium_executable():
@@ -90,18 +94,45 @@ print("SEED_OK", pid)
     return out.stdout.split("SEED_OK", 1)[1].strip().split()[0]
 
 
-def boot(cmd, port):
+def boot(cmd, port, timeout=45.0):
+    """Start the server and wait for its token URL with a GENUINELY bounded wait.
+
+    Reading the child's pipe directly blocks with no timeout — on Windows a server
+    that starts but buffers (or never prints) its startup line would hang the
+    harness past any deadline. Instead a daemon thread pumps stdout into a queue
+    and the main thread polls that queue with per-get timeouts until the overall
+    deadline, so boot() ALWAYS returns within ``timeout`` seconds. The child runs
+    with PYTHONUNBUFFERED=1 so the token line is not stuck in a stdio buffer."""
     env = dict(os.environ); env["EARCRATE_HOME"] = str(HOME)
+    env["PYTHONUNBUFFERED"] = "1"
     for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
         env[k] = "1"
     proc = subprocess.Popen(cmd + ["--serve", "--no-browser", "--port", str(port)],
                             cwd=str(ROOT), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    url = None; t0 = time.time()
-    while time.time() - t0 < 45:
-        line = proc.stdout.readline()
-        if not line and proc.poll() is not None:
-            break
-        m = re.search(r"(http://127\.0\.0\.1:%d/\?token=[^\s]+)" % port, line or "")
+    lines: "queue.Queue" = queue.Queue()
+
+    def _pump(stream):
+        try:
+            for line in iter(stream.readline, ""):
+                lines.put(line)
+        except Exception:
+            pass
+        finally:
+            lines.put(None)   # EOF sentinel
+
+    threading.Thread(target=_pump, args=(proc.stdout,), daemon=True).start()
+    url = None
+    deadline = time.time() + float(timeout)
+    while time.time() < deadline:
+        try:
+            line = lines.get(timeout=min(1.0, max(0.05, deadline - time.time())))
+        except queue.Empty:
+            if proc.poll() is not None:
+                break             # server died without printing the token line
+            continue              # still starting; keep waiting until the deadline
+        if line is None:
+            break                 # stdout closed (server exited)
+        m = re.search(r"(http://127\.0\.0\.1:%d/\?token=[^\s]+)" % port, line)
         if m:
             url = m.group(1); break
     return proc, url

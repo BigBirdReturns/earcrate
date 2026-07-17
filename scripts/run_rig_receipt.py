@@ -589,7 +589,13 @@ def stage_verify_package(ctx):
 
 def stage_workbench_dom(ctx):
     shots = ctx.run_dir("workbench_dom")   # per-run_id browser receipts + screenshots
-    env = {"WB_SHOTS_DIR": str(shots)}
+    env = {"WB_SHOTS_DIR": str(shots),
+           # per-run_id browser WORKSPACE too (seeded project + home) — never an
+           # anonymous OS temp dir that outlives/estranges the run (item 2)
+           "WB_BASE_DIR": str(ctx.run_dir("workbench_dom_state")),
+           # Windows-deterministic startup: the child server must not buffer the
+           # token line the harness waits for
+           "PYTHONUNBUFFERED": "1"}
     if ctx.args.chromium:
         env["EARCRATE_CHROMIUM"] = ctx.args.chromium
     rec = ctx.run_subprocess("workbench_dom", [ctx.python, "tests/manual/verify_workbench_dom.py"],
@@ -808,7 +814,14 @@ def stage_piano(ctx):
 
 
 def stage_allin1(ctx):
-    env = _scratch_env(ctx) or {"EARCRATE_HOME": str(Path(ctx.args.workspace).expanduser())}
+    # NO production fallback: sampling decodes tracks and opens the analysis DB, so
+    # without a trusted scratch clone the stage SKIPS. It must never construct the
+    # engine against --workspace or touch the production SQLite/WAL/SHM. (item 1)
+    env = _scratch_env(ctx)
+    if env is None:
+        return SKIPPED, {"reason": "no durable-state clone; allin1 sampling must not run against the "
+                                   "production workspace, so the stage is skipped (never silently redirected)",
+                         "rerun": "prepare the scratch workspace, then resume with the SAME --run-id"}
     rec = ctx.run_helper("allin1", _ALLIN1_SAMPLE_SRC, [str(ctx.args.real_seconds)], env=env, timeout=3600)
     if not rec.get("result_readable"):
         return FAILED, {"log": rec["log"], "reason": "allin1 helper wrote no readable result"}

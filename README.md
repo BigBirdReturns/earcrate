@@ -17,13 +17,49 @@ per-stage receipts. No fallback render is allowed.
 - Dev: `python -m earcrate`
 - Single file: `python build/make_singlefile.py` then `python dist/earcrate.py`
 
+## Exact MIDI and the neutral player piano
+
+MIDI enters through a source-independent, content-hashed event ledger. Mido is
+used as the Standard MIDI File codec, while EarCrate retains every absolute
+tick, track-local event order, tempo event, controller, program change, pitch
+bend, note message, and meta message as its own canonical data.
+
+```text
+python -m earcrate midi inspect "arrangement.mid"
+python -m earcrate midi ledger "arrangement.mid" "arrangement.ledger.json"
+python -m earcrate midi roundtrip "arrangement.mid" "arrangement.roundtrip.mid"
+python -m earcrate midi render "arrangement.mid" "arrangement.neutral.wav" --stems-dir "neutral-stems"
+```
+
+The neutral renderer deliberately uses simple tones. It executes tempo changes,
+sustain, volume, expression, pan, and pitch bend, writes optional per-track
+stems, and records every rendered or refused note in a receipt. Declared track
+count does not determine render cost; only note events and occupied tracks are
+materialized.
+
+Basic Pitch is an optional note-observation provider for isolated stems. It is
+measurement only: EarCrate retains authority over the accepted beat grid,
+quantization, arrangement, and sample binding.
+
+```text
+pip install "basic-pitch>=0.4,<0.5"
+python -m earcrate midi transcribe "bass-stem.wav" "bass.notes.json" --provider basic-pitch
+```
+
+The provider hashes the installed model bytes and raw model outputs into the
+observation receipt. No Basic Pitch model is bundled by EarCrate.
+
 ## Verify
+
 - `python tests/run_gates.py`
 - `python VERIFY_PACKAGE.py` (builds and selftests the single file too)
+- `python scripts/oss_audit.py` (validates code and model governance ledgers)
 
-CI runs both on every push and pull request. Treat a red run as a merge blocker.
+CI runs the package and package-verification gates on every push and pull
+request. Treat a red run as a merge blocker.
 
 ## Lineage
+
 Descends from the Jukebreaker GT line (v0.5.x deck discipline, v0.6.x
 fail-fast harvest / turnover contract / keyless percussion, v0.7.x modular
 rebuild). Full history in CHANGELOG.md. Legacy workspaces are adopted in
@@ -32,6 +68,7 @@ place: an existing `jukebreaker.sqlite` is used without migration.
 Sources (audio) never enter this repository.
 
 ## License
+
 PolyForm Noncommercial 1.0.0 — free for personal/noncommercial use; commercial use
 requires a written license from the copyright holder. See LICENSE.md (which also
 notes that music rights are separate from software rights).

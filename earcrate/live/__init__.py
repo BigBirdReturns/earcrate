@@ -1,4 +1,4 @@
-"""Deterministic local live-DJ planning, precompiled crates, and sparse CPU execution."""
+"""Deterministic local live-DJ planning, precompiled crates, and buffered audio execution."""
 
 from earcrate.live.model import (
     LiveError,
@@ -44,9 +44,16 @@ from earcrate.live.crate import (
     live_validate_crate_session,
     live_write_crate_session,
 )
+from earcrate.live.stream import (
+    LiveBlockStream,
+    live_render_next_phrase,
+    live_stream_capability,
+    live_validate_phrase_receipt,
+)
 
 __all__ = [
     "LIVE_TECHNIQUE_NAMES",
+    "LiveBlockStream",
     "LiveError",
     "live_apply_control",
     "live_apply_technique",
@@ -64,8 +71,10 @@ __all__ = [
     "live_persona_policy",
     "live_plan_next",
     "live_plan_session",
+    "live_render_next_phrase",
     "live_run_crate_session",
     "live_runtime_capability",
+    "live_stream_capability",
     "live_technique_names",
     "live_validate_atlas",
     "live_validate_cpu_execution",
@@ -75,6 +84,7 @@ __all__ = [
     "live_validate_engine_step",
     "live_validate_horizon_plan",
     "live_validate_midi_lowering",
+    "live_validate_phrase_receipt",
     "live_validate_session_plan",
     "live_validate_state",
     "live_write_crate_session",

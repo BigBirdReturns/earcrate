@@ -118,18 +118,79 @@ stems, and event-level execution receipts. SFZ is generated as portable object
 code for external samplers; the EarCrate rack and binding ledgers remain the
 source of truth.
 
+## Local live DJ runtime
+
+The live engine treats MIDI as an exact teaching and execution language rather
+than the final product. It compiles arrangement patterns into a `LiveMaterialAtlas`,
+maintains a hashed `LiveSetState`, plans over a receding horizon, commits only the
+next phrase, and replans after controls or state changes.
+
+Four numerical persona policies ship with the runtime: `club`, `girl_talk`,
+`pretty_lights`, and `minimal`. They control phrase and horizon lengths, energy,
+density, risk, layer limits, source turnover, role priorities, technique weights,
+and objective weights. Persona changes remain pending until a phrase boundary
+that is legal for both policies.
+
+The typed technique registry currently includes blend, hard cut, loop extension,
+drop to floor, foreground swap, tease, layer building, breakdown, echo out, drum
+rebuild, sample chop, and layer accumulation. Every selected technique has
+preconditions, exact selected layers, lowering commands, objective terms,
+ranked alternatives, and an execution outcome.
+
+```text
+python -m earcrate live capability
+python -m earcrate live atlas "source-performance.mid" "live-atlas.json"
+python -m earcrate live session "source-performance.mid" "live-build" \
+  --bars 64 \
+  --persona pretty_lights \
+  --controls "controls.json" \
+  --neutral-render
+```
+
+A timed controls file is a JSON array. Controls may switch persona, enable,
+disable, or force a technique, change energy, density, risk, or layer limits,
+hold and release the current material, and skip source patterns.
+
+The expensive private-library search can be moved completely out of the live
+path. Export approved atoms to JSON once, compile a sealed live crate, and use
+that small rack set for later sessions:
+
+```text
+python -m earcrate live crate-compile \
+  "source-performance.mid" \
+  "approved-atoms.json" \
+  "compiled-live-crate" \
+  --profile girl_talk_v1 \
+  --max-transpose 18
+
+python -m earcrate live crate-session \
+  "compiled-live-crate/live-crate-atlas.json" \
+  "live-show" \
+  --bars 128 \
+  --persona pretty_lights \
+  --controls "controls.json" \
+  --render \
+  --stems
+```
+
+`crate-compile` performs the slow candidate search, materializes exact sample
+slices, seals multi-zone racks, optionally writes SFZ, and binds the source
+performance. `crate-session` plans on CPU, revalidates the compiled sample
+identities, binds the generated performance to those racks, and renders without
+scanning the full library. Its CPU execution receipt reports the command count,
+peak active layers, and zero pattern or material scans during execution.
+
 ## Verify
 
 - `python tests/run_gates.py`
 - `python VERIFY_PACKAGE.py` builds and self-tests the single-file package and
-  drives its packaged MIDI and rack command surfaces.
+  drives its packaged MIDI, rack, reference, and live command surfaces.
 - `python scripts/oss_audit.py` validates code and model governance ledgers.
 
-CI currently passes 199 of 199 executable gates. The generated single-file
-package also passes its historical self-test, MIDI inspection smoke, and an
-end-to-end rack smoke that seals, binds, and renders a real sample. CI retains
-the complete gate ledger and package-verifier ledger as artifacts whether a run
-passes or fails.
+CI retains the complete gate ledger and package-verifier ledger as artifacts on
+both successful and failed runs. Treat a red run as a merge blocker. The gate
+runner prints the current executable count, so documentation does not preserve a
+stale historical number.
 
 ## Lineage
 

@@ -24,7 +24,13 @@ def _midi_kind(message: Mapping[str, Any]) -> str:
     return typ
 
 
-def _midi_curve_append(curves: dict[tuple[int, int], dict[str, list[tuple[int, int]]]], key: tuple[int, int], name: str, tick: int, value: int) -> None:
+def _midi_curve_append(
+    curves: dict[tuple[int, int], dict[str, list[tuple[int, int]]]],
+    key: tuple[int, int],
+    name: str,
+    tick: int,
+    value: int,
+) -> None:
     rows = curves[key][name]
     if rows and rows[-1][0] == tick:
         rows[-1] = (tick, value)
@@ -33,8 +39,19 @@ def _midi_curve_append(curves: dict[tuple[int, int], dict[str, list[tuple[int, i
 
 
 def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
-    """Compile note lifetimes and MIDI channel-control curves without rasterizing tracks."""
+    """Compile note lifetimes and channel curves without rasterizing tracks."""
     midi_validate_ledger(ledger)
+    if int(ledger["midi_type"]) == 2:
+        raise MidiLedgerError(
+            "SMF type 2 contains asynchronous sequences; exact parse and round-trip are supported, "
+            "but neutral rendering requires an explicit sequence selection"
+        )
+
+    global_max_tick = max(
+        (int(event["tick"]) for track in ledger["tracks"] for event in track["events"]),
+        default=0,
+    )
+    close_tick = global_max_tick + int(ledger["ticks_per_beat"])
     curves: dict[tuple[int, int], dict[str, list[tuple[int, int]]]] = defaultdict(
         lambda: {
             "pitchwheel": [(0, 0)],
@@ -47,7 +64,6 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
     dangling_note_ons = 0
     unmatched_note_offs = 0
     sustained_releases = 0
-    max_tick = 0
 
     for track in ledger["tracks"]:
         track_index = int(track["track_index"])
@@ -58,7 +74,6 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
 
         def finalize(note_state: dict[str, Any], end_tick: int, reason: str) -> None:
             nonlocal sustained_releases
-            resolved_end = max(int(end_tick), int(note_state["start_tick"]) + 1)
             spans.append({
                 "event_id": note_state["event_id"],
                 "track_index": track_index,
@@ -68,7 +83,7 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
                 "velocity": int(note_state["velocity"]),
                 "program": int(note_state["program"]),
                 "start_tick": int(note_state["start_tick"]),
-                "end_tick": resolved_end,
+                "end_tick": max(int(end_tick), int(note_state["start_tick"]) + 1),
                 "end_reason": reason,
             })
             if reason == "sustain_release":
@@ -76,7 +91,6 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
 
         for event in sorted(track["events"], key=lambda item: (int(item["tick"]), int(item["order"]))):
             tick = int(event["tick"])
-            max_tick = max(max_tick, tick)
             message = event["message"]
             kind = _midi_kind(message)
             if event["is_meta"]:
@@ -101,26 +115,23 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
                     was_down = sustain_down[channel]
                     sustain_down[channel] = value >= 64
                     if was_down and not sustain_down[channel]:
-                        pending = sustained.pop(channel, [])
-                        for state in pending:
+                        for state in sustained.pop(channel, []):
                             finalize(state, tick, "sustain_release")
             elif kind == "note_on":
                 note = int(message.get("note") or 0)
-                velocity = int(message.get("velocity") or 0)
-                event_id = hashlib.sha256(
+                digest = hashlib.sha256(
                     f"{ledger['semantic_sha256']}:{track_index}:{event['order']}:{tick}:{channel}:{note}".encode("utf-8")
                 ).hexdigest()[:24]
                 active[(channel, note)].append({
-                    "event_id": f"mnote_{event_id}",
+                    "event_id": f"mnote_{digest}",
                     "channel": channel,
                     "note": note,
-                    "velocity": velocity,
+                    "velocity": int(message.get("velocity") or 0),
                     "program": program[channel],
                     "start_tick": tick,
                 })
             elif kind == "note_off":
-                note = int(message.get("note") or 0)
-                key = (channel, note)
+                key = (channel, int(message.get("note") or 0))
                 if not active[key]:
                     unmatched_note_offs += 1
                     continue
@@ -130,7 +141,6 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
                 else:
                     finalize(state, tick, "note_off")
 
-        close_tick = max_tick + int(ledger["ticks_per_beat"])
         for states in active.values():
             for state in states:
                 dangling_note_ons += 1
@@ -139,7 +149,15 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
             for state in states:
                 finalize(state, close_tick, "end_of_file_sustain")
 
-    spans.sort(key=lambda item: (int(item["start_tick"]), int(item["track_index"]), int(item["channel"]), int(item["note"]), str(item["event_id"])))
+    spans.sort(
+        key=lambda item: (
+            int(item["start_tick"]),
+            int(item["track_index"]),
+            int(item["channel"]),
+            int(item["note"]),
+            str(item["event_id"]),
+        )
+    )
     serialized_curves = {
         f"{track_index}:{channel}": {
             name: [{"tick": tick, "value": value} for tick, value in rows]
@@ -159,17 +177,21 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
             "sustain_release_count": sustained_releases,
             "occupied_track_count": len({int(span["track_index"]) for span in spans}),
             "declared_track_count": len(ledger["tracks"]),
+            "dangling_close_tick": close_tick,
         },
     }
 
 
-def _midi_curve_from_compiled(compiled: Mapping[str, Any], track_index: int, channel: int, name: str) -> list[tuple[int, int]]:
+def _midi_curve_from_compiled(
+    compiled: Mapping[str, Any], track_index: int, channel: int, name: str
+) -> list[tuple[int, int]]:
     channel_row = (compiled.get("channel_curves") or {}).get(f"{track_index}:{channel}") or {}
-    rows = channel_row.get(name) or []
-    return [(int(row["tick"]), int(row["value"])) for row in rows]
+    return [(int(row["tick"]), int(row["value"])) for row in channel_row.get(name) or []]
 
 
-def _midi_step_curve(rows: list[tuple[int, int]], clock: MidiTempoClock, sample_times: np.ndarray, default: int) -> np.ndarray | float:
+def _midi_step_curve(
+    rows: list[tuple[int, int]], clock: MidiTempoClock, sample_times: np.ndarray, default: int
+) -> np.ndarray | float:
     if not rows:
         return float(default)
     times = np.asarray([clock.tick_to_seconds(tick) for tick, _value in rows], dtype=np.float64)
@@ -177,8 +199,7 @@ def _midi_step_curve(rows: list[tuple[int, int]], clock: MidiTempoClock, sample_
     if len(values) == 1:
         return float(values[0])
     indices = np.searchsorted(times, sample_times, side="right") - 1
-    indices = np.clip(indices, 0, len(values) - 1)
-    return values[indices]
+    return values[np.clip(indices, 0, len(values) - 1)]
 
 
 def _midi_waveform(phase: np.ndarray, waveform: str) -> np.ndarray:
@@ -192,7 +213,15 @@ def _midi_waveform(phase: np.ndarray, waveform: str) -> np.ndarray:
     raise MidiLedgerError(f"unsupported neutral waveform: {waveform}")
 
 
-def _midi_render_notes_into(target: np.ndarray, notes: list[Mapping[str, Any]], compiled: Mapping[str, Any], clock: MidiTempoClock, sample_rate: int, waveform: str, pitch_bend_range_semitones: float) -> dict[str, int]:
+def _midi_render_notes_into(
+    target: np.ndarray,
+    notes: list[Mapping[str, Any]],
+    compiled: Mapping[str, Any],
+    clock: MidiTempoClock,
+    sample_rate: int,
+    waveform: str,
+    pitch_bend_range_semitones: float,
+) -> dict[str, int]:
     rendered = 0
     truncated = 0
     total_frames = int(target.shape[0])
@@ -210,42 +239,67 @@ def _midi_render_notes_into(target: np.ndarray, notes: list[Mapping[str, Any]], 
         count = end_frame - start_frame
         if count <= 0:
             continue
+
         sample_times = start_seconds + np.arange(count, dtype=np.float64) / float(sample_rate)
         track_index = int(note_event["track_index"])
         channel = int(note_event["channel"])
-        pitch_rows = _midi_curve_from_compiled(compiled, track_index, channel, "pitchwheel")
-        volume_rows = _midi_curve_from_compiled(compiled, track_index, channel, "volume")
-        expression_rows = _midi_curve_from_compiled(compiled, track_index, channel, "expression")
-        pan_rows = _midi_curve_from_compiled(compiled, track_index, channel, "pan")
-        pitch_values = _midi_step_curve(pitch_rows, clock, sample_times, 0)
-        semitone_bend = np.asarray(pitch_values, dtype=np.float64) / 8192.0 * float(pitch_bend_range_semitones)
-        base_frequency = 440.0 * (2.0 ** ((int(note_event["note"]) - 69) / 12.0))
+        pitch = _midi_step_curve(
+            _midi_curve_from_compiled(compiled, track_index, channel, "pitchwheel"),
+            clock,
+            sample_times,
+            0,
+        )
+        semitone_bend = np.asarray(pitch, dtype=np.float64) / 8192.0 * float(pitch_bend_range_semitones)
+        base_frequency = 440.0 * 2.0 ** ((int(note_event["note"]) - 69) / 12.0)
         frequency = base_frequency * np.power(2.0, semitone_bend / 12.0)
         if np.ndim(frequency) == 0:
             phase = np.arange(count, dtype=np.float64) * (2.0 * math.pi * float(frequency) / sample_rate)
         else:
             phase = np.cumsum(np.asarray(frequency, dtype=np.float64)) * (2.0 * math.pi / sample_rate)
-        phase_seed = int(hashlib.sha256(str(note_event["event_id"]).encode("utf-8")).hexdigest()[:8], 16)
-        phase += (phase_seed / 0xFFFFFFFF) * 2.0 * math.pi
+        seed = int(hashlib.sha256(str(note_event["event_id"]).encode("utf-8")).hexdigest()[:8], 16)
+        phase += seed / 0xFFFFFFFF * 2.0 * math.pi
         mono = _midi_waveform(phase, waveform)
 
-        volume = np.asarray(_midi_step_curve(volume_rows, clock, sample_times, 100), dtype=np.float64) / 127.0
-        expression = np.asarray(_midi_step_curve(expression_rows, clock, sample_times, 127), dtype=np.float64) / 127.0
+        volume = np.asarray(
+            _midi_step_curve(
+                _midi_curve_from_compiled(compiled, track_index, channel, "volume"),
+                clock,
+                sample_times,
+                100,
+            ),
+            dtype=np.float64,
+        ) / 127.0
+        expression = np.asarray(
+            _midi_step_curve(
+                _midi_curve_from_compiled(compiled, track_index, channel, "expression"),
+                clock,
+                sample_times,
+                127,
+            ),
+            dtype=np.float64,
+        ) / 127.0
         velocity = (max(1, int(note_event["velocity"])) / 127.0) ** 1.35
-        amplitude = 0.20 * velocity * volume * expression
-        mono *= amplitude
+        mono *= 0.20 * velocity * volume * expression
 
         attack = min(count // 2, max(1, int(round(0.005 * sample_rate))))
         release = min(count // 2, max(1, int(round(0.020 * sample_rate))))
         envelope = np.ones(count, dtype=np.float64)
         if attack > 1:
-            envelope[:attack] *= np.linspace(0.0, 1.0, attack, endpoint=True)
+            envelope[:attack] *= np.linspace(0.0, 1.0, attack)
         if release > 1:
-            envelope[-release:] *= np.linspace(1.0, 0.0, release, endpoint=True)
+            envelope[-release:] *= np.linspace(1.0, 0.0, release)
         mono *= envelope
 
-        pan = np.asarray(_midi_step_curve(pan_rows, clock, sample_times, 64), dtype=np.float64)
-        angle = np.clip(pan / 127.0, 0.0, 1.0) * (math.pi / 2.0)
+        pan = np.asarray(
+            _midi_step_curve(
+                _midi_curve_from_compiled(compiled, track_index, channel, "pan"),
+                clock,
+                sample_times,
+                64,
+            ),
+            dtype=np.float64,
+        )
+        angle = np.clip(pan / 127.0, 0.0, 1.0) * math.pi / 2.0
         target[start_frame:end_frame, 0] += (mono * np.cos(angle)).astype(target.dtype, copy=False)
         target[start_frame:end_frame, 1] += (mono * np.sin(angle)).astype(target.dtype, copy=False)
         rendered += 1
@@ -257,8 +311,19 @@ def _midi_safe_stem_name(track_index: int, name: str) -> str:
     return f"{track_index:04d}_{safe}.wav"
 
 
-def midi_render_ledger(ledger: Mapping[str, Any], output_path: str | Path, *, stems_dir: str | Path | None = None, sample_rate: int = 44_100, waveform: str = "sine", pitch_bend_range_semitones: float = 2.0, max_seconds: float = 0.0, target_peak: float = 0.92, overwrite: bool = False) -> dict[str, Any]:
-    """Render a ledger with neutral tones; cost follows note events and active voices."""
+def midi_render_ledger(
+    ledger: Mapping[str, Any],
+    output_path: str | Path,
+    *,
+    stems_dir: str | Path | None = None,
+    sample_rate: int = 44_100,
+    waveform: str = "sine",
+    pitch_bend_range_semitones: float = 2.0,
+    max_seconds: float = 0.0,
+    target_peak: float = 0.92,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Render type-0/1 MIDI with neutral tones; cost follows events and voices."""
     midi_validate_ledger(ledger)
     if sample_rate <= 0:
         raise MidiLedgerError("sample_rate must be positive")
@@ -266,7 +331,7 @@ def midi_render_ledger(ledger: Mapping[str, Any], output_path: str | Path, *, st
         raise MidiLedgerError(f"waveform must be one of {sorted(MIDI_RENDER_WAVEFORMS)}")
     if pitch_bend_range_semitones <= 0:
         raise MidiLedgerError("pitch_bend_range_semitones must be positive")
-    if not (0.0 < target_peak <= 1.0):
+    if not 0.0 < target_peak <= 1.0:
         raise MidiLedgerError("target_peak must be in (0,1]")
 
     destination = Path(output_path).expanduser().resolve()
@@ -282,7 +347,15 @@ def midi_render_ledger(ledger: Mapping[str, Any], output_path: str | Path, *, st
     duration = min(natural_duration, float(max_seconds)) if max_seconds and max_seconds > 0 else natural_duration
     total_frames = max(1, int(math.ceil(duration * sample_rate)))
     master = np.zeros((total_frames, 2), dtype=np.float32)
-    first_pass = _midi_render_notes_into(master, list(compiled["note_spans"]), compiled, clock, sample_rate, waveform, pitch_bend_range_semitones)
+    first_pass = _midi_render_notes_into(
+        master,
+        list(compiled["note_spans"]),
+        compiled,
+        clock,
+        sample_rate,
+        waveform,
+        pitch_bend_range_semitones,
+    )
     peak_before = float(np.max(np.abs(master))) if master.size else 0.0
     scale = min(1.0, target_peak / peak_before) if peak_before > 0 else 1.0
     master *= np.float32(scale)
@@ -298,14 +371,25 @@ def midi_render_ledger(ledger: Mapping[str, Any], output_path: str | Path, *, st
     if stems_dir is not None:
         stem_root = Path(stems_dir).expanduser().resolve()
         stem_root.mkdir(parents=True, exist_ok=True)
-        names = {int(track["track_index"]): str(track.get("name") or f"Track {int(track['track_index']) + 1}") for track in ledger["tracks"]}
+        names = {
+            int(track["track_index"]): str(track.get("name") or f"Track {int(track['track_index']) + 1}")
+            for track in ledger["tracks"]
+        }
         for track_index in occupied_tracks:
             stem_path = stem_root / _midi_safe_stem_name(track_index, names[track_index])
             if stem_path.exists() and not overwrite:
                 raise FileExistsError(f"refusing to overwrite existing stem: {stem_path}")
             track_audio = np.zeros((total_frames, 2), dtype=np.float32)
             track_notes = [span for span in compiled["note_spans"] if int(span["track_index"]) == track_index]
-            track_counts = _midi_render_notes_into(track_audio, track_notes, compiled, clock, sample_rate, waveform, pitch_bend_range_semitones)
+            counts = _midi_render_notes_into(
+                track_audio,
+                track_notes,
+                compiled,
+                clock,
+                sample_rate,
+                waveform,
+                pitch_bend_range_semitones,
+            )
             track_audio *= np.float32(scale)
             sf.write(str(stem_path), track_audio, sample_rate, subtype="FLOAT")
             stem_receipts.append({
@@ -314,7 +398,7 @@ def midi_render_ledger(ledger: Mapping[str, Any], output_path: str | Path, *, st
                 "path": str(stem_path),
                 "sha256": midi_sha256_file(stem_path),
                 "note_count": len(track_notes),
-                **track_counts,
+                **counts,
             })
 
     receipt = {
@@ -345,7 +429,10 @@ def midi_render_ledger(ledger: Mapping[str, Any], output_path: str | Path, *, st
     receipt_path = destination.with_suffix(destination.suffix + ".render.json")
     if receipt_path.exists() and not overwrite:
         raise FileExistsError(f"refusing to overwrite existing render receipt: {receipt_path}")
-    receipt_path.write_text(json.dumps(midi_jsonable(receipt), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    receipt_path.write_text(
+        json.dumps(midi_jsonable(receipt), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     receipt["receipt_path"] = str(receipt_path)
     receipt["receipt_sha256"] = midi_sha256_file(receipt_path)
     return receipt

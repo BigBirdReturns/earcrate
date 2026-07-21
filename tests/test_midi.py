@@ -4,7 +4,6 @@ from pathlib import Path
 
 import mido
 import numpy as np
-import pytest
 import soundfile as sf
 
 from earcrate.midi.codec import midi_read, midi_roundtrip
@@ -136,5 +135,9 @@ def test_type_two_render_refuses_async_sequences(tmp_path: Path) -> None:
             },
         ],
     })
-    with pytest.raises(ValueError, match="asynchronous sequences"):
+    try:
         midi_render_ledger(ledger, tmp_path / "type2.wav", sample_rate=8_000)
+    except ValueError as exc:
+        assert "asynchronous sequences" in str(exc)
+    else:
+        raise AssertionError("SMF type 2 neutral rendering must refuse without an explicit sequence selection")

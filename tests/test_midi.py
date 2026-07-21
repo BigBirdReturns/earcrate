@@ -4,6 +4,7 @@ from pathlib import Path
 
 import mido
 import numpy as np
+import pytest
 import soundfile as sf
 
 from earcrate.midi.codec import midi_read, midi_roundtrip
@@ -101,11 +102,39 @@ def test_sparse_ten_thousand_track_deck_only_materializes_occupied_tracks(tmp_pa
         "tracks": tracks,
     })
     compiled = midi_compile_note_spans(ledger)
-    output = tmp_path / "sparse.wav"
-    receipt = midi_render_ledger(ledger, output, sample_rate=8_000)
+    receipt = midi_render_ledger(ledger, tmp_path / "sparse.wav", sample_rate=8_000)
     assert compiled["diagnostics"]["declared_track_count"] == 10_000
     assert compiled["diagnostics"]["occupied_track_count"] == 1
     assert compiled["diagnostics"]["note_span_count"] == 1
     assert receipt["declared_track_count"] == 10_000
     assert receipt["rendered_track_count"] == 1
     assert receipt["first_pass"]["rendered"] == 1
+
+
+def test_type_two_render_refuses_async_sequences(tmp_path: Path) -> None:
+    ledger = midi_seal_ledger({
+        "schema_version": MIDI_LEDGER_SCHEMA_VERSION,
+        "kind": MIDI_LEDGER_KIND,
+        "midi_type": 2,
+        "ticks_per_beat": 192,
+        "tracks": [
+            {
+                "track_index": 0,
+                "name": "Sequence A",
+                "events": [
+                    {"tick": 0, "order": 0, "is_meta": False, "message": {"type": "note_on", "channel": 0, "note": 60, "velocity": 100}},
+                    {"tick": 96, "order": 1, "is_meta": False, "message": {"type": "note_off", "channel": 0, "note": 60, "velocity": 0}},
+                ],
+            },
+            {
+                "track_index": 1,
+                "name": "Sequence B",
+                "events": [
+                    {"tick": 0, "order": 0, "is_meta": False, "message": {"type": "note_on", "channel": 1, "note": 67, "velocity": 100}},
+                    {"tick": 192, "order": 1, "is_meta": False, "message": {"type": "note_off", "channel": 1, "note": 67, "velocity": 0}},
+                ],
+            },
+        ],
+    })
+    with pytest.raises(ValueError, match="asynchronous sequences"):
+        midi_render_ledger(ledger, tmp_path / "type2.wav", sample_rate=8_000)

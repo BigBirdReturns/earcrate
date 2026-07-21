@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from earcrate.live.runtime_fix import live_build_session
+from earcrate.live.runtime import live_build_session
 from earcrate.midi.codec import midi_read
 from test_live_dj_runtime import _write_source
 
@@ -33,5 +33,7 @@ def test_long_set_replans_personas_without_runtime_library_scans(tmp_path: Path)
     assert execution["patterns_scanned_during_execution"] == 0
     assert execution["materials_scanned_during_execution"] == 0
     assert execution["runtime_operation_count"] == execution["selected_command_count"]
+    assert execution["activity_delta"]["domains"]["cpu_execution"]["cpu_command"] == execution["selected_command_count"]
     assert execution["runtime_operation_count"] < 128 * 24
+    assert build["activity_delta"]["domains"]["control"]["planning"] > 0
     assert build["midi_lowering"]["output_statistics"]["note_on_count"] == len(build["midi_lowering"]["event_provenance"])

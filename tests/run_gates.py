@@ -52,6 +52,7 @@ MODULES = (
     "test_note_provider",
     "test_rack",
     "test_rack_library",
+    "test_rack_multizone",
     "test_oss_governance",
 )
 

@@ -22,6 +22,11 @@ from earcrate.live.planner import (
     live_validate_session_plan,
 )
 from earcrate.live.planner_fix import live_plan_next
+from earcrate.live.engine import (
+    live_engine_new,
+    live_engine_step,
+    live_validate_engine_step,
+)
 from earcrate.live.runtime_fix import (
     live_build_session,
     live_compile_cpu_program,
@@ -49,6 +54,8 @@ __all__ = [
     "live_build_session",
     "live_compile_cpu_program",
     "live_compile_crate_atlas",
+    "live_engine_new",
+    "live_engine_step",
     "live_execute_cpu_program",
     "live_load_crate_atlas",
     "live_lower_session_to_midi",
@@ -65,6 +72,7 @@ __all__ = [
     "live_validate_cpu_program",
     "live_validate_crate_atlas",
     "live_validate_crate_session",
+    "live_validate_engine_step",
     "live_validate_horizon_plan",
     "live_validate_midi_lowering",
     "live_validate_session_plan",

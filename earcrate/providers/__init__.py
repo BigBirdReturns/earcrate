@@ -3,11 +3,12 @@ from earcrate.core.deps import *
 
 Core reaches capability THROUGH a seam, never around it. A *kind* names a
 capability (``stems``, ``retriever``, ``embedding``, ``vector_index``,
-``artifacts``); each kind has one or more registered *factories* keyed by name,
-exactly one of which is the DEFAULT. ``get(kind)`` with no name hands back a
-freshly constructed instance of the DEFAULT, so callers that don't care which
-implementation they get still go through the seam. Pure python — no torch, no
-network, no heavy deps at import time."""
+``artifacts``, ``notes``); each kind has one or more registered *factories*
+keyed by name, exactly one of which is the DEFAULT. ``get(kind)`` with no name
+hands back a freshly constructed instance of the DEFAULT, so callers that do
+not care which implementation they get still go through the seam. Pure python
+— no torch, no network, no heavy deps at import time.
+"""
 
 # kind -> {name: factory(callable -> instance)}
 _REGISTRY: Dict[str, Dict[str, Any]] = {}
@@ -54,9 +55,9 @@ def default_name(kind: str) -> Optional[str]:
 # Re-export the concrete classes so callers can `from earcrate.providers import
 # NoopStemProvider`. These lines are column-0 `from earcrate.` imports: the
 # single-file builder STRIPS them, and the classes are already in the shared
-# namespace by concatenation order (artifacts -> stems -> retrieval come after
-# this file in build ORDER). In package mode they run here and, as a side
+# namespace by concatenation order. In package mode they run here and, as a side
 # effect, execute each module's module-level register() calls.
 from earcrate.providers.artifacts import ArtifactStore
 from earcrate.providers.stems import StemProvider, NoopStemProvider, DemucsStemProvider, stem_capability
 from earcrate.providers.retrieval import CandidateRetriever, FullScanRetriever, EmbeddingProvider, NoopEmbeddingProvider, VectorIndex, LinearScanIndex
+from earcrate.providers.notes import NoteTranscriber, NoopNoteTranscriber, BasicPitchNoteTranscriber

@@ -12,20 +12,20 @@ from earcrate.midi.render import midi_compile_note_spans
 from earcrate.rack.demand import rack_compile_demands
 from earcrate.midi.anatomy_grid import (
     AnatomyError,
-    _bar_cells,
-    _bar_grid,
-    _event_slot_maps,
-    _feature_vectors,
-    _novelty,
-    _role_order,
+    _anatomy_bar_cells,
+    _anatomy_bar_grid,
+    _anatomy_event_slot_maps,
+    _anatomy_feature_vectors,
+    _anatomy_novelty,
+    _anatomy_role_order,
     midi_time_signature_map,
 )
 from earcrate.midi.anatomy_structure import (
-    _event_assignments,
-    _fingerprint,
-    _motifs,
-    _sections,
-    _structural_payload,
+    _anatomy_event_assignments,
+    _anatomy_fingerprint,
+    _anatomy_motifs,
+    _anatomy_sections,
+    _anatomy_structural_payload,
 )
 
 ANATOMY_SCHEMA_VERSION = 1
@@ -49,19 +49,19 @@ def midi_arrangement_anatomy(
         raise AnatomyError("section penalty and boundary reward must be nonnegative")
     demand = rack_compile_demands(ledger)
     compiled = midi_compile_note_spans(ledger)
-    slots, event_map = _event_slot_maps(demand)
+    slots, event_map = _anatomy_event_slot_maps(demand)
     spans = list(compiled["note_spans"])
     selected_ids = {str(span["event_id"]) for span in spans}
     if selected_ids != set(event_map):
         raise AnatomyError("demand and compiled note spans disagree on selected event IDs")
-    bars = _bar_grid(ledger, spans)
-    cells, onset_to_bar = _bar_cells(ledger, bars, spans, event_map)
+    bars = _anatomy_bar_grid(ledger, spans)
+    cells, onset_to_bar = _anatomy_bar_cells(ledger, bars, spans, event_map)
     if set(onset_to_bar) != selected_ids:
         raise AnatomyError("bar mapping did not account for every selected MIDI event")
-    roles = _role_order(cells)
-    vectors = _feature_vectors(cells, roles)
-    novelty = _novelty(vectors, cells)
-    sections = _sections(
+    roles = _anatomy_role_order(cells)
+    vectors = _anatomy_feature_vectors(cells, roles)
+    novelty = _anatomy_novelty(vectors, cells)
+    sections = _anatomy_sections(
         cells,
         vectors,
         novelty,
@@ -70,9 +70,9 @@ def midi_arrangement_anatomy(
         section_penalty=section_penalty,
         boundary_reward=boundary_reward,
     )
-    motifs = _motifs(demand, bars, subdivisions=motif_subdivisions)
-    assignments = _event_assignments(event_map, onset_to_bar, sections)
-    fingerprint = _fingerprint(cells, sections, motifs, roles)
+    motifs = _anatomy_motifs(demand, bars, subdivisions=motif_subdivisions)
+    assignments = _anatomy_event_assignments(event_map, onset_to_bar, sections)
+    fingerprint = _anatomy_fingerprint(cells, sections, motifs, roles)
     anatomy = {
         "schema_version": ANATOMY_SCHEMA_VERSION,
         "kind": ANATOMY_KIND,
@@ -101,7 +101,7 @@ def midi_arrangement_anatomy(
         "fingerprint": fingerprint,
         "compile_diagnostics": deepcopy(compiled["diagnostics"]),
     }
-    anatomy["structural_sha256"] = midi_sha256_json(_structural_payload(anatomy))
+    anatomy["structural_sha256"] = midi_sha256_json(_anatomy_structural_payload(anatomy))
     anatomy["anatomy_sha256"] = midi_sha256_json(anatomy)
     midi_validate_arrangement_anatomy(anatomy)
     return anatomy
@@ -144,7 +144,7 @@ def midi_validate_arrangement_anatomy(anatomy: Mapping[str, Any]) -> None:
         raise AnatomyError("anatomy selected_event_count disagrees with assignments")
     if len(assignments) != int(anatomy.get("mapped_event_count") or 0):
         raise AnatomyError("anatomy mapped_event_count disagrees with assignments")
-    structural = midi_sha256_json(_structural_payload(anatomy))
+    structural = midi_sha256_json(_anatomy_structural_payload(anatomy))
     if str(anatomy.get("structural_sha256") or "") != structural:
         raise AnatomyError("structural_sha256 does not match anatomy structure")
     expected = midi_sha256_json({key: value for key, value in anatomy.items() if key != "anatomy_sha256"})

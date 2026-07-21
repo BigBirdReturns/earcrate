@@ -42,22 +42,36 @@ class _LiveActivityContext:
 
 
 _context = threading.local()
+_UNSPECIFIED_CONTEXT = _LiveActivityContext(None, "unspecified")
 
 
 def _current_context() -> _LiveActivityContext:
     value = getattr(_context, "value", None)
-    if isinstance(value, _LiveActivityContext):
-        return value
-    return _LiveActivityContext(None, "unspecified")
+    return value if isinstance(value, _LiveActivityContext) else _UNSPECIFIED_CONTEXT
 
 
-def live_activity_push(recorder: "LiveActivityRecorder | None", domain: str) -> _LiveActivityContext:
+def live_activity_context(
+    recorder: "LiveActivityRecorder | None",
+    domain: str,
+) -> _LiveActivityContext:
     normalized = str(domain or "unspecified")
     if normalized not in LIVE_ACTIVITY_DOMAINS:
         raise ValueError(f"unknown live activity domain: {normalized}")
+    return _LiveActivityContext(recorder, normalized)
+
+
+def live_activity_swap(context: _LiveActivityContext) -> _LiveActivityContext:
+    """Install a preallocated context and return the previous context."""
     previous = _current_context()
-    _context.value = _LiveActivityContext(recorder, normalized)
+    _context.value = context
     return previous
+
+
+def live_activity_push(
+    recorder: "LiveActivityRecorder | None",
+    domain: str,
+) -> _LiveActivityContext:
+    return live_activity_swap(live_activity_context(recorder, domain))
 
 
 def live_activity_pop(previous: _LiveActivityContext) -> None:
@@ -65,11 +79,7 @@ def live_activity_pop(previous: _LiveActivityContext) -> None:
 
 
 class live_activity_scope:
-    """Thread-local activity scope for control and render threads.
-
-    The callback uses `live_activity_push/pop` directly so its hot path does not
-    allocate a context-manager generator.
-    """
+    """Thread-local activity scope for control and render threads."""
 
     def __init__(self, recorder: "LiveActivityRecorder | None", domain: str):
         self.recorder = recorder
@@ -120,18 +130,28 @@ class LiveActivityRecorder:
         if normalized_domain not in LIVE_ACTIVITY_DOMAINS:
             raise ValueError(f"unknown live activity domain: {normalized_domain}")
         if normalized_domain == "audio_callback" and normalized_operation in _CALLBACK_FORBIDDEN_OPERATIONS:
-            # This is a violation path, not normal callback work. Count it before
-            # refusing so the receipt proves the detector was exercised.
             with self._lock:
                 self._counts[normalized_domain][normalized_operation] += amount
                 self._callback_violation_count += amount
-                self._record_event_locked(normalized_domain, normalized_operation, amount, detail, forbidden=True)
+                self._record_event_locked(
+                    normalized_domain,
+                    normalized_operation,
+                    amount,
+                    detail,
+                    forbidden=True,
+                )
             raise LiveCallbackPurityError(
                 f"forbidden {normalized_operation} operation reached the audio callback"
             )
         with self._lock:
             self._counts[normalized_domain][normalized_operation] += amount
-            self._record_event_locked(normalized_domain, normalized_operation, amount, detail, forbidden=False)
+            self._record_event_locked(
+                normalized_domain,
+                normalized_operation,
+                amount,
+                detail,
+                forbidden=False,
+            )
 
     def _record_event_locked(
         self,

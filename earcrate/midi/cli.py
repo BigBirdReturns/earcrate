@@ -9,8 +9,8 @@ from typing import Any
 from earcrate.midi.codec import midi_read, midi_roundtrip, midi_write_ledger_json
 from earcrate.midi.model import MidiLedgerError, midi_statistics
 from earcrate.midi.render import MIDI_RENDER_WAVEFORMS, midi_render_file
+from earcrate.providers import get
 from earcrate.providers.artifacts import ArtifactStore
-from earcrate.providers.notes import BasicPitchNoteTranscriber, NoopNoteTranscriber
 
 
 def _midi_print(value: Any, *, stream: Any = None) -> None:
@@ -105,7 +105,7 @@ def midi_main(argv: list[str] | None = None) -> int:
             output = Path(args.output).expanduser().resolve()
             if output.exists() and not args.overwrite:
                 raise FileExistsError(f"refusing to overwrite existing note observation: {output}")
-            provider = BasicPitchNoteTranscriber() if args.provider == "basic-pitch" else NoopNoteTranscriber()
+            provider = get("notes", args.provider)
             config: dict[str, Any] = {
                 "onset_threshold": args.onset_threshold,
                 "frame_threshold": args.frame_threshold,

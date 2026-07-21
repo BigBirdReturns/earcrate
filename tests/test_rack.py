@@ -149,6 +149,17 @@ def test_demand_binding_and_rack_render_are_complete(tmp_path: Path) -> None:
     assert float(np.max(np.abs(master - stem_sum))) < 1e-6
 
 
+def test_binding_hash_is_independent_of_rack_input_order(tmp_path: Path) -> None:
+    midi_path = tmp_path / "arrangement.mid"
+    _write_midi(midi_path)
+    ledger = midi_read(midi_path)
+    bass, drums = _racks(tmp_path)
+    left = rack_compile_binding(ledger, [bass, drums])
+    right = rack_compile_binding(ledger, [drums, bass])
+    assert left["binding_sha256"] == right["binding_sha256"]
+    assert left == right
+
+
 def test_binding_preserves_missing_substitute_as_refusal(tmp_path: Path) -> None:
     midi_path = tmp_path / "arrangement.mid"
     _write_midi(midi_path)

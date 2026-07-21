@@ -13,7 +13,7 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "rack/model.py", "rack/demand.py", "rack/binding.py", "rack/binding_stable.py", "rack/sfz.py", "rack/render.py", "rack/render_fix.py", "rack/library.py", "rack/library_fix.py", "rack/multizone.py",
          "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/arranger.py", "midi/arranger_fix.py",
          "study/reference.py", "study/reference_grid.py", "study/reference_bundle.py", "study/reference_cli.py",
-         "live/model.py", "live/operators.py", "live/planner.py", "live/planner_fix.py", "live/engine.py", "live/runtime.py", "live/runtime_fix.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/capability_fix.py", "live/audio_cli.py", "live/cli.py",
+         "live/model.py", "live/operators.py", "live/planner.py", "live/planner_fix.py", "live/engine.py", "live/runtime.py", "live/runtime_fix.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/performance.py", "live/capability_fix.py", "live/audio_cli.py", "live/cli.py",
          "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
 INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
@@ -56,14 +56,10 @@ parts = ["#!/usr/bin/env python3\nfrom __future__ import annotations\n# Auto-bui
 for rel in ORDER:
     src = (PKG / rel).read_text(encoding="utf-8")
     lines = _strip_package_imports(src)
-    # A function-level `from earcrate.` import survives the column-0 strip and then
-    # raises ModuleNotFoundError in the standalone dist. Hoist such imports instead.
     bad = [f"{rel}:{i+1}: {line.strip()}" for i, line in enumerate(lines) if INDENTED_EARCRATE.match(line)]
     if bad:
         raise SystemExit("indented earcrate imports would break the single-file dist at call time:\n  " + "\n  ".join(bad))
     body = "\n".join(lines)
-    # Module-specific CLIs are callable from the top-level dispatcher. Their own
-    # `python -m` guards must not fire while the concatenated artifact is loading.
     if rel in {"study/reference_cli.py", "live/cli.py", "live/audio_cli.py"}:
         marker = '\nif __name__ == "__main__":'
         if marker in body:
@@ -93,8 +89,6 @@ for rel in ORDER:
 out = "\n".join(parts)
 if "if __name__" not in out.split("# ===== cli.py =====")[-1]:
     out += '\nif __name__ == "__main__":\n    import sys\n    sys.exit(main())\n'
-# Stamp the package content hash so the single-file header matches the package
-# header and the Pages installer button (same formula in .github/workflows/pages.yml).
 _h = hashlib.sha256()
 for _f in sorted(PKG.rglob("*.py")) + [PKG / "ui" / "static" / "index.html"]:
     _h.update(_f.read_bytes())

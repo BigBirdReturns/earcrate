@@ -1,5 +1,17 @@
 """Deterministic local live-DJ planning, precompiled crates, and buffered audio execution."""
 
+from earcrate.live.capabilities import (
+    live_audio_device_capability,
+    live_runtime_capability,
+    live_stream_capability,
+)
+from earcrate.live.instrumentation import (
+    LiveActivityRecorder,
+    LiveCallbackPurityError,
+    live_activity_delta,
+    live_activity_scope,
+    live_record_activity,
+)
 from earcrate.live.model import (
     LiveError,
     live_apply_control,
@@ -15,18 +27,18 @@ from earcrate.live.operators import (
 )
 from earcrate.live.planner import (
     live_atlas_from_midi,
+    live_plan_next,
     live_plan_session,
     live_validate_atlas,
     live_validate_horizon_plan,
     live_validate_session_plan,
 )
-from earcrate.live.planner_fix import live_plan_next
 from earcrate.live.engine import (
     live_engine_new,
     live_engine_step,
     live_validate_engine_step,
 )
-from earcrate.live.runtime_fix import (
+from earcrate.live.runtime import (
     live_build_session,
     live_compile_cpu_program,
     live_execute_cpu_program,
@@ -46,22 +58,22 @@ from earcrate.live.crate import (
 from earcrate.live.stream import (
     LiveBlockStream,
     live_render_next_phrase,
-    live_stream_capability,
     live_validate_phrase_receipt,
 )
-from earcrate.live.playback import (
-    LiveAudioCallback,
-    LiveSoundDevicePlayer,
-    live_audio_device_capability,
-)
-from earcrate.live.capability_fix import live_runtime_capability
+from earcrate.live.playback import LiveAudioCallback, LiveSoundDevicePlayer
+from earcrate.live.performance import LivePerformanceEngine
 
 __all__ = [
     "LIVE_TECHNIQUE_NAMES",
+    "LiveActivityRecorder",
     "LiveAudioCallback",
     "LiveBlockStream",
+    "LiveCallbackPurityError",
     "LiveError",
+    "LivePerformanceEngine",
     "LiveSoundDevicePlayer",
+    "live_activity_delta",
+    "live_activity_scope",
     "live_apply_control",
     "live_apply_technique",
     "live_atlas_from_midi",
@@ -79,6 +91,7 @@ __all__ = [
     "live_persona_policy",
     "live_plan_next",
     "live_plan_session",
+    "live_record_activity",
     "live_render_next_phrase",
     "live_run_crate_session",
     "live_runtime_capability",

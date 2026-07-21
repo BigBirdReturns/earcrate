@@ -50,6 +50,7 @@ MODULES = (
     "test_workqueue",
     "test_midi",
     "test_midi_anatomy",
+    "test_midi_arranger",
     "test_note_provider",
     "test_rack",
     "test_rack_library",

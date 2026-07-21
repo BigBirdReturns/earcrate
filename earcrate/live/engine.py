@@ -12,8 +12,7 @@ from earcrate.live.model import (
     live_validate_state,
 )
 from earcrate.live.operators import LIVE_TECHNIQUE_NAMES
-from earcrate.live.planner_fix import live_plan_next
-from earcrate.live.planner import live_validate_atlas, live_validate_horizon_plan
+from earcrate.live.planner import live_plan_next, live_validate_atlas, live_validate_horizon_plan
 from earcrate.midi.model import midi_sha256_json
 
 LIVE_ENGINE_STEP_SCHEMA_VERSION = 1

@@ -10,6 +10,11 @@ if len(sys.argv) > 1 and sys.argv[1] == "live":
 
     sys.exit(live_cli_main(sys.argv[2:]))
 
+if len(sys.argv) > 1 and sys.argv[1] == "live-audio":
+    from earcrate.live.audio_cli import live_audio_cli_main
+
+    sys.exit(live_audio_cli_main(sys.argv[2:]))
+
 if len(sys.argv) > 1 and sys.argv[1] == "reference":
     from earcrate.study.reference_cli import reference_cli_main
 

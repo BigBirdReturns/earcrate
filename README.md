@@ -125,9 +125,10 @@ source of truth.
   drives its packaged MIDI and rack command surfaces.
 - `python scripts/oss_audit.py` validates code and model governance ledgers.
 
-CI runs the package and package-verification gates on every push and pull
-request. Treat a red run as a merge blocker. The complete gate ledger and the
-package-verifier ledger are retained as workflow artifacts whether the run
+CI currently passes 199 of 199 executable gates. The generated single-file
+package also passes its historical self-test, MIDI inspection smoke, and an
+end-to-end rack smoke that seals, binds, and renders a real sample. CI retains
+the complete gate ledger and package-verifier ledger as artifacts whether a run
 passes or fails.
 
 ## Lineage

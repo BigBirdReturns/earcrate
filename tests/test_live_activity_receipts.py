@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -26,9 +27,10 @@ def test_real_calls_increment_measured_domains_and_callback_stays_zero(tmp_path:
     _write_source(source)
     ledger = midi_read(source)
     recorder = LiveActivityRecorder(event_capacity=1024)
+    atoms = _atoms(tmp_path)
     compiled = live_compile_crate_atlas(
         ledger,
-        _atoms(tmp_path),
+        atoms,
         tmp_path / "crate",
         sample_rate=8_000,
         compile_sfz=False,
@@ -36,7 +38,7 @@ def test_real_calls_increment_measured_domains_and_callback_stays_zero(tmp_path:
     )
     offline = recorder.snapshot()
     assert offline["domains"]["offline_compile"]["library_search"] == 1
-    assert offline["domains"]["offline_compile"]["material_scan"] == len(_atoms(tmp_path))
+    assert offline["domains"]["offline_compile"]["material_scan"] == len(atoms)
     assert offline["domains"]["offline_compile"]["binding"] == 1
 
     host = LivePerformanceEngine(
@@ -115,8 +117,12 @@ def test_concurrent_plans_do_not_share_risk_state(tmp_path: Path) -> None:
 
 
 def test_callback_hot_path_contains_no_lock_or_unbounded_append() -> None:
-    for method in (LiveAudioCallback._take_next_phrase, LiveAudioCallback.render_into, LiveAudioCallback._record_completion):
-        tree = ast.parse(inspect.getsource(method))
+    for method in (
+        LiveAudioCallback._take_next_phrase,
+        LiveAudioCallback.render_into,
+        LiveAudioCallback._record_completion,
+    ):
+        tree = ast.parse(textwrap.dedent(inspect.getsource(method)))
         assert not any(isinstance(node, (ast.With, ast.AsyncWith)) for node in ast.walk(tree))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):

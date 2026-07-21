@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import mido
+
 from earcrate.live.engine import live_engine_new, live_engine_step
 from earcrate.live.planner import live_atlas_from_midi
 from earcrate.midi.codec import midi_read
@@ -47,22 +49,34 @@ def test_incremental_engine_refuses_state_from_another_atlas(tmp_path: Path) -> 
     right = tmp_path / "right.mid"
     _write_source(left)
     _write_source(right)
-    # Change the second source without changing the fixture's structure.
-    data = bytearray(right.read_bytes())
-    data[-1] = (data[-1] + 1) % 256
-    right.write_bytes(bytes(data))
-    left_atlas = live_atlas_from_midi(midi_read(left))
-    try:
-        right_atlas = live_atlas_from_midi(midi_read(right))
-    except Exception:
-        # A byte-level mutation may make the SMF invalid; use a valid policy mismatch
-        # by modifying a sealed atlas identity instead.
-        right_atlas = dict(left_atlas)
-        right_atlas["atlas_sha256"] = "0" * 64
-    state = live_engine_new(left_atlas, persona="club")
-    try:
-        live_engine_step(right_atlas, state)
-    except Exception as exc:
-        assert "atlas" in str(exc).lower() or "sha" in str(exc).lower()
-    else:
-        raise AssertionError("live engine accepted a state from another atlas")
+    changed = mido.MidiFile(right)
+    changed_note = None
+    for track in changed.tracks:
+        for message in track:
+            if message.type == "note_on" and int(message.velocity) > 0:
+                changed_note = int(message.note)
+                message.note = min(127, changed_note + 1)
+                break
+        if changed_note is not None:
+            break
+    assert changed_note is not None
+    # Change the matching first note-off so the modified performance remains valid.
+    for track in changed.tracks:
+        for message in track:
+            if message.type in {"note_off", "note_on"} and int(message.note) == changed_note and (
+                message.type == "note_off" or int(message.velocity) == 0
+            ):
+                message.note = min(127, changed_note + 1)
+                changed.save(right)
+                left_atlas = live_atlas_from_midi(midi_read(left))
+                right_atlas = live_atlas_from_midi(midi_read(right))
+                assert left_atlas["atlas_sha256"] != right_atlas["atlas_sha256"]
+                state = live_engine_new(left_atlas, persona="club")
+                try:
+                    live_engine_step(right_atlas, state)
+                except Exception as exc:
+                    assert "atlas" in str(exc).lower() or "sha" in str(exc).lower()
+                else:
+                    raise AssertionError("live engine accepted a state from another atlas")
+                return
+    raise AssertionError("could not find matching note-off in MIDI fixture")

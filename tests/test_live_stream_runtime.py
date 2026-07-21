@@ -48,6 +48,14 @@ def test_prepared_phrase_stream_matches_exact_rack_renderer(tmp_path: Path) -> N
     assert receipt["truncated_event_count"] == receipt["refused_event_count"] == 0
     assert receipt["materials_scanned_during_render"] == 0
     assert receipt["samples_decoded_during_callback"] == 0
+    activity = receipt["activity_delta"]
+    assert activity["domains"]["control"]["planning"] == 1
+    assert activity["domains"]["phrase_render"]["binding"] == 1
+    assert activity["domains"]["phrase_render"]["sample_decode"] > 0
+    assert activity["domains"]["audio_callback"]["planning"] == 0
+    assert activity["domains"]["audio_callback"]["library_search"] == 0
+    assert activity["domains"]["audio_callback"]["sample_decode"] == 0
+    assert activity["domains"]["audio_callback"]["binding"] == 0
     assert phrase["next_state"]["current_persona"] == "pretty_lights"
     assert all(operator == "hard_cut" for operator in receipt["operators"])
 
@@ -89,6 +97,8 @@ def test_block_callback_copies_prepared_frames_without_planning_or_decode(tmp_pa
     assert stream_receipt["callback_planning_count"] == 0
     assert stream_receipt["callback_library_search_count"] == 0
     assert stream_receipt["callback_sample_decode_count"] == 0
+    assert stream_receipt["callback_binding_count"] == 0
+    assert stream_receipt["completed_phrase_count"] == 1
     assert len(stream_receipt["phrase_history"]) == 1
 
     underrun = streamer.read_block()
@@ -114,6 +124,6 @@ def test_live_stream_capability_is_local_and_callback_safe() -> None:
     assert capability["requires_gpu"] is False
     assert capability["requires_network"] is False
     assert capability["requires_cloud"] is False
-    assert capability["audio_callback_performs_planning"] is False
-    assert capability["audio_callback_performs_library_search"] is False
-    assert capability["audio_callback_performs_sample_decode"] is False
+    contract = capability["callback_contract"]
+    assert sorted(contract["forbidden"]) == ["binding", "library_search", "planning", "sample_decode"]
+    assert sorted(contract["allowed"]) == ["float32_frame_copy", "prepared_buffer_swap", "silence_on_underrun"]

@@ -13,11 +13,11 @@ BINDING_SCHEMA_VERSION = 1
 BINDING_KIND = "earcrate_rack_binding_plan"
 
 
-def _rack_mode_accepts(rack_mode: str, slot_mode: str) -> bool:
+def _rack_binding_mode_accepts(rack_mode: str, slot_mode: str) -> bool:
     return rack_mode == "hybrid" or rack_mode == slot_mode
 
 
-def _matching_zones(rack: Mapping[str, Any], note: int, velocity: int) -> list[dict[str, Any]]:
+def _rack_binding_matching_zones(rack: Mapping[str, Any], note: int, velocity: int) -> list[dict[str, Any]]:
     matches = []
     for zone in rack["zones"]:
         key_lo, key_hi = [int(value) for value in zone["key_range"]]
@@ -35,7 +35,7 @@ def _matching_zones(rack: Mapping[str, Any], note: int, velocity: int) -> list[d
     return matches
 
 
-def _playable_seconds(zone: Mapping[str, Any], note: int, pitch_bend_range_semitones: float) -> float:
+def _rack_binding_playable_seconds(zone: Mapping[str, Any], note: int, pitch_bend_range_semitones: float) -> float:
     if str(zone["trigger_mode"]) == "one_shot" or bool((zone.get("loop") or {}).get("enabled")):
         return float("inf")
     sample = zone["sample"]
@@ -49,7 +49,7 @@ def _playable_seconds(zone: Mapping[str, Any], note: int, pitch_bend_range_semit
     return int(sample["slice_frames"]) / float(sample["sample_rate"]) / fastest_ratio
 
 
-def _zone_for_event(
+def _rack_binding_zone_for_event(
     rack: Mapping[str, Any],
     event: Mapping[str, Any],
     *,
@@ -57,17 +57,17 @@ def _zone_for_event(
 ) -> tuple[dict[str, Any] | None, str]:
     note = int(event["note"])
     velocity = int(event["velocity"])
-    zones = _matching_zones(rack, note, velocity)
+    zones = _rack_binding_matching_zones(rack, note, velocity)
     if not zones:
         return None, "no_key_velocity_zone"
     duration = float(event["duration_seconds"])
     for zone in zones:
-        if _playable_seconds(zone, note, pitch_bend_range_semitones) + 1e-9 >= duration:
+        if _rack_binding_playable_seconds(zone, note, pitch_bend_range_semitones) + 1e-9 >= duration:
             return zone, ""
     return None, "sample_cannot_cover_gate_duration"
 
 
-def _track_tokens(value: str) -> set[str]:
+def _rack_binding_track_tokens(value: str) -> set[str]:
     return {
         token
         for token in "".join(character.lower() if character.isalnum() else " " for character in value).split()
@@ -75,14 +75,14 @@ def _track_tokens(value: str) -> set[str]:
     }
 
 
-def _candidate_score(slot: Mapping[str, Any], rack: Mapping[str, Any], event_bindings: list[dict[str, Any]]) -> float:
+def _rack_binding_candidate_score(slot: Mapping[str, Any], rack: Mapping[str, Any], event_bindings: list[dict[str, Any]]) -> float:
     tags = {str(tag).lower() for tag in (rack.get("metadata") or {}).get("tags") or []}
     score = 100.0
     if str(slot.get("role_hint") or "").lower() in tags:
         score += 30.0
     if str(slot.get("gm_family") or "").lower() in tags:
         score += 18.0
-    score += 3.0 * len(_track_tokens(str(slot.get("track_name") or "")) & tags)
+    score += 3.0 * len(_rack_binding_track_tokens(str(slot.get("track_name") or "")) & tags)
     if event_bindings:
         average_transpose = sum(abs(float(row["transpose_semitones"])) for row in event_bindings) / len(event_bindings)
         score += max(0.0, 12.0 - average_transpose)
@@ -92,13 +92,13 @@ def _candidate_score(slot: Mapping[str, Any], rack: Mapping[str, Any], event_bin
     return round(score, 9)
 
 
-def _candidate_receipt(
+def _rack_binding_candidate_receipt(
     slot: Mapping[str, Any],
     rack: Mapping[str, Any],
     *,
     pitch_bend_range_semitones: float,
 ) -> dict[str, Any]:
-    if not _rack_mode_accepts(str(rack["mode"]), str(slot["mode"])):
+    if not _rack_binding_mode_accepts(str(rack["mode"]), str(slot["mode"])):
         return {
             "rack_id": rack["rack_id"],
             "rack_sha256": rack["rack_sha256"],
@@ -112,7 +112,7 @@ def _candidate_receipt(
     missing = []
     failures = []
     for event in slot["events"]:
-        zone, failure = _zone_for_event(
+        zone, failure = _rack_binding_zone_for_event(
             rack,
             event,
             pitch_bend_range_semitones=pitch_bend_range_semitones,
@@ -143,7 +143,7 @@ def _candidate_receipt(
         "rack_id": rack["rack_id"],
         "rack_sha256": rack["rack_sha256"],
         "compatible": compatible,
-        "score": _candidate_score(slot, rack, bindings) if compatible else None,
+        "score": _rack_binding_candidate_score(slot, rack, bindings) if compatible else None,
         "failure": "" if compatible else "event_coverage_incomplete",
         "missing_events": missing,
         "failures": failures,
@@ -185,7 +185,7 @@ def rack_compile_binding(
 
     for slot in demand["slots"]:
         receipts = [
-            _candidate_receipt(
+            _rack_binding_candidate_receipt(
                 slot,
                 rack,
                 pitch_bend_range_semitones=float(demand["pitch_bend_range_semitones"]),

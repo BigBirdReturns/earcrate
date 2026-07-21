@@ -1,4 +1,4 @@
-"""Exact sample racks, performance demands, bindings, SFZ export, and rack rendering."""
+"""Exact sample racks, library proposals, bindings, SFZ export, and rack rendering."""
 
 from earcrate.rack.binding import (
     rack_compile_binding,
@@ -7,6 +7,12 @@ from earcrate.rack.binding import (
     rack_validate_binding,
 )
 from earcrate.rack.demand import rack_compile_demands, rack_validate_demands
+from earcrate.rack.library import (
+    rack_build_from_atoms,
+    rack_materialize_library_proposal,
+    rack_propose_from_atoms,
+    rack_validate_library_proposal,
+)
 from earcrate.rack.model import (
     RackError,
     rack_atomic_json,
@@ -23,6 +29,7 @@ from earcrate.rack.sfz import rack_compile_sfz
 __all__ = [
     "RackError",
     "rack_atomic_json",
+    "rack_build_from_atoms",
     "rack_capabilities",
     "rack_compile_binding",
     "rack_compile_demands",
@@ -31,11 +38,14 @@ __all__ = [
     "rack_load_binding",
     "rack_load_many",
     "rack_load_revision",
+    "rack_materialize_library_proposal",
+    "rack_propose_from_atoms",
     "rack_render_ledger",
     "rack_seal_draft",
     "rack_template",
     "rack_validate_binding",
     "rack_validate_demands",
+    "rack_validate_library_proposal",
     "rack_validate_revision",
     "rack_verify_sources",
 ]

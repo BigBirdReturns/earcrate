@@ -11,16 +11,35 @@ from earcrate.midi.model import MidiLedgerError, midi_statistics
 from earcrate.midi.render import MIDI_RENDER_WAVEFORMS, midi_render_file
 from earcrate.providers import get
 from earcrate.providers.artifacts import ArtifactStore
+from earcrate.rack.binding import rack_compile_binding, rack_load_binding, rack_load_many
+from earcrate.rack.demand import rack_compile_demands
+from earcrate.rack.model import (
+    RACK_MODES,
+    RackError,
+    rack_atomic_json,
+    rack_load_revision,
+    rack_seal_draft,
+    rack_template,
+)
+from earcrate.rack.render import rack_render_ledger
+from earcrate.rack.sfz import rack_compile_sfz
 
 
 def _midi_print(value: Any, *, stream: Any = None) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True), file=stream or sys.stdout)
 
 
+def _json_arg(value: str) -> Any:
+    path = Path(value).expanduser()
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(value)
+
+
 def _midi_build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="earcrate midi",
-        description="Exact Standard MIDI File ledger, round-trip verifier, neutral player-piano renderer, and note-observation provider.",
+        description="Exact MIDI ledger, neutral proof renderer, sample-rack substitution bridge, and note-observation providers.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -65,6 +84,49 @@ def _midi_build_parser() -> argparse.ArgumentParser:
     transcribe_parser.add_argument("--midi-tempo", type=float, default=120.0)
     transcribe_parser.add_argument("--model-path", default="")
     transcribe_parser.add_argument("--overwrite", action="store_true")
+
+    demand_parser = sub.add_parser("demand", help="compile exact substitution requirements from a MIDI performance")
+    demand_parser.add_argument("input")
+    demand_parser.add_argument("output")
+    demand_parser.add_argument("--pitch-bend-range", type=float, default=2.0)
+    demand_parser.add_argument("--overwrite", action="store_true")
+
+    template_parser = sub.add_parser("rack-template", help="write a human-editable sample-rack draft")
+    template_parser.add_argument("output")
+    template_parser.add_argument("--mode", choices=sorted(RACK_MODES), default="pitched")
+    template_parser.add_argument("--rack-id", default="my-rack")
+    template_parser.add_argument("--name", default="My Rack")
+    template_parser.add_argument("--overwrite", action="store_true")
+
+    seal_parser = sub.add_parser("rack-seal", help="resolve sample identities and seal an immutable rack revision")
+    seal_parser.add_argument("draft")
+    seal_parser.add_argument("output")
+    seal_parser.add_argument("--base-dir", default="", help="base for relative sample paths; default is the draft directory")
+    seal_parser.add_argument("--overwrite", action="store_true")
+
+    bind_parser = sub.add_parser("bind", help="bind every MIDI event to one exact compatible rack zone")
+    bind_parser.add_argument("input")
+    bind_parser.add_argument("output")
+    bind_parser.add_argument("racks", nargs="+")
+    bind_parser.add_argument("--assignments", default="{}", help="slot_id to rack_id/rack_sha JSON object or file")
+    bind_parser.add_argument("--pitch-bend-range", type=float, default=2.0)
+    bind_parser.add_argument("--overwrite", action="store_true")
+
+    sfz_parser = sub.add_parser("sfz", help="compile a sealed rack revision to SFZ object code")
+    sfz_parser.add_argument("rack")
+    sfz_parser.add_argument("output")
+    sfz_parser.add_argument("--overwrite", action="store_true")
+
+    rack_render_parser = sub.add_parser("render-rack", help="execute a complete MIDI binding through exact sample slices")
+    rack_render_parser.add_argument("input")
+    rack_render_parser.add_argument("binding")
+    rack_render_parser.add_argument("output")
+    rack_render_parser.add_argument("--rack", dest="racks", action="append", required=True, help="sealed rack JSON; repeat for every referenced revision")
+    rack_render_parser.add_argument("--stems-dir", default="")
+    rack_render_parser.add_argument("--sample-rate", type=int, default=44_100)
+    rack_render_parser.add_argument("--max-seconds", type=float, default=0.0)
+    rack_render_parser.add_argument("--target-peak", type=float, default=0.92)
+    rack_render_parser.add_argument("--overwrite", action="store_true")
 
     return parser
 
@@ -137,8 +199,63 @@ def midi_main(argv: list[str] | None = None) -> int:
                 "cache_status": observation.get("cache_status"),
             })
             return 0
+        if args.command == "demand":
+            demand = rack_compile_demands(midi_read(args.input), pitch_bend_range_semitones=args.pitch_bend_range)
+            receipt = rack_atomic_json(args.output, demand, overwrite=args.overwrite)
+            _midi_print({**receipt, "demand_sha256": demand["demand_sha256"], "slot_count": demand["slot_count"], "selected_event_count": demand["selected_event_count"]})
+            return 0
+        if args.command == "rack-template":
+            draft = rack_template(mode=args.mode, rack_id=args.rack_id, name=args.name)
+            _midi_print(rack_atomic_json(args.output, draft, overwrite=args.overwrite))
+            return 0
+        if args.command == "rack-seal":
+            draft_path = Path(args.draft).expanduser().resolve()
+            draft = json.loads(draft_path.read_text(encoding="utf-8"))
+            base_dir = Path(args.base_dir).expanduser().resolve() if args.base_dir else draft_path.parent
+            rack = rack_seal_draft(draft, base_dir=base_dir)
+            receipt = rack_atomic_json(args.output, rack, overwrite=args.overwrite)
+            _midi_print({**receipt, "rack_id": rack["rack_id"], "rack_sha256": rack["rack_sha256"], "zone_count": len(rack["zones"])})
+            return 0
+        if args.command == "bind":
+            assignments = _json_arg(args.assignments)
+            if not isinstance(assignments, dict):
+                raise RackError("--assignments must be a JSON object")
+            plan = rack_compile_binding(
+                midi_read(args.input),
+                rack_load_many(args.racks),
+                assignments=assignments,
+                pitch_bend_range_semitones=args.pitch_bend_range,
+            )
+            receipt = rack_atomic_json(args.output, plan, overwrite=args.overwrite)
+            _midi_print({
+                **receipt,
+                "binding_sha256": plan["binding_sha256"],
+                "complete": plan["complete"],
+                "selected_event_count": plan["selected_event_count"],
+                "bound_event_count": plan["bound_event_count"],
+                "unresolved": plan["unresolved"],
+            })
+            return 0 if plan["complete"] else 3
+        if args.command == "sfz":
+            _midi_print(rack_compile_sfz(rack_load_revision(args.rack), args.output, overwrite=args.overwrite))
+            return 0
+        if args.command == "render-rack":
+            _midi_print(
+                rack_render_ledger(
+                    midi_read(args.input),
+                    rack_load_binding(args.binding),
+                    rack_load_many(args.racks),
+                    args.output,
+                    stems_dir=args.stems_dir or None,
+                    sample_rate=args.sample_rate,
+                    max_seconds=args.max_seconds,
+                    target_peak=args.target_peak,
+                    overwrite=args.overwrite,
+                )
+            )
+            return 0
         parser.error(f"unknown command: {args.command}")
         return 2
-    except (MidiLedgerError, RuntimeError, OSError, ValueError) as exc:
+    except (MidiLedgerError, RackError, RuntimeError, OSError, ValueError) as exc:
         _midi_print({"ok": False, "error": str(exc), "type": type(exc).__name__}, stream=sys.stderr)
         return 2

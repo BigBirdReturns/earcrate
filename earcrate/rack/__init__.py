@@ -1,13 +1,13 @@
 """Exact sample racks, library proposals, bindings, SFZ export, and rack rendering."""
 
-from earcrate.rack.binding import (
+from earcrate.rack.binding_stable import (
     rack_compile_binding,
     rack_load_binding,
     rack_load_many,
     rack_validate_binding,
 )
 from earcrate.rack.demand import rack_compile_demands, rack_validate_demands
-from earcrate.rack.library import (
+from earcrate.rack.library_fix import (
     rack_build_from_atoms,
     rack_materialize_library_proposal,
     rack_propose_from_atoms,

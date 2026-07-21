@@ -18,7 +18,7 @@ class AnatomyError(ValueError):
     """Raised when arrangement anatomy cannot be compiled or verified."""
 
 
-def _round(value: float, digits: int = 9) -> float:
+def _anatomy_round(value: float, digits: int = 9) -> float:
     number = float(value)
     if not math.isfinite(number):
         raise AnatomyError("arrangement anatomy cannot contain non-finite values")
@@ -68,7 +68,7 @@ def midi_time_signature_map(ledger: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _bar_grid(
+def _anatomy_bar_grid(
     ledger: Mapping[str, Any],
     spans: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -114,9 +114,9 @@ def _bar_grid(
                 "start_tick": tick,
                 "end_tick": bar_end,
                 "duration_ticks": bar_end - tick,
-                "duration_beats": _round((bar_end - tick) / ticks_per_quarter),
-                "start_seconds": _round(clock.tick_to_seconds(tick)),
-                "end_seconds": _round(clock.tick_to_seconds(bar_end)),
+                "duration_beats": _anatomy_round((bar_end - tick) / ticks_per_quarter),
+                "start_seconds": _anatomy_round(clock.tick_to_seconds(tick)),
+                "end_seconds": _anatomy_round(clock.tick_to_seconds(bar_end)),
                 "numerator": numerator,
                 "denominator": denominator,
                 "partial": partial,
@@ -126,7 +126,7 @@ def _bar_grid(
     return bars
 
 
-def _event_slot_maps(demand: Mapping[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+def _anatomy_event_slot_maps(demand: Mapping[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
     slots = {}
     events = {}
     for slot in demand["slots"]:
@@ -148,7 +148,7 @@ def _event_slot_maps(demand: Mapping[str, Any]) -> tuple[dict[str, dict[str, Any
     return slots, events
 
 
-def _union_ticks(intervals: Sequence[tuple[int, int]]) -> int:
+def _anatomy_union_ticks(intervals: Sequence[tuple[int, int]]) -> int:
     merged = 0
     current_start = None
     current_end = None
@@ -165,7 +165,7 @@ def _union_ticks(intervals: Sequence[tuple[int, int]]) -> int:
     return merged
 
 
-def _max_polyphony(spans: Sequence[Mapping[str, Any]], start_tick: int, end_tick: int) -> int:
+def _anatomy_max_polyphony(spans: Sequence[Mapping[str, Any]], start_tick: int, end_tick: int) -> int:
     boundaries = []
     for span in spans:
         start = max(start_tick, int(span["start_tick"]))
@@ -183,7 +183,7 @@ def _max_polyphony(spans: Sequence[Mapping[str, Any]], start_tick: int, end_tick
     return maximum
 
 
-def _register_bucket(note: int) -> str:
+def _anatomy_register_bucket(note: int) -> str:
     if note < 48:
         return "bass"
     if note < 60:
@@ -195,7 +195,7 @@ def _register_bucket(note: int) -> str:
     return "high"
 
 
-def _bar_cells(
+def _anatomy_bar_cells(
     ledger: Mapping[str, Any],
     bars: Sequence[Mapping[str, Any]],
     spans: Sequence[Mapping[str, Any]],
@@ -229,7 +229,7 @@ def _bar_cells(
             note = int(span["note"])
             notes.append(note)
             velocities.append(int(span["velocity"]))
-            register[_register_bucket(note)] += 1
+            register[_anatomy_register_bucket(note)] += 1
         slot_intervals: dict[str, list[tuple[int, int]]] = defaultdict(list)
         role_intervals: dict[str, dict[str, list[tuple[int, int]]]] = defaultdict(lambda: defaultdict(list))
         for span in active:
@@ -241,17 +241,17 @@ def _bar_cells(
             role_intervals[role][slot_id].append(interval)
         bar_ticks = max(1, end - start)
         slot_occupancy = {
-            slot_id: _round(_union_ticks(intervals) / bar_ticks)
+            slot_id: _anatomy_round(_anatomy_union_ticks(intervals) / bar_ticks)
             for slot_id, intervals in sorted(slot_intervals.items())
         }
         role_layer_occupancy = {
-            role: _round(sum(_union_ticks(intervals) for intervals in by_slot.values()) / bar_ticks)
+            role: _anatomy_round(sum(_anatomy_union_ticks(intervals) for intervals in by_slot.values()) / bar_ticks)
             for role, by_slot in sorted(role_intervals.items())
         }
         mean_layers = sum(slot_occupancy.values())
         density = len(onsets) / max(1e-9, float(bar["duration_beats"]))
         mean_velocity = sum(velocities) / len(velocities) if velocities else 0.0
-        maximum_polyphony = _max_polyphony(active, start, end)
+        maximum_polyphony = _anatomy_max_polyphony(active, start, end)
         energy = (
             0.35 * min(1.0, density / 8.0)
             + 0.30 * min(1.0, mean_layers / 6.0)
@@ -269,18 +269,18 @@ def _bar_cells(
             "onset_count": len(onsets),
             "active_note_count": len(active),
             "active_slot_count": len(active_slots),
-            "mean_active_layers": _round(mean_layers),
+            "mean_active_layers": _anatomy_round(mean_layers),
             "maximum_polyphony": maximum_polyphony,
-            "onsets_per_beat": _round(density),
-            "mean_velocity": _round(mean_velocity),
+            "onsets_per_beat": _anatomy_round(density),
+            "mean_velocity": _anatomy_round(mean_velocity),
             "minimum_onset_note": min(notes) if notes else None,
             "maximum_onset_note": max(notes) if notes else None,
-            "mean_onset_note": _round(sum(notes) / len(notes)) if notes else None,
+            "mean_onset_note": _anatomy_round(sum(notes) / len(notes)) if notes else None,
             "register_onsets": {name: int(register.get(name, 0)) for name in ("bass", "low_mid", "mid", "upper_mid", "high")},
             "role_onsets": dict(sorted(role_onsets.items())),
             "slot_occupancy": slot_occupancy,
             "role_layer_occupancy": role_layer_occupancy,
-            "energy": _round(energy),
+            "energy": _anatomy_round(energy),
         }
         cell["state_sha256"] = midi_sha256_json({key: value for key, value in cell.items() if key != "state_sha256"})
         cells.append(cell)
@@ -291,14 +291,14 @@ def _bar_cells(
     return cells, onset_to_bar
 
 
-def _role_order(cells: Sequence[Mapping[str, Any]]) -> list[str]:
+def _anatomy_role_order(cells: Sequence[Mapping[str, Any]]) -> list[str]:
     present = {str(role) for cell in cells for role in cell.get("active_roles") or []}
     ordered = [role for role in DEFAULT_ROLE_ORDER if role in present]
     ordered.extend(sorted(present - set(ordered)))
     return ordered
 
 
-def _feature_vectors(cells: Sequence[Mapping[str, Any]], roles: Sequence[str]) -> list[list[float]]:
+def _anatomy_feature_vectors(cells: Sequence[Mapping[str, Any]], roles: Sequence[str]) -> list[list[float]]:
     vectors = []
     for cell in cells:
         vector = [
@@ -315,12 +315,12 @@ def _feature_vectors(cells: Sequence[Mapping[str, Any]], roles: Sequence[str]) -
     return vectors
 
 
-def _novelty(vectors: Sequence[Sequence[float]], cells: Sequence[Mapping[str, Any]]) -> list[float]:
+def _anatomy_novelty(vectors: Sequence[Sequence[float]], cells: Sequence[Mapping[str, Any]]) -> list[float]:
     values = [0.0]
     for index in range(1, len(vectors)):
         left = vectors[index - 1]
         right = vectors[index]
         distance = math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(left, right)))
         event_change = 0.10 * (len(cells[index]["entering_slot_ids"]) + len(cells[index]["exiting_slot_ids"]))
-        values.append(_round(distance + event_change))
+        values.append(_anatomy_round(distance + event_change))
     return values

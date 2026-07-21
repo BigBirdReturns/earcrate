@@ -15,14 +15,14 @@ from earcrate.live.operators import (
 )
 from earcrate.live.planner import (
     live_atlas_from_midi,
-    live_plan_next,
     live_plan_session,
     live_runtime_capability,
     live_validate_atlas,
     live_validate_horizon_plan,
     live_validate_session_plan,
 )
-from earcrate.live.runtime import (
+from earcrate.live.planner_fix import live_plan_next
+from earcrate.live.runtime_fix import (
     live_build_session,
     live_compile_cpu_program,
     live_execute_cpu_program,

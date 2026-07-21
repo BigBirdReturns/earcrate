@@ -37,9 +37,10 @@ def test_integrated_host_prepares_persona_switched_phrases_and_callback_only_cop
     assert first["absolute_start_bar_index"] == 0
     assert first["persona"] == "pretty_lights"
     assert first["library_materials_scanned"] == 0
+    assert first["activity_delta"]["domains"]["control"]["planning"] > 0
+    assert first["activity_delta"]["domains"]["phrase_render"]["binding"] == 1
+    assert first["activity_delta"]["domains"]["phrase_render"]["sample_decode"] > 0
 
-    # The audio callback starts consuming phrase one while the control thread
-    # prepares phrase two. No planner or library lookup is called here.
     outdata = np.empty((257, 2), dtype=np.float32)
     host.callback.render_into(outdata)
     assert np.isfinite(outdata).all()
@@ -53,12 +54,14 @@ def test_integrated_host_prepares_persona_switched_phrases_and_callback_only_cop
 
     receipt = host.receipt()
     assert receipt["planning_count"] == 2
+    assert receipt["preparation_count"] == 2
     assert receipt["current_state"]["current_bar_index"] == 8
     assert receipt["current_state"]["current_persona"] == "girl_talk"
     assert receipt["library_scans_after_initialization"] == 0
-    assert receipt["gpu_calls_after_initialization"] == 0
-    assert receipt["network_calls_after_initialization"] == 0
-    assert receipt["cloud_calls_after_initialization"] == 0
+    activity = receipt["activity_receipt"]
+    assert activity["totals"]["planning"] == 2
+    assert activity["totals"]["binding"] == 2
+    assert activity["totals"]["sample_decode"] > 0
     assert receipt["audio_callback"]["callback_planning_count"] == 0
     assert receipt["audio_callback"]["callback_library_search_count"] == 0
     assert receipt["audio_callback"]["callback_sample_decode_count"] == 0
@@ -85,4 +88,5 @@ def test_prepare_is_transactional_when_audio_queue_is_full(tmp_path: Path) -> No
         raise AssertionError("live host advanced despite a full audio queue")
     assert host.state["state_sha256"] == state_before
     assert len(host.pending_controls) == 1
-    assert host.planning_count == 1
+    assert host.receipt()["preparation_count"] == 1
+    assert host.planning_count == 2

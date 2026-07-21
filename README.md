@@ -137,6 +137,8 @@ rebuild, sample chop, and layer accumulation. Every selected technique has
 preconditions, exact selected layers, lowering commands, objective terms,
 ranked alternatives, and an execution outcome.
 
+A complete scheduled set can be planned and proved through neutral instruments:
+
 ```text
 python -m earcrate live capability
 python -m earcrate live atlas "source-performance.mid" "live-atlas.json"
@@ -147,13 +149,48 @@ python -m earcrate live session "source-performance.mid" "live-build" \
   --neutral-render
 ```
 
-A timed controls file is a JSON array. Controls may switch persona, enable,
-disable, or force a technique, change energy, density, risk, or layer limits,
-hold and release the current material, and skip source patterns.
+For interactive operation, keep the state as an immutable JSON revision. Apply a
+control or commit one legal phrase at a time:
+
+```text
+python -m earcrate live state-init \
+  "live-atlas.json" \
+  "state.000.json" \
+  --persona club
+
+python -m earcrate live control \
+  "state.000.json" \
+  "state.requested.json" \
+  --command set_persona \
+  --value '"pretty_lights"'
+
+python -m earcrate live step \
+  "live-atlas.json" \
+  "state.requested.json" \
+  "step-001"
+```
+
+Controls may switch persona, enable, disable, or force a technique, change
+energy, density, risk, or layer limits, hold and release the current material,
+and skip source patterns. The next phrase is replanned from the exact current
+state; the earlier performance and previous decisions are never rewritten.
+
+### Compile the private library once
 
 The expensive private-library search can be moved completely out of the live
-path. Export approved atoms to JSON once, compile a sealed live crate, and use
-that small rack set for later sessions:
+path. The configured-library command reads the approved EarAtom pool, performs
+the slow multi-zone search once, materializes exact sample slices, seals racks,
+and optionally writes SFZ:
+
+```text
+python -m earcrate live crate-compile-library \
+  "source-performance.mid" \
+  "compiled-live-crate" \
+  --profile girl_talk_v1 \
+  --max-transpose 18
+```
+
+A portable alternative accepts an explicit approved-atom JSON export:
 
 ```text
 python -m earcrate live crate-compile \
@@ -162,7 +199,12 @@ python -m earcrate live crate-compile \
   "compiled-live-crate" \
   --profile girl_talk_v1 \
   --max-transpose 18
+```
 
+Later sessions use only the sealed crate and execute with zero full-library
+scans:
+
+```text
 python -m earcrate live crate-session \
   "compiled-live-crate/live-crate-atlas.json" \
   "live-show" \
@@ -173,18 +215,42 @@ python -m earcrate live crate-session \
   --stems
 ```
 
-`crate-compile` performs the slow candidate search, materializes exact sample
-slices, seals multi-zone racks, optionally writes SFZ, and binds the source
-performance. `crate-session` plans on CPU, revalidates the compiled sample
-identities, binds the generated performance to those racks, and renders without
-scanning the full library. Its CPU execution receipt reports the command count,
-peak active layers, and zero pattern or material scans during execution.
+`crate-session` plans on CPU, revalidates the compiled sample identities, binds
+the generated performance to those racks, and renders without rescanning the
+library. Its CPU execution receipt reports the command count, peak active layers,
+and zero pattern or material scans during execution.
+
+### Phrase-buffered audio output
+
+The device callback is deliberately smaller than the planner. A non-audio thread
+applies controls, plans the next phrase, binds it to the sealed racks, decodes or
+loads the required samples, and prepares stereo float PCM. The callback may only
+swap a queued phrase buffer and copy prepared frames. It may not plan, search the
+library, decode samples, or bind events.
+
+Prepare one exact phrase and its next state:
+
+```text
+python -m earcrate live-audio capability
+python -m earcrate live-audio phrase \
+  "compiled-live-crate/live-crate-atlas.json" \
+  "state.requested.json" \
+  "prepared-phrase-001" \
+  --controls "next-controls.json"
+```
+
+The phrase directory contains the WAV, next state, engine step, MIDI,
+MIDI-lowering ledger, binding, render program, event execution ledger, and phrase
+receipt. The in-memory `LiveAudioCallback` consumes prepared buffers in fixed
+blocks and records explicit underruns. `LiveSoundDevicePlayer` is an optional
+thin host around the `sounddevice` package. Core planning, tests, and offline
+crate compilation do not require that package or an audio device.
 
 ## Verify
 
 - `python tests/run_gates.py`
 - `python VERIFY_PACKAGE.py` builds and self-tests the single-file package and
-  drives its packaged MIDI, rack, reference, and live command surfaces.
+  drives its packaged MIDI, rack, reference, live, and live-audio command surfaces.
 - `python scripts/oss_audit.py` validates code and model governance ledgers.
 
 CI retains the complete gate ledger and package-verifier ledger as artifacts on

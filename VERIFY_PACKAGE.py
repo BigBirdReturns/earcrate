@@ -56,6 +56,7 @@ if checks["singlefile_builds"]:
         live_payload = json.loads(live_capability.stdout) if live_capability.returncode == 0 else {}
     except json.JSONDecodeError:
         live_payload = {}
+    runtime_boundary = live_payload.get("runtime_boundary") or {}
     checks["singlefile_live_smoke"] = (
         live_capability.returncode == 0
         and live_payload.get("ok") is True
@@ -64,10 +65,8 @@ if checks["singlefile_builds"]:
         and live_payload.get("requires_network") is False
         and live_payload.get("requires_cloud") is False
         and len(live_payload.get("techniques") or []) >= 12
-        and (live_payload.get("runtime_boundary") or {}).get("callback_planning_count") == 0
-        and (live_payload.get("runtime_boundary") or {}).get("callback_library_search_count") == 0
-        and (live_payload.get("runtime_boundary") or {}).get("callback_sample_decode_count") == 0
-        and (live_payload.get("runtime_boundary") or {}).get("callback_binding_count") == 0
+        and runtime_boundary.get("evidence") == "measured_by_live_activity_recorder"
+        and runtime_boundary.get("audio_callback") == "fixed_ring_buffer_swap_and_float32_copy"
     )
     if not checks["singlefile_live_smoke"]:
         details["singlefile_live_smoke"] = {
@@ -88,6 +87,7 @@ if checks["singlefile_builds"]:
         audio_payload = {}
     prepared = audio_payload.get("prepared_stream") or {}
     audio_device = audio_payload.get("audio_device") or {}
+    callback_contract = prepared.get("callback_contract") or {}
     checks["singlefile_live_audio_smoke"] = (
         live_audio_capability.returncode == 0
         and audio_payload.get("ok") is True
@@ -95,13 +95,10 @@ if checks["singlefile_builds"]:
         and prepared.get("requires_gpu") is False
         and prepared.get("requires_network") is False
         and prepared.get("requires_cloud") is False
-        and prepared.get("audio_callback_performs_planning") is False
-        and prepared.get("audio_callback_performs_library_search") is False
-        and prepared.get("audio_callback_performs_sample_decode") is False
-        and audio_device.get("callback_plans") is False
-        and audio_device.get("callback_searches_library") is False
-        and audio_device.get("callback_decodes_samples") is False
-        and audio_device.get("callback_binds_events") is False
+        and sorted(callback_contract.get("forbidden") or [])
+        == ["binding", "library_search", "planning", "sample_decode"]
+        and audio_device.get("queue_model") == "single_producer_single_consumer_fixed_ring"
+        and audio_device.get("completion_history") == "fixed_ring"
     )
     if not checks["singlefile_live_audio_smoke"]:
         details["singlefile_live_audio_smoke"] = {
@@ -152,7 +149,12 @@ if checks["singlefile_builds"]:
             source = tmp / "package-sample.wav"
             sample_rate = 8_000
             time = np.arange(int(0.5 * sample_rate), dtype=np.float64) / sample_rate
-            sf.write(source, (0.25 * np.sin(2.0 * np.pi * 261.625565 * time)).astype(np.float32), sample_rate, subtype="FLOAT")
+            sf.write(
+                source,
+                (0.25 * np.sin(2.0 * np.pi * 261.625565 * time)).astype(np.float32),
+                sample_rate,
+                subtype="FLOAT",
+            )
             draft = tmp / "package-rack.draft.json"
             sealed = tmp / "package-rack.json"
             binding = tmp / "package-binding.json"
@@ -164,7 +166,10 @@ if checks["singlefile_builds"]:
                         "name": "Package Piano",
                         "mode": "pitched",
                         "metadata": {"tags": ["piano"]},
-                        "created_by": {"actor": "package_verifier", "reason": "single-file rack smoke"},
+                        "created_by": {
+                            "actor": "package_verifier",
+                            "reason": "single-file rack smoke",
+                        },
                         "zones": [
                             {
                                 "zone_id": "middle-c",
@@ -173,7 +178,12 @@ if checks["singlefile_builds"]:
                                 "velocity_range": [1, 127],
                                 "root_key": 60,
                                 "trigger_mode": "gate",
-                                "loop": {"enabled": False, "start_frame": 0, "end_frame": 0, "crossfade_frames": 0},
+                                "loop": {
+                                    "enabled": False,
+                                    "start_frame": 0,
+                                    "end_frame": 0,
+                                    "crossfade_frames": 0,
+                                },
                                 "attack_ms": 2.0,
                                 "release_ms": 12.0,
                             }
@@ -190,31 +200,51 @@ if checks["singlefile_builds"]:
                 text=True,
                 timeout=60,
             )
-            bind = subprocess.run(
-                [sys.executable, str(artifact), "midi", "bind", str(fixture), str(binding), str(sealed)],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            ) if seal.returncode == 0 else None
-            rack_render = subprocess.run(
-                [
-                    sys.executable,
-                    str(artifact),
-                    "midi",
-                    "render-rack",
-                    str(fixture),
-                    str(binding),
-                    str(rendered),
-                    "--rack",
-                    str(sealed),
-                    "--sample-rate",
-                    str(sample_rate),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            ) if bind is not None and bind.returncode == 0 else None
-            rack_payload = json.loads(rack_render.stdout) if rack_render is not None and rack_render.returncode == 0 else {}
+            bind = (
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(artifact),
+                        "midi",
+                        "bind",
+                        str(fixture),
+                        str(binding),
+                        str(sealed),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if seal.returncode == 0
+                else None
+            )
+            rack_render = (
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(artifact),
+                        "midi",
+                        "render-rack",
+                        str(fixture),
+                        str(binding),
+                        str(rendered),
+                        "--rack",
+                        str(sealed),
+                        "--sample-rate",
+                        str(sample_rate),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if bind is not None and bind.returncode == 0
+                else None
+            )
+            rack_payload = (
+                json.loads(rack_render.stdout)
+                if rack_render is not None and rack_render.returncode == 0
+                else {}
+            )
             checks["singlefile_rack_smoke"] = (
                 seal.returncode == 0
                 and bind is not None
@@ -229,9 +259,25 @@ if checks["singlefile_builds"]:
             )
             if not checks["singlefile_rack_smoke"]:
                 details["singlefile_rack_smoke"] = {
-                    "seal": None if seal is None else {"returncode": seal.returncode, "stdout": seal.stdout[-1200:], "stderr": seal.stderr[-1200:]},
-                    "bind": None if bind is None else {"returncode": bind.returncode, "stdout": bind.stdout[-1200:], "stderr": bind.stderr[-1200:]},
-                    "render": None if rack_render is None else {"returncode": rack_render.returncode, "stdout": rack_render.stdout[-1200:], "stderr": rack_render.stderr[-1200:]},
+                    "seal": {
+                        "returncode": seal.returncode,
+                        "stdout": seal.stdout[-1200:],
+                        "stderr": seal.stderr[-1200:],
+                    },
+                    "bind": None
+                    if bind is None
+                    else {
+                        "returncode": bind.returncode,
+                        "stdout": bind.stdout[-1200:],
+                        "stderr": bind.stderr[-1200:],
+                    },
+                    "render": None
+                    if rack_render is None
+                    else {
+                        "returncode": rack_render.returncode,
+                        "stdout": rack_render.stdout[-1200:],
+                        "stderr": rack_render.stderr[-1200:],
+                    },
                 }
     except Exception as exc:
         checks["singlefile_midi_smoke"] = False

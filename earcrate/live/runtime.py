@@ -4,13 +4,19 @@ from collections import defaultdict
 from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
+from earcrate.live.instrumentation import (
+    LiveActivityRecorder,
+    live_activity_delta,
+    live_activity_scope,
+    live_record_activity,
+)
 from earcrate.live.model import LiveError
 from earcrate.live.planner import (
     live_plan_session,
     live_validate_atlas,
     live_validate_session_plan,
 )
-from earcrate.midi.arranger import _arranger_allocate_channels, _arranger_track_events
+from earcrate.midi.arranger import _arranger_allocate_channels
 from earcrate.midi.model import (
     MIDI_LEDGER_KIND,
     MIDI_LEDGER_SCHEMA_VERSION,
@@ -28,6 +34,62 @@ LIVE_CPU_PROGRAM_SCHEMA_VERSION = 1
 LIVE_CPU_PROGRAM_KIND = "earcrate_live_cpu_program"
 LIVE_CPU_EXECUTION_SCHEMA_VERSION = 1
 LIVE_CPU_EXECUTION_KIND = "earcrate_live_cpu_execution"
+
+_EVENT_MARKERS = (
+    "_generated_note_id",
+    "_generated_note_off_id",
+    "_generated_control_id",
+    "_live_note_id",
+    "_live_note_off_id",
+    "_live_control_id",
+)
+
+
+def _live_message_priority(message: Mapping[str, Any], is_meta: bool) -> int:
+    typ = str(message.get("type") or "")
+    if is_meta and typ == "track_name":
+        return 0
+    if typ == "program_change":
+        return 1
+    if typ in {"control_change", "pitchwheel"}:
+        return 2
+    if typ == "note_off" or (typ == "note_on" and int(message.get("velocity") or 0) == 0):
+        return 3
+    if typ == "note_on":
+        return 4
+    if is_meta and typ == "end_of_track":
+        return 9
+    return 5
+
+
+def _marker_identity(row: Mapping[str, Any]) -> str:
+    return next((str(row[marker]) for marker in _EVENT_MARKERS if row.get(marker)), "")
+
+
+def _live_track_events(raw: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Order MIDI events while retaining arranger and live provenance markers."""
+    ordered = sorted(
+        [deepcopy(dict(row)) for row in raw],
+        key=lambda row: (
+            int(row["tick"]),
+            _live_message_priority(row["message"], bool(row["is_meta"])),
+            midi_sha256_json(row["message"]),
+            _marker_identity(row),
+        ),
+    )
+    events = []
+    for index, row in enumerate(ordered):
+        event = {
+            "tick": int(row["tick"]),
+            "order": index,
+            "is_meta": bool(row["is_meta"]),
+            "message": deepcopy(dict(row["message"])),
+        }
+        for marker in _EVENT_MARKERS:
+            if row.get(marker):
+                event[marker] = str(row[marker])
+        events.append(event)
+    return events
 
 
 def _live_find_slot(pattern: Mapping[str, Any], slot_id: str) -> dict[str, Any]:
@@ -226,17 +288,44 @@ def live_lower_session_to_midi(
                     }
                 )
 
-            expression_commands = [command for command in decision.get("commands") or [] if str(command.get("kind") or "") == "expression_ramp"]
+            expression_commands = [
+                command
+                for command in decision.get("commands") or []
+                if str(command.get("kind") or "") == "expression_ramp"
+            ]
             for command in expression_commands:
                 command_id = str(command["command_id"])
                 start_value = int(round(127.0 * float(command.get("start", 1.0))))
                 end_value = int(round(127.0 * float(command.get("end", 1.0))))
-                start_id = "live_control_event_" + midi_sha256_json({"command_id": command_id, "slot_id": slot_id, "edge": "start"})[:24]
-                end_id = "live_control_event_" + midi_sha256_json({"command_id": command_id, "slot_id": slot_id, "edge": "end"})[:24]
-                generated_events[slot_id].append(_live_control_event(tick=target_start, channel=output_channel, control=11, value=start_value, control_id=start_id))
-                generated_events[slot_id].append(_live_control_event(tick=max(target_start, target_end - 1), channel=output_channel, control=11, value=end_value, control_id=end_id))
+                start_id = "live_control_event_" + midi_sha256_json(
+                    {"command_id": command_id, "slot_id": slot_id, "edge": "start"}
+                )[:24]
+                end_id = "live_control_event_" + midi_sha256_json(
+                    {"command_id": command_id, "slot_id": slot_id, "edge": "end"}
+                )[:24]
+                generated_events[slot_id].append(
+                    _live_control_event(
+                        tick=target_start,
+                        channel=output_channel,
+                        control=11,
+                        value=start_value,
+                        control_id=start_id,
+                    )
+                )
+                generated_events[slot_id].append(
+                    _live_control_event(
+                        tick=max(target_start, target_end - 1),
+                        channel=output_channel,
+                        control=11,
+                        value=end_value,
+                        control_id=end_id,
+                    )
+                )
                 command_effects[command_id].extend([start_id, end_id])
-                for generated_id, tick, value in ((start_id, target_start, start_value), (end_id, max(target_start, target_end - 1), end_value)):
+                for generated_id, tick, value in (
+                    (start_id, target_start, start_value),
+                    (end_id, max(target_start, target_end - 1), end_value),
+                ):
                     control_provenance.append(
                         {
                             "generated_control_id": generated_id,
@@ -246,7 +335,12 @@ def live_lower_session_to_midi(
                             "pattern_id": pattern_id,
                             "slot_id": slot_id,
                             "tick": tick,
-                            "message": {"type": "control_change", "channel": output_channel, "control": 11, "value": value},
+                            "message": {
+                                "type": "control_change",
+                                "channel": output_channel,
+                                "control": 11,
+                                "value": value,
+                            },
                             "snapshot": False,
                             "command_id": command_id,
                         }
@@ -269,7 +363,19 @@ def live_lower_session_to_midi(
                     end_tick = min(total_ticks, start_tick + max(1, int(fragment_duration)))
                     if start_tick >= total_ticks or end_tick <= start_tick:
                         continue
-                    velocity = max(1, min(127, int(round(int(source_event["velocity"]) * velocity_scale * energy_velocity))))
+                    velocity = max(
+                        1,
+                        min(
+                            127,
+                            int(
+                                round(
+                                    int(source_event["velocity"])
+                                    * velocity_scale
+                                    * energy_velocity
+                                )
+                            ),
+                        ),
+                    )
                     generated_id = "live_note_" + midi_sha256_json(
                         {
                             "source_event_id": source_event["source_event_id"],
@@ -363,7 +469,13 @@ def live_lower_session_to_midi(
         },
         {"tick": total_ticks, "is_meta": True, "message": {"type": "end_of_track"}},
     ]
-    tracks = [{"track_index": 0, "name": "EarCrate Live Conductor", "events": _arranger_track_events(conductor_raw)}]
+    tracks = [
+        {
+            "track_index": 0,
+            "name": "EarCrate Live Conductor",
+            "events": _live_track_events(conductor_raw),
+        }
+    ]
     note_on_locators: dict[str, dict[str, Any]] = {}
     note_off_locators: dict[str, dict[str, Any]] = {}
     control_locators: dict[str, dict[str, Any]] = {}
@@ -377,7 +489,7 @@ def live_lower_session_to_midi(
             {"tick": total_ticks, "is_meta": True, "message": {"type": "end_of_track"}},
         ]
         track_index = len(tracks)
-        events = _arranger_track_events(raw)
+        events = _live_track_events(raw)
         for event in events:
             note_id = event.pop("_live_note_id", None)
             note_off_id = event.pop("_live_note_off_id", None)
@@ -413,7 +525,14 @@ def live_lower_session_to_midi(
     compiled = midi_compile_note_spans(output)
     span_queues: dict[tuple[int, int, int, int], list[dict[str, Any]]] = defaultdict(list)
     for span in compiled["note_spans"]:
-        span_queues[(int(span["track_index"]), int(span["channel"]), int(span["note"]), int(span["start_tick"]))].append(span)
+        span_queues[
+            (
+                int(span["track_index"]),
+                int(span["channel"]),
+                int(span["note"]),
+                int(span["start_tick"]),
+            )
+        ].append(span)
     for rows in span_queues.values():
         rows.sort(key=lambda row: (int(row["end_tick"]), str(row["event_id"])))
 
@@ -568,7 +687,9 @@ def live_compile_cpu_program(atlas: Mapping[str, Any], session: Mapping[str, Any
     commands.sort(key=lambda row: (int(row["tick"]), int(row["order"]), str(row["program_command_id"])))
     for index, row in enumerate(commands):
         row["order"] = index
-        row["program_command_id"] = "live_cpu_command_" + midi_sha256_json({key: value for key, value in row.items() if key != "program_command_id"})[:24]
+        row["program_command_id"] = "live_cpu_command_" + midi_sha256_json(
+            {key: value for key, value in row.items() if key != "program_command_id"}
+        )[:24]
     program = {
         "schema_version": LIVE_CPU_PROGRAM_SCHEMA_VERSION,
         "kind": LIVE_CPU_PROGRAM_KIND,
@@ -598,61 +719,80 @@ def live_validate_cpu_execution(execution: Mapping[str, Any]) -> None:
         raise LiveError("live CPU execution does not account for every command")
     if bool(execution.get("complete")) and any(str(row.get("status") or "") != "executed" for row in outcomes):
         raise LiveError("complete live CPU execution contains a refused command")
+    activity = execution.get("activity_delta")
+    if not isinstance(activity, Mapping):
+        raise LiveError("live CPU execution requires a measured activity delta")
     expected = midi_sha256_json({key: value for key, value in execution.items() if key != "execution_sha256"})
     if str(execution.get("execution_sha256") or "") != expected:
         raise LiveError("execution_sha256 does not match live CPU execution")
 
 
-def live_execute_cpu_program(program: Mapping[str, Any]) -> dict[str, Any]:
+def live_execute_cpu_program(
+    program: Mapping[str, Any],
+    *,
+    activity_recorder: LiveActivityRecorder | None = None,
+) -> dict[str, Any]:
     live_validate_cpu_program(program)
+    recorder = activity_recorder or LiveActivityRecorder()
+    before = recorder.snapshot()
     active: dict[str, dict[str, Any]] = {}
     outcomes = []
     peak_active = 0
     refused = 0
-    for command in program["commands"]:
-        kind = str(command["kind"])
-        status = "executed"
-        reason = ""
-        if kind == "activate_layer":
-            layer_id = str(command["layer_id"])
-            if layer_id in active:
-                status = "refused"
-                reason = "layer_already_active"
+    with live_activity_scope(recorder, "cpu_execution"):
+        for command in program["commands"]:
+            live_record_activity(
+                "cpu_command",
+                detail={
+                    "program_command_id": command["program_command_id"],
+                    "kind": command["kind"],
+                },
+            )
+            kind = str(command["kind"])
+            status = "executed"
+            reason = ""
+            if kind == "activate_layer":
+                layer_id = str(command["layer_id"])
+                if layer_id in active:
+                    status = "refused"
+                    reason = "layer_already_active"
+                else:
+                    active[layer_id] = deepcopy(dict(command["layer"]))
+            elif kind == "deactivate_layer":
+                layer_id = str(command["layer_id"])
+                if layer_id not in active:
+                    status = "refused"
+                    reason = "layer_not_active"
+                else:
+                    active.pop(layer_id)
+            elif kind == "bar_commit":
+                expected_layers = sorted(str(value) for value in command["expected_layer_ids"])
+                if sorted(active) != expected_layers:
+                    status = "refused"
+                    reason = "active_layer_state_mismatch"
+            elif kind == "technique_command":
+                technique_command = command.get("command") or {}
+                if not str(technique_command.get("command_id") or ""):
+                    status = "refused"
+                    reason = "technique_command_missing_identity"
             else:
-                active[layer_id] = deepcopy(dict(command["layer"]))
-        elif kind == "deactivate_layer":
-            layer_id = str(command["layer_id"])
-            if layer_id not in active:
                 status = "refused"
-                reason = "layer_not_active"
-            else:
-                active.pop(layer_id)
-        elif kind == "bar_commit":
-            expected_layers = sorted(str(value) for value in command["expected_layer_ids"])
-            if sorted(active) != expected_layers:
-                status = "refused"
-                reason = "active_layer_state_mismatch"
-        elif kind == "technique_command":
-            technique_command = command.get("command") or {}
-            if not str(technique_command.get("command_id") or ""):
-                status = "refused"
-                reason = "technique_command_missing_identity"
-        else:
-            status = "refused"
-            reason = "unknown_program_command"
-        if status != "executed":
-            refused += 1
-        peak_active = max(peak_active, len(active))
-        outcomes.append(
-            {
-                "program_command_id": str(command["program_command_id"]),
-                "tick": int(command["tick"]),
-                "kind": kind,
-                "status": status,
-                "reason": reason,
-                "active_layer_count_after": len(active),
-            }
-        )
+                reason = "unknown_program_command"
+            if status != "executed":
+                refused += 1
+            peak_active = max(peak_active, len(active))
+            outcomes.append(
+                {
+                    "program_command_id": str(command["program_command_id"]),
+                    "tick": int(command["tick"]),
+                    "kind": kind,
+                    "status": status,
+                    "reason": reason,
+                    "active_layer_count_after": len(active),
+                }
+            )
+    after = recorder.snapshot()
+    delta = live_activity_delta(before, after)
     complete = refused == 0 and not active
     execution = {
         "schema_version": LIVE_CPU_EXECUTION_SCHEMA_VERSION,
@@ -665,10 +805,11 @@ def live_execute_cpu_program(program: Mapping[str, Any]) -> dict[str, Any]:
         "peak_active_layer_count": peak_active,
         "declared_pattern_count": int(program["declared_pattern_count"]),
         "declared_material_count": int(program["declared_material_count"]),
-        "patterns_scanned_during_execution": 0,
-        "materials_scanned_during_execution": 0,
-        "runtime_operation_count": len(program["commands"]),
+        "patterns_scanned_during_execution": int(delta["domains"]["cpu_execution"]["pattern_scan"]),
+        "materials_scanned_during_execution": int(delta["domains"]["cpu_execution"]["material_scan"]),
+        "runtime_operation_count": int(delta["domains"]["cpu_execution"]["cpu_command"]),
         "active_layers_after_execution": sorted(active),
+        "activity_delta": delta,
         "outcomes": outcomes,
     }
     execution["execution_sha256"] = midi_sha256_json(execution)
@@ -694,22 +835,26 @@ def live_build_session(
     beam_width: int = 32,
     candidate_limit: int = 12,
     target_bpm: float = 0.0,
+    activity_recorder: LiveActivityRecorder | None = None,
 ) -> dict[str, Any]:
-    planned = live_plan_session(
-        source_ledger,
-        target_bars=target_bars,
-        persona=persona,
-        seed=seed,
-        controls=controls,
-        target_energy=target_energy,
-        density=density,
-        risk=risk,
-        maximum_layers=maximum_layers,
-        horizon_bars=horizon_bars,
-        phrase_bars=phrase_bars,
-        beam_width=beam_width,
-        candidate_limit=candidate_limit,
-    )
+    recorder = activity_recorder or LiveActivityRecorder()
+    before = recorder.snapshot()
+    with live_activity_scope(recorder, "control"):
+        planned = live_plan_session(
+            source_ledger,
+            target_bars=target_bars,
+            persona=persona,
+            seed=seed,
+            controls=controls,
+            target_energy=target_energy,
+            density=density,
+            risk=risk,
+            maximum_layers=maximum_layers,
+            horizon_bars=horizon_bars,
+            phrase_bars=phrase_bars,
+            beam_width=beam_width,
+            candidate_limit=candidate_limit,
+        )
     lowering = live_lower_session_to_midi(
         source_ledger,
         planned["atlas"],
@@ -717,7 +862,8 @@ def live_build_session(
         target_bpm=target_bpm,
     )
     program = live_compile_cpu_program(planned["atlas"], planned["session"])
-    execution = live_execute_cpu_program(program)
+    execution = live_execute_cpu_program(program, activity_recorder=recorder)
+    activity = live_activity_delta(before, recorder.snapshot())
     return {
         "ok": True,
         "complete": True,
@@ -728,4 +874,6 @@ def live_build_session(
         "midi_ledger": lowering["ledger"],
         "cpu_program": program,
         "cpu_execution": execution,
+        "activity_delta": activity,
+        "activity_receipt": recorder.snapshot(),
     }

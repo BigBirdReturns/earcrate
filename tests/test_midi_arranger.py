@@ -169,7 +169,9 @@ def test_pattern_bank_preserves_note_and_controller_sources(tmp_path: Path) -> N
     source = tmp_path / "source.mid"
     _write_source(source)
     bank = midi_pattern_bank(midi_read(source))
-    assert bank["pattern_count"] == 16
+    assert bank["pattern_count"] == 15
+    assert bank["excluded_partial_bar_count"] == 1
+    assert bank["excluded_partial_bars"][0]["bar_index"] == 15
     assert any(slot["controls"]["pitch_bend_used"] for slot in bank["slots"])
     source_events = [event for pattern in bank["patterns"] for slot in pattern["slots"] for event in slot["events"]]
     source_controls = [event for pattern in bank["patterns"] for slot in pattern["slots"] for event in slot["controls"]]

@@ -13,7 +13,7 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "rack/model.py", "rack/demand.py", "rack/binding.py", "rack/binding_stable.py", "rack/sfz.py", "rack/render.py", "rack/render_fix.py", "rack/library.py", "rack/library_fix.py", "rack/multizone.py",
          "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/arranger.py", "midi/arranger_fix.py",
          "study/reference.py", "study/reference_grid.py", "study/reference_bundle.py", "study/reference_cli.py",
-         "live/model.py", "live/operators.py", "live/planner.py", "live/planner_fix.py", "live/engine.py", "live/runtime.py", "live/runtime_fix.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/capability_fix.py", "live/cli.py",
+         "live/model.py", "live/operators.py", "live/planner.py", "live/planner_fix.py", "live/engine.py", "live/runtime.py", "live/runtime_fix.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/capability_fix.py", "live/audio_cli.py", "live/cli.py",
          "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
 INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
@@ -64,7 +64,7 @@ for rel in ORDER:
     body = "\n".join(lines)
     # Module-specific CLIs are callable from the top-level dispatcher. Their own
     # `python -m` guards must not fire while the concatenated artifact is loading.
-    if rel in {"study/reference_cli.py", "live/cli.py"}:
+    if rel in {"study/reference_cli.py", "live/cli.py", "live/audio_cli.py"}:
         marker = '\nif __name__ == "__main__":'
         if marker in body:
             body = body.split(marker, 1)[0]
@@ -83,6 +83,7 @@ for rel in ORDER:
             needle
             + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
             + "\n    if argv and argv[0] == \"live\":\n        return live_cli_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"live-audio\":\n        return live_audio_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"reference\":\n        return reference_cli_main(argv[1:])"
         )
         if needle not in body:

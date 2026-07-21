@@ -8,16 +8,19 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from earcrate.live.instrumentation import (
+    LiveActivityRecorder,
+    live_activity_delta,
+    live_activity_scope,
+    live_record_activity,
+)
 from earcrate.live.model import LiveError
 from earcrate.live.planner import live_atlas_from_midi, live_validate_atlas
-from earcrate.live.runtime_fix import live_build_session
+from earcrate.live.runtime import live_build_session
 from earcrate.midi.codec import midi_write
 from earcrate.midi.model import midi_sha256_json, midi_validate_ledger
 from earcrate.rack.binding_stable import rack_compile_binding
-from earcrate.rack.model import (
-    rack_validate_revision,
-    rack_verify_sources,
-)
+from earcrate.rack.model import rack_validate_revision, rack_verify_sources
 from earcrate.rack.multizone import rack_build_from_atoms
 from earcrate.rack.render_fix import rack_render_ledger
 
@@ -90,6 +93,11 @@ def live_validate_crate_atlas(atlas: Mapping[str, Any], *, verify_sources: bool 
         raise LiveError("live crate atlas requires a complete source-rack build")
     if str(build.get("build_sha256") or "") != str(atlas.get("rack_build_sha256") or ""):
         raise LiveError("live crate atlas rack-build identity disagrees with its receipt")
+    activity = atlas.get("offline_activity")
+    if not isinstance(activity, Mapping):
+        raise LiveError("live crate atlas requires measured offline activity")
+    if int((activity.get("totals") or {}).get("library_search", 0)) <= 0:
+        raise LiveError("live crate atlas does not prove an actual library search")
     expected = live_compute_crate_atlas_sha256(atlas)
     if str(atlas.get("crate_atlas_sha256") or "") != expected:
         raise LiveError("crate_atlas_sha256 does not match live crate atlas contents")
@@ -109,29 +117,47 @@ def live_compile_crate_atlas(
     sample_rate: int = 44_100,
     compile_sfz: bool = True,
     overwrite: bool = False,
+    activity_recorder: LiveActivityRecorder | None = None,
 ) -> dict[str, Any]:
     """Spend the expensive library search once and seal a reusable live crate."""
     midi_validate_ledger(source_ledger)
+    normalized_atoms = [deepcopy(dict(atom)) for atom in atoms]
+    if not normalized_atoms:
+        raise LiveError("live crate compilation requires approved atoms")
     root = Path(output_root).expanduser().resolve()
     atlas_path = root / "live-crate-atlas.json"
     if atlas_path.exists() and not overwrite:
         raise FileExistsError(f"refusing to overwrite live crate atlas: {atlas_path}")
+    recorder = activity_recorder or LiveActivityRecorder()
+    before = recorder.snapshot()
     live_atlas = live_atlas_from_midi(source_ledger)
-    rack_build = rack_build_from_atoms(
-        source_ledger,
-        atoms,
-        root / "library-racks",
-        taste_profile=taste_profile,
-        top_k=top_k,
-        maximum_transpose_semitones=maximum_transpose_semitones,
-        loopability_threshold=loopability_threshold,
-        max_zones_per_slot=max_zones_per_slot,
-        combination_beam_width=combination_beam_width,
-        sample_rate=sample_rate,
-        apply=True,
-        overwrite=overwrite,
-        compile_sfz=compile_sfz,
-    )
+    with live_activity_scope(recorder, "offline_compile"):
+        live_record_activity(
+            "library_search",
+            detail={
+                "atom_count": len(normalized_atoms),
+                "source_semantic_sha256": source_ledger["semantic_sha256"],
+                "maximum_transpose_semitones": maximum_transpose_semitones,
+                "max_zones_per_slot": max_zones_per_slot,
+            },
+        )
+        live_record_activity("material_scan", units=len(normalized_atoms), detail={"purpose": "rack_candidate_search"})
+        rack_build = rack_build_from_atoms(
+            source_ledger,
+            normalized_atoms,
+            root / "library-racks",
+            taste_profile=taste_profile,
+            top_k=top_k,
+            maximum_transpose_semitones=maximum_transpose_semitones,
+            loopability_threshold=loopability_threshold,
+            max_zones_per_slot=max_zones_per_slot,
+            combination_beam_width=combination_beam_width,
+            sample_rate=sample_rate,
+            apply=True,
+            overwrite=overwrite,
+            compile_sfz=compile_sfz,
+        )
+        live_record_activity("binding", detail={"stage": "source_rack_build"})
     if not bool(rack_build.get("complete")) or not bool((rack_build.get("binding") or {}).get("complete")):
         raise LiveError("approved library did not produce an event-complete source rack build")
     rack_revisions = [deepcopy(dict(rack)) for rack in rack_build["rack_revisions"]]
@@ -144,6 +170,7 @@ def live_compile_crate_atlas(
         if key not in {"rack_revisions", "binding"}
     }
     public_build["source_binding_sha256"] = str(rack_build["binding"]["binding_sha256"])
+    offline_activity = live_activity_delta(before, recorder.snapshot())
     atlas = {
         "schema_version": LIVE_CRATE_ATLAS_SCHEMA_VERSION,
         "kind": LIVE_CRATE_ATLAS_KIND,
@@ -164,11 +191,12 @@ def live_compile_crate_atlas(
         "live_material_atlas": live_atlas,
         "rack_revisions": rack_revisions,
         "rack_build": public_build,
+        "offline_activity": offline_activity,
     }
     atlas["crate_atlas_sha256"] = live_compute_crate_atlas_sha256(atlas)
     live_validate_crate_atlas(atlas, verify_sources=True)
     write = _live_crate_atomic_json(atlas_path, atlas, overwrite=overwrite)
-    return {"atlas": atlas, "write": write}
+    return {"atlas": atlas, "write": write, "activity_receipt": recorder.snapshot()}
 
 
 def live_load_crate_atlas(path: str | Path, *, verify_sources: bool = True) -> dict[str, Any]:
@@ -193,6 +221,9 @@ def live_validate_crate_session(session: Mapping[str, Any]) -> None:
     binding = session.get("generated_binding")
     if not isinstance(binding, Mapping) or not bool(binding.get("complete")):
         raise LiveError("live crate session requires an event-complete generated binding")
+    activity = session.get("runtime_activity")
+    if not isinstance(activity, Mapping):
+        raise LiveError("live crate session requires measured runtime activity")
     expected = midi_sha256_json({key: value for key, value in session.items() if key != "crate_session_sha256"})
     if str(session.get("crate_session_sha256") or "") != expected:
         raise LiveError("crate_session_sha256 does not match live crate session contents")
@@ -217,9 +248,12 @@ def live_run_crate_session(
     render_path: str | Path | None = None,
     stems_dir: str | Path | None = None,
     overwrite: bool = False,
+    activity_recorder: LiveActivityRecorder | None = None,
 ) -> dict[str, Any]:
     """Plan on CPU, bind to precompiled racks, and optionally render without a library scan."""
     live_validate_crate_atlas(crate_atlas, verify_sources=True)
+    recorder = activity_recorder or LiveActivityRecorder()
+    before = recorder.snapshot()
     source_ledger = crate_atlas["source_midi_ledger"]
     build = live_build_session(
         source_ledger,
@@ -236,15 +270,18 @@ def live_run_crate_session(
         beam_width=beam_width,
         candidate_limit=candidate_limit,
         target_bpm=target_bpm,
+        activity_recorder=recorder,
     )
     if str(build["atlas"]["atlas_sha256"]) != str(crate_atlas["live_atlas_sha256"]):
         raise LiveError("live code or source performance changed after crate compilation")
     racks = [deepcopy(dict(rack)) for rack in crate_atlas["rack_revisions"]]
-    generated_binding = rack_compile_binding(
-        build["midi_ledger"],
-        racks,
-        pitch_bend_range_semitones=2.0,
-    )
+    with live_activity_scope(recorder, "phrase_render"):
+        live_record_activity("binding", detail={"stage": "generated_live_session"})
+        generated_binding = rack_compile_binding(
+            build["midi_ledger"],
+            racks,
+            pitch_bend_range_semitones=2.0,
+        )
     if not bool(generated_binding.get("complete")):
         raise LiveError(
             "precompiled live racks cannot execute the generated session: "
@@ -263,6 +300,7 @@ def live_run_crate_session(
         )
         if not bool(render.get("complete_execution")):
             raise LiveError("rack render did not execute every selected live event")
+    runtime_activity = live_activity_delta(before, recorder.snapshot())
     session = {
         "schema_version": LIVE_CRATE_SESSION_SCHEMA_VERSION,
         "kind": LIVE_CRATE_SESSION_KIND,
@@ -276,15 +314,22 @@ def live_run_crate_session(
         "target_bars": int(target_bars),
         "persona": str(persona),
         "declared_library_material_count": int(crate_atlas["live_material_atlas"]["declared_material_count"]),
-        "library_materials_scanned_during_execution": int(build["cpu_execution"]["materials_scanned_during_execution"]),
+        "library_materials_scanned_during_execution": int(runtime_activity["totals"]["library_search"]),
         "generated_event_count": int(generated_binding["selected_event_count"]),
         "bound_event_count": int(generated_binding["bound_event_count"]),
+        "runtime_activity": runtime_activity,
         "generated_binding": generated_binding,
         "render": render,
     }
     session["crate_session_sha256"] = midi_sha256_json(session)
     live_validate_crate_session(session)
-    return {"build": build, "session": session, "binding": generated_binding, "render": render}
+    return {
+        "build": build,
+        "session": session,
+        "binding": generated_binding,
+        "render": render,
+        "activity_receipt": recorder.snapshot(),
+    }
 
 
 def live_write_crate_session(

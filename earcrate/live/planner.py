@@ -5,6 +5,8 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
+from earcrate.live.capabilities import live_runtime_capability
+from earcrate.live.instrumentation import live_record_activity
 from earcrate.live.model import (
     LiveError,
     live_advance_state,
@@ -18,7 +20,6 @@ from earcrate.live.operators import (
     LIVE_TECHNIQUE_NAMES,
     live_apply_technique,
     live_operator_capabilities,
-    live_technique_names,
 )
 from earcrate.midi.arranger_fix import midi_pattern_bank
 from earcrate.midi.model import midi_sha256_json, midi_validate_ledger
@@ -29,19 +30,6 @@ LIVE_PLAN_SCHEMA_VERSION = 1
 LIVE_PLAN_KIND = "earcrate_live_horizon_plan"
 LIVE_SESSION_SCHEMA_VERSION = 1
 LIVE_SESSION_KIND = "earcrate_live_session_plan"
-
-
-def live_runtime_capability() -> dict[str, Any]:
-    return {
-        "ready": True,
-        "planner_backend": "deterministic_python_cpu",
-        "requires_gpu": False,
-        "requires_network": False,
-        "requires_cloud": False,
-        "expensive_analysis_expected_offline": True,
-        "techniques": live_technique_names(),
-        "personas": ["club", "girl_talk", "minimal", "pretty_lights"],
-    }
 
 
 def live_atlas_payload(atlas: Mapping[str, Any]) -> dict[str, Any]:
@@ -192,6 +180,7 @@ def _live_score_candidate(
     active_layers: Sequence[Mapping[str, Any]],
     target_energy: float,
     target_layers: int,
+    requested_risk: float,
     policy: Mapping[str, Any],
     recent_patterns: Sequence[str],
     seed: int,
@@ -211,7 +200,7 @@ def _live_score_candidate(
     pattern_ids = [str(value) for value in result["pattern_ids"]]
     recent = Counter(str(value) for value in recent_patterns)
     novelty = 1.0 - min(1.0, sum(recent[pattern_id] for pattern_id in pattern_ids) / max(1, 8 * len(pattern_ids)))
-    risk_fit = max(0.0, 1.0 - abs(float(result["risk"]) - float(policy.get("default_risk", 0.5))))
+    risk_fit = max(0.0, 1.0 - abs(float(result["risk"]) - float(requested_risk)))
     source_diversity = len(set(pattern_ids)) / max(1, len(result["layers"]))
     terms = {
         "technique": technique_score,
@@ -230,6 +219,37 @@ def _live_score_candidate(
     return round(weighted, 9), {key: round(float(value), 9) for key, value in terms.items()}
 
 
+def _live_contextualize_commands(
+    commands: Sequence[Mapping[str, Any]],
+    *,
+    atlas_sha256: str,
+    state_before_sha256: str,
+    bar_index: int,
+    operator: str,
+    candidate_pattern_id: str,
+) -> list[dict[str, Any]]:
+    contextual = []
+    for ordinal, command in enumerate(commands):
+        row = deepcopy(dict(command))
+        template_id = str(row.pop("command_id", ""))
+        row["template_command_id"] = template_id
+        row["bar_index"] = int(bar_index)
+        row["ordinal"] = ordinal
+        row["command_id"] = "live_command_" + midi_sha256_json(
+            {
+                "atlas_sha256": atlas_sha256,
+                "state_before_sha256": state_before_sha256,
+                "bar_index": bar_index,
+                "operator": operator,
+                "candidate_pattern_id": candidate_pattern_id,
+                "ordinal": ordinal,
+                "template": row,
+            }
+        )[:24]
+        contextual.append(row)
+    return contextual
+
+
 def live_validate_horizon_plan(plan: Mapping[str, Any]) -> None:
     if int(plan.get("schema_version") or 0) != LIVE_PLAN_SCHEMA_VERSION:
         raise LiveError(f"unsupported live plan schema: {plan.get('schema_version')}")
@@ -242,6 +262,7 @@ def live_validate_horizon_plan(plan: Mapping[str, Any]) -> None:
     if not isinstance(committed, list) or not committed:
         raise LiveError("live horizon plan requires committed decisions")
     start = int(plan.get("start_bar_index") or 0)
+    seen_commands: set[str] = set()
     for offset, row in enumerate(decisions):
         if int(row.get("bar_index", -1)) != start + offset:
             raise LiveError("live horizon decisions must be contiguous")
@@ -253,6 +274,11 @@ def live_validate_horizon_plan(plan: Mapping[str, Any]) -> None:
         layer_ids = [str(layer.get("layer_id") or "") for layer in layers]
         if not all(layer_ids) or len(layer_ids) != len(set(layer_ids)):
             raise LiveError("live horizon decision layers must be unique")
+        for command in row.get("commands") or []:
+            command_id = str(command.get("command_id") or "")
+            if not command_id or command_id in seen_commands:
+                raise LiveError("live horizon command IDs must be unique and nonempty")
+            seen_commands.add(command_id)
     if committed != decisions[: len(committed)]:
         raise LiveError("committed live decisions must be the horizon prefix")
     expected = midi_sha256_json({key: value for key, value in plan.items() if key != "plan_sha256"})
@@ -284,6 +310,17 @@ def live_plan_next(
     patterns = [deepcopy(dict(row)) for row in atlas["patterns"] if str(row["pattern_id"]) not in set(resolved["skipped_pattern_ids"])]
     if not patterns:
         raise LiveError("all live patterns are skipped")
+    live_record_activity(
+        "planning",
+        detail={
+            "atlas_sha256": atlas["atlas_sha256"],
+            "state_sha256": resolved["state_sha256"],
+            "horizon_bars": horizon,
+            "commit_bars": commit,
+            "beam_width": beam_width,
+            "candidate_limit": candidate_limit,
+        },
+    )
     pattern_by_id = {str(row["pattern_id"]): row for row in patterns}
     enabled = [str(value) for value in resolved["enabled_techniques"]]
     if resolved.get("forced_technique"):
@@ -304,6 +341,7 @@ def live_plan_next(
         bar_index = int(resolved["current_bar_index"]) + step
         target_energy = _live_target_energy(resolved, bar_index)
         target_layers = _live_target_layers(resolved, policy, target_energy)
+        live_record_activity("pattern_scan", units=len(patterns), detail={"bar_index": bar_index})
         ranked_patterns = sorted(
             patterns,
             key=lambda pattern: _live_pattern_rank(
@@ -336,11 +374,20 @@ def live_plan_next(
                         active_layers=node["active_layers"],
                         target_energy=target_energy,
                         target_layers=target_layers,
+                        requested_risk=float(resolved["risk"]),
                         policy=policy,
                         recent_patterns=node["recent_patterns"],
                         seed=int(resolved["seed"]),
                         bar_index=bar_index,
                         pattern_by_id=pattern_by_id,
+                    )
+                    commands = _live_contextualize_commands(
+                        result["commands"],
+                        atlas_sha256=str(atlas["atlas_sha256"]),
+                        state_before_sha256=str(resolved["state_sha256"]),
+                        bar_index=bar_index,
+                        operator=technique,
+                        candidate_pattern_id=str(pattern["pattern_id"]),
                     )
                     decision = {
                         "bar_index": bar_index,
@@ -352,7 +399,7 @@ def live_plan_next(
                         "candidate_pattern_id": str(pattern["pattern_id"]),
                         "pattern_ids": list(result["pattern_ids"]),
                         "layers": deepcopy(result["layers"]),
-                        "commands": deepcopy(result["commands"]),
+                        "commands": commands,
                         "velocity_scale": round(float(result["velocity_scale"]), 9),
                         "operator_risk": round(float(result["risk"]), 9),
                         "score": score,

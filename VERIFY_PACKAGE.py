@@ -64,12 +64,50 @@ if checks["singlefile_builds"]:
         and live_payload.get("requires_network") is False
         and live_payload.get("requires_cloud") is False
         and len(live_payload.get("techniques") or []) >= 12
+        and (live_payload.get("runtime_boundary") or {}).get("callback_planning_count") == 0
+        and (live_payload.get("runtime_boundary") or {}).get("callback_library_search_count") == 0
+        and (live_payload.get("runtime_boundary") or {}).get("callback_sample_decode_count") == 0
+        and (live_payload.get("runtime_boundary") or {}).get("callback_binding_count") == 0
     )
     if not checks["singlefile_live_smoke"]:
         details["singlefile_live_smoke"] = {
             "returncode": live_capability.returncode,
             "stdout": live_capability.stdout[-2000:],
             "stderr": live_capability.stderr[-2000:],
+        }
+
+    live_audio_capability = subprocess.run(
+        [sys.executable, str(artifact), "live-audio", "capability"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    try:
+        audio_payload = json.loads(live_audio_capability.stdout) if live_audio_capability.returncode == 0 else {}
+    except json.JSONDecodeError:
+        audio_payload = {}
+    prepared = audio_payload.get("prepared_stream") or {}
+    audio_device = audio_payload.get("audio_device") or {}
+    checks["singlefile_live_audio_smoke"] = (
+        live_audio_capability.returncode == 0
+        and audio_payload.get("ok") is True
+        and prepared.get("ready") is True
+        and prepared.get("requires_gpu") is False
+        and prepared.get("requires_network") is False
+        and prepared.get("requires_cloud") is False
+        and prepared.get("audio_callback_performs_planning") is False
+        and prepared.get("audio_callback_performs_library_search") is False
+        and prepared.get("audio_callback_performs_sample_decode") is False
+        and audio_device.get("callback_plans") is False
+        and audio_device.get("callback_searches_library") is False
+        and audio_device.get("callback_decodes_samples") is False
+        and audio_device.get("callback_binds_events") is False
+    )
+    if not checks["singlefile_live_audio_smoke"]:
+        details["singlefile_live_audio_smoke"] = {
+            "returncode": live_audio_capability.returncode,
+            "stdout": live_audio_capability.stdout[-2000:],
+            "stderr": live_audio_capability.stderr[-2000:],
         }
 
     try:

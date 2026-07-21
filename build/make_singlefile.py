@@ -11,7 +11,8 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "providers/__init__.py", "providers/artifacts.py", "providers/notes.py", "providers/stems.py", "providers/retrieval.py", "providers/workqueue.py",
          "midi/model.py", "midi/codec.py", "midi/render.py",
          "rack/model.py", "rack/demand.py", "rack/binding.py", "rack/binding_stable.py", "rack/sfz.py", "rack/render.py", "rack/render_fix.py", "rack/library.py", "rack/library_fix.py", "rack/multizone.py",
-         "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
+         "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/cli.py",
+         "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
 INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
 

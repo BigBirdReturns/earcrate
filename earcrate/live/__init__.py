@@ -1,4 +1,4 @@
-"""Deterministic local live-DJ planning and sparse CPU execution."""
+"""Deterministic local live-DJ planning, precompiled crates, and sparse CPU execution."""
 
 from earcrate.live.model import (
     LiveError,
@@ -31,6 +31,14 @@ from earcrate.live.runtime_fix import (
     live_validate_cpu_program,
     live_validate_midi_lowering,
 )
+from earcrate.live.crate import (
+    live_compile_crate_atlas,
+    live_load_crate_atlas,
+    live_run_crate_session,
+    live_validate_crate_atlas,
+    live_validate_crate_session,
+    live_write_crate_session,
+)
 
 __all__ = [
     "LIVE_TECHNIQUE_NAMES",
@@ -40,20 +48,26 @@ __all__ = [
     "live_atlas_from_midi",
     "live_build_session",
     "live_compile_cpu_program",
+    "live_compile_crate_atlas",
     "live_execute_cpu_program",
+    "live_load_crate_atlas",
     "live_lower_session_to_midi",
     "live_new_state",
     "live_persona_names",
     "live_persona_policy",
     "live_plan_next",
     "live_plan_session",
+    "live_run_crate_session",
     "live_runtime_capability",
     "live_technique_names",
     "live_validate_atlas",
     "live_validate_cpu_execution",
     "live_validate_cpu_program",
+    "live_validate_crate_atlas",
+    "live_validate_crate_session",
     "live_validate_horizon_plan",
     "live_validate_midi_lowering",
     "live_validate_session_plan",
     "live_validate_state",
+    "live_write_crate_session",
 ]

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_midi_render_program_v1.schema.json",
+  "title": "EarCrate neutral MIDI render program v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "semantic_sha256",
+    "program_sha256",
+    "note_spans",
+    "channel_curves",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "neutral_midi_render_program"},
+    "semantic_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "program_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "note_spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "track_index",
+          "track_name",
+          "channel",
+          "note",
+          "velocity",
+          "program",
+          "start_tick",
+          "end_tick",
+          "end_reason"
+        ],
+        "properties": {
+          "event_id": {"type": "string", "minLength": 1},
+          "track_index": {"type": "integer", "minimum": 0},
+          "track_name": {"type": "string"},
+          "channel": {"type": "integer", "minimum": 0, "maximum": 15},
+          "note": {"type": "integer", "minimum": 0, "maximum": 127},
+          "velocity": {"type": "integer", "minimum": 0, "maximum": 127},
+          "program": {"type": "integer", "minimum": 0, "maximum": 127},
+          "start_tick": {"type": "integer", "minimum": 0},
+          "end_tick": {"type": "integer", "minimum": 1},
+          "end_reason": {"enum": ["note_off", "sustain_release", "end_of_file", "end_of_file_sustain"]}
+        },
+        "additionalProperties": false
+      }
+    },
+    "channel_curves": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["pitchwheel", "volume", "expression", "pan"],
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tick", "value"],
+            "properties": {
+              "tick": {"type": "integer", "minimum": 0},
+              "value": {"type": "integer"}
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": [
+        "note_span_count",
+        "dangling_note_on_count",
+        "unmatched_note_off_count",
+        "sustain_release_count",
+        "occupied_track_count",
+        "declared_track_count",
+        "dangling_close_tick"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

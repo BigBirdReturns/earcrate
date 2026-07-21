@@ -12,20 +12,49 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "midi/model.py", "midi/codec.py", "midi/render.py", "midi/cli.py",
          "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
+INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
+
+
+def _strip_package_imports(source: str) -> list[str]:
+    """Strip complete package-local import statements from concatenated modules.
+
+    A parenthesized import spans several physical lines. Removing only the first
+    line leaves its indented names and closing parenthesis as invalid standalone
+    syntax. Track parenthesis depth so the complete statement is removed.
+    """
+    kept: list[str] = []
+    skipping = False
+    depth = 0
+    continued = False
+    for line in source.split("\n"):
+        if skipping:
+            depth += line.count("(") - line.count(")")
+            continued = line.rstrip().endswith("\\")
+            if depth <= 0 and not continued:
+                skipping = False
+            continue
+        if line.startswith("from __future__"):
+            continue
+        if STRIP.match(line):
+            depth = line.count("(") - line.count(")")
+            continued = line.rstrip().endswith("\\")
+            skipping = depth > 0 or continued
+            continue
+        kept.append(line)
+    return kept
+
+
 import base64
 html_b64 = base64.b64encode((PKG / "ui/static/index.html").read_bytes()).decode("ascii")
 profiles_b64 = {f.stem: base64.b64encode(f.read_bytes()).decode("ascii")
                 for f in sorted((ROOT / "profiles").glob("*.json")) if f.stem != "tastespec.schema"}
 parts = ["#!/usr/bin/env python3\nfrom __future__ import annotations\n# Auto-built from the earcrate package. Do not edit; edit the package.\nimport base64 as _b64\n"]
-INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
 for rel in ORDER:
     src = (PKG / rel).read_text(encoding="utf-8")
-    lines = [l for l in src.split("\n") if not STRIP.match(l) and not l.startswith("from __future__")]
+    lines = _strip_package_imports(src)
     # A function-level `from earcrate.` import survives the column-0 strip and then
-    # raises ModuleNotFoundError in the standalone dist — only at call time, only in
-    # the single-file build, invisible to package-mode gates. Refuse to build it:
-    # hoist the import to module top level instead (ORDER guarantees definition order).
-    bad = [f"{rel}:{i+1}: {l.strip()}" for i, l in enumerate(lines) if INDENTED_EARCRATE.match(l)]
+    # raises ModuleNotFoundError in the standalone dist. Hoist such imports instead.
+    bad = [f"{rel}:{i+1}: {line.strip()}" for i, line in enumerate(lines) if INDENTED_EARCRATE.match(line)]
     if bad:
         raise SystemExit("indented earcrate imports would break the single-file dist at call time:\n  " + "\n  ".join(bad))
     body = "\n".join(lines)

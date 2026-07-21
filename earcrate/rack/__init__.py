@@ -17,7 +17,7 @@ from earcrate.rack.model import (
     rack_validate_revision,
     rack_verify_sources,
 )
-from earcrate.rack.render import rack_compile_render_program, rack_render_ledger
+from earcrate.rack.render_fix import rack_compile_render_program, rack_render_ledger
 from earcrate.rack.sfz import rack_compile_sfz
 
 __all__ = [

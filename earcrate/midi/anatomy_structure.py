@@ -3,14 +3,13 @@ from __future__ import annotations
 import math
 from bisect import bisect_right
 from collections import Counter, defaultdict
-from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
 from earcrate.midi.model import midi_sha256_json
-from earcrate.midi.anatomy_grid import AnatomyError, _round
+from earcrate.midi.anatomy_grid import AnatomyError, _anatomy_round
 
 
-def _segment_intervals(
+def _anatomy_segment_intervals(
     vectors: Sequence[Sequence[float]],
     novelty: Sequence[float],
     *,
@@ -56,7 +55,7 @@ def _segment_intervals(
             if start > 0:
                 objective -= float(boundary_reward) * float(novelty[start])
             intervals = [*previous[1], (start, end)]
-            rank = (_round(objective, 12), len(intervals), tuple(interval[1] for interval in intervals))
+            rank = (_anatomy_round(objective, 12), len(intervals), tuple(interval[1] for interval in intervals))
             candidates.append((rank, intervals))
         if candidates:
             best[end] = min(candidates, key=lambda item: item[0])
@@ -65,7 +64,7 @@ def _segment_intervals(
     return best[count][1]
 
 
-def _quantile(values: Sequence[float], fraction: float) -> float:
+def _anatomy_quantile(values: Sequence[float], fraction: float) -> float:
     if not values:
         return 0.0
     ordered = sorted(float(value) for value in values)
@@ -78,7 +77,7 @@ def _quantile(values: Sequence[float], fraction: float) -> float:
     return ordered[lo] * (1.0 - weight) + ordered[hi] * weight
 
 
-def _section_label(
+def _anatomy_section_label(
     index: int,
     count: int,
     mean_energy: float,
@@ -104,7 +103,7 @@ def _section_label(
     return "groove"
 
 
-def _sections(
+def _anatomy_sections(
     cells: Sequence[Mapping[str, Any]],
     vectors: Sequence[Sequence[float]],
     novelty: Sequence[float],
@@ -114,7 +113,7 @@ def _sections(
     section_penalty: float,
     boundary_reward: float,
 ) -> list[dict[str, Any]]:
-    intervals = _segment_intervals(
+    intervals = _anatomy_segment_intervals(
         vectors,
         novelty,
         minimum_bars=minimum_bars,
@@ -123,15 +122,15 @@ def _sections(
         boundary_reward=boundary_reward,
     )
     means = [sum(float(cells[index]["energy"]) for index in range(start, end)) / max(1, end - start) for start, end in intervals]
-    low = _quantile(means, 0.30)
-    high = _quantile(means, 0.72)
+    low = _anatomy_quantile(means, 0.30)
+    high = _anatomy_quantile(means, 0.72)
     out = []
     for section_index, (start, end) in enumerate(intervals):
         subset = cells[start:end]
         active_roles = {str(role) for cell in subset for role in cell["active_roles"]}
         active_slots = {str(slot) for cell in subset for slot in cell["active_slot_ids"]}
         mean_energy = means[section_index]
-        label = _section_label(
+        label = _anatomy_section_label(
             section_index,
             len(intervals),
             mean_energy,
@@ -151,12 +150,12 @@ def _sections(
             "end_tick": int(subset[-1]["end_tick"]),
             "start_seconds": float(subset[0]["start_seconds"]),
             "end_seconds": float(subset[-1]["end_seconds"]),
-            "mean_energy": _round(mean_energy),
-            "minimum_energy": _round(min(float(cell["energy"]) for cell in subset)),
-            "maximum_energy": _round(max(float(cell["energy"]) for cell in subset)),
-            "energy_trend": _round(float(subset[-1]["energy"]) - float(subset[0]["energy"])),
-            "mean_layers": _round(sum(float(cell["mean_active_layers"]) for cell in subset) / len(subset)),
-            "mean_onsets_per_beat": _round(sum(float(cell["onsets_per_beat"]) for cell in subset) / len(subset)),
+            "mean_energy": _anatomy_round(mean_energy),
+            "minimum_energy": _anatomy_round(min(float(cell["energy"]) for cell in subset)),
+            "maximum_energy": _anatomy_round(max(float(cell["energy"]) for cell in subset)),
+            "energy_trend": _anatomy_round(float(subset[-1]["energy"]) - float(subset[0]["energy"])),
+            "mean_layers": _anatomy_round(sum(float(cell["mean_active_layers"]) for cell in subset) / len(subset)),
+            "mean_onsets_per_beat": _anatomy_round(sum(float(cell["onsets_per_beat"]) for cell in subset) / len(subset)),
             "active_roles": sorted(active_roles),
             "active_slot_ids": sorted(active_slots),
             "transition_in": None,
@@ -174,13 +173,13 @@ def _sections(
     return out
 
 
-def _bar_index_for_tick(bars: Sequence[Mapping[str, Any]], tick: int) -> int:
+def _anatomy_bar_index_for_tick(bars: Sequence[Mapping[str, Any]], tick: int) -> int:
     starts = [int(bar["start_tick"]) for bar in bars]
     index = bisect_right(starts, int(tick)) - 1
     return max(0, min(len(bars) - 1, index))
 
 
-def _motifs(
+def _anatomy_motifs(
     demand: Mapping[str, Any],
     bars: Sequence[Mapping[str, Any]],
     *,
@@ -192,7 +191,7 @@ def _motifs(
     for slot in demand["slots"]:
         by_bar: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
         for event in slot["events"]:
-            by_bar[_bar_index_for_tick(bars, int(event["start_tick"]))].append(event)
+            by_bar[_anatomy_bar_index_for_tick(bars, int(event["start_tick"]))].append(event)
         groups: dict[str, dict[str, Any]] = {}
         for bar_index, events in sorted(by_bar.items()):
             bar = bars[bar_index]
@@ -249,7 +248,7 @@ def _motifs(
     return motifs
 
 
-def _event_assignments(
+def _anatomy_event_assignments(
     event_map: Mapping[str, Mapping[str, Any]],
     onset_to_bar: Mapping[str, int],
     sections: Sequence[Mapping[str, Any]],
@@ -281,14 +280,14 @@ def _event_assignments(
     return assignments
 
 
-def _fingerprint(
+def _anatomy_fingerprint(
     cells: Sequence[Mapping[str, Any]],
     sections: Sequence[Mapping[str, Any]],
     motifs: Sequence[Mapping[str, Any]],
     roles: Sequence[str],
 ) -> dict[str, Any]:
     role_coverage = {
-        role: _round(sum(1 for cell in cells if role in set(cell["active_roles"])) / max(1, len(cells)))
+        role: _anatomy_round(sum(1 for cell in cells if role in set(cell["active_roles"])) / max(1, len(cells)))
         for role in roles
     }
     layer_histogram: Counter[int] = Counter(int(cell["active_slot_count"]) for cell in cells)
@@ -310,11 +309,11 @@ def _fingerprint(
         "layer_count_histogram": {str(key): value for key, value in sorted(layer_histogram.items())},
         "motif_count": len(motifs),
         "recurring_motif_count": recurring,
-        "motif_recurrence_ratio": _round(recurring / max(1, len(motifs))),
+        "motif_recurrence_ratio": _anatomy_round(recurring / max(1, len(motifs))),
     }
 
 
-def _structural_payload(anatomy: Mapping[str, Any]) -> dict[str, Any]:
+def _anatomy_structural_payload(anatomy: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "bars": [
             {

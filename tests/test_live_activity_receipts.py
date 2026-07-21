@@ -14,7 +14,8 @@ from earcrate.live.instrumentation import (
     LiveCallbackPurityError,
     live_activity_scope,
 )
-from earcrate.live.model import live_new_state
+from earcrate.live.model import live_apply_control, live_new_state
+from earcrate.live.operators import LIVE_TECHNIQUE_NAMES
 from earcrate.live.performance import LivePerformanceEngine
 from earcrate.live.planner import live_atlas_from_midi, live_plan_next
 from earcrate.live.playback import LiveAudioCallback
@@ -89,8 +90,16 @@ def test_concurrent_plans_do_not_share_risk_state(tmp_path: Path) -> None:
     source = tmp_path / "source.mid"
     _write_source(source)
     atlas = live_atlas_from_midi(midi_read(source))
-    low = live_new_state(atlas, persona="club", seed=17, risk=0.0)
-    high = live_new_state(atlas, persona="club", seed=17, risk=1.0)
+    low = live_apply_control(
+        live_new_state(atlas, persona="club", seed=17, risk=0.0),
+        {"command": "force_technique", "value": "hard_cut"},
+        known_techniques=LIVE_TECHNIQUE_NAMES,
+    )
+    high = live_apply_control(
+        live_new_state(atlas, persona="club", seed=17, risk=1.0),
+        {"command": "force_technique", "value": "hard_cut"},
+        known_techniques=LIVE_TECHNIQUE_NAMES,
+    )
 
     def plan(state: dict) -> tuple[str, tuple[float, ...]]:
         result = live_plan_next(

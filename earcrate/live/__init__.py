@@ -16,7 +16,6 @@ from earcrate.live.operators import (
 from earcrate.live.planner import (
     live_atlas_from_midi,
     live_plan_session,
-    live_runtime_capability,
     live_validate_atlas,
     live_validate_horizon_plan,
     live_validate_session_plan,
@@ -55,6 +54,7 @@ from earcrate.live.playback import (
     LiveSoundDevicePlayer,
     live_audio_device_capability,
 )
+from earcrate.live.capability_fix import live_runtime_capability
 
 __all__ = [
     "LIVE_TECHNIQUE_NAMES",

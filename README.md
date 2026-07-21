@@ -65,6 +65,35 @@ program, then records note and velocity coverage, gate duration, polyphony,
 controller use, pitch bend, General MIDI family, role hints, and every source
 event that must remain accounted for.
 
+The direct approved-library flow is dry-run first. It searches only the current
+approved EarAtoms for the chosen profile and writes nothing:
+
+```text
+python -m earcrate rack-from-crate "arrangement.mid" --profile girl_talk_v1
+```
+
+When the proposal is complete, `--apply` decodes the selected source regions,
+seals exact rack revisions, compiles SFZ instruments, binds every MIDI event,
+and can render the substituted arrangement immediately:
+
+```text
+python -m earcrate rack-from-crate "arrangement.mid" \
+  --profile girl_talk_v1 \
+  --apply \
+  --output "crate-build" \
+  --render "crate-build/substituted.wav" \
+  --stems-dir "crate-build/stems"
+```
+
+Search produces candidate receipts instead of changing execution semantics.
+Each receipt records role fit, timbral fit, key and transposition distance,
+duration coverage, loopability, quality terms, and the exact approved atom.
+Rejected atoms are excluded. Missing coverage remains unresolved and prevents
+an applied build or render. There is no runtime sample fallback.
+
+The lower-level rack commands remain available for manual or external search
+systems:
+
 ```text
 python -m earcrate midi demand "arrangement.mid" "arrangement.demand.json"
 python -m earcrate midi rack-template "bass.rack.draft.json" --mode pitched --rack-id crate-bass --name "Crate Bass"
@@ -93,12 +122,13 @@ source of truth.
 
 - `python tests/run_gates.py`
 - `python VERIFY_PACKAGE.py` builds and self-tests the single-file package and
-  drives its packaged MIDI command surface.
+  drives its packaged MIDI and rack command surfaces.
 - `python scripts/oss_audit.py` validates code and model governance ledgers.
 
 CI runs the package and package-verification gates on every push and pull
-request. Treat a red run as a merge blocker. The complete gate ledger is retained
-as a workflow artifact whether the run passes or fails.
+request. Treat a red run as a merge blocker. The complete gate ledger and the
+package-verifier ledger are retained as workflow artifacts whether the run
+passes or fails.
 
 ## Lineage
 

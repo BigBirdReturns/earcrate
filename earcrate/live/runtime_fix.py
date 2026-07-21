@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
+_live_runtime_module = None
 import earcrate.live.runtime as _live_runtime_module
 from earcrate.midi.model import midi_sha256_json
 
@@ -49,12 +50,14 @@ def _live_track_events(raw: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]
     return events
 
 
-_live_runtime_module._arranger_track_events = _live_track_events
-
-live_build_session = _live_runtime_module.live_build_session
-live_compile_cpu_program = _live_runtime_module.live_compile_cpu_program
-live_execute_cpu_program = _live_runtime_module.live_execute_cpu_program
-live_lower_session_to_midi = _live_runtime_module.live_lower_session_to_midi
-live_validate_cpu_execution = _live_runtime_module.live_validate_cpu_execution
-live_validate_cpu_program = _live_runtime_module.live_validate_cpu_program
-live_validate_midi_lowering = _live_runtime_module.live_validate_midi_lowering
+if _live_runtime_module is not None:
+    _live_runtime_module._arranger_track_events = _live_track_events
+    live_build_session = _live_runtime_module.live_build_session
+    live_compile_cpu_program = _live_runtime_module.live_compile_cpu_program
+    live_execute_cpu_program = _live_runtime_module.live_execute_cpu_program
+    live_lower_session_to_midi = _live_runtime_module.live_lower_session_to_midi
+    live_validate_cpu_execution = _live_runtime_module.live_validate_cpu_execution
+    live_validate_cpu_program = _live_runtime_module.live_validate_cpu_program
+    live_validate_midi_lowering = _live_runtime_module.live_validate_midi_lowering
+else:
+    _arranger_track_events = _live_track_events

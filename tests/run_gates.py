@@ -51,6 +51,7 @@ MODULES = (
     "test_midi",
     "test_note_provider",
     "test_rack",
+    "test_rack_library",
     "test_oss_governance",
 )
 

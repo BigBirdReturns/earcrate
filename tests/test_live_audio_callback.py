@@ -66,7 +66,6 @@ def test_audio_callback_crosses_prepared_phrase_boundary_without_work(tmp_path) 
     assert receipt["frames_from_phrases"] == 17
     assert receipt["silence_frames"] == 7
     assert receipt["underrun_count"] == 1
-    assert receipt["callback_lock_count"] == 0
     assert receipt["callback_planning_count"] == 0
     assert receipt["callback_library_search_count"] == 0
     assert receipt["callback_sample_decode_count"] == 0

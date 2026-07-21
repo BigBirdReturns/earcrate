@@ -116,17 +116,58 @@ def test_concurrent_plans_do_not_share_risk_state(tmp_path: Path) -> None:
     assert results[1::2] == [expected_high] * 12
 
 
-def test_callback_hot_path_contains_no_lock_or_unbounded_append() -> None:
-    for method in (
+def test_callback_hot_path_is_a_bounded_copy_machine() -> None:
+    methods = (
         LiveAudioCallback._take_next_phrase,
         LiveAudioCallback.render_into,
         LiveAudioCallback._record_completion,
-    ):
-        tree = ast.parse(textwrap.dedent(inspect.getsource(method)))
-        assert not any(isinstance(node, (ast.With, ast.AsyncWith)) for node in ast.walk(tree))
+    )
+    forbidden_nodes = (
+        ast.For,
+        ast.AsyncFor,
+        ast.ListComp,
+        ast.SetComp,
+        ast.DictComp,
+        ast.GeneratorExp,
+        ast.With,
+        ast.AsyncWith,
+    )
+    forbidden_names = {
+        "approved_atom_pool",
+        "live_plan_next",
+        "rack_compile_binding",
+        "_load_zone_audio",
+        "decode_audio",
+    }
+    allowed_attribute_calls = {
+        "asarray",
+        "fill",
+        "_record_completion",
+        "_take_next_phrase",
+    }
+    allowed_name_calls = {
+        "LiveError",
+        "int",
+        "live_activity_pop",
+        "live_activity_swap",
+        "min",
+        "str",
+    }
+    for method in methods:
+        source = textwrap.dedent(inspect.getsource(method))
+        tree = ast.parse(source)
+        assert not any(isinstance(node, forbidden_nodes) for node in ast.walk(tree))
+        assert not any(name in source for name in forbidden_names)
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                assert node.func.attr != "append"
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Attribute):
+                assert node.func.attr in allowed_attribute_calls
+            elif isinstance(node.func, ast.Name):
+                assert node.func.id in allowed_name_calls
+            else:
+                raise AssertionError(f"unsupported callback call shape: {ast.dump(node.func)}")
     callback = LiveAudioCallback(sample_rate=8_000, block_frames=64, completion_capacity=8)
     assert not hasattr(callback, "_lock")
     assert len(callback._completion_hashes) == 8
+    assert callback._callback_activity_context.domain == "audio_callback"

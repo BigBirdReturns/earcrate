@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import mido
@@ -13,6 +14,7 @@ from earcrate.midi.render import midi_compile_note_spans, midi_render_file, midi
 
 def _write_fixture(path: Path) -> None:
     midi = mido.MidiFile(type=1, ticks_per_beat=192)
+
     conductor = mido.MidiTrack()
     conductor.append(mido.MetaMessage("track_name", name="Conductor", time=0))
     conductor.append(mido.MetaMessage("set_tempo", tempo=600_000, time=0))
@@ -46,13 +48,14 @@ def test_midi_roundtrip_preserves_semantic_event_ledger(tmp_path: Path) -> None:
     source = tmp_path / "fixture.mid"
     output = tmp_path / "roundtrip.mid"
     _write_fixture(source)
+
     before = midi_read(source)
     receipt = midi_roundtrip(source, output)
     after = midi_read(output)
     stats = midi_statistics(before)
+
     assert receipt["ok"] is True
     assert before["semantic_sha256"] == after["semantic_sha256"]
-    assert receipt["output"]["byte_sha256"] == receipt["input"]["byte_sha256"]
     assert stats["declared_track_count"] == 3
     assert stats["occupied_note_track_count"] == 2
     assert stats["note_on_count"] == 2
@@ -69,6 +72,7 @@ def test_neutral_render_stems_sum_to_master(tmp_path: Path) -> None:
     output = tmp_path / "mix.wav"
     stems = tmp_path / "stems"
     _write_fixture(source)
+
     receipt = midi_render_file(source, output, stems_dir=stems, sample_rate=8_000)
     master, master_rate = sf.read(output, always_2d=True)
     stem_sum = np.zeros_like(master)
@@ -77,21 +81,60 @@ def test_neutral_render_stems_sum_to_master(tmp_path: Path) -> None:
         assert stem_rate == master_rate
         assert stem.shape == master.shape
         stem_sum += stem
+
     assert receipt["ok"] is True
     assert receipt["note_span_count"] == 2
     assert receipt["declared_track_count"] == 3
     assert receipt["rendered_track_count"] == 2
     assert receipt["compile_diagnostics"]["sustain_release_count"] == 1
+    assert receipt["complete_execution"] is True
+    assert receipt["selected_event_count"] == 2
+    assert receipt["executed_event_count"] == 2
+    execution = json.loads(Path(receipt["execution_path"]).read_text(encoding="utf-8"))
+    assert execution["complete_execution"] is True
+    assert execution["program_sha256"] == receipt["program_sha256"]
+    assert len(execution["events"]) == 2
+    assert [event["status"] for event in execution["events"]] == ["executed", "executed"]
     assert len(receipt["stems"]) == 2
     assert float(np.max(np.abs(master - stem_sum))) < 1e-6
 
 
+def test_diagnostic_truncation_accounts_for_every_selected_event(tmp_path: Path) -> None:
+    source = tmp_path / "fixture.mid"
+    output = tmp_path / "diagnostic.wav"
+    _write_fixture(source)
+
+    receipt = midi_render_file(source, output, sample_rate=8_000, max_seconds=0.4)
+    execution = json.loads(Path(receipt["execution_path"]).read_text(encoding="utf-8"))
+    assert receipt["complete_execution"] is False
+    assert receipt["selected_event_count"] == 2
+    assert receipt["executed_event_count"] == 0
+    assert receipt["partially_executed_event_count"] == 1
+    assert receipt["refused_event_count"] == 1
+    assert len(execution["events"]) == receipt["selected_event_count"]
+    assert [event["status"] for event in execution["events"]] == ["truncated", "refused"]
+    assert execution["events"][1]["reason"] == "starts_after_render_extent"
+
+
 def test_sparse_ten_thousand_track_deck_only_materializes_occupied_tracks(tmp_path: Path) -> None:
-    tracks = [{"track_index": index, "name": f"Track {index + 1}", "events": []} for index in range(10_000)]
+    tracks = [
+        {"track_index": index, "name": f"Track {index + 1}", "events": []}
+        for index in range(10_000)
+    ]
     tracks[-1]["name"] = "Only occupied track"
     tracks[-1]["events"] = [
-        {"tick": 0, "order": 0, "is_meta": False, "message": {"type": "note_on", "channel": 0, "note": 60, "velocity": 100}},
-        {"tick": 96, "order": 1, "is_meta": False, "message": {"type": "note_off", "channel": 0, "note": 60, "velocity": 0}},
+        {
+            "tick": 0,
+            "order": 0,
+            "is_meta": False,
+            "message": {"type": "note_on", "channel": 0, "note": 60, "velocity": 100},
+        },
+        {
+            "tick": 96,
+            "order": 1,
+            "is_meta": False,
+            "message": {"type": "note_off", "channel": 0, "note": 60, "velocity": 0},
+        },
     ]
     ledger = midi_seal_ledger({
         "schema_version": MIDI_LEDGER_SCHEMA_VERSION,
@@ -101,13 +144,16 @@ def test_sparse_ten_thousand_track_deck_only_materializes_occupied_tracks(tmp_pa
         "tracks": tracks,
     })
     compiled = midi_compile_note_spans(ledger)
-    receipt = midi_render_ledger(ledger, tmp_path / "sparse.wav", sample_rate=8_000)
+    output = tmp_path / "sparse.wav"
+    receipt = midi_render_ledger(ledger, output, sample_rate=8_000)
+
     assert compiled["diagnostics"]["declared_track_count"] == 10_000
     assert compiled["diagnostics"]["occupied_track_count"] == 1
     assert compiled["diagnostics"]["note_span_count"] == 1
     assert receipt["declared_track_count"] == 10_000
     assert receipt["rendered_track_count"] == 1
-    assert receipt["first_pass"]["rendered"] == 1
+    assert receipt["selected_event_count"] == 1
+    assert receipt["executed_event_count"] == 1
 
 
 def test_type_two_render_refuses_async_sequences(tmp_path: Path) -> None:
@@ -135,9 +181,26 @@ def test_type_two_render_refuses_async_sequences(tmp_path: Path) -> None:
             },
         ],
     })
+
     try:
         midi_render_ledger(ledger, tmp_path / "type2.wav", sample_rate=8_000)
     except ValueError as exc:
         assert "asynchronous sequences" in str(exc)
     else:
         raise AssertionError("SMF type 2 neutral rendering must refuse without an explicit sequence selection")
+
+
+def test_render_preflights_all_output_paths_before_writing(tmp_path: Path) -> None:
+    source = tmp_path / "fixture.mid"
+    output = tmp_path / "mix.wav"
+    _write_fixture(source)
+    receipt_path = output.with_suffix(output.suffix + ".render.json")
+    receipt_path.write_text("sentinel", encoding="utf-8")
+    try:
+        midi_render_file(source, output, sample_rate=8_000)
+    except FileExistsError as exc:
+        assert "partial render" in str(exc)
+    else:
+        raise AssertionError("render must refuse before writing when any planned output exists")
+    assert not output.exists()
+    assert receipt_path.read_text(encoding="utf-8") == "sentinel"

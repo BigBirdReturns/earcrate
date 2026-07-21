@@ -54,6 +54,7 @@ MODULES = (
     "test_midi_arranger",
     "test_live_dj_runtime",
     "test_live_crate_runtime",
+    "test_live_long_set",
     "test_note_provider",
     "test_rack",
     "test_rack_library",

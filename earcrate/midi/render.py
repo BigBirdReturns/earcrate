@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Mapping
@@ -11,9 +13,18 @@ from typing import Any, Mapping
 import numpy as np
 
 from earcrate.midi.codec import midi_read, midi_sha256_file
-from earcrate.midi.model import MidiLedgerError, MidiTempoClock, midi_duration_seconds, midi_duration_ticks, midi_jsonable, midi_validate_ledger
+from earcrate.midi.model import (
+    MidiLedgerError,
+    MidiTempoClock,
+    midi_duration_seconds,
+    midi_duration_ticks,
+    midi_jsonable,
+    midi_sha256_json,
+    midi_validate_ledger,
+)
 
 MIDI_RENDER_SCHEMA_VERSION = 1
+MIDI_EXECUTION_SCHEMA_VERSION = 1
 MIDI_RENDER_WAVEFORMS = {"sine", "triangle", "square"}
 
 
@@ -161,8 +172,9 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
         }
         for (track_index, channel), values in sorted(curves.items())
     }
-    return {
+    program = {
         "schema_version": MIDI_RENDER_SCHEMA_VERSION,
+        "kind": "neutral_midi_render_program",
         "semantic_sha256": ledger["semantic_sha256"],
         "note_spans": spans,
         "channel_curves": serialized_curves,
@@ -176,6 +188,8 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
             "dangling_close_tick": close_tick,
         },
     }
+    program["program_sha256"] = midi_sha256_json(program)
+    return program
 
 
 def _midi_curve_from_compiled(
@@ -217,24 +231,53 @@ def _midi_render_notes_into(
     sample_rate: int,
     waveform: str,
     pitch_bend_range_semitones: float,
-) -> dict[str, int]:
-    rendered = 0
-    truncated = 0
+    *,
+    record_outcomes: bool = False,
+) -> dict[str, Any]:
+    fully_executed = 0
+    partially_executed = 0
+    refused = 0
+    outcomes: list[dict[str, Any]] = []
     total_frames = int(target.shape[0])
     for note_event in notes:
         start_seconds = clock.tick_to_seconds(int(note_event["start_tick"]))
         end_seconds = clock.tick_to_seconds(int(note_event["end_tick"]))
         start_frame = max(0, int(round(start_seconds * sample_rate)))
-        end_frame = max(start_frame + 1, int(round(end_seconds * sample_rate)))
+        requested_end_frame = max(start_frame + 1, int(round(end_seconds * sample_rate)))
+        event_id = str(note_event["event_id"])
         if start_frame >= total_frames:
-            truncated += 1
+            refused += 1
+            if record_outcomes:
+                outcomes.append({
+                    "event_id": event_id,
+                    "status": "refused",
+                    "reason": "starts_after_render_extent",
+                    "requested_start_frame": start_frame,
+                    "requested_end_frame": requested_end_frame,
+                    "rendered_start_frame": None,
+                    "rendered_end_frame": None,
+                })
             continue
-        if end_frame > total_frames:
-            end_frame = total_frames
-            truncated += 1
+        end_frame = min(requested_end_frame, total_frames)
         count = end_frame - start_frame
         if count <= 0:
+            refused += 1
+            if record_outcomes:
+                outcomes.append({
+                    "event_id": event_id,
+                    "status": "refused",
+                    "reason": "empty_render_window",
+                    "requested_start_frame": start_frame,
+                    "requested_end_frame": requested_end_frame,
+                    "rendered_start_frame": None,
+                    "rendered_end_frame": None,
+                })
             continue
+        status = "executed" if end_frame == requested_end_frame else "truncated"
+        if status == "executed":
+            fully_executed += 1
+        else:
+            partially_executed += 1
 
         sample_times = start_seconds + np.arange(count, dtype=np.float64) / float(sample_rate)
         track_index = int(note_event["track_index"])
@@ -252,7 +295,7 @@ def _midi_render_notes_into(
             phase = np.arange(count, dtype=np.float64) * (2.0 * math.pi * float(frequency) / sample_rate)
         else:
             phase = np.cumsum(np.asarray(frequency, dtype=np.float64)) * (2.0 * math.pi / sample_rate)
-        seed = int(hashlib.sha256(str(note_event["event_id"]).encode("utf-8")).hexdigest()[:8], 16)
+        seed = int(hashlib.sha256(event_id.encode("utf-8")).hexdigest()[:8], 16)
         phase += seed / 0xFFFFFFFF * 2.0 * math.pi
         mono = _midi_waveform(phase, waveform)
 
@@ -298,13 +341,55 @@ def _midi_render_notes_into(
         angle = np.clip(pan / 127.0, 0.0, 1.0) * math.pi / 2.0
         target[start_frame:end_frame, 0] += (mono * np.cos(angle)).astype(target.dtype, copy=False)
         target[start_frame:end_frame, 1] += (mono * np.sin(angle)).astype(target.dtype, copy=False)
-        rendered += 1
-    return {"rendered": rendered, "truncated": truncated}
+        if record_outcomes:
+            outcomes.append({
+                "event_id": event_id,
+                "status": status,
+                "reason": "" if status == "executed" else "render_extent_truncated_note",
+                "requested_start_frame": start_frame,
+                "requested_end_frame": requested_end_frame,
+                "rendered_start_frame": start_frame,
+                "rendered_end_frame": end_frame,
+            })
+    return {
+        "rendered": fully_executed + partially_executed,
+        "fully_executed": fully_executed,
+        "partially_executed": partially_executed,
+        "refused": refused,
+        "outcomes": outcomes,
+    }
 
 
 def _midi_safe_stem_name(track_index: int, name: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name.strip()).strip("._") or f"track_{track_index + 1}"
     return f"{track_index:04d}_{safe}.wav"
+
+
+def _atomic_json(path: Path, value: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(midi_jsonable(dict(value)), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
+    os.close(fd)
+    temp = Path(temp_name)
+    try:
+        temp.write_text(text, encoding="utf-8")
+        os.replace(temp, path)
+    finally:
+        if temp.exists():
+            temp.unlink()
+
+
+def _atomic_wav(path: Path, audio: np.ndarray, sample_rate: int, sf: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
+    os.close(fd)
+    temp = Path(temp_name)
+    try:
+        sf.write(str(temp), audio, sample_rate, format="WAV", subtype="FLOAT")
+        os.replace(temp, path)
+    finally:
+        if temp.exists():
+            temp.unlink()
 
 
 def midi_render_ledger(
@@ -331,10 +416,28 @@ def midi_render_ledger(
         raise MidiLedgerError("target_peak must be in (0,1]")
 
     destination = Path(output_path).expanduser().resolve()
-    if destination.exists() and not overwrite:
-        raise FileExistsError(f"refusing to overwrite existing render: {destination}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path = destination.with_suffix(destination.suffix + ".render.json")
+    program_path = destination.with_suffix(destination.suffix + ".program.json")
+    execution_path = destination.with_suffix(destination.suffix + ".execution.json")
     compiled = midi_compile_note_spans(ledger)
+    occupied_tracks = sorted({int(span["track_index"]) for span in compiled["note_spans"]})
+    names = {
+        int(track["track_index"]): str(track.get("name") or f"Track {int(track['track_index']) + 1}")
+        for track in ledger["tracks"]
+    }
+    stem_paths: dict[int, Path] = {}
+    if stems_dir is not None:
+        stem_root = Path(stems_dir).expanduser().resolve()
+        stem_paths = {
+            track_index: stem_root / _midi_safe_stem_name(track_index, names[track_index])
+            for track_index in occupied_tracks
+        }
+    planned_paths = [destination, receipt_path, program_path, execution_path, *stem_paths.values()]
+    if not overwrite:
+        conflicts = [str(path) for path in planned_paths if path.exists()]
+        if conflicts:
+            raise FileExistsError("refusing partial render because output path(s) already exist: " + ", ".join(conflicts))
+
     clock = MidiTempoClock(ledger)
     natural_duration = max(
         midi_duration_seconds(ledger),
@@ -351,7 +454,14 @@ def midi_render_ledger(
         sample_rate,
         waveform,
         pitch_bend_range_semitones,
+        record_outcomes=True,
     )
+    if len(first_pass["outcomes"]) != len(compiled["note_spans"]):
+        raise MidiLedgerError("execution ledger does not account for every selected note event")
+    complete_execution = first_pass["partially_executed"] == 0 and first_pass["refused"] == 0
+    if not max_seconds and not complete_execution:
+        raise MidiLedgerError("full neutral render failed to execute every selected note event")
+
     peak_before = float(np.max(np.abs(master))) if master.size else 0.0
     scale = min(1.0, target_peak / peak_before) if peak_before > 0 else 1.0
     master *= np.float32(scale)
@@ -360,48 +470,73 @@ def midi_render_ledger(
         import soundfile as sf
     except Exception as exc:
         raise RuntimeError("neutral MIDI rendering requires soundfile") from exc
-    sf.write(str(destination), master, sample_rate, subtype="FLOAT")
+
+    _atomic_wav(destination, master, sample_rate, sf)
+    _atomic_json(program_path, compiled)
+    execution = {
+        "schema_version": MIDI_EXECUTION_SCHEMA_VERSION,
+        "kind": "midi_execution_ledger",
+        "semantic_sha256": ledger["semantic_sha256"],
+        "program_sha256": compiled["program_sha256"],
+        "sample_rate": int(sample_rate),
+        "frames": int(total_frames),
+        "max_seconds": float(max_seconds),
+        "complete_execution": complete_execution,
+        "selected_event_count": len(compiled["note_spans"]),
+        "fully_executed_count": first_pass["fully_executed"],
+        "partially_executed_count": first_pass["partially_executed"],
+        "refused_event_count": first_pass["refused"],
+        "events": first_pass["outcomes"],
+    }
+    execution["execution_sha256"] = midi_sha256_json(execution)
+    _atomic_json(execution_path, execution)
 
     stem_receipts: list[dict[str, Any]] = []
-    occupied_tracks = sorted({int(span["track_index"]) for span in compiled["note_spans"]})
-    if stems_dir is not None:
-        stem_root = Path(stems_dir).expanduser().resolve()
-        stem_root.mkdir(parents=True, exist_ok=True)
-        names = {
-            int(track["track_index"]): str(track.get("name") or f"Track {int(track['track_index']) + 1}")
-            for track in ledger["tracks"]
-        }
-        for track_index in occupied_tracks:
-            stem_path = stem_root / _midi_safe_stem_name(track_index, names[track_index])
-            if stem_path.exists() and not overwrite:
-                raise FileExistsError(f"refusing to overwrite existing stem: {stem_path}")
-            track_audio = np.zeros((total_frames, 2), dtype=np.float32)
-            track_notes = [span for span in compiled["note_spans"] if int(span["track_index"]) == track_index]
-            counts = _midi_render_notes_into(
-                track_audio,
-                track_notes,
-                compiled,
-                clock,
-                sample_rate,
-                waveform,
-                pitch_bend_range_semitones,
-            )
-            track_audio *= np.float32(scale)
-            sf.write(str(stem_path), track_audio, sample_rate, subtype="FLOAT")
-            stem_receipts.append({
-                "track_index": track_index,
-                "track_name": names[track_index],
-                "path": str(stem_path),
-                "sha256": midi_sha256_file(stem_path),
-                "note_count": len(track_notes),
-                **counts,
-            })
+    for track_index in occupied_tracks:
+        if track_index not in stem_paths:
+            continue
+        track_audio = np.zeros((total_frames, 2), dtype=np.float32)
+        track_notes = [span for span in compiled["note_spans"] if int(span["track_index"]) == track_index]
+        counts = _midi_render_notes_into(
+            track_audio,
+            track_notes,
+            compiled,
+            clock,
+            sample_rate,
+            waveform,
+            pitch_bend_range_semitones,
+        )
+        counts.pop("outcomes", None)
+        track_audio *= np.float32(scale)
+        stem_path = stem_paths[track_index]
+        _atomic_wav(stem_path, track_audio, sample_rate, sf)
+        stem_receipts.append({
+            "track_index": track_index,
+            "track_name": names[track_index],
+            "path": str(stem_path),
+            "sha256": midi_sha256_file(stem_path),
+            "note_count": len(track_notes),
+            **counts,
+        })
 
+    first_pass_summary = dict(first_pass)
+    first_pass_summary.pop("outcomes", None)
     receipt = {
         "schema_version": MIDI_RENDER_SCHEMA_VERSION,
         "ok": True,
         "kind": "neutral_midi_render",
         "semantic_sha256": ledger["semantic_sha256"],
+        "program_sha256": compiled["program_sha256"],
+        "program_path": str(program_path),
+        "program_file_sha256": midi_sha256_file(program_path),
+        "execution_sha256": execution["execution_sha256"],
+        "execution_path": str(execution_path),
+        "execution_file_sha256": midi_sha256_file(execution_path),
+        "complete_execution": complete_execution,
+        "selected_event_count": len(compiled["note_spans"]),
+        "executed_event_count": first_pass["fully_executed"],
+        "partially_executed_event_count": first_pass["partially_executed"],
+        "refused_event_count": first_pass["refused"],
         "output_path": str(destination),
         "output_sha256": midi_sha256_file(destination),
         "sample_rate": int(sample_rate),
@@ -418,17 +553,11 @@ def midi_render_ledger(
         "declared_track_count": len(ledger["tracks"]),
         "rendered_track_count": len(occupied_tracks),
         "note_span_count": len(compiled["note_spans"]),
-        "first_pass": first_pass,
+        "first_pass": first_pass_summary,
         "compile_diagnostics": compiled["diagnostics"],
         "stems": stem_receipts,
     }
-    receipt_path = destination.with_suffix(destination.suffix + ".render.json")
-    if receipt_path.exists() and not overwrite:
-        raise FileExistsError(f"refusing to overwrite existing render receipt: {receipt_path}")
-    receipt_path.write_text(
-        json.dumps(midi_jsonable(receipt), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    _atomic_json(receipt_path, receipt)
     receipt["receipt_path"] = str(receipt_path)
     receipt["receipt_sha256"] = midi_sha256_file(receipt_path)
     return receipt

@@ -73,6 +73,9 @@ def test_module_live_audio_phrase_writes_exact_next_state_and_pcm(tmp_path: Path
     assert next_state["current_persona"] == "pretty_lights"
     receipt = json.loads(Path(payload["paths"]["receipt"]).read_text(encoding="utf-8"))
     assert receipt["selected_event_count"] == receipt["executed_event_count"]
+    assert receipt["activity_delta"]["domains"]["control"]["planning"] == 1
+    assert receipt["activity_delta"]["domains"]["phrase_render"]["binding"] == 1
+    assert receipt["activity_delta"]["domains"]["phrase_render"]["sample_decode"] > 0
     assert all(operator == "hard_cut" for operator in receipt["operators"])
 
 
@@ -90,7 +93,7 @@ def test_single_file_reports_audio_callback_boundary(tmp_path: Path) -> None:
     assert run.returncode == 0, run.stdout + run.stderr
     payload = json.loads(run.stdout)
     assert payload["ok"] is True
-    assert payload["prepared_stream"]["audio_callback_performs_planning"] is False
-    assert payload["prepared_stream"]["audio_callback_performs_library_search"] is False
-    assert payload["prepared_stream"]["audio_callback_performs_sample_decode"] is False
-    assert payload["audio_device"]["callback_binds_events"] is False
+    contract = payload["prepared_stream"]["callback_contract"]
+    assert sorted(contract["forbidden"]) == ["binding", "library_search", "planning", "sample_decode"]
+    assert payload["audio_device"]["queue_model"] == "single_producer_single_consumer_fixed_ring"
+    assert payload["audio_device"]["completion_history"] == "fixed_ring"

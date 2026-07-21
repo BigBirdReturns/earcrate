@@ -2,6 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 
+from earcrate.live.instrumentation import (
+    LiveActivityRecorder,
+    live_activity_delta,
+    live_activity_scope,
+    live_record_activity,
+)
 from earcrate.live.playback import (
     LiveAudioCallback,
     LiveSoundDevicePlayer,
@@ -13,6 +19,13 @@ from earcrate.midi.model import midi_sha256_json
 
 def _phrase(frames: int, value: float, *, sample_rate: int = 8_000, ordinal: int = 0) -> dict:
     audio = np.full((frames, 2), value, dtype=np.float32)
+    recorder = LiveActivityRecorder()
+    before = recorder.snapshot()
+    with live_activity_scope(recorder, "control"):
+        live_record_activity("planning", detail={"synthetic_phrase": ordinal})
+    with live_activity_scope(recorder, "phrase_render"):
+        live_record_activity("binding", detail={"synthetic_phrase": ordinal})
+        live_record_activity("sample_decode", detail={"synthetic_phrase": ordinal})
     receipt = {
         "schema_version": LIVE_PHRASE_BUFFER_SCHEMA_VERSION,
         "kind": LIVE_PHRASE_BUFFER_KIND,
@@ -25,6 +38,7 @@ def _phrase(frames: int, value: float, *, sample_rate: int = 8_000, ordinal: int
         "truncated_event_count": 0,
         "refused_event_count": 0,
         "ordinal": ordinal,
+        "activity_delta": live_activity_delta(before, recorder.snapshot()),
     }
     receipt["phrase_sha256"] = midi_sha256_json(receipt)
     return {"audio": audio, "receipt": receipt}
@@ -52,10 +66,12 @@ def test_audio_callback_crosses_prepared_phrase_boundary_without_work(tmp_path) 
     assert receipt["frames_from_phrases"] == 17
     assert receipt["silence_frames"] == 7
     assert receipt["underrun_count"] == 1
+    assert receipt["callback_lock_count"] == 0
     assert receipt["callback_planning_count"] == 0
     assert receipt["callback_library_search_count"] == 0
     assert receipt["callback_sample_decode_count"] == 0
     assert receipt["callback_binding_count"] == 0
+    assert receipt["completed_phrase_count"] == 2
     assert len(receipt["completed_phrases"]) == 2
 
 
@@ -117,7 +133,5 @@ def test_audio_device_capability_is_optional_and_local() -> None:
     assert capability["requires_gpu"] is False
     assert capability["requires_network"] is False
     assert capability["requires_cloud"] is False
-    assert capability["callback_plans"] is False
-    assert capability["callback_searches_library"] is False
-    assert capability["callback_decodes_samples"] is False
-    assert capability["callback_binds_events"] is False
+    assert capability["queue_model"] == "single_producer_single_consumer_fixed_ring"
+    assert capability["completion_history"] == "fixed_ring"

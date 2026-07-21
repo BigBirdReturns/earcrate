@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
+from earcrate.live.capabilities import live_runtime_capability
 from earcrate.live.crate import (
     live_compile_crate_atlas,
     live_load_crate_atlas,
@@ -18,8 +19,8 @@ from earcrate.live.crate import (
 from earcrate.live.engine import live_engine_new, live_engine_step
 from earcrate.live.model import LiveError, live_apply_control, live_persona_names
 from earcrate.live.operators import LIVE_TECHNIQUE_NAMES
-from earcrate.live.planner import live_atlas_from_midi, live_runtime_capability, live_validate_atlas
-from earcrate.live.runtime_fix import live_build_session
+from earcrate.live.planner import live_atlas_from_midi, live_validate_atlas
+from earcrate.live.runtime import live_build_session
 from earcrate.midi.codec import midi_read, midi_write
 from earcrate.midi.render import midi_render_ledger
 
@@ -142,6 +143,7 @@ def _compile_crate(args: Any, atoms: list[dict[str, Any]]) -> dict[str, Any]:
         "rack_build_sha256": atlas["rack_build_sha256"],
         "rack_count": len(atlas["rack_revisions"]),
         "path": compiled["write"]["path"],
+        "offline_activity": atlas["offline_activity"],
     }
 
 
@@ -349,6 +351,7 @@ def live_cli_main(argv: list[str] | None = None) -> int:
                 "generated_event_count": session["session"]["generated_event_count"],
                 "bound_event_count": session["session"]["bound_event_count"],
                 "library_materials_scanned_during_execution": session["session"]["library_materials_scanned_during_execution"],
+                "runtime_activity": session["session"]["runtime_activity"],
                 "render": session["render"],
                 "writes": writes,
             }
@@ -400,6 +403,7 @@ def live_cli_main(argv: list[str] | None = None) -> int:
             _live_cli_atomic_json(root / "midi.lowering.json", build["midi_lowering"], overwrite=bool(args.overwrite))
             _live_cli_atomic_json(root / "cpu.program.json", build["cpu_program"], overwrite=bool(args.overwrite))
             _live_cli_atomic_json(root / "cpu.execution.json", build["cpu_execution"], overwrite=bool(args.overwrite))
+            _live_cli_atomic_json(root / "activity.json", build["activity_receipt"], overwrite=bool(args.overwrite))
             midi_receipt = midi_write(build["midi_ledger"], root / "session.mid", overwrite=bool(args.overwrite))
             neutral = None
             if args.neutral_render:
@@ -424,6 +428,7 @@ def live_cli_main(argv: list[str] | None = None) -> int:
                 "peak_active_layers": build["cpu_execution"]["peak_active_layer_count"],
                 "runtime_operation_count": build["cpu_execution"]["runtime_operation_count"],
                 "materials_scanned_during_execution": build["cpu_execution"]["materials_scanned_during_execution"],
+                "activity_delta": build["activity_delta"],
                 "midi": midi_receipt,
                 "neutral_render": neutral,
             }

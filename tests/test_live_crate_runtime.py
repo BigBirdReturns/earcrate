@@ -12,7 +12,6 @@ from earcrate.live.crate import (
     live_run_crate_session,
     live_write_crate_session,
 )
-from earcrate.live.model import LiveError
 from earcrate.midi.codec import midi_read
 
 PPQ = 192
@@ -133,9 +132,10 @@ def _atoms(tmp_path: Path) -> list[dict]:
 def test_precompiled_crate_runs_live_without_scanning_the_library(tmp_path: Path) -> None:
     source = tmp_path / "source.mid"
     _write_source(source)
+    atoms = _atoms(tmp_path)
     compiled = live_compile_crate_atlas(
         midi_read(source),
-        _atoms(tmp_path),
+        atoms,
         tmp_path / "crate",
         taste_profile="test",
         sample_rate=8_000,
@@ -144,6 +144,9 @@ def test_precompiled_crate_runs_live_without_scanning_the_library(tmp_path: Path
     atlas = compiled["atlas"]
     assert atlas["rack_revisions"]
     assert atlas["rack_build"]["complete"] is True
+    assert atlas["offline_activity"]["domains"]["offline_compile"]["library_search"] == 1
+    assert atlas["offline_activity"]["domains"]["offline_compile"]["material_scan"] == len(atoms)
+    assert atlas["offline_activity"]["domains"]["offline_compile"]["binding"] == 1
     result = live_run_crate_session(
         atlas,
         target_bars=16,
@@ -156,6 +159,9 @@ def test_precompiled_crate_runs_live_without_scanning_the_library(tmp_path: Path
     assert session["complete"] is True
     assert session["generated_event_count"] == session["bound_event_count"]
     assert session["library_materials_scanned_during_execution"] == 0
+    assert session["runtime_activity"]["totals"]["library_search"] == 0
+    assert session["runtime_activity"]["domains"]["control"]["planning"] > 0
+    assert session["runtime_activity"]["domains"]["phrase_render"]["binding"] == 1
     assert result["render"]["complete_execution"] is True
     assert result["render"]["selected_event_count"] == session["generated_event_count"]
     writes = live_write_crate_session(result, tmp_path / "session-artifacts")

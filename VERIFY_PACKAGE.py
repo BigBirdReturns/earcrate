@@ -46,6 +46,32 @@ if checks["singlefile_builds"]:
     if not checks["singlefile_selftest"]:
         details["singlefile_selftest"] = (selftest.stdout + selftest.stderr)[-2000:]
 
+    live_capability = subprocess.run(
+        [sys.executable, str(artifact), "live", "capability"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    try:
+        live_payload = json.loads(live_capability.stdout) if live_capability.returncode == 0 else {}
+    except json.JSONDecodeError:
+        live_payload = {}
+    checks["singlefile_live_smoke"] = (
+        live_capability.returncode == 0
+        and live_payload.get("ok") is True
+        and live_payload.get("ready") is True
+        and live_payload.get("requires_gpu") is False
+        and live_payload.get("requires_network") is False
+        and live_payload.get("requires_cloud") is False
+        and len(live_payload.get("techniques") or []) >= 12
+    )
+    if not checks["singlefile_live_smoke"]:
+        details["singlefile_live_smoke"] = {
+            "returncode": live_capability.returncode,
+            "stdout": live_capability.stdout[-2000:],
+            "stderr": live_capability.stderr[-2000:],
+        }
+
     try:
         import mido
         import numpy as np

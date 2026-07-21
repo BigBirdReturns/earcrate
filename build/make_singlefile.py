@@ -8,7 +8,9 @@ PKG = ROOT / "earcrate"
 ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", "core/util.py", "core/wavinfo.py", "analyze/decode.py", "deck/dsp.py",
          "deck/transform.py", "deck/lattice.py", "ear/readiness.py", "judge/audio.py",
          "deck/harmony.py", "core/config.py", "analyze/features.py", "analyze/beat_features.py", "librarian/ingest.py",
-         "providers/__init__.py", "providers/artifacts.py", "providers/stems.py", "providers/retrieval.py", "providers/workqueue.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
+         "providers/__init__.py", "providers/artifacts.py", "providers/notes.py", "providers/stems.py", "providers/retrieval.py", "providers/workqueue.py",
+         "midi/model.py", "midi/codec.py", "midi/render.py", "midi/cli.py",
+         "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
 import base64
 html_b64 = base64.b64encode((PKG / "ui/static/index.html").read_bytes()).decode("ascii")
@@ -36,6 +38,12 @@ for rel in ORDER:
             'HTML_PAGE = _b64.b64decode("' + html_b64 + '").decode("utf-8")')
     if rel == "app.py":
         body = body.replace("# --- librarian attachment", "# librarian functions are inline above in single-file build\n# --- librarian attachment")
+    if rel == "cli.py":
+        needle = "    argv = list(sys.argv[1:] if argv is None else argv)"
+        replacement = needle + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
+        if needle not in body:
+            raise SystemExit("cli.py MIDI dispatch insertion point is missing")
+        body = body.replace(needle, replacement, 1)
     parts.append(f"\n# ===== {rel} =====\n" + body)
 out = "\n".join(parts)
 if "if __name__" not in out.split("# ===== cli.py =====")[-1]:

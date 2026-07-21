@@ -57,6 +57,38 @@ python -m earcrate midi transcribe "bass-stem.wav" "bass.notes.json" --provider 
 The provider hashes the installed model bytes and raw model outputs into the
 observation receipt. No Basic Pitch model is bundled by EarCrate.
 
+## Plug-and-play crate substitution
+
+EarCrate can turn a finished MIDI performance into an exact shopping list for
+replacement material. A demand manifest groups notes by track, channel, and
+program, then records note and velocity coverage, gate duration, polyphony,
+controller use, pitch bend, General MIDI family, role hints, and every source
+event that must remain accounted for.
+
+```text
+python -m earcrate midi demand "arrangement.mid" "arrangement.demand.json"
+python -m earcrate midi rack-template "bass.rack.draft.json" --mode pitched --rack-id crate-bass --name "Crate Bass"
+# Edit the draft to point at an approved sample or EarAtom slice.
+python -m earcrate midi rack-seal "bass.rack.draft.json" "bass.rack.json"
+python -m earcrate midi bind "arrangement.mid" "arrangement.binding.json" "bass.rack.json" "drums.rack.json"
+python -m earcrate midi render-rack "arrangement.mid" "arrangement.binding.json" "arrangement.crate.wav" --rack "bass.rack.json" --rack "drums.rack.json" --stems-dir "crate-stems"
+python -m earcrate midi sfz "bass.rack.json" "bass.sfz"
+```
+
+A sealed `RackRevision` identifies the exact source file, decoded PCM slice,
+key and velocity zone, root note, loop, trigger behavior, tuning, gain, pan, and
+envelope. Binding compiles an event-level map from every MIDI note to one exact
+rack zone. A missing key range, velocity layer, duration, rack, sample, or source
+identity remains an explicit unresolved or refused event. Rendering cannot
+silently substitute another sample.
+
+The in-process rack renderer is the proof backend. It performs variable-rate
+sample playback, pitch bend, looping with optional crossfade, one-shot and gated
+voices, velocity and channel controls, exact source revalidation, per-track
+stems, and event-level execution receipts. SFZ is generated as portable object
+code for external samplers; the EarCrate rack and binding ledgers remain the
+source of truth.
+
 ## Verify
 
 - `python tests/run_gates.py`

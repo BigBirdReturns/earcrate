@@ -8,8 +8,9 @@ import numpy as np
 from earcrate.live.capabilities import live_audio_device_capability
 from earcrate.live.instrumentation import (
     LiveActivityRecorder,
+    live_activity_context,
     live_activity_pop,
-    live_activity_push,
+    live_activity_swap,
 )
 from earcrate.live.model import LiveError
 from earcrate.live.stream import live_validate_phrase_receipt
@@ -48,6 +49,10 @@ class LiveAudioCallback:
         self.maximum_queued_phrases = int(maximum_queued_phrases)
         self.completion_capacity = int(completion_capacity)
         self.activity_recorder = activity_recorder or LiveActivityRecorder()
+        self._callback_activity_context = live_activity_context(
+            self.activity_recorder,
+            "audio_callback",
+        )
 
         self._queue_audio: list[np.ndarray | None] = [None] * self.maximum_queued_phrases
         self._queue_receipts: list[dict[str, Any] | None] = [None] * self.maximum_queued_phrases
@@ -133,7 +138,7 @@ class LiveAudioCallback:
             raise LiveError("audio callback output buffer must be stereo")
         if target.dtype != np.float32:
             raise LiveError("audio callback output buffer must be float32")
-        previous = live_activity_push(self.activity_recorder, "audio_callback")
+        previous = live_activity_swap(self._callback_activity_context)
         try:
             target.fill(0.0)
             requested = int(target.shape[0])
@@ -195,7 +200,6 @@ class LiveAudioCallback:
             "block_frames": self.block_frames,
             "maximum_queued_phrases": self.maximum_queued_phrases,
             "queue_model": "single_producer_single_consumer_fixed_ring",
-            "callback_lock_count": 0,
             "callback_count": self._callback_count,
             "frames_requested": self._frames_requested,
             "frames_from_phrases": self._frames_from_phrases,

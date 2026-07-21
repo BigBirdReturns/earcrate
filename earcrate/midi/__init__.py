@@ -9,11 +9,11 @@ from earcrate.midi.anatomy import (
 from earcrate.midi.arranger import (
     ArrangementError,
     midi_generate_pattern_arrangement,
-    midi_pattern_bank,
     midi_validate_pattern_arrangement,
     midi_validate_pattern_bank,
     midi_write_pattern_arrangement,
 )
+from earcrate.midi.arranger_fix import midi_pattern_bank
 from earcrate.midi.codec import midi_read, midi_roundtrip, midi_write
 from earcrate.midi.model import midi_statistics
 from earcrate.midi.render import midi_compile_note_spans, midi_render_file, midi_render_ledger

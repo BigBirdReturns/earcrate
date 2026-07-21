@@ -57,6 +57,7 @@ MODULES = (
     "test_live_long_set",
     "test_live_engine_step",
     "test_live_stream_runtime",
+    "test_live_audio_callback",
     "test_note_provider",
     "test_rack",
     "test_rack_library",

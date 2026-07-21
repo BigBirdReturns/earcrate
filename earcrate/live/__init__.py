@@ -1,0 +1,59 @@
+"""Deterministic local live-DJ planning and sparse CPU execution."""
+
+from earcrate.live.model import (
+    LiveError,
+    live_apply_control,
+    live_new_state,
+    live_persona_names,
+    live_persona_policy,
+    live_validate_state,
+)
+from earcrate.live.operators import (
+    LIVE_TECHNIQUE_NAMES,
+    live_apply_technique,
+    live_technique_names,
+)
+from earcrate.live.planner import (
+    live_atlas_from_midi,
+    live_plan_next,
+    live_plan_session,
+    live_runtime_capability,
+    live_validate_atlas,
+    live_validate_horizon_plan,
+    live_validate_session_plan,
+)
+from earcrate.live.runtime import (
+    live_build_session,
+    live_compile_cpu_program,
+    live_execute_cpu_program,
+    live_lower_session_to_midi,
+    live_validate_cpu_execution,
+    live_validate_cpu_program,
+    live_validate_midi_lowering,
+)
+
+__all__ = [
+    "LIVE_TECHNIQUE_NAMES",
+    "LiveError",
+    "live_apply_control",
+    "live_apply_technique",
+    "live_atlas_from_midi",
+    "live_build_session",
+    "live_compile_cpu_program",
+    "live_execute_cpu_program",
+    "live_lower_session_to_midi",
+    "live_new_state",
+    "live_persona_names",
+    "live_persona_policy",
+    "live_plan_next",
+    "live_plan_session",
+    "live_runtime_capability",
+    "live_technique_names",
+    "live_validate_atlas",
+    "live_validate_cpu_execution",
+    "live_validate_cpu_program",
+    "live_validate_horizon_plan",
+    "live_validate_midi_lowering",
+    "live_validate_session_plan",
+    "live_validate_state",
+]

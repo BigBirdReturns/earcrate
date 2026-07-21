@@ -61,6 +61,7 @@ MODULES = (
     "test_live_audio_cli",
     "test_live_technique_registry",
     "test_live_performance_host",
+    "test_live_activity_receipts",
     "test_note_provider",
     "test_rack",
     "test_rack_library",

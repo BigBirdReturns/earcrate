@@ -1,14 +1,23 @@
 from __future__ import annotations
 
-import importlib.util
+import hashlib
 import math
 from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
 import numpy as np
 
+from earcrate.live.capabilities import live_stream_capability
 from earcrate.live.crate import live_validate_crate_atlas
 from earcrate.live.engine import live_engine_step, live_validate_engine_step
+from earcrate.live.instrumentation import (
+    LiveActivityRecorder,
+    live_activity_delta,
+    live_activity_pop,
+    live_activity_push,
+    live_activity_scope,
+    live_record_activity,
+)
 from earcrate.live.model import LiveError, live_validate_state
 from earcrate.live.planner import (
     LIVE_SESSION_KIND,
@@ -17,19 +26,11 @@ from earcrate.live.planner import (
     live_validate_atlas,
     live_validate_session_plan,
 )
-from earcrate.live.runtime_fix import live_lower_session_to_midi
-from earcrate.midi.model import (
-    MidiTempoClock,
-    midi_duration_seconds,
-    midi_sha256_json,
-)
+from earcrate.live.runtime import live_lower_session_to_midi
+from earcrate.midi.model import MidiTempoClock, midi_duration_seconds, midi_sha256_json
 from earcrate.rack.binding_stable import rack_compile_binding
 from earcrate.rack.model import rack_validate_revision, rack_verify_sources
-from earcrate.rack.render import (
-    _event_extent_seconds,
-    _load_zone_audio,
-    _render_pass,
-)
+from earcrate.rack.render import _event_extent_seconds, _load_zone_audio, _render_pass
 from earcrate.rack.render_fix import rack_compile_render_program
 
 LIVE_PHRASE_BUFFER_SCHEMA_VERSION = 1
@@ -38,24 +39,7 @@ LIVE_BLOCK_STREAM_SCHEMA_VERSION = 1
 LIVE_BLOCK_STREAM_KIND = "earcrate_live_block_stream"
 
 
-def live_stream_capability() -> dict[str, Any]:
-    return {
-        "ready": True,
-        "backend": "prepared_phrase_numpy_blocks",
-        "requires_gpu": False,
-        "requires_network": False,
-        "requires_cloud": False,
-        "audio_callback_performs_planning": False,
-        "audio_callback_performs_library_search": False,
-        "audio_callback_performs_sample_decode": False,
-        "optional_sounddevice_ready": importlib.util.find_spec("sounddevice") is not None,
-    }
-
-
-def _live_local_phrase_session(
-    atlas: Mapping[str, Any],
-    step: Mapping[str, Any],
-) -> dict[str, Any]:
+def _live_local_phrase_session(atlas: Mapping[str, Any], step: Mapping[str, Any]) -> dict[str, Any]:
     live_validate_atlas(atlas)
     live_validate_engine_step(step)
     committed = [deepcopy(dict(row)) for row in step["plan"]["committed_decisions"]]
@@ -119,6 +103,19 @@ def live_validate_phrase_receipt(receipt: Mapping[str, Any]) -> None:
         raise LiveError("live phrase buffer did not execute every selected event")
     if int(receipt.get("truncated_event_count") or 0) or int(receipt.get("refused_event_count") or 0):
         raise LiveError("live phrase buffer contains truncated or refused events")
+    activity = receipt.get("activity_delta")
+    if not isinstance(activity, Mapping):
+        raise LiveError("live phrase buffer requires measured activity")
+    callback = (activity.get("domains") or {}).get("audio_callback") or {}
+    for operation in ("planning", "library_search", "sample_decode", "binding"):
+        if int(callback.get(operation, 0)) != 0:
+            raise LiveError(f"live phrase receipt contains callback {operation} activity")
+    if int((activity.get("domains") or {}).get("control", {}).get("planning", 0)) <= 0:
+        raise LiveError("live phrase receipt does not prove an actual planning call")
+    if int((activity.get("domains") or {}).get("phrase_render", {}).get("binding", 0)) <= 0:
+        raise LiveError("live phrase receipt does not prove an actual binding call")
+    if int((activity.get("domains") or {}).get("phrase_render", {}).get("sample_decode", 0)) <= 0:
+        raise LiveError("live phrase receipt does not prove actual sample loading")
     expected = midi_sha256_json({key: value for key, value in receipt.items() if key != "phrase_sha256"})
     if str(receipt.get("phrase_sha256") or "") != expected:
         raise LiveError("phrase_sha256 does not match live phrase receipt")
@@ -135,8 +132,9 @@ def live_render_next_phrase(
     candidate_limit: int = 12,
     target_bpm: float = 0.0,
     target_peak: float = 0.90,
+    activity_recorder: LiveActivityRecorder | None = None,
 ) -> dict[str, Any]:
-    """Plan one legal phrase and render it into memory before the audio callback needs it."""
+    """Plan and render one phrase before the audio callback needs it."""
     live_validate_crate_atlas(crate_atlas, verify_sources=True)
     live_validate_state(state)
     if not 0.0 < float(target_peak) <= 1.0:
@@ -144,76 +142,86 @@ def live_render_next_phrase(
     atlas = crate_atlas["live_material_atlas"]
     if str(state["atlas_sha256"]) != str(atlas["atlas_sha256"]):
         raise LiveError("live phrase state belongs to another crate atlas")
-    step = live_engine_step(
-        atlas,
-        state,
-        controls=controls,
-        horizon_bars=horizon_bars,
-        commit_bars=commit_bars,
-        beam_width=beam_width,
-        candidate_limit=candidate_limit,
-    )
-    phrase_session = _live_local_phrase_session(atlas, step)
-    lowering = live_lower_session_to_midi(
-        crate_atlas["source_midi_ledger"],
-        atlas,
-        phrase_session,
-        target_bpm=target_bpm,
-    )
-    racks = [deepcopy(dict(rack)) for rack in crate_atlas["rack_revisions"]]
-    for rack in racks:
-        rack_validate_revision(rack)
-        rack_verify_sources(rack)
-    binding = rack_compile_binding(
-        lowering["ledger"],
-        racks,
-        pitch_bend_range_semitones=2.0,
-    )
-    if not bool(binding.get("complete")):
-        raise LiveError(
-            "precompiled racks cannot execute the next live phrase: "
-            + str(binding.get("unresolved") or [])
+    recorder = activity_recorder or LiveActivityRecorder()
+    before = recorder.snapshot()
+    with live_activity_scope(recorder, "control"):
+        step = live_engine_step(
+            atlas,
+            state,
+            controls=controls,
+            horizon_bars=horizon_bars,
+            commit_bars=commit_bars,
+            beam_width=beam_width,
+            candidate_limit=candidate_limit,
         )
-    sample_rate = int(crate_atlas["sample_rate"])
-    pitch_bend_range = float(binding["pitch_bend_range_semitones"])
-    program = rack_compile_render_program(
-        lowering["ledger"],
-        binding,
-        racks,
-        sample_rate=sample_rate,
-        pitch_bend_range_semitones=pitch_bend_range,
-    )
-    racks_by_sha = {str(rack["rack_sha256"]): rack for rack in racks}
-    audio_cache: dict[tuple[str, str], np.ndarray] = {}
-    for event in program["events"]:
-        key = (str(event["rack_sha256"]), str(event["zone_id"]))
-        if key not in audio_cache:
-            rack = racks_by_sha[key[0]]
-            zone = next(zone for zone in rack["zones"] if str(zone["zone_id"]) == key[1])
-            audio_cache[key] = _load_zone_audio(zone)
-    clock = MidiTempoClock(lowering["ledger"])
-    natural_duration = max(
-        midi_duration_seconds(lowering["ledger"]),
-        max(
-            (
-                _event_extent_seconds(event, event, clock, pitch_bend_range)
-                for event in program["events"]
+    phrase_session = _live_local_phrase_session(atlas, step)
+    with live_activity_scope(recorder, "phrase_render"):
+        lowering = live_lower_session_to_midi(
+            crate_atlas["source_midi_ledger"],
+            atlas,
+            phrase_session,
+            target_bpm=target_bpm,
+        )
+        racks = [deepcopy(dict(rack)) for rack in crate_atlas["rack_revisions"]]
+        for rack in racks:
+            rack_validate_revision(rack)
+            rack_verify_sources(rack)
+        live_record_activity("binding", detail={"stage": "phrase", "bar": phrase_session["absolute_start_bar_index"]})
+        binding = rack_compile_binding(
+            lowering["ledger"],
+            racks,
+            pitch_bend_range_semitones=2.0,
+        )
+        if not bool(binding.get("complete")):
+            raise LiveError(
+                "precompiled racks cannot execute the next live phrase: "
+                + str(binding.get("unresolved") or [])
+            )
+        sample_rate = int(crate_atlas["sample_rate"])
+        pitch_bend_range = float(binding["pitch_bend_range_semitones"])
+        program = rack_compile_render_program(
+            lowering["ledger"],
+            binding,
+            racks,
+            sample_rate=sample_rate,
+            pitch_bend_range_semitones=pitch_bend_range,
+        )
+        racks_by_sha = {str(rack["rack_sha256"]): rack for rack in racks}
+        audio_cache: dict[tuple[str, str], np.ndarray] = {}
+        for event in program["events"]:
+            key = (str(event["rack_sha256"]), str(event["zone_id"]))
+            if key not in audio_cache:
+                rack = racks_by_sha[key[0]]
+                zone = next(zone for zone in rack["zones"] if str(zone["zone_id"]) == key[1])
+                live_record_activity(
+                    "sample_decode",
+                    detail={
+                        "rack_sha256": key[0],
+                        "zone_id": key[1],
+                        "sample_path": zone["sample"]["path"],
+                    },
+                )
+                audio_cache[key] = _load_zone_audio(zone)
+        clock = MidiTempoClock(lowering["ledger"])
+        natural_duration = max(
+            midi_duration_seconds(lowering["ledger"]),
+            max(
+                (_event_extent_seconds(event, event, clock, pitch_bend_range) for event in program["events"]),
+                default=0.0,
             ),
-            default=0.0,
-        ),
-    ) + 0.05
-    total_frames = max(1, int(math.ceil(natural_duration * sample_rate)))
-    audio = np.zeros((total_frames, 2), dtype=np.float32)
-    outcomes = _render_pass(
-        audio,
-        list(program["events"]),
-        program,
-        clock,
-        audio_cache,
-        sample_rate=sample_rate,
-        pitch_bend_range_semitones=pitch_bend_range,
-        record_outcomes=True,
-    )
+        ) + 0.05
+        total_frames = max(1, int(math.ceil(natural_duration * sample_rate)))
+        audio = np.zeros((total_frames, 2), dtype=np.float32)
+        outcomes = _render_pass(
+            audio,
+            list(program["events"]),
+            program,
+            clock,
+            audio_cache,
+            sample_rate=sample_rate,
+            pitch_bend_range_semitones=pitch_bend_range,
+            record_outcomes=True,
+        )
     if len(outcomes) != len(program["events"]):
         raise LiveError("live phrase execution did not account for every selected event")
     counts = {
@@ -230,7 +238,8 @@ def live_render_next_phrase(
     peak_before = float(np.max(np.abs(audio))) if audio.size else 0.0
     scale = min(1.0, float(target_peak) / peak_before) if peak_before > 0.0 else 1.0
     audio *= np.float32(scale)
-    pcm_sha256 = __import__("hashlib").sha256(np.asarray(audio, dtype="<f4", order="C").tobytes(order="C")).hexdigest()
+    pcm_sha256 = hashlib.sha256(np.asarray(audio, dtype="<f4", order="C").tobytes(order="C")).hexdigest()
+    activity = live_activity_delta(before, recorder.snapshot())
     receipt = {
         "schema_version": LIVE_PHRASE_BUFFER_SCHEMA_VERSION,
         "kind": LIVE_PHRASE_BUFFER_KIND,
@@ -257,8 +266,9 @@ def live_render_next_phrase(
         "peak_before_scale": round(peak_before, 9),
         "applied_scale": round(scale, 12),
         "pcm_f32le_sha256": pcm_sha256,
-        "materials_scanned_during_render": 0,
-        "samples_decoded_during_callback": 0,
+        "materials_scanned_during_render": int(activity["domains"]["phrase_render"]["library_search"]),
+        "samples_decoded_during_callback": int(activity["domains"]["audio_callback"]["sample_decode"]),
+        "activity_delta": activity,
     }
     receipt["phrase_sha256"] = midi_sha256_json(receipt)
     live_validate_phrase_receipt(receipt)
@@ -272,24 +282,39 @@ def live_render_next_phrase(
         "binding": binding,
         "render_program": program,
         "execution_outcomes": outcomes,
+        "activity_receipt": recorder.snapshot(),
     }
 
 
 class LiveBlockStream:
-    """Copy already-prepared phrase audio in fixed blocks; planning never runs here."""
+    """Copy prepared phrase audio in fixed blocks with bounded completion history."""
 
-    def __init__(self, *, sample_rate: int, block_frames: int = 512):
+    def __init__(
+        self,
+        *,
+        sample_rate: int,
+        block_frames: int = 512,
+        completion_capacity: int = 64,
+        activity_recorder: LiveActivityRecorder | None = None,
+    ):
         if int(sample_rate) <= 0 or int(block_frames) <= 0:
             raise LiveError("live block stream requires positive sample rate and block size")
+        if int(completion_capacity) <= 0:
+            raise LiveError("live block stream completion capacity must be positive")
         self.sample_rate = int(sample_rate)
         self.block_frames = int(block_frames)
+        self.completion_capacity = int(completion_capacity)
+        self.activity_recorder = activity_recorder or LiveActivityRecorder()
         self._audio: np.ndarray | None = None
         self._receipt: dict[str, Any] | None = None
         self._offset = 0
         self._blocks = 0
         self._frames_delivered = 0
         self._underruns = 0
-        self._phrase_history: list[dict[str, Any]] = []
+        self._completion_hashes: list[str | None] = [None] * self.completion_capacity
+        self._completion_frames: list[int] = [0] * self.completion_capacity
+        self._completion_blocks: list[int] = [0] * self.completion_capacity
+        self._completion_count = 0
 
     @property
     def ready(self) -> bool:
@@ -319,34 +344,53 @@ class LiveBlockStream:
         self._receipt = deepcopy(dict(receipt))
         self._offset = 0
 
+    def _record_completion(self) -> None:
+        assert self._audio is not None and self._receipt is not None
+        index = self._completion_count % self.completion_capacity
+        self._completion_hashes[index] = str(self._receipt["phrase_sha256"])
+        self._completion_frames[index] = int(self._audio.shape[0])
+        self._completion_blocks[index] = self._blocks
+        self._completion_count += 1
+
     def read_block(self, frames: int | None = None) -> np.ndarray:
         count = int(frames or self.block_frames)
         if count <= 0:
             raise LiveError("live block size must be positive")
         block = np.zeros((count, 2), dtype=np.float32)
-        if not self.ready:
-            self._underruns += 1
+        previous = live_activity_push(self.activity_recorder, "audio_callback")
+        try:
+            if not self.ready:
+                self._underruns += 1
+                self._blocks += 1
+                self._frames_delivered += count
+                return block
+            assert self._audio is not None
+            available = min(count, int(self._audio.shape[0]) - self._offset)
+            block[:available] = self._audio[self._offset : self._offset + available]
+            self._offset += available
             self._blocks += 1
             self._frames_delivered += count
+            if self._offset >= int(self._audio.shape[0]):
+                self._record_completion()
             return block
-        assert self._audio is not None
-        available = min(count, int(self._audio.shape[0]) - self._offset)
-        block[:available] = self._audio[self._offset : self._offset + available]
-        self._offset += available
-        self._blocks += 1
-        self._frames_delivered += count
-        if self._offset >= int(self._audio.shape[0]):
-            assert self._receipt is not None
-            self._phrase_history.append(
-                {
-                    "phrase_sha256": str(self._receipt["phrase_sha256"]),
-                    "frames": int(self._audio.shape[0]),
-                    "blocks_at_completion": self._blocks,
-                }
-            )
-        return block
+        finally:
+            live_activity_pop(previous)
 
     def receipt(self) -> dict[str, Any]:
+        retained = min(self._completion_count, self.completion_capacity)
+        start = max(0, self._completion_count - retained)
+        history = []
+        for ordinal in range(start, self._completion_count):
+            index = ordinal % self.completion_capacity
+            history.append(
+                {
+                    "ordinal": ordinal,
+                    "phrase_sha256": self._completion_hashes[index],
+                    "frames": self._completion_frames[index],
+                    "blocks_at_completion": self._completion_blocks[index],
+                }
+            )
+        activity = self.activity_recorder.snapshot()
         value = {
             "schema_version": LIVE_BLOCK_STREAM_SCHEMA_VERSION,
             "kind": LIVE_BLOCK_STREAM_KIND,
@@ -357,10 +401,14 @@ class LiveBlockStream:
             "underrun_count": self._underruns,
             "ready": self.ready,
             "remaining_frames": self.remaining_frames,
-            "phrase_history": deepcopy(self._phrase_history),
-            "callback_planning_count": 0,
-            "callback_library_search_count": 0,
-            "callback_sample_decode_count": 0,
+            "completed_phrase_count": self._completion_count,
+            "completion_capacity": self.completion_capacity,
+            "phrase_history": history,
+            "activity_receipt": activity,
+            "callback_planning_count": int(activity["domains"]["audio_callback"]["planning"]),
+            "callback_library_search_count": int(activity["domains"]["audio_callback"]["library_search"]),
+            "callback_sample_decode_count": int(activity["domains"]["audio_callback"]["sample_decode"]),
+            "callback_binding_count": int(activity["domains"]["audio_callback"]["binding"]),
         }
         value["stream_sha256"] = midi_sha256_json(value)
         return value

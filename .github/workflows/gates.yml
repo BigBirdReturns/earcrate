@@ -18,6 +18,17 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - run: pip install -r requirements.txt
       - name: gate tests
-        run: python tests/run_gates.py
+        shell: bash
+        run: |
+          set -o pipefail
+          python tests/run_gates.py 2>&1 | tee gate.log
+      - name: retain gate ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-ledger-${{ github.run_id }}
+          path: gate.log
+          if-no-files-found: error
+          retention-days: 30
       - name: package verifier (gate suite already passed above)
         run: python VERIFY_PACKAGE.py --skip-gates

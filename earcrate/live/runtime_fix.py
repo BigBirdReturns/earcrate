@@ -7,6 +7,15 @@ _live_runtime_module = None
 import earcrate.live.runtime as _live_runtime_module
 from earcrate.midi.model import midi_sha256_json
 
+_EVENT_MARKERS = (
+    "_generated_note_id",
+    "_generated_note_off_id",
+    "_generated_control_id",
+    "_live_note_id",
+    "_live_note_off_id",
+    "_live_control_id",
+)
+
 
 def _live_message_priority(message: Mapping[str, Any], is_meta: bool) -> int:
     typ = str(message.get("type") or "")
@@ -25,14 +34,19 @@ def _live_message_priority(message: Mapping[str, Any], is_meta: bool) -> int:
     return 5
 
 
+def _marker_identity(row: Mapping[str, Any]) -> str:
+    return next((str(row[marker]) for marker in _EVENT_MARKERS if row.get(marker)), "")
+
+
 def _live_track_events(raw: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Order MIDI events while retaining both arranger and live provenance markers."""
     ordered = sorted(
         [deepcopy(dict(row)) for row in raw],
         key=lambda row: (
             int(row["tick"]),
             _live_message_priority(row["message"], bool(row["is_meta"])),
             midi_sha256_json(row["message"]),
-            str(row.get("_live_control_id") or row.get("_live_note_off_id") or row.get("_live_note_id") or ""),
+            _marker_identity(row),
         ),
     )
     events = []
@@ -43,7 +57,7 @@ def _live_track_events(raw: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]
             "is_meta": bool(row["is_meta"]),
             "message": deepcopy(dict(row["message"])),
         }
-        for marker in ("_live_note_id", "_live_note_off_id", "_live_control_id"):
+        for marker in _EVENT_MARKERS:
             if row.get(marker):
                 event[marker] = str(row[marker])
         events.append(event)

@@ -50,6 +50,7 @@ MODULES = (
     "test_workqueue",
     "test_midi",
     "test_note_provider",
+    "test_rack",
     "test_oss_governance",
 )
 

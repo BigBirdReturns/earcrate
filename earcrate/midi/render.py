@@ -11,7 +11,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from earcrate.midi.codec import midi_read, midi_sha256_file
-from earcrate.midi.model import MidiLedgerError, MidiTempoClock, midi_duration_seconds, midi_jsonable, midi_validate_ledger
+from earcrate.midi.model import MidiLedgerError, MidiTempoClock, midi_duration_seconds, midi_duration_ticks, midi_jsonable, midi_validate_ledger
 
 MIDI_RENDER_SCHEMA_VERSION = 1
 MIDI_RENDER_WAVEFORMS = {"sine", "triangle", "square"}
@@ -47,11 +47,7 @@ def midi_compile_note_spans(ledger: Mapping[str, Any]) -> dict[str, Any]:
             "but neutral rendering requires an explicit sequence selection"
         )
 
-    global_max_tick = max(
-        (int(event["tick"]) for track in ledger["tracks"] for event in track["events"]),
-        default=0,
-    )
-    close_tick = global_max_tick + int(ledger["ticks_per_beat"])
+    close_tick = midi_duration_ticks(ledger) + int(ledger["ticks_per_beat"])
     curves: dict[tuple[int, int], dict[str, list[tuple[int, int]]]] = defaultdict(
         lambda: {
             "pitchwheel": [(0, 0)],

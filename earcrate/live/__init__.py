@@ -50,14 +50,22 @@ from earcrate.live.stream import (
     live_stream_capability,
     live_validate_phrase_receipt,
 )
+from earcrate.live.playback import (
+    LiveAudioCallback,
+    LiveSoundDevicePlayer,
+    live_audio_device_capability,
+)
 
 __all__ = [
     "LIVE_TECHNIQUE_NAMES",
+    "LiveAudioCallback",
     "LiveBlockStream",
     "LiveError",
+    "LiveSoundDevicePlayer",
     "live_apply_control",
     "live_apply_technique",
     "live_atlas_from_midi",
+    "live_audio_device_capability",
     "live_build_session",
     "live_compile_cpu_program",
     "live_compile_crate_atlas",

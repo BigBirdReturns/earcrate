@@ -31,4 +31,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: package verifier (gate suite already passed above)
-        run: python VERIFY_PACKAGE.py --skip-gates
+        shell: bash
+        run: |
+          set -o pipefail
+          python VERIFY_PACKAGE.py --skip-gates 2>&1 | tee package-verifier.log
+      - name: retain package verifier ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-verifier-${{ github.run_id }}
+          path: package-verifier.log
+          if-no-files-found: error
+          retention-days: 30

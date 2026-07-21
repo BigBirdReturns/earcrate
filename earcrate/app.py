@@ -191,6 +191,29 @@ def _durable_render_attempt(fn):
     return wrapped
 
 
+def _path_under_temp(p: Path) -> bool:
+    """True when ``p`` lives inside the system temp dir.
+
+    The single rule behind both pointer guards: a workspace under the temp dir
+    belongs to a test or self-test run and must never be promoted into, or
+    adopted as, the user's real app-global workspace. See tests/conftest.py for
+    the 2026-07-20 incident this encodes."""
+    with contextlib.suppress(Exception):
+        root = Path(tempfile.gettempdir()).resolve()
+        r = Path(p).resolve()
+        return r == root or root in r.parents
+    return False
+
+
+def _config_under_temp(cfg_data: Dict[str, Any]) -> bool:
+    """True when a loaded config's roots point into the temp dir."""
+    for key in ("agent_root", "working_root", "master_root"):
+        value = str(cfg_data.get(key) or "").strip()
+        if value and _path_under_temp(Path(value).expanduser()):
+            return True
+    return False
+
+
 class EarcrateCore:
     def __init__(self):
         # The workspace pointer is the ONE app-global breadcrumb (it names the
@@ -574,6 +597,15 @@ class EarcrateCore:
                     break
             if cfg is None and self.legacy_pointer_path.exists():
                 loaded = _valid_pointer(self.legacy_pointer_path)
+                # The legacy pointer lives at app_state_dir(), which EARCRATE_HOME
+                # does NOT sandbox — so a test run leaves its mkdtemp workspace
+                # there, and while that temp dir survives, _valid_pointer accepts
+                # it and this branch copies it verbatim over the user's real
+                # pointer. That was found live on the operator's machine on
+                # 2026-07-20 (legacy pointer -> S:\Temp\tmpvqb0230r\a2). A temp
+                # workspace is never a legitimate thing to adopt or to promote.
+                if loaded is not None and _config_under_temp(loaded):
+                    loaded = None
                 if loaded is not None:
                     cfg = loaded
                     pointer = self.legacy_pointer_path
@@ -699,7 +731,24 @@ class EarcrateCore:
         self.write_toml_config()
         self.state_dir.mkdir(parents=True, exist_ok=True)
         pointer_body = json.dumps({"config_json": str(cfg_path)}, indent=2)
-        self.pointer_path.write_text(pointer_body, encoding="utf-8")
+        # A TEMP config written into a NON-TEMP pointer is never legitimate: it
+        # is a test/self-test workspace overwriting the user's real one, and it
+        # fails silently (the next run resolves an empty database and simply
+        # reports no approved atoms). This happened on 2026-07-20 and cost a
+        # session; see tests/conftest.py. A temp workspace under a temp pointer
+        # is fine — that is a properly sandboxed run — so only the mismatch is
+        # refused. Skipped, not raised: the in-process config above is already
+        # valid, and a temp-workspace caller has no need of the global pointer.
+        pointer_skipped = None
+        _tmp_root = Path(tempfile.gettempdir()).resolve()
+        if _path_under_temp(cfg_path) and not _path_under_temp(self.pointer_path):
+            pointer_skipped = (
+                f"refused to point the app-global pointer {self.pointer_path} at a "
+                f"temporary workspace {cfg_path}; set EARCRATE_HOME to a temp dir for "
+                f"sandboxed runs"
+            )
+        else:
+            self.pointer_path.write_text(pointer_body, encoding="utf-8")
         # Trap A fix, kept VISIBLE: load_config_if_present READS by scanning
         # pointer_search_dirs() (which vary by entry point — `python -m earcrate` vs
         # the launcher). Mirror the pointer to those read locations so a different
@@ -707,8 +756,8 @@ class EarcrateCore:
         # dirs. Never litter the user's home ROOT or a temp dir with a stray pointer
         # (setting EARCRATE_HOME makes this a single, deterministic location).
         _home = Path.home().resolve()
-        _tmp = Path(tempfile.gettempdir()).resolve()
-        for d in pointer_search_dirs():
+        _tmp = _tmp_root
+        for d in (() if pointer_skipped else pointer_search_dirs()):
             with contextlib.suppress(Exception):
                 dr = d.resolve()
                 if dr == _home or dr == _tmp or _tmp in dr.parents:
@@ -719,7 +768,11 @@ class EarcrateCore:
                 d.mkdir(parents=True, exist_ok=True)
                 target.write_text(pointer_body, encoding="utf-8")
         self.connect_db()
-        return {"ok": True, "config": self.config.as_dict()}
+        out: Dict[str, Any] = {"ok": True, "config": self.config.as_dict()}
+        if pointer_skipped:
+            out["pointer_written"] = False
+            out["pointer_skipped_reason"] = pointer_skipped
+        return out
 
     def default_paths(self) -> Dict[str, Any]:
         home = Path.home()

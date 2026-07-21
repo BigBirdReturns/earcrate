@@ -83,16 +83,34 @@ def _cases():
             raise RuntimeError(f"gate module has no discovered tests: {module_name}")
 
 
+# Vars that app code mutates as a side effect of merely constructing
+# EarcrateCore: `_seed_from_machine_defaults` calls os.environ.setdefault on
+# EARCRATE_STEMS and EARCRATE_CACHE_ROOT. Without a restore between gates, one
+# gate that exercises auto-seed silently changes the stem provider for every
+# gate after it, and unrelated "provider is noop" gates fail by ordering alone.
+# pytest gets this from tests/conftest.py; this runner needs its own copy
+# because it imports the modules directly and never loads a conftest.
+_LEAKY_VARS = ("EARCRATE_STEMS", "EARCRATE_CACHE_ROOT", "EARCRATE_DEFAULTS", "EARCRATE_HOME")
+
+
 def _invoke(fn):
-    params = list(inspect.signature(fn).parameters.values())
-    if not params:
-        fn()
-        return
-    if len(params) == 1 and params[0].name == "tmp_path":
-        fn(Path(tempfile.mkdtemp(prefix="earcrate-gate-")))
-        return
-    names = ", ".join(p.name for p in params)
-    raise TypeError(f"unsupported gate fixture(s): {names}")
+    saved = {k: os.environ.get(k) for k in _LEAKY_VARS}
+    try:
+        params = list(inspect.signature(fn).parameters.values())
+        if not params:
+            fn()
+            return
+        if len(params) == 1 and params[0].name == "tmp_path":
+            fn(Path(tempfile.mkdtemp(prefix="earcrate-gate-")))
+            return
+        names = ", ".join(p.name for p in params)
+        raise TypeError(f"unsupported gate fixture(s): {names}")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def main(argv=None) -> int:

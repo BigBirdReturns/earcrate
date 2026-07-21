@@ -4,7 +4,11 @@ import os, sys, random, tempfile
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 # Same sandbox as run_gates.py, for direct pytest invocation: gates that build
 # EarcrateCore() must never write the user's real repo-root workspace pointer.
-os.environ.setdefault("EARCRATE_HOME", tempfile.mkdtemp(prefix="earcrate_gates_home_"))
+# ASSIGNMENT, not setdefault: a machine with a real EARCRATE_HOME set (the
+# operator's does) is the ONLY case that needs sandboxing, and setdefault is a
+# no-op in exactly that case. That defect clobbered the real pointer with a
+# mkdtemp path on 2026-07-20 — see tests/conftest.py for the full incident.
+os.environ["EARCRATE_HOME"] = tempfile.mkdtemp(prefix="earcrate_gates_home_")
 from earcrate.deck.transform import plan_varispeed_transform
 from earcrate.deck.lattice import score_bpm_lattice
 from earcrate.ear.readiness import crate_readiness_audit, girl_talk_targets, endless_sustain

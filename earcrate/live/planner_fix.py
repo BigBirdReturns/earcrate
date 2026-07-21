@@ -3,11 +3,20 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping
 
+_live_planner_module = None
 import earcrate.live.planner as _live_planner_module
 from earcrate.midi.model import midi_sha256_json
 
-_original_live_score_candidate = _live_planner_module._live_score_candidate
-_original_live_plan_next = _live_planner_module.live_plan_next
+_original_live_score_candidate = (
+    _live_planner_module._live_score_candidate
+    if _live_planner_module is not None
+    else _live_score_candidate
+)
+_original_live_plan_next = (
+    _live_planner_module.live_plan_next
+    if _live_planner_module is not None
+    else live_plan_next
+)
 _live_runtime_requested_risk = 0.5
 
 
@@ -58,9 +67,17 @@ def live_plan_next(*args: Any, **kwargs: Any) -> dict[str, Any]:
         decision["commands"] = contextual
     plan["committed_decisions"] = deepcopy(plan["decisions"][: int(plan["commit_bars"])])
     plan["plan_sha256"] = midi_sha256_json({key: value for key, value in plan.items() if key != "plan_sha256"})
-    _live_planner_module.live_validate_horizon_plan(plan)
+    if _live_planner_module is not None:
+        _live_planner_module.live_validate_horizon_plan(plan)
+    else:
+        live_validate_horizon_plan(plan)
     return out
 
 
-_live_planner_module._live_score_candidate = _live_score_candidate_with_requested_risk
-_live_planner_module.live_plan_next = live_plan_next
+# In the package build, patch the module. In the concatenated single-file build,
+# these assignments overwrite the already-defined global functions directly.
+if _live_planner_module is not None:
+    _live_planner_module._live_score_candidate = _live_score_candidate_with_requested_risk
+    _live_planner_module.live_plan_next = live_plan_next
+else:
+    _live_score_candidate = _live_score_candidate_with_requested_risk

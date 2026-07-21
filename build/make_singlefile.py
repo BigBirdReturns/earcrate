@@ -11,8 +11,10 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "providers/__init__.py", "providers/artifacts.py", "providers/notes.py", "providers/stems.py", "providers/retrieval.py", "providers/workqueue.py",
          "midi/model.py", "midi/codec.py", "midi/render.py",
          "rack/model.py", "rack/demand.py", "rack/binding.py", "rack/binding_stable.py", "rack/sfz.py", "rack/render.py", "rack/render_fix.py", "rack/library.py", "rack/library_fix.py", "rack/multizone.py",
-         "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/arranger.py", "midi/arranger_fix.py", "midi/cli.py",
-         "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
+         "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/arranger.py", "midi/arranger_fix.py",
+         "study/reference.py", "study/reference_grid.py", "study/reference_bundle.py", "study/reference_cli.py",
+         "live/model.py", "live/operators.py", "live/planner.py", "live/runtime.py", "live/cli.py",
+         "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
 INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
 
@@ -60,6 +62,12 @@ for rel in ORDER:
     if bad:
         raise SystemExit("indented earcrate imports would break the single-file dist at call time:\n  " + "\n  ".join(bad))
     body = "\n".join(lines)
+    # Module-specific CLIs are callable from the top-level dispatcher. Their own
+    # `python -m` guards must not fire while the concatenated artifact is loading.
+    if rel in {"study/reference_cli.py", "live/cli.py"}:
+        marker = '\nif __name__ == "__main__":'
+        if marker in body:
+            body = body.split(marker, 1)[0]
     if rel == "tastespec/profiles.py":
         body = body.replace("EMBEDDED_PROFILES: Dict[str, str] = {}",
                             "EMBEDDED_PROFILES: Dict[str, str] = " + repr(profiles_b64))
@@ -71,9 +79,14 @@ for rel in ORDER:
         body = body.replace("# --- librarian attachment", "# librarian functions are inline above in single-file build\n# --- librarian attachment")
     if rel == "cli.py":
         needle = "    argv = list(sys.argv[1:] if argv is None else argv)"
-        replacement = needle + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
+        replacement = (
+            needle
+            + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"live\":\n        return live_cli_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"reference\":\n        return reference_cli_main(argv[1:])"
+        )
         if needle not in body:
-            raise SystemExit("cli.py MIDI dispatch insertion point is missing")
+            raise SystemExit("cli.py command dispatch insertion point is missing")
         body = body.replace(needle, replacement, 1)
     parts.append(f"\n# ===== {rel} =====\n" + body)
 out = "\n".join(parts)

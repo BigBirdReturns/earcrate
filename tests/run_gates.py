@@ -52,6 +52,7 @@ MODULES = (
     "test_midi",
     "test_midi_anatomy",
     "test_midi_arranger",
+    "test_player_piano_kernel",
     "test_live_dj_runtime",
     "test_live_crate_runtime",
     "test_live_long_set",

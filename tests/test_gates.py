@@ -2026,7 +2026,9 @@ def test_stem_path_producible():
     for d in ("music", "work", "agent"): (tmp / d).mkdir()
     sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
     sl = os.environ.get("EARCRATE_L3_ROOT")
+    sc = os.environ.get("EARCRATE_CACHE_ROOT")
     os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    os.environ["EARCRATE_CACHE_ROOT"] = str(tmp / "cache")
 
     # A FAKE demucs that SUBCLASSES the real provider, so it drives the REAL
     # cache-first + L3 materialization seam, but produces a synthetic 660 Hz
@@ -2123,8 +2125,13 @@ def test_stem_path_producible():
         assert y0.shape == y3.shape and np.array_equal(y0, y3), \
             "noop re-render not byte-identical — fallback drifted"
 
-        # (3b) capability probe is still honest at the end.
-        assert stem_capability()["ready"] is False
+        # (3b) capability probe is still honest at the end.  The gate must run
+        # on both dependency-free CI workers and the operator's CUDA workstation;
+        # availability is a measured environment fact, not a fixed assertion.
+        capability = stem_capability()
+        assert capability["ready"] is bool(
+            capability["torch"] and capability["demucs"] and capability["cuda"]
+        )
     finally:
         P._DEFAULTS["stems"] = "noop"
         P._REGISTRY.get("stems", {}).pop("fakedemucs", None)
@@ -2133,6 +2140,8 @@ def test_stem_path_producible():
         else: os.environ.pop("EARCRATE_HOME", None)
         if sl is not None: os.environ["EARCRATE_L3_ROOT"] = sl
         else: os.environ.pop("EARCRATE_L3_ROOT", None)
+        if sc is not None: os.environ["EARCRATE_CACHE_ROOT"] = sc
+        else: os.environ.pop("EARCRATE_CACHE_ROOT", None)
 
     assert P.default_name("stems") == "noop"
 

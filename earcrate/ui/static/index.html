@@ -529,7 +529,21 @@ async function renderLibrary(){
 }
 let REORG={signature:null, journal:null};
 async function reorgPreview(){ toast('Reorganize preview…'); try{ const j=await post('/api/reorganize/plan',{}); if(j.ok===false){toast(j.error||'preview failed');return;} REORG.signature=j.signature; toast('DRY-RUN: '+(j.planned||0)+' moves, '+(j.quarantined||0)+' → _unsorted. Nothing moved — press Apply.'); }catch(e){} }
-async function reorgApply(){ if(!REORG.signature){toast('Preview first (dry-run before any move)');return;} try{ const j=await post('/api/reorganize/apply',{signature:REORG.signature}); if(j.ok){REORG.journal=j.journal; toast('Reorganized '+(j.moved||0)+' files. Rollback is now available.'); loadTracks();} else toast(j.error||'apply refused (re-preview)'); }catch(e){} }
+async function reorgApply(){
+  if(!REORG.signature){toast('Preview first (dry-run before any move)');return;}
+  let j; try{ j=await post('/api/reorganize/apply',{signature:REORG.signature}); }catch(e){return;}
+  if(j.rollback_available && j.journal && j.journal.durable){ REORG.journal=j.journal.path; } else { REORG.journal=null; }
+  if(j.errors && j.errors.length) console.error('reorganize errors:', j.errors);
+  const firstErr=(j.errors&&j.errors[0])?(' — e.g. '+(j.errors[0].src||'')+': '+(j.errors[0].error||'')):'';
+  switch(j.outcome){
+    case 'complete': toast('Reorganized '+j.moved+'/'+j.planned+' files. Rollback available.'); loadTracks(); break;
+    case 'partial': toast('Reorganized '+j.moved+'/'+j.planned+' files; '+j.failed+' failed'+firstErr+'. Rollback available.'); loadTracks(); break;
+    case 'failed': toast('No files reorganized; '+(j.failed||0)+' failed'+firstErr+'.'); break;
+    case 'refused': toast(j.error||'apply refused (re-preview)'); break;
+    case 'integrity_error': toast((j.moved||0)+' file(s) may have changed but the rollback receipt could not be verified'+firstErr+'. Do not re-apply — check console and the library on disk.'); break;
+    default: toast(j.error||'apply refused (re-preview)');
+  }
+}
 async function reorgRollback(){ if(!REORG.journal){toast('Nothing to undo — no applied reorganize this session');return;} try{ const dry=await post('/api/reorganize/rollback',{journal:REORG.journal, apply:false}); const n=dry.restored||dry.would_restore||dry.planned||0; if(!window.confirm('Undo the reorganize? Restores ~'+n+' files to their original locations.')) return; const j=await post('/api/reorganize/rollback',{journal:REORG.journal, apply:true}); toast(j.ok?('Undo complete: '+(j.restored||0)+' files restored'):(j.error||'undo failed')); loadTracks(); }catch(e){} }
 function loopRow(l){
   const title=esc(l.title||(l.path?l.path.split(/[\\/]/).pop():'loop'));

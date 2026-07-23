@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_note_observation_v1.schema.json",
+  "title": "EarCrate note transcription observation v1",
+  "type": "object",
+  "required": ["schema_version", "kind", "provider", "provider_version", "model_sha256", "source_identity", "config", "note_count", "notes", "observation_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "note_transcription_observation"},
+    "provider": {"type": "string", "minLength": 1},
+    "provider_version": {"type": "string", "minLength": 1},
+    "model_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_identity": {"type": "string", "minLength": 1},
+    "config": {"type": "object"},
+    "note_count": {"type": "integer", "minimum": 0},
+    "observation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["note_id", "ordinal", "start_s", "end_s", "pitch_midi", "amplitude", "velocity", "pitch_bends"],
+        "properties": {
+          "note_id": {"type": "string", "minLength": 1},
+          "ordinal": {"type": "integer", "minimum": 0},
+          "start_s": {"type": "number", "minimum": 0},
+          "end_s": {"type": "number", "exclusiveMinimum": 0},
+          "pitch_midi": {"type": "integer", "minimum": 0, "maximum": 127},
+          "amplitude": {"type": "number", "minimum": 0, "maximum": 1},
+          "velocity": {"type": "integer", "minimum": 0, "maximum": 127},
+          "pitch_bends": {"type": "array", "items": {"type": "integer"}}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -4,11 +4,23 @@ import os, sys, random, tempfile
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 # Same sandbox as run_gates.py, for direct pytest invocation: gates that build
 # EarcrateCore() must never write the user's real repo-root workspace pointer.
-os.environ.setdefault("EARCRATE_HOME", tempfile.mkdtemp(prefix="earcrate_gates_home_"))
+# ASSIGNMENT, not setdefault: a machine with a real EARCRATE_HOME set (the
+# operator's does) is the ONLY case that needs sandboxing, and setdefault is a
+# no-op in exactly that case. That defect clobbered the real pointer with a
+# mkdtemp path on 2026-07-20 — see tests/conftest.py for the full incident.
+os.environ["EARCRATE_HOME"] = tempfile.mkdtemp(prefix="earcrate_gates_home_")
 from earcrate.deck.transform import plan_varispeed_transform
 from earcrate.deck.lattice import score_bpm_lattice
 from earcrate.ear.readiness import crate_readiness_audit, girl_talk_targets, endless_sustain
 from earcrate.app import EarcrateCore
+
+
+def _passthrough_presence(y, _sr, return_receipt=False, spectral_profile=None):
+    """Mock finisher that honors the production receipt-return contract."""
+    if return_receipt:
+        return y, {"passed": True, "required_high_boost_db": 0.0,
+                   "high_boost_cap_db": 3.0, "presence_rescue_refused": False}
+    return y
 
 
 def _fast_analysis_fixture(job):
@@ -964,7 +976,7 @@ def test_saved_plan_renders_identically():
                         json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
             db.commit()
             dst = tmp / "work" / "renders" / f"out_{tag}.wav"
-            with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+            with patch("earcrate.app.stable_presence_restore", side_effect=_passthrough_presence), \
                  patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
                  patch("earcrate.app.drydeck_metrics", return_value={}), \
                  patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}):
@@ -1074,7 +1086,7 @@ def test_execute_manifest_surfaces_rejected_render(tmp_path):
 
         forced_gate = {"passed": False, "failures": ["forced post-render gate failure for F3 gate"],
                        "warnings": [], "metrics": {}}
-        with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+        with patch("earcrate.app.stable_presence_restore", side_effect=_passthrough_presence), \
              patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
              patch("earcrate.app.drydeck_metrics", return_value={}), \
              patch("earcrate.app.drydeck_quality_gate", return_value=copy.deepcopy(forced_gate)):
@@ -1833,7 +1845,7 @@ def test_render_consults_stem_seam():
                         json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
             db.commit()
             dst = tmp / "work" / "renders" / f"out_{tag}.wav"
-            with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+            with patch("earcrate.app.stable_presence_restore", side_effect=_passthrough_presence), \
                  patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
                  patch("earcrate.app.drydeck_metrics", return_value={}), \
                  patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}):
@@ -2014,7 +2026,9 @@ def test_stem_path_producible():
     for d in ("music", "work", "agent"): (tmp / d).mkdir()
     sh, se = os.environ.get("HOME"), os.environ.get("EARCRATE_HOME")
     sl = os.environ.get("EARCRATE_L3_ROOT")
+    sc = os.environ.get("EARCRATE_CACHE_ROOT")
     os.environ["HOME"] = str(tmp); os.environ["EARCRATE_HOME"] = str(tmp)
+    os.environ["EARCRATE_CACHE_ROOT"] = str(tmp / "cache")
 
     # A FAKE demucs that SUBCLASSES the real provider, so it drives the REAL
     # cache-first + L3 materialization seam, but produces a synthetic 660 Hz
@@ -2060,7 +2074,7 @@ def test_stem_path_producible():
                         json.dumps(plan), None, now_utc(), ENGINE_VERSION, arrangement_sha(plan)))
             db.commit()
             dst = tmp / "work" / "renders" / f"out_{tag}.wav"
-            with patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+            with patch("earcrate.app.stable_presence_restore", side_effect=_passthrough_presence), \
                  patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
                  patch("earcrate.app.drydeck_metrics", return_value={}), \
                  patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}):
@@ -2111,8 +2125,13 @@ def test_stem_path_producible():
         assert y0.shape == y3.shape and np.array_equal(y0, y3), \
             "noop re-render not byte-identical — fallback drifted"
 
-        # (3b) capability probe is still honest at the end.
-        assert stem_capability()["ready"] is False
+        # (3b) capability probe is still honest at the end.  The gate must run
+        # on both dependency-free CI workers and the operator's CUDA workstation;
+        # availability is a measured environment fact, not a fixed assertion.
+        capability = stem_capability()
+        assert capability["ready"] is bool(
+            capability["torch"] and capability["demucs"] and capability["cuda"]
+        )
     finally:
         P._DEFAULTS["stems"] = "noop"
         P._REGISTRY.get("stems", {}).pop("fakedemucs", None)
@@ -2121,6 +2140,8 @@ def test_stem_path_producible():
         else: os.environ.pop("EARCRATE_HOME", None)
         if sl is not None: os.environ["EARCRATE_L3_ROOT"] = sl
         else: os.environ.pop("EARCRATE_L3_ROOT", None)
+        if sc is not None: os.environ["EARCRATE_CACHE_ROOT"] = sc
+        else: os.environ.pop("EARCRATE_CACHE_ROOT", None)
 
     assert P.default_name("stems") == "noop"
 
@@ -2418,9 +2439,56 @@ def test_reorganize_source_in_place_previews_and_reverses():
         assert any(t.startswith("_unsorted/") for t in tree), "unidentifiable must be quarantined, not lost"
         db = core.conn()
         assert all(Path(r["path"]).exists() for r in db.execute("SELECT path FROM files WHERE root='master'").fetchall())
-        rb = core.rollback_reorganize({"journal": res["journal"], "apply": True})
+        assert res["outcome"] == "complete" and res["journal"]["durable"] and res["rollback_available"]
+        rb = core.rollback_reorganize({"journal": res["journal"]["path"], "apply": True})
         assert rb["ok"] and rb["restored"] >= 2
         assert (src / "dump" / "Aphex Twin - Windowlicker.wav").exists(), "rollback must restore originals"
+    finally:
+        if saved is not None:
+            os.environ["HOME"] = saved
+
+
+def test_reorganize_partial_failure_stays_honest_and_rollback_reaches_moved_files():
+    """A reorganize apply where SOME files move and one move genuinely fails
+    partway through (permission error, vanished mount, etc.) must not report
+    'refused' (implying nothing happened) while silently stranding an
+    unreachable rollback journal for the files that DID move. outcome must be
+    'partial', the journal must be marked durable, and rollback_available must
+    let the user undo the files that were actually relocated."""
+    import tempfile, os
+    from pathlib import Path
+    from unittest.mock import patch
+    import numpy as np, soundfile as sf
+    import earcrate.librarian.ingest as ingest_mod
+    tmp = Path(tempfile.mkdtemp()); saved = os.environ.get("HOME"); os.environ["HOME"] = str(tmp)
+    try:
+        src = tmp / "The Sample Factory"; (src / "dump").mkdir(parents=True)
+        def wav(p): sf.write(str(p), np.zeros((2000, 2), dtype='float32'), 44100)
+        wav(src / "dump" / "Aphex Twin - Windowlicker.wav")
+        wav(src / "dump" / "Boards of Canada - Roygbiv.wav")
+        core = EarcrateCore()
+        core.configure({"master_root": str(src), "working_root": str(tmp / "work"), "agent_root": str(tmp / "agent")})
+        core.scan()
+        plan = core.reorganize_source({"apply": False})
+        assert plan["dry_run"] and plan["planned"] >= 2
+        real_move = ingest_mod.shutil.move
+        def flaky_move(s, d, *a, **kw):
+            if "Roygbiv" in str(s):
+                raise OSError("simulated: source vanished mid-batch (e.g. unmounted drive)")
+            return real_move(s, d, *a, **kw)
+        with patch.object(ingest_mod.shutil, "move", side_effect=flaky_move):
+            res = core.reorganize_source({"apply": True, "signature": plan["signature"]})
+        assert res["outcome"] == "partial", f"expected partial, got: {res}"
+        assert res["moved"] >= 1 and res["failed"] >= 1
+        assert res["ok"] is False, "partial must not be reported as ok:true (that would overclaim)"
+        assert res["rollback_available"] is True, "files that DID move must remain reachable via rollback"
+        assert res["journal"]["durable"] and res["journal"]["entries"] == res["moved"]
+        assert any(p.name == "Windowlicker.wav" for p in src.rglob("*.wav")), \
+            "the successfully-moved file must exist somewhere under src"
+        rb = core.rollback_reorganize({"journal": res["journal"]["path"], "apply": True})
+        assert rb["ok"] and rb["restored"] >= 1
+        assert (src / "dump" / "Aphex Twin - Windowlicker.wav").exists(), \
+            "rollback must restore the file that the partial apply actually moved"
     finally:
         if saved is not None:
             os.environ["HOME"] = saved
@@ -3280,7 +3348,7 @@ def test_render_preflight_rejects_post_analysis_source_mutation(tmp_path):
         dst2 = work / "must-also-not-exist.wav"
         try:
             with patch("earcrate.app.decode_audio", side_effect=_mutate_after_decode), \
-                 patch("earcrate.app.stable_presence_restore", side_effect=lambda y, _sr: y), \
+                 patch("earcrate.app.stable_presence_restore", side_effect=_passthrough_presence), \
                  patch("earcrate.app.integrated_lufs_normalize", side_effect=lambda y, _sr, _target: y), \
                  patch("earcrate.app.drydeck_metrics", return_value={}), \
                  patch("earcrate.app.drydeck_quality_gate", return_value={"passed": True}), \
@@ -3749,11 +3817,7 @@ def test_low200_is_a_ceiling_not_a_floor():
 
 
 def test_presence_corrective_moves_signal_toward_gt_balance():
-    """The strengthened corrective must measurably tame the low end and lift
-    presence, measured with earcrate's OWN drydeck_metrics -- direction and a
-    real magnitude, not a token nudge. (A fixed shelf cannot fully rescue a
-    render that is 10x too dark; that is an upstream-mix lever. This proves the
-    in-path corrective is genuinely effective, not cosmetic.)"""
+    """Low trimming may reveal existing presence; high correction stays small."""
     import numpy as np
     from earcrate.judge.audio import stable_presence_restore, drydeck_metrics
     sr = 22050
@@ -3767,9 +3831,11 @@ def test_presence_corrective_moves_signal_toward_gt_balance():
     y = np.fft.irfft(spec * shape, n=N).astype(np.float32)
     y /= max(1e-9, float(np.max(np.abs(y))))
     before = drydeck_metrics(y, sr)
-    after = drydeck_metrics(stable_presence_restore(y, sr), sr)
+    corrected, receipt = stable_presence_restore(y, sr, return_receipt=True)
+    after = drydeck_metrics(corrected, sr)
     assert after["low200_share"] < before["low200_share"] - 0.10, (before, after)
-    assert after["high3000_share"] > before["high3000_share"] * 2.0, (before, after)
+    assert after["high3000_share"] >= 0.15, (before, after)
+    assert receipt["passed"] and receipt["high_boost_db"] <= 3.0, receipt
 
 
 def test_atom_edge_harmonic_requires_pair_agreement_not_either_or():
@@ -3973,13 +4039,7 @@ def test_gate_suite_sandboxes_the_workspace_pointer():
 
 
 def test_presence_restore_is_measured_and_reaches_gate_bands():
-    """The finishing EQ must MEASURE the mix and land it inside the calibrated
-    gate's spectral bands — the fixed-shelf version under-corrected forever
-    (high3000_share stuck ~0.067 vs the 0.30 real-GT target across releases)
-    and was named the sole blocker for audible external-remix output. Also pins:
-    dynamics are untouched (pure linear EQ), the correction is deterministic,
-    a balanced mix passes through within bands, and EVERY render path applies
-    it (the external_remix mode used to get no correction at all)."""
+    """Finishing may make a small correction, but may not EQ hiss into a pass."""
     import inspect
     import numpy as np
     from earcrate.judge.audio import stable_presence_restore, drydeck_metrics
@@ -3990,26 +4050,34 @@ def test_presence_restore_is_measured_and_reaches_gate_bands():
     t = np.arange(sr * 20) / sr
     low = 0.55 * np.sin(2 * np.pi * 90 * t) + 0.25 * np.sin(2 * np.pi * 160 * t)
     mid = 0.35 * np.sin(2 * np.pi * 600 * t) + 0.25 * np.sin(2 * np.pi * 1500 * t)
-    hi = 0.05 * rng.standard_normal(t.size)
+    hi = 0.01 * rng.standard_normal(t.size)
     env = (np.sin(2 * np.pi * t / 8.0) > 0).astype(np.float32) * 0.7 + 0.3
     dark = ((low + mid + hi) * env).astype(np.float32) * 0.2
 
     m0 = drydeck_metrics(dark, sr)
     assert m0["high3000_share"] < 0.05 and m0["low200_share"] > 0.45, "fixture must reproduce the dark render"
-    out = stable_presence_restore(dark, sr)
+    out, refused = stable_presence_restore(dark, sr, return_receipt=True)
     m1 = drydeck_metrics(out, sr)
-    assert m1["high3000_share"] >= 0.15, "presence still below the gate's warn floor after finishing"
     assert m1["low200_share"] <= 0.34, "low-end mud still above the gate's warn ceiling after finishing"
+    assert refused["presence_rescue_refused"] and not refused["passed"], \
+        "white hiss must not be promoted into enough presence to pass"
+    assert refused["high_boost_db"] == 0.0, "a refused noise rescue must apply no high shelf"
+    assert m1["high3000_share"] < 0.15, "the adversarial hiss fixture was EQ'd into a spectral pass"
     # Linear time-invariant EQ cannot manufacture dynamics.
     assert abs(m1["rms_std_db"] - m0["rms_std_db"]) < 0.5
     assert np.array_equal(out, stable_presence_restore(dark.copy(), sr)), "finishing EQ must be deterministic"
 
-    # A mix already inside the bands passes through without a correction pass
-    # dragging it OUT of band.
-    bal = (0.2 * np.sin(2 * np.pi * 150 * t) + 0.3 * np.sin(2 * np.pi * 1000 * t)
-           + 0.1 * rng.standard_normal(t.size)).astype(np.float32) * 0.2
-    mb = drydeck_metrics(stable_presence_restore(bal, sr), sr)
+    # A musical mix just under the floor can receive a modest correction.  Use
+    # stable high partials, not white noise, so this fixture represents program
+    # material the arrangement intentionally selected.
+    bal = (0.18 * np.sin(2 * np.pi * 150 * t) + 0.34 * np.sin(2 * np.pi * 1000 * t)
+           + 0.12 * np.sin(2 * np.pi * 5200 * t)
+           + 0.065 * np.sin(2 * np.pi * 8300 * t)).astype(np.float32) * 0.2
+    corrected, accepted = stable_presence_restore(bal, sr, return_receipt=True)
+    mb = drydeck_metrics(corrected, sr)
     assert mb["high3000_share"] >= 0.15 and mb["low200_share"] <= 0.34
+    assert accepted["passed"] and not accepted["presence_rescue_refused"]
+    assert 0.0 <= accepted["high_boost_db"] <= accepted["high_boost_cap_db"]
 
     # Every gated render applies the finish — no quality_mode carve-out that
     # ships external remixes uncorrected.
@@ -4019,3 +4087,114 @@ def test_presence_restore_is_measured_and_reaches_gate_bands():
     guard = render_source[max(0, idx - 220):idx]
     assert 'in {"dry_deck", "stable_deck"}' not in guard, \
         "finishing EQ is quality_mode-gated again; external_remix would ship uncorrected"
+    assert "return_receipt=True" in render_source[idx:idx + 180]
+    assert 'report["finishing"]' in render_source
+
+
+def test_presence_shelf_response_matches_measurement_boundary():
+    """v2 presence shelf: zero gain at/below the gate's 3kHz boundary (no
+    collateral lift into vocal-presence territory), full plateau by 4kHz,
+    monotonic share response as shelf gain rises, and the solver's predicted
+    dB actually reproduces the measured share once applied for real."""
+    import numpy as np
+    from earcrate.judge.audio import (
+        _presence_shelf_gain, _presence_shelf_weight, _solve_presence_shelf_db,
+    )
+
+    freqs = np.array([500.0, 1600.0, 2500.0, 2999.0, 3000.0, 3200.0, 3500.0,
+                      4000.0, 4001.0, 5000.0, 8000.0])
+
+    # Zero gain at and below the boundary -- freqs > 3000 is what the gate
+    # counts, so nothing at or below 3000Hz should move at all.
+    at_or_below = freqs <= 3000.0
+    gain_db = 20.0 * np.log10(_presence_shelf_gain(freqs, shelf_db=3.0))
+    assert np.allclose(gain_db[at_or_below], 0.0, atol=1e-9), \
+        f"collateral gain at/below 3kHz: {gain_db[at_or_below]}"
+
+    # Full plateau by 4kHz.
+    at_or_above_4k = freqs >= 4000.0
+    assert np.allclose(gain_db[at_or_above_4k], 3.0, atol=1e-6), \
+        f"plateau not reached by 4kHz: {gain_db[at_or_above_4k]}"
+
+    # Monotonic in between.
+    between = freqs[(freqs > 3000.0) & (freqs < 4000.0)]
+    weights = _presence_shelf_weight(between)
+    assert np.all(np.diff(weights) > 0), "shelf weight is not monotonic through the transition"
+
+    # Monotonic share response as shelf gain rises, on a synthetic spectrum
+    # with real power both below and above the boundary.
+    rng = np.random.default_rng(11)
+    n_bins = 200
+    solve_freqs = np.linspace(0.0, 10000.0, n_bins)
+    bin_power = rng.uniform(0.1, 1.0, n_bins) ** 2
+    bin_power[solve_freqs < 500] *= 8.0  # heavy low end, like a real dark mix
+    counted = solve_freqs > 3000.0
+
+    def _share_at(db):
+        gain = _presence_shelf_gain(solve_freqs, db)
+        corrected = bin_power * (gain ** 2)  # power gain = amplitude gain squared
+        return float(corrected[counted].sum() / corrected.sum())
+
+    shares = [_share_at(db) for db in (0.0, 1.0, 2.0, 3.0, 4.0, 5.0)]
+    assert all(b >= a - 1e-12 for a, b in zip(shares, shares[1:])), \
+        f"share response is not monotonic in shelf gain: {shares}"
+
+    # Solver prediction agrees with measurement after applying the same response.
+    target = shares[3]  # whatever 3.0dB actually produces
+    solved_db = _solve_presence_shelf_db(solve_freqs, bin_power, target, max_db=6.0)
+    assert solved_db is not None
+    achieved = _share_at(solved_db)
+    assert abs(achieved - target) < 1e-3, \
+        f"solver's {solved_db:.3f}dB produced {achieved}, target was {target}"
+
+    # An unreachable target refuses (returns None) rather than clamping to the cap.
+    unreachable = _solve_presence_shelf_db(solve_freqs, bin_power, target_share=0.99, max_db=3.0)
+    assert unreachable is None, "target far beyond the cap must refuse, not silently clamp"
+
+
+def test_loop_contract_requires_real_periodicity_and_middle_cycle_crop():
+    """A seamless loop is repeated context, never an edge fade in disguise."""
+    import numpy as np
+    from earcrate.judge.audio import periodic_cycle_receipt
+
+    rng = np.random.default_rng(1402)
+    cycle = rng.standard_normal(4096).astype(np.float32) * 0.1
+    repeated = np.tile(cycle, 4)
+    good = periodic_cycle_receipt(repeated, cycle.size)
+    assert good["passed"] and good["repeat_error_db"] <= -60.0, good
+    assert good["crop_start_sample"] == cycle.size
+    assert good["crop_end_sample"] == cycle.size * 2
+
+    broken = repeated.copy()
+    broken[2 * cycle.size + 100:2 * cycle.size + 300] += 0.05
+    bad = periodic_cycle_receipt(broken, cycle.size)
+    assert not bad["passed"] and bad["repeat_error_db"] > -60.0, bad
+
+    short = periodic_cycle_receipt(np.tile(cycle, 3), cycle.size)
+    assert not short["passed"] and "four complete" in short["reason"]
+
+    # Technical context copies must not make the musical scorer report lower
+    # diversity or higher source reuse than the authored cycle itself.
+    import copy
+    from earcrate.app import EarcrateCore
+    logical_sections = [
+        {"bar_start": 0, "bars": 4, "type": "sustain", "target_key": 0,
+         "transition_in": {"type": "beatmatch_blend"},
+         "layers": [{"loop_id": "a", "source_track_key": "a", "role": "drum_anchor", "bar_len": 4},
+                    {"loop_id": "b", "source_track_key": "b", "role": "vocal", "bar_len": 4}]},
+        {"bar_start": 4, "bars": 4, "type": "drop", "target_key": 0,
+         "transition_in": {"type": "beatmatch_blend"},
+         "layers": [{"loop_id": "c", "source_track_key": "c", "role": "drum_anchor", "bar_len": 4},
+                    {"loop_id": "d", "source_track_key": "d", "role": "vocal", "bar_len": 4}]},
+    ]
+    repeated_sections = []
+    for repeat in range(4):
+        for section in logical_sections:
+            item = copy.deepcopy(section)
+            item["bar_start"] += repeat * 8
+            repeated_sections.append(item)
+    core = EarcrateCore.__new__(EarcrateCore)
+    logical_score = core.score_arrangement({"params": {}, "sections": logical_sections})
+    loop_score = core.score_arrangement({"params": {"loop_cycle_bars": 8}, "sections": repeated_sections})
+    for field in ("source_diversity", "max_source_reuse", "layer_events", "duration_bars"):
+        assert loop_score[field] == logical_score[field], (field, logical_score, loop_score)

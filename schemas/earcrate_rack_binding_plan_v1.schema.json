@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schemas/earcrate_rack_binding_plan_v1.schema.json",
+  "title": "EarCrate RackBindingPlan v1",
+  "type": "object",
+  "required": ["schema_version", "kind", "semantic_sha256", "demand_sha256", "pitch_bend_range_semitones", "rack_revisions", "selected_event_count", "bound_event_count", "complete", "slot_bindings", "event_bindings", "unresolved", "demand", "binding_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "earcrate_rack_binding_plan"},
+    "semantic_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "demand_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pitch_bend_range_semitones": {"type": "number", "exclusiveMinimum": 0},
+    "selected_event_count": {"type": "integer", "minimum": 0},
+    "bound_event_count": {"type": "integer", "minimum": 0},
+    "complete": {"type": "boolean"},
+    "rack_revisions": {"type": "array"},
+    "slot_bindings": {"type": "array"},
+    "event_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "slot_id", "rack_id", "rack_sha256", "zone_id", "note", "velocity", "transpose_semitones", "trigger_mode", "source_path", "source_byte_sha256", "source_slice_pcm_sha256"]
+      }
+    },
+    "unresolved": {"type": "array"},
+    "demand": {"$ref": "earcrate_performance_demand_v1.schema.json"},
+    "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

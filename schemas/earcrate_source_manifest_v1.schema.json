@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/source-manifest-v1",
+  "title": "EarCrate project source manifest v1",
+  "type": "object",
+  "required": ["schema_version", "sources"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "name": {"type": "string"},
+    "profile": {"type": "string"},
+    "constraints": {"type": "object"},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "source_id": {"type": "string"},
+          "path": {"type": "string", "minLength": 1},
+          "label": {"type": "string"},
+          "kind": {"type": "string"},
+          "role_hint": {"type": "string"},
+          "ear_role": {"type": "string"},
+          "stem": {"type": "string"},
+          "stems": {"type": "object", "additionalProperties": {"type": "string"}},
+          "loopable": {"type": "boolean"},
+          "locked": {"type": "boolean"},
+          "bpm": {"type": "number", "exclusiveMinimum": 0},
+          "key_root": {"type": "integer", "minimum": 0, "maximum": 11},
+          "key_mode": {"type": "integer"},
+          "analysis_overrides": {"type": "object"},
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "region_id": {"type": "string"},
+                "start_s": {"type": "number", "minimum": 0},
+                "end_s": {"type": "number", "exclusiveMinimum": 0},
+                "role_hint": {"type": "string"},
+                "ear_role": {"type": "string"},
+                "stem": {"type": "string"},
+                "score": {"type": "number", "minimum": 0, "maximum": 1},
+                "locked": {"type": "boolean"}
+              }
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

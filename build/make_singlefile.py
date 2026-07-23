@@ -8,25 +8,58 @@ PKG = ROOT / "earcrate"
 ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", "core/util.py", "core/wavinfo.py", "analyze/decode.py", "deck/dsp.py",
          "deck/transform.py", "deck/lattice.py", "ear/readiness.py", "judge/audio.py",
          "deck/harmony.py", "core/config.py", "analyze/features.py", "analyze/beat_features.py", "librarian/ingest.py",
-         "providers/__init__.py", "providers/artifacts.py", "providers/stems.py", "providers/retrieval.py", "providers/workqueue.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/reference.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
+         "providers/__init__.py", "providers/artifacts.py", "providers/notes.py", "providers/stems.py", "providers/retrieval.py", "providers/workqueue.py",
+         "music/model.py", "music/equations.py", "music/law_context.py", "music/law_voice.py", "music/law_harmony.py", "music/laws.py", "music/player_piano.py", "music/heritage.py",
+         "midi/model.py", "midi/codec.py", "midi/render.py",
+         "rack/model.py", "rack/demand.py", "rack/binding.py", "rack/binding_stable.py", "rack/sfz.py", "rack/render.py", "rack/render_fix.py", "rack/library.py", "rack/library_fix.py", "rack/multizone.py",
+         "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/arranger.py", "midi/arranger_fix.py",
+         "study/reference.py", "study/reference_grid.py", "study/reference_bundle.py", "study/reference_cli.py",
+         "live/model.py", "live/operators.py", "live/capabilities.py", "live/instrumentation.py", "live/planner.py", "live/engine.py", "live/runtime.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/performance.py", "live/audio_cli.py", "live/cli.py",
+         "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 STRIP = re.compile(r"^(from|import) earcrate[.\s]")
+INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
+
+
+def _strip_package_imports(source: str) -> list[str]:
+    """Strip complete package-local import statements from concatenated modules."""
+    kept: list[str] = []
+    skipping = False
+    depth = 0
+    continued = False
+    for line in source.split("\n"):
+        if skipping:
+            depth += line.count("(") - line.count(")")
+            continued = line.rstrip().endswith("\\")
+            if depth <= 0 and not continued:
+                skipping = False
+            continue
+        if line.startswith("from __future__"):
+            continue
+        if STRIP.match(line):
+            depth = line.count("(") - line.count(")")
+            continued = line.rstrip().endswith("\\")
+            skipping = depth > 0 or continued
+            continue
+        kept.append(line)
+    return kept
+
+
 import base64
 html_b64 = base64.b64encode((PKG / "ui/static/index.html").read_bytes()).decode("ascii")
 profiles_b64 = {f.stem: base64.b64encode(f.read_bytes()).decode("ascii")
                 for f in sorted((ROOT / "profiles").glob("*.json")) if f.stem != "tastespec.schema"}
 parts = ["#!/usr/bin/env python3\nfrom __future__ import annotations\n# Auto-built from the earcrate package. Do not edit; edit the package.\nimport base64 as _b64\n"]
-INDENTED_EARCRATE = re.compile(r"^\s+(from|import) earcrate[.\s]")
 for rel in ORDER:
     src = (PKG / rel).read_text(encoding="utf-8")
-    lines = [l for l in src.split("\n") if not STRIP.match(l) and not l.startswith("from __future__")]
-    # A function-level `from earcrate.` import survives the column-0 strip and then
-    # raises ModuleNotFoundError in the standalone dist — only at call time, only in
-    # the single-file build, invisible to package-mode gates. Refuse to build it:
-    # hoist the import to module top level instead (ORDER guarantees definition order).
-    bad = [f"{rel}:{i+1}: {l.strip()}" for i, l in enumerate(lines) if INDENTED_EARCRATE.match(l)]
+    lines = _strip_package_imports(src)
+    bad = [f"{rel}:{i+1}: {line.strip()}" for i, line in enumerate(lines) if INDENTED_EARCRATE.match(line)]
     if bad:
         raise SystemExit("indented earcrate imports would break the single-file dist at call time:\n  " + "\n  ".join(bad))
     body = "\n".join(lines)
+    if rel in {"study/reference_cli.py", "live/cli.py", "live/audio_cli.py"}:
+        marker = '\nif __name__ == "__main__":'
+        if marker in body:
+            body = body.split(marker, 1)[0]
     if rel == "tastespec/profiles.py":
         body = body.replace("EMBEDDED_PROFILES: Dict[str, str] = {}",
                             "EMBEDDED_PROFILES: Dict[str, str] = " + repr(profiles_b64))
@@ -36,12 +69,22 @@ for rel in ORDER:
             'HTML_PAGE = _b64.b64decode("' + html_b64 + '").decode("utf-8")')
     if rel == "app.py":
         body = body.replace("# --- librarian attachment", "# librarian functions are inline above in single-file build\n# --- librarian attachment")
+    if rel == "cli.py":
+        needle = "    argv = list(sys.argv[1:] if argv is None else argv)"
+        replacement = (
+            needle
+            + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"live\":\n        return live_cli_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"live-audio\":\n        return live_audio_cli_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"reference\":\n        return reference_cli_main(argv[1:])"
+        )
+        if needle not in body:
+            raise SystemExit("cli.py command dispatch insertion point is missing")
+        body = body.replace(needle, replacement, 1)
     parts.append(f"\n# ===== {rel} =====\n" + body)
 out = "\n".join(parts)
 if "if __name__" not in out.split("# ===== cli.py =====")[-1]:
     out += '\nif __name__ == "__main__":\n    import sys\n    sys.exit(main())\n'
-# Stamp the package content hash so the single-file header matches the package
-# header and the Pages installer button (same formula in .github/workflows/pages.yml).
 _h = hashlib.sha256()
 for _f in sorted(PKG.rglob("*.py")) + [PKG / "ui" / "static" / "index.html"]:
     _h.update(_f.read_bytes())

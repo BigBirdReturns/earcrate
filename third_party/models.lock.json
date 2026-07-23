@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "bundled_or_approved_models_require_sha256": true,
+    "model_license_is_independent_of_code_license": true,
+    "runtime_discovery_must_emit_model_sha256": true,
+    "unreviewed_models_may_not_be_bundled": true
+  },
+  "models": []
+}

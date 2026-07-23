@@ -376,7 +376,7 @@ class JBHandler(BaseHTTPRequestHandler):
             if path == "/api/rollback":
                 self._json(200, self.core.rollback_outputs(str(data.get("manifest_id") or ""), int(data.get("limit") or 0), apply=bool(data.get("apply", False)))); return
             if path == "/api/judge":
-                self._json(200, self.core.judge_render(str(data.get("path") or ""), str(data.get("ref") or "") or None)); return
+                self._json(200, self.core.judge_render(str(data.get("path") or ""), str(data.get("ref") or "") or None, str(data.get("taste_profile") or ""))); return
             self._json(404, {"error": "not found"})
         except Exception as exc:
             if DEBUG_LOG.on:

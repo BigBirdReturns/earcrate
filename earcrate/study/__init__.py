@@ -1,21 +1,39 @@
-"""earcrate.study — reference-study capability (measured persona ground truth).
+"""Deterministic reference study and local reference-evidence compilation."""
 
-Pure, deterministic functions that turn a documented Girl Talk sample dataset
-(the shared schema) into engine ground truth: a measured persona fingerprint,
-the set of Girl-Talk-PROVEN compatibility edges, and a reference-calibrated copy
-of a hand-tuned TasteSpec profile. No I/O beyond reading a JSON file in
-``load_reference``, no DB, no core state, no clock, no randomness.
-"""
 from earcrate.study.reference import (
-    load_reference,
-    reference_fingerprint,
-    reference_edges,
     calibrate_profile,
+    load_reference,
+    reference_edges,
+    reference_fingerprint,
+)
+from earcrate.study.reference_bundle import (
+    ReferenceBundleError,
+    reference_compile_bundle,
+    reference_validate_bundle,
+    reference_write_bundle,
+)
+from earcrate.study.reference_grid import (
+    reference_accept_grid,
+    reference_propose_drum_observation_from_audio,
+    reference_propose_grid_from_audio,
+    reference_validate_drum_observation,
+    reference_validate_grid,
+    reference_validate_note_observation,
 )
 
 __all__ = [
-    "load_reference",
-    "reference_fingerprint",
-    "reference_edges",
+    "ReferenceBundleError",
     "calibrate_profile",
+    "load_reference",
+    "reference_accept_grid",
+    "reference_compile_bundle",
+    "reference_edges",
+    "reference_fingerprint",
+    "reference_propose_drum_observation_from_audio",
+    "reference_propose_grid_from_audio",
+    "reference_validate_bundle",
+    "reference_validate_drum_observation",
+    "reference_validate_grid",
+    "reference_validate_note_observation",
+    "reference_write_bundle",
 ]

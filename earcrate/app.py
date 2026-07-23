@@ -191,6 +191,29 @@ def _durable_render_attempt(fn):
     return wrapped
 
 
+def _path_under_temp(p: Path) -> bool:
+    """True when ``p`` lives inside the system temp dir.
+
+    The single rule behind both pointer guards: a workspace under the temp dir
+    belongs to a test or self-test run and must never be promoted into, or
+    adopted as, the user's real app-global workspace. See tests/conftest.py for
+    the 2026-07-20 incident this encodes."""
+    with contextlib.suppress(Exception):
+        root = Path(tempfile.gettempdir()).resolve()
+        r = Path(p).resolve()
+        return r == root or root in r.parents
+    return False
+
+
+def _config_under_temp(cfg_data: Dict[str, Any]) -> bool:
+    """True when a loaded config's roots point into the temp dir."""
+    for key in ("agent_root", "working_root", "master_root"):
+        value = str(cfg_data.get(key) or "").strip()
+        if value and _path_under_temp(Path(value).expanduser()):
+            return True
+    return False
+
+
 class EarcrateCore:
     def __init__(self):
         # The workspace pointer is the ONE app-global breadcrumb (it names the
@@ -574,6 +597,15 @@ class EarcrateCore:
                     break
             if cfg is None and self.legacy_pointer_path.exists():
                 loaded = _valid_pointer(self.legacy_pointer_path)
+                # The legacy pointer lives at app_state_dir(), which EARCRATE_HOME
+                # does NOT sandbox — so a test run leaves its mkdtemp workspace
+                # there, and while that temp dir survives, _valid_pointer accepts
+                # it and this branch copies it verbatim over the user's real
+                # pointer. That was found live on the operator's machine on
+                # 2026-07-20 (legacy pointer -> S:\Temp\tmpvqb0230r\a2). A temp
+                # workspace is never a legitimate thing to adopt or to promote.
+                if loaded is not None and _config_under_temp(loaded):
+                    loaded = None
                 if loaded is not None:
                     cfg = loaded
                     pointer = self.legacy_pointer_path
@@ -699,7 +731,24 @@ class EarcrateCore:
         self.write_toml_config()
         self.state_dir.mkdir(parents=True, exist_ok=True)
         pointer_body = json.dumps({"config_json": str(cfg_path)}, indent=2)
-        self.pointer_path.write_text(pointer_body, encoding="utf-8")
+        # A TEMP config written into a NON-TEMP pointer is never legitimate: it
+        # is a test/self-test workspace overwriting the user's real one, and it
+        # fails silently (the next run resolves an empty database and simply
+        # reports no approved atoms). This happened on 2026-07-20 and cost a
+        # session; see tests/conftest.py. A temp workspace under a temp pointer
+        # is fine — that is a properly sandboxed run — so only the mismatch is
+        # refused. Skipped, not raised: the in-process config above is already
+        # valid, and a temp-workspace caller has no need of the global pointer.
+        pointer_skipped = None
+        _tmp_root = Path(tempfile.gettempdir()).resolve()
+        if _path_under_temp(cfg_path) and not _path_under_temp(self.pointer_path):
+            pointer_skipped = (
+                f"refused to point the app-global pointer {self.pointer_path} at a "
+                f"temporary workspace {cfg_path}; set EARCRATE_HOME to a temp dir for "
+                f"sandboxed runs"
+            )
+        else:
+            self.pointer_path.write_text(pointer_body, encoding="utf-8")
         # Trap A fix, kept VISIBLE: load_config_if_present READS by scanning
         # pointer_search_dirs() (which vary by entry point — `python -m earcrate` vs
         # the launcher). Mirror the pointer to those read locations so a different
@@ -707,8 +756,8 @@ class EarcrateCore:
         # dirs. Never litter the user's home ROOT or a temp dir with a stray pointer
         # (setting EARCRATE_HOME makes this a single, deterministic location).
         _home = Path.home().resolve()
-        _tmp = Path(tempfile.gettempdir()).resolve()
-        for d in pointer_search_dirs():
+        _tmp = _tmp_root
+        for d in (() if pointer_skipped else pointer_search_dirs()):
             with contextlib.suppress(Exception):
                 dr = d.resolve()
                 if dr == _home or dr == _tmp or _tmp in dr.parents:
@@ -719,7 +768,11 @@ class EarcrateCore:
                 d.mkdir(parents=True, exist_ok=True)
                 target.write_text(pointer_body, encoding="utf-8")
         self.connect_db()
-        return {"ok": True, "config": self.config.as_dict()}
+        out: Dict[str, Any] = {"ok": True, "config": self.config.as_dict()}
+        if pointer_skipped:
+            out["pointer_written"] = False
+            out["pointer_skipped_reason"] = pointer_skipped
+        return out
 
     def default_paths(self) -> Dict[str, Any]:
         home = Path.home()
@@ -3781,6 +3834,17 @@ class EarcrateCore:
         pcm_sha = decoded_audio_sha256(tp, sr, duration_s)
         title = safe_name(str(params.get("name") or tp.stem or "target"), "target")
         ext_atom = external_foreground_atom(title, anchor, duration_s, pcm_sha, str(tp))
+        # Replace the external atom's neutral planning defaults with measurements
+        # from the actual dropped take.  Otherwise the preflight pretends every
+        # vocal contributes 30% high-band energy and can conceal a dark bed that
+        # will later ask mastering to promote hiss.
+        external_spectral = drydeck_metrics(y_feat, sr)
+        ext_atom["high_share"] = float(external_spectral.get("high3000_share") or 0.0)
+        ext_atom["low_share"] = float(external_spectral.get("low200_share") or 0.0)
+        ext_atom["measured_spectral_profile"] = {
+            "low200_share": ext_atom["low_share"],
+            "high3000_share": ext_atom["high_share"],
+        }
         profile = TASTE_PROFILES[taste_profile]
         target_seconds = float(params.get("target_seconds") or min(duration_s or 120.0, 240.0))
         needed_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
@@ -3805,13 +3869,17 @@ class EarcrateCore:
                        "external_foreground": ext_atom, "target_seconds": target_seconds})
         arrangement = self.compose_taste_arrangement(pool, params, seed)
         arrangement["external_target"] = {"title": title, "path": str(tp), "pcm_sha": pcm_sha,
-            "duration_s": round(duration_s, 3), "anchor": anchor, "feasibility": feasibility}
+            "duration_s": round(duration_s, 3), "anchor": anchor, "feasibility": feasibility,
+            "measured_spectral_profile": ext_atom["measured_spectral_profile"]}
         preflight = self.arrangement_preflight_gate(arrangement)
         taste_gate = self.taste_arrangement_gate(arrangement)  # advisory for external remix
-        arr_sha = arrangement_sha(arrangement)
         arrangement["candidate_search"] = {"count": 1, "selected_seed": seed, "mode": "external_remix",
             "selected_preflight": preflight, "taste_gate": taste_gate, "external_feasibility": feasibility,
             "render_policy": "external-target remix: hard gate = bed feasibility at the pinned anchor; persona taste gate is advisory (single held vocal is not a rotating collage)"}
+        # Candidate receipts are part of the durable plan. Hash only after the
+        # receipt is attached so the filename, DB row, run bundle, and render
+        # report all bind to the exact same serialized arrangement.
+        arr_sha = arrangement_sha(arrangement)
         # Preflight (structural sanity) is still a hard veto — empty sections, illegal
         # transforms, no floor coverage are real render failures regardless of mode.
         if not preflight.get("passed"):
@@ -3982,8 +4050,24 @@ class EarcrateCore:
                     novelty += 0.25  # human-approved pairing
                     reasons = dict(reasons); reasons["human_verdict"] = "approved"
                 balance = -0.18 * source_use.get(src, 0)
+                # Presence must come from selected program material, not a broad
+                # mastering rescue.  Structural beds get credit for useful,
+                # moderate top-end content; a >55% high-band atom is too
+                # high-dominant to own the floor and remains available only on
+                # the bounded spark/texture rail where the gesture is explicit.
+                high_share = float(x.get("high_share") or 0.0)
+                presence_provenance = 0.0
+                if relation == "floor":
+                    presence_provenance = 0.34 * min(1.0, high_share / 0.16)
+                    if high_share > 0.55:
+                        penalty += 1.50
+                elif relation == "spark_into_phrase":
+                    presence_provenance = (0.30 if external_fg else 0.12) * min(1.0, high_share / 0.25)
                 jitter = rng.random() * 0.01
-                scored.append((float(x.get("score") or 0.0) * 0.44 + edge * 0.38 + recog_w * _recog_score(x) + novelty + balance - penalty + jitter, x, edge, reasons))
+                scored.append((float(x.get("score") or 0.0) * 0.44 + edge * 0.38
+                               + recog_w * _recog_score(x) + novelty + balance
+                               + presence_provenance - penalty + jitter,
+                               x, edge, reasons))
             if not scored:
                 return None
             # Hard rotation (v0.6.4): while the turnover target is unmet, unused
@@ -4085,7 +4169,9 @@ class EarcrateCore:
             bass = None
             if basses and floor and not low_energy and str(floor.get("ear_role")) != "BASS_RIFF" and float(floor.get("low_share") or 0.0) < 0.34:
                 bass = pick(basses, floor, "bass_over_drums", role="bass")
-            spark = pick(sparks, floor or fg, "spark_into_phrase") if sparks and (sec_type == "drop" or (idx % 2 == 1 and not low_energy)) else None
+            spark_due = (sec_type == "drop" or (idx % 2 == 1 and not low_energy)
+                         or (bool(external_fg) and not low_energy))
+            spark = pick(sparks, floor or fg, "spark_into_phrase") if sparks and spark_due else None
             layers: List[Dict[str, Any]] = []
             if floor:
                 add_layer(layers, floor, str(floor.get("role") or "harmony"), (-8.5 if sec_type != "drop" else -7.0) + etrim, 0, bars)
@@ -4100,7 +4186,11 @@ class EarcrateCore:
                 add_layer(layers, fg, "vocal" if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else str(fg.get("role") or "harmony"), (-6.5 if str(fg.get("ear_role")) in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT"} else -10.5) + fg_trim, fg_off, fg_len)
             if spark:
                 slen = 1 if bars <= 4 else 2
-                add_layer(layers, spark, str(spark.get("role") or "texture"), -16.0 + etrim, max(0, bars - slen), slen)
+                spark_gain = (-12.0 if external_fg else -16.0) + etrim
+                if external_fg:
+                    spark_gain = min(-10.0, spark_gain)
+                add_layer(layers, spark, str(spark.get("role") or "texture"), spark_gain,
+                          max(0, bars - slen), slen)
             if not any(x.get("role") in {"drum_anchor","bass","harmony","full"} for x in layers) and floors:
                 for cand in floors:
                     if add_layer(layers, cand, str(cand.get("role") or "harmony"), -8.5 + etrim, 0, bars):
@@ -4145,8 +4235,15 @@ class EarcrateCore:
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
         bpm = float(arrangement.get("bpm") or 120.0)
         sections = list(arrangement.get("sections") or [])
+        loop_cycle_bars = int(params.get("loop_cycle_bars") or 0)
+        if loop_cycle_bars > 0:
+            # Extra repeated cycles are render context for proving/cropping a
+            # seamless boundary, not additional authored material. Judge the
+            # musical source/coverage contract on the logical cycle exactly once.
+            sections = [s for s in sections if int(s.get("bar_start") or 0) < loop_cycle_bars]
         failures: List[str] = []
         warnings: List[str] = []
+        external_mode = bool(params.get("external_foreground"))
         total_bars = sum(int(s.get("bars") or 0) for s in sections)
         floor_bars = 0; fg_bars = 0; first_fg_bar: Optional[int] = None
         source_bars: Dict[str, int] = {}
@@ -4157,7 +4254,9 @@ class EarcrateCore:
                 role = str(ly.get("role") or "")
                 ear = str(ly.get("ear_role") or "")
                 src = str(ly.get("source_track_key") or ly.get("loop_id"))
-                source_bars[src] = source_bars.get(src, 0) + blen
+                is_external = bool(ly.get("external_ref")) or str(ly.get("loop_id") or "").startswith("external::")
+                if not (external_mode and is_external):
+                    source_bars[src] = source_bars.get(src, 0) + blen
                 if role in {"drum_anchor","bass","harmony","full"} or ear in {"DRUM_BREAK","BASS_RIFF","BED_CHORD","RIFF_ID"}:
                     floor_bars += blen
                 if role == "vocal" or ear in {"VOX_HOOK","VOX_VERSE","VOX_SHOUT","RIFF_ID"}:
@@ -4182,7 +4281,7 @@ class EarcrateCore:
             failures.append(f"source identity turnover too low ({source_count}/{need_sources})")
         if max_source_run_s > float(profile.get("max_source_run_s") or 16.0) * 1.8:
             warnings.append(f"one source dominates {max_source_run_s:.1f}s of planned bars")
-        return {"passed": not failures, "failures": failures, "warnings": warnings, "metrics": {"floor_coverage": round(floor_cov,3), "foreground_coverage": round(fg_cov,3), "source_tracks": source_count, "needed_sources": need_sources, "first_foreground_s": None if first_fg_s is None else round(first_fg_s,2), "max_source_run_s": round(max_source_run_s,2)}}
+        return {"passed": not failures, "failures": failures, "warnings": warnings, "metrics": {"floor_coverage": round(floor_cov,3), "foreground_coverage": round(fg_cov,3), "source_tracks": source_count, "source_turnover_scope": "library_bed" if external_mode else "all_layers", "needed_sources": need_sources, "first_foreground_s": None if first_fg_s is None else round(first_fg_s,2), "max_source_run_s": round(max_source_run_s,2), "evaluated_loop_cycle_bars": loop_cycle_bars or None}}
 
     def _taste_harvest_projection(self, readiness, analyzed_count, total_files, report_all=False):
         """Project per-axis atom yield to the full library. Axes whose projected
@@ -4494,8 +4593,23 @@ class EarcrateCore:
     def score_arrangement(self, arrangement: Dict[str, Any]) -> Dict[str, Any]:
         """Cheap arrangement-only scorer so many candidate plans can compete before audio render."""
         sections = list(arrangement.get("sections") or [])
+        params = arrangement.get("params") or {}
+        loop_cycle_bars = int(params.get("loop_cycle_bars") or 0)
+        if loop_cycle_bars > 0:
+            sections = [s for s in sections if int(s.get("bar_start") or 0) < loop_cycle_bars]
         layers = [ly for sec in sections for ly in sec.get("layers", [])]
-        track_keys = {str(ly.get("source_track_key") or ly.get("loop_id")) for ly in layers}
+        # An external-target remix intentionally repeats one held identity anchor
+        # through every section. Source diversity/reuse governs the ROTATING library
+        # bed, not that fixed vocal rail; counting the anchor once per section made
+        # every 13+ section external remix fail max_source_reuse regardless of seed.
+        external_mode = bool(params.get("external_foreground"))
+        def _is_external_layer(ly: Dict[str, Any]) -> bool:
+            return bool(ly.get("external_ref")) or str(ly.get("loop_id") or "").startswith("external::")
+        reuse_layers = [
+            ly for ly in layers
+            if not (external_mode and _is_external_layer(ly))
+        ]
+        track_keys = {str(ly.get("source_track_key") or ly.get("loop_id")) for ly in reuse_layers}
         worlds = [str(ly.get("world") or "") for ly in layers]
         keys = [int(sec.get("target_key") or 0) % 12 for sec in sections]
         transitions = [sec.get("transition_in") or {} for sec in sections]
@@ -4539,9 +4653,8 @@ class EarcrateCore:
                     covered_bars_set.add(b)
         covered_bar_ratio = len(covered_bars_set) / max(1, duration_bars)
         avg_layer_depth = weighted_layer_bars / max(1, duration_bars)
-        source_diversity = len(track_keys) / max(1, len(layers))
+        source_diversity = len(track_keys) / max(1, len(reuse_layers))
         pitch_diversity = len(set(keys))
-        params = arrangement.get("params") or {}
         transform_violations = 0
         role_leaks = 0
         max_stretch_seen = 0.0
@@ -4555,8 +4668,9 @@ class EarcrateCore:
             max_pitch_seen = max(max_pitch_seen, abs(ps))
             if drydeck_transform_violation(role, ps, stretch_pct):
                 transform_violations += 1
-            k = str(ly.get("source_track_key") or ly.get("loop_id"))
-            by_source[k] = by_source.get(k, 0) + 1
+            if not (external_mode and _is_external_layer(ly)):
+                k = str(ly.get("source_track_key") or ly.get("loop_id"))
+                by_source[k] = by_source.get(k, 0) + 1
         max_source_reuse = max(by_source.values()) if by_source else 0
         tail_density = sum(int(t.get("xfade_beats") or 0) for t in transitions if t.get("type") not in {"start", "hard_cut_to_air", "impact_drop"}) / max(1, len(transitions))
 
@@ -4597,7 +4711,7 @@ class EarcrateCore:
         total -= 3.0 * empty_music_sections
         structural_empty = covered_bar_ratio < 0.62 or len(layers) < 6 or first_layer_bar is None or first_layer_bar > 4 or (music_sections and empty_music_sections / max(1, len(music_sections)) > 0.25)
         veto = bool(transform_violations or role_leaks or predicted_silence > 0.10 or max_source_reuse > 12 or source_diversity < 0.16 or structural_empty)
-        return {"total": round(float(total), 4), "veto": veto, "transform_violations": transform_violations, "role_leaks": role_leaks, "predicted_silence_ratio": round(float(predicted_silence), 4), "hard_air_transitions": int(hard_air), "max_stretch_pct": round(float(max_stretch_seen), 3), "max_abs_residual_pitch_shift": round(float(max_pitch_seen), 3), "max_source_reuse": int(max_source_reuse), "source_tracks": len(track_keys), "source_diversity": round(float(source_diversity), 4), "pitch_centers": pitch_diversity, "named_transitions": named, "dynamic_sections": dynamic, "false_blends": false_blend, "voice_layers": voice, "bed_layers": bed, "duration_bars": duration_bars, "layer_events": len(layers), "covered_bar_ratio": round(float(covered_bar_ratio), 4), "avg_layer_depth": round(float(avg_layer_depth), 4), "music_sections": len(music_sections), "empty_music_sections": int(empty_music_sections), "first_layer_bar": first_layer_bar, "realized_chaos": round(realized_chaos, 3), "realized_drama": round(realized_drama, 3), "realized_whiplash": round(realized_whiplash, 3), "realized_vocal": round(realized_vocal, 3), "intent_targets": {"chaos": round(t_chaos, 3), "drama": round(t_drama, 3), "whiplash": round(t_whip, 3), "vocal": round(t_vocal, 3)}}
+        return {"total": round(float(total), 4), "veto": veto, "transform_violations": transform_violations, "role_leaks": role_leaks, "predicted_silence_ratio": round(float(predicted_silence), 4), "hard_air_transitions": int(hard_air), "max_stretch_pct": round(float(max_stretch_seen), 3), "max_abs_residual_pitch_shift": round(float(max_pitch_seen), 3), "max_source_reuse": int(max_source_reuse), "source_reuse_scope": "library_bed" if external_mode else "all_layers", "source_tracks": len(track_keys), "source_diversity": round(float(source_diversity), 4), "pitch_centers": pitch_diversity, "named_transitions": named, "dynamic_sections": dynamic, "false_blends": false_blend, "voice_layers": voice, "bed_layers": bed, "duration_bars": duration_bars, "layer_events": len(layers), "covered_bar_ratio": round(float(covered_bar_ratio), 4), "avg_layer_depth": round(float(avg_layer_depth), 4), "music_sections": len(music_sections), "empty_music_sections": int(empty_music_sections), "first_layer_bar": first_layer_bar, "realized_chaos": round(realized_chaos, 3), "realized_drama": round(realized_drama, 3), "realized_whiplash": round(realized_whiplash, 3), "realized_vocal": round(realized_vocal, 3), "intent_targets": {"chaos": round(t_chaos, 3), "drama": round(t_drama, 3), "whiplash": round(t_whip, 3), "vocal": round(t_vocal, 3)}}
 
     def choose_target_key_for_pool(self, pool: List[Dict[str, Any]]) -> int:
         counts: Dict[int, float] = {}
@@ -5498,7 +5612,8 @@ class EarcrateCore:
         transform_cache_dir = self._cache_root() / "transforms" / ENGINE_VERSION
         transform_cache_dir.mkdir(parents=True, exist_ok=True)
         max_tail_decks = max(1, min(6, int((arrangement.get("params") or {}).get("max_aux_decks") or 3)))
-        report: Dict[str, Any] = {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "bpm": bpm, "render_timestamp": now_utc(), "dj_compiler": arrangement.get("dj_compiler") or {}, "world_model": arrangement.get("world_model") or {}, "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "candidate_search": arrangement.get("candidate_search") or {}, "deck_model": {"version": "v0.5.17", "model": "varispeed_lattice_dry_multideck_tail_overlay", "max_aux_decks": max_tail_decks, "rule": "incoming downbeat stays on grid; only dry, role-approved outgoing decks overhang into the transition window"}, "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0}, "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0}
+        stem_policy = str((arrangement.get("params") or {}).get("stem_policy") or "separated")
+        report: Dict[str, Any] = {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "bpm": bpm, "render_timestamp": now_utc(), "stem_policy": stem_policy, "dj_compiler": arrangement.get("dj_compiler") or {}, "world_model": arrangement.get("world_model") or {}, "tastespec": arrangement.get("tastespec") or profile_summary(str((arrangement.get("params") or {}).get("taste_profile") or "girl_talk_v1")), "candidate_search": arrangement.get("candidate_search") or {}, "deck_model": {"version": "v0.5.17", "model": "varispeed_lattice_dry_multideck_tail_overlay", "max_aux_decks": max_tail_decks, "rule": "incoming downbeat stays on grid; only dry, role-approved outgoing decks overhang into the transition window"}, "transform_cache": {"hits": 0, "misses": 0, "disk_hits": 0}, "quality_gate": {}, "layers": [], "transitions": [], "drops": [], "drop_count": 0}
 
         def transition_xfade_samples(sec_obj: Dict[str, Any], sec_len_samples: int) -> int:
             transition = dict(sec_obj.get("transition_in") or {})
@@ -5715,10 +5830,12 @@ class EarcrateCore:
             vocal_present = any(layer.get("role") == "vocal" for layer in sec.get("layers", []))
             section_has_bass = any(layer.get("role") == "bass" for layer in sec.get("layers", []))
             section_deck = np.zeros(deck_len, dtype=np.float32)
+            section_vox = np.zeros(deck_len, dtype=np.float32)
             tail_parts: Dict[str, np.ndarray] = {}
             for layer in sec.get("layers", []):
                 lid = layer.get("loop_id")
-                drop_base = {"section_index": sidx, "loop_id": lid, "role": layer.get("role")}
+                drop_base = {"section_index": sidx, "loop_id": lid, "role": layer.get("role"),
+                             "ear_role": layer.get("ear_role")}
                 # EXTERNAL VOCAL: a dropped, out-of-library take. It is the render ANCHOR
                 # (render_bpm == the vocal's own tempo, target_key == its own key), so it
                 # plays at IDENTITY — no time-stretch, no pitch-shift, no transform mud.
@@ -5749,7 +5866,9 @@ class EarcrateCore:
                         clip = esrc[wa:wb].astype(np.float32, copy=True)
                         if clip.size < 256:
                             report["drops"].append({**drop_base, "reason": "external vocal window empty"}); continue
-                        role_name = "vocal"
+                        # external layers declare their role; assuming "vocal"
+                        # made external BEDS get vocal filtering/leveling.
+                        role_name = str(layer.get("role") or "vocal")
                         layer_bar_offset = max(0, int(layer.get("bar_offset") or 0))
                         active_bars = min(max(1, int(layer.get("bar_len") or sec["bars"])), int(sec["bars"]) - layer_bar_offset)
                         if layer_bar_offset >= int(sec["bars"]):
@@ -5773,8 +5892,11 @@ class EarcrateCore:
                         gain = 10 ** (layer_gain_db / 20.0)
                         active_end = min(deck_len, active_start + clip.size)
                         if active_end > active_start:
-                            section_deck[active_start:active_end] += clip[: active_end - active_start] * gain
-                            report["layers"].append({**drop_base, "stretch_rate": 1.0, "stretch_pct": 0.0, "pitch_shift": 0.0, "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": "vocal", "world": "external", "source_track_key": "external", "stem_source": "external_target", "stem_identity": ext_ref.get("pcm_sha"), "transform_mode": "identity_anchor", "external_window_s": [ext_ref.get("start_s"), ext_ref.get("len_s")]})
+                            _rendered_ext = clip[: active_end - active_start] * gain
+                            section_deck[active_start:active_end] += _rendered_ext
+                            if role_name == "vocal":
+                                section_vox[active_start:active_end] += _rendered_ext
+                            report["layers"].append({**drop_base, "stretch_rate": 1.0, "stretch_pct": 0.0, "pitch_shift": 0.0, "gain_db": layer_gain_db, "bar_offset": layer_bar_offset, "bar_len": active_bars, "deck": f"deck_{sidx % 4}", "deck_group": deck_group_for_role(role_name), "world": "external", "source_track_key": "external", "stem_source": "external_target", "stem_identity": ext_ref.get("pcm_sha"), "transform_mode": "identity_anchor", "external_window_s": [ext_ref.get("start_s"), ext_ref.get("len_s")]})
                         else:
                             report["drops"].append({**drop_base, "reason": "external render window is empty"})
                     except Exception as exc:
@@ -5804,7 +5926,12 @@ class EarcrateCore:
                     source = None
                     _ear = str(layer.get("ear_role") or "")
                     _role = str(layer.get("role") or info.get("role") or "")
-                    if _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
+                    if stem_policy == "intact_mix":
+                        # This is an authored source choice, not a runtime
+                        # fallback: it is hashed in arrangement.params and
+                        # surfaced on every layer receipt.
+                        stem_reason = "arrangement stem_policy=intact_mix"
+                    elif _role == "vocal" or _ear in _VOCAL_EAR_ROLES:
                         pcm_sha = info.get("audio_sha256")
                         if pcm_sha:
                             stem_arr, stem_reason, stem_identity = separated_stem_source(str(pcm_sha), path, "vocals")
@@ -5897,6 +6024,8 @@ class EarcrateCore:
                     if active_end > active_start:
                         rendered = clip[: active_end - active_start] * gain
                         section_deck[active_start:active_end] += rendered
+                        if role_name == "vocal":
+                            section_vox[active_start:active_end] += rendered
                         if tail_participates:
                             tail_start = max(0, sec_len - active_start)
                             tail_audio = clip[tail_start:tail_start + tail_len] * gain
@@ -5920,6 +6049,38 @@ class EarcrateCore:
                 summed_tail = section_deck[sec_len:sec_len + tail_len].astype(np.float32)
                 if summed_tail.size > 32 and float(np.max(np.abs(summed_tail))) > 1e-7:
                     tail_decks_out.append({"deck_group": "mixed", "audio": summed_tail, "samples": int(summed_tail.size)})
+            # VOCAL-KEYED BED DUCKING (opt-in via params.vocal_bed_ducking):
+            # the missing integration layer — without it an external vocal sits
+            # ON the mix like narration instead of IN it. Musical sidechain:
+            # capped 2.5 dB, 10 ms attack / 180 ms release, keyed by the vocal
+            # bus. This is production glue, not corrective gain-riding.
+            if bool((arrangement.get("params") or {}).get("vocal_bed_ducking")) and float(np.max(np.abs(section_vox))) > 1e-6:
+                block = max(1, int(sr * 0.005))
+                venv_blocks = np.array([
+                    float(np.sqrt(np.mean(np.square(section_vox[i:i + block].astype(np.float64)))))
+                    for i in range(0, deck_len, block)])
+                a_c = float(np.exp(-block / (0.010 * sr)))
+                r_c = float(np.exp(-block / (0.180 * sr)))
+                sm = np.empty_like(venv_blocks)
+                state = 0.0
+                for i, x in enumerate(venv_blocks):
+                    coeff = a_c if x > state else r_c
+                    state = coeff * state + (1.0 - coeff) * x
+                    sm[i] = state
+                ref_level = float(np.percentile(sm[sm > 1e-6], 75)) if np.any(sm > 1e-6) else 1.0
+                duck_db = -2.5 * np.clip(sm / max(ref_level, 1e-9), 0.0, 1.0)
+                duck = np.power(10.0, np.repeat(duck_db, block)[:deck_len] / 20.0).astype(np.float32)
+                bed = section_deck - section_vox
+                # BAND-LIMITED duck: clear the low/mids under the voice, leave
+                # the bed's air alone (full-band ducking starves presence and
+                # gets the render rejected for darkness). LR4 split, causal.
+                from scipy.signal import butter as _btr, sosfilt as _sosf
+                _sos = _btr(2, 3000.0, btype="lowpass", fs=sr, output="sos")
+                bed_lo = _sosf(_sos, _sosf(_sos, bed)).astype(np.float32)
+                bed_hi = bed - bed_lo
+                section_deck = bed_lo * duck + bed_hi + section_vox
+                report.setdefault("vocal_bed_ducking", []).append(
+                    {"section_index": sidx, "max_duck_db": round(float(-np.min(duck_db)), 2)})
             return section_deck[:sec_len].astype(np.float32), tail_decks_out
 
         tail_decks: List[Dict[str, Any]] = []
@@ -5984,11 +6145,84 @@ class EarcrateCore:
         # external-target remix ("external_remix") shipped with NO tonal correction
         # at all — the box measured high3000_share 0.067 across releases and named
         # the treble-dead chain the sole blocker for audible #4 output.
-        mix = stable_presence_restore(mix, sr)
+        loop_cycle_bars = int((arrangement.get("params") or {}).get("loop_cycle_bars") or 0)
+        loop_cycle_samples = 0
+        loop_receipt: Optional[Dict[str, Any]] = None
+        if loop_cycle_bars > 0:
+            loop_cycle_samples = int(round(loop_cycle_bars * 4.0 * 60.0 / bpm * sr))
+            loop_receipt = periodic_cycle_receipt(mix, loop_cycle_samples)
+            report["loop_contract"] = loop_receipt
+
+        # Run mastering on all repeated context first. Cropping before the linear
+        # finishing filters would reintroduce edge conditions at the loop seam.
+        prof_spec = self._persona_spectral_profile(
+            str((arrangement.get("params") or {}).get("taste_profile") or "")
+        )
+        mix, finishing_receipt = stable_presence_restore(mix, sr, return_receipt=True, spectral_profile=prof_spec)
+        report["finishing"] = finishing_receipt
         mix = integrated_lufs_normalize(mix, sr, -14.0)
+        if loop_receipt is not None and loop_receipt.get("passed"):
+            mix = mix[loop_cycle_samples:2 * loop_cycle_samples].copy()
+            report["loop_contract"]["published_samples"] = int(mix.size)
+            report["loop_contract"]["published_seconds"] = float(mix.size) / float(sr)
         target_seconds = float((arrangement.get("params") or {}).get("target_seconds") or (total_bars * 4 * 60.0 / bpm))
-        prof_spec = self._persona_spectral_profile(str((arrangement.get("params") or {}).get("taste_profile") or ""))
         report["quality_gate"] = drydeck_quality_gate(drydeck_metrics(mix, sr), target_seconds, prof_spec)
+        if not finishing_receipt.get("passed", False):
+            demanded = float(finishing_receipt.get("required_high_boost_db") or 0.0)
+            cap = float(finishing_receipt.get("high_boost_cap_db") or 0.0)
+            report["quality_gate"]["failures"].append(
+                "presence would require %.2f dB broad high boost (cap %.2f dB); "
+                "refusing to promote hiss, fuzz, or transform residue into a spectral pass"
+                % (demanded, cap)
+            )
+            report["quality_gate"]["passed"] = False
+        if loop_receipt is not None and not loop_receipt.get("passed"):
+            report["quality_gate"]["failures"].append(
+                "loop seam verification failed: " + str(loop_receipt.get("reason") or
+                    ("repeat error %.2f dB exceeds %.2f dB threshold" % (
+                        float(loop_receipt.get("repeat_error_db") or 0.0),
+                        float(loop_receipt.get("threshold_db") or -60.0))))
+            )
+            report["quality_gate"]["passed"] = False
+        # Noise-like dominance is allowed only as an authored, bounded event.
+        # This is an intentionality/provenance rule, not a claim that all bright
+        # material is noise: the conservative >45% high-band threshold catches
+        # only extreme sources, and the spark rail may still use them for one bar
+        # at a tucked level.  A structural bed may never smuggle one through as
+        # continuous "presence".
+        intentional_roles = {"PICKUP_FILL", "DROP_HIT", "TRANSITION_TAIL", "TEXTURE", "VOX_SHOUT"}
+        intentional_events: List[Dict[str, Any]] = []
+        unowned_events: List[Dict[str, Any]] = []
+        for layer_receipt in report["layers"]:
+            high_share = float(layer_receipt.get("dry_high3000_share") or 0.0)
+            if high_share <= 0.45:
+                continue
+            event = {
+                "section_index": layer_receipt.get("section_index"),
+                "loop_id": layer_receipt.get("loop_id"),
+                "ear_role": layer_receipt.get("ear_role"),
+                "render_role": layer_receipt.get("role"),
+                "bar_offset": layer_receipt.get("bar_offset"),
+                "bar_len": layer_receipt.get("bar_len"),
+                "gain_db": layer_receipt.get("gain_db"),
+                "dry_high3000_share": high_share,
+            }
+            owned = (str(layer_receipt.get("ear_role") or "") in intentional_roles
+                     and int(layer_receipt.get("bar_len") or 99) <= 1
+                     and float(layer_receipt.get("gain_db") or 0.0) <= -10.0)
+            (intentional_events if owned else unowned_events).append(event)
+        report["intentional_interference"] = {
+            "policy": "extreme_high_band_requires_bounded_authored_role_v1",
+            "threshold_high3000_share": 0.45,
+            "events": intentional_events,
+            "unowned_events": unowned_events,
+            "passed": not unowned_events,
+        }
+        if unowned_events:
+            report["quality_gate"]["failures"].append(
+                f"{len(unowned_events)} extreme high-band layer(s) lack a bounded texture/transition role"
+            )
+            report["quality_gate"]["passed"] = False
         selected_layers = sum(len(sec.get("layers", [])) for sec in sections)
         report["drop_count"] = len(report["drops"])
         report["selected_layer_count"] = selected_layers
@@ -6053,7 +6287,8 @@ class EarcrateCore:
             db.execute("UPDATE mashups SET render_path=NULL, engine_version=?, arrangement_sha=?, render_report_path=? WHERE id=?", (ENGINE_VERSION, arr_sha, str(q_report), mashup_id))
             db.commit()
             return {"type": "render_rejected", "path": None, "report": str(q_report), "quality_gate": report.get("quality_gate"), "drop_count": report["drop_count"], "failure_kind": "selected_layer_render_failure", "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": selected_layers, "presented": False}
-        if bool((arrangement.get("params") or {}).get("post_render_gate", True)) and target_seconds >= 60 and not report.get("quality_gate", {}).get("passed", True):
+        gate_required = target_seconds >= 60 or loop_cycle_bars > 0
+        if bool((arrangement.get("params") or {}).get("post_render_gate", True)) and gate_required and not report.get("quality_gate", {}).get("passed", True):
             # The gate has already judged the in-memory mix. Persist the receipt,
             # never the rejected audio: a failed TasteSpec must not become a WAV.
             reject_dir = (c.agent_root / "rejected_renders" / ENGINE_VERSION).resolve()
@@ -6090,7 +6325,12 @@ class EarcrateCore:
              "target_seconds": float(params.get("target_seconds") or 120),
              "bpm": float(params.get("bpm") or 0.0),
              "stretch_budget": float(params.get("stretch_budget") or 8.0),
-             "pitch_shift_budget": int(params.get("pitch_shift_budget") or 2)}
+             "pitch_shift_budget": int(params.get("pitch_shift_budget") or 2),
+             # Explicit composition policy, carried into the arrangement hash.
+             # ``intact_mix`` is useful for sample-collage plans whose selected
+             # atoms were analyzed on the source mix and must not silently turn
+             # into spectrally different separated stems at render time.
+             "stem_policy": str(params.get("stem_policy") or "separated")}
         seed = int(params.get("seed") or 0) or self.next_render_seed(self.ensure_config().seed)
         try:
             arrangement = self.compose_taste_arrangement(pool, p, seed)
@@ -6113,7 +6353,13 @@ class EarcrateCore:
             return {"ok": False, "error": "no arrangement to render — propose or load a plan first"}
         preflight = self.arrangement_preflight_gate(arrangement)
         taste_gate = self.taste_arrangement_gate(arrangement)
-        if not preflight.get("passed") or not taste_gate.get("passed"):
+        # RECONSTRUCTION MODE: the structural gates encode persona-set
+        # aesthetics (density, turnover, brightness). A source reconstruction
+        # mirrors a REFERENCE, which may legitimately be sparse and dark —
+        # those verdicts become advisory (recorded, never vetoing) and
+        # reference fidelity is the binding contract instead.
+        _recon = str((arrangement.get("params") or {}).get("composition_mode") or "") == "reconstruction"
+        if (not preflight.get("passed") or not taste_gate.get("passed")) and not _recon:
             fails = (preflight.get("failures") or []) + (taste_gate.get("failures") or [])
             return {"ok": False, "error": "plan failed the pre-render gate: " + "; ".join(fails)}
         params = arrangement.get("params") or {}
@@ -6676,8 +6922,13 @@ class EarcrateCore:
         if not row: raise ValueError("saved plan not found")
         return {"ok": True, "plan": json.loads(row["plan_json"]), "name": row["name"], "taste_profile": row["taste_profile"], "plan_hash": row["plan_hash"]}
 
-    def judge_render(self, render_path: str, ref_path: Optional[str] = None) -> Dict[str, Any]:
-        render_metrics = judge_audio_file(Path(render_path), ref_path=Path(ref_path) if ref_path else None)
+    def judge_render(self, render_path: str, ref_path: Optional[str] = None,
+                     taste_profile: str = "") -> Dict[str, Any]:
+        render_metrics = judge_audio_file(
+            Path(render_path), ref_path=Path(ref_path) if ref_path else None,
+            spectral_profile=self._persona_spectral_profile(taste_profile))
+        if taste_profile:
+            render_metrics["taste_profile"] = taste_profile
         return render_metrics
 
     def run_background(self, fn, *args, **kwargs) -> Dict[str, Any]:

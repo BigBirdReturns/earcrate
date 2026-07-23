@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_midi_execution_ledger_v1.schema.json",
+  "title": "EarCrate MIDI execution ledger v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "semantic_sha256",
+    "program_sha256",
+    "execution_sha256",
+    "sample_rate",
+    "frames",
+    "max_seconds",
+    "complete_execution",
+    "selected_event_count",
+    "fully_executed_count",
+    "partially_executed_count",
+    "refused_event_count",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "midi_execution_ledger"},
+    "semantic_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "program_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sample_rate": {"type": "integer", "minimum": 1},
+    "frames": {"type": "integer", "minimum": 1},
+    "max_seconds": {"type": "number", "minimum": 0},
+    "complete_execution": {"type": "boolean"},
+    "selected_event_count": {"type": "integer", "minimum": 0},
+    "fully_executed_count": {"type": "integer", "minimum": 0},
+    "partially_executed_count": {"type": "integer", "minimum": 0},
+    "refused_event_count": {"type": "integer", "minimum": 0},
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "status",
+          "reason",
+          "requested_start_frame",
+          "requested_end_frame",
+          "rendered_start_frame",
+          "rendered_end_frame"
+        ],
+        "properties": {
+          "event_id": {"type": "string", "minLength": 1},
+          "status": {"enum": ["executed", "truncated", "refused"]},
+          "reason": {"type": "string"},
+          "requested_start_frame": {"type": "integer", "minimum": 0},
+          "requested_end_frame": {"type": "integer", "minimum": 1},
+          "rendered_start_frame": {"type": ["integer", "null"], "minimum": 0},
+          "rendered_end_frame": {"type": ["integer", "null"], "minimum": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

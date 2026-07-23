@@ -414,32 +414,57 @@ def reorganize_source(self, data: Dict[str, Any]) -> Dict[str, Any]:
                           f"conforming. Journaled and fully reversible; nothing deleted.")}
     approved = str(data.get("signature") or "")
     if not approved:
-        return {"ok": False, "dry_run": True, "requires_signature": True,
+        return {"ok": False, "outcome": "refused", "dry_run": True, "requires_signature": True,
                 "error": "refusing to reorganize (move files in place) without an approved signature; run the preview (apply:false) and pass its signature to apply",
                 "expected_signature": sig}
     if approved != sig:
-        return {"ok": False, "error": "library changed since you approved this plan; re-run the preview",
+        return {"ok": False, "outcome": "refused", "error": "library changed since you approved this plan; re-run the preview",
                 "expected_signature": sig}
     journal = c.agent_root / "reorg_journal" / f"reorg-{ulidish()}.jsonl"
     journal.parent.mkdir(parents=True, exist_ok=True)
     moved, errors = 0, []
+    integrity_error = False
     for fid, s, d, unk in moves:
+        if integrity_error:
+            break
+        sp, dp = Path(s), Path(d)
         try:
-            sp, dp = Path(s), Path(d)
             if not sp.exists():
                 continue
             dp.parent.mkdir(parents=True, exist_ok=True)
             if dp.exists():
                 dp = dp.with_name(dp.stem + "__" + ulidish()[:6] + dp.suffix)
             shutil.move(str(sp), str(dp))
+        except Exception as exc:
+            errors.append({"src": s, "stage": "move", "error": str(exc)[:160]})
+            continue
+        # The filesystem mutation already happened here. A failure past this
+        # point means `moved` can no longer describe the true disk state, so
+        # it must not be reported as an ordinary partial failure — stop and
+        # surface it as an integrity error instead of silently under-counting.
+        try:
             db.execute("UPDATE files SET path=? WHERE id=?", (str(dp), fid))
             fsync_append_jsonl(journal, {"from": str(dp), "restore_to": str(sp), "file_id": fid})
             moved += 1
         except Exception as exc:
-            errors.append({"src": s, "error": str(exc)[:160]})
+            errors.append({"src": s, "dst": str(dp), "stage": "receipt", "error": str(exc)[:160]})
+            integrity_error = True
     db.commit()
     self._prune_empty_dirs(root)
-    return {"ok": not errors, "moved": moved, "errors": errors, "journal": str(journal), "root": str(root),
+    planned = len(moves)
+    failed = len(errors)
+    if integrity_error:
+        outcome = "integrity_error"
+    elif moved == planned and not failed:
+        outcome = "complete"
+    elif moved > 0:
+        outcome = "partial"
+    else:
+        outcome = "failed"
+    return {"ok": outcome == "complete", "outcome": outcome, "planned": planned, "moved": moved,
+            "failed": failed, "errors": errors,
+            "journal": {"path": str(journal), "entries": moved, "durable": not integrity_error},
+            "rollback_available": moved > 0 and not integrity_error, "root": str(root),
             "note": ("reorganized in place; DB paths updated to follow the move; reversible via the journal; "
                      "unidentifiable files quarantined under _unsorted/; nothing deleted")}
 

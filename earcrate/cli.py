@@ -1,8 +1,92 @@
 from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.selftest import *
+from earcrate.midi.codec import midi_read
+from earcrate.rack.multizone import rack_build_from_atoms
+from earcrate.rack.render_fix import rack_render_ledger
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in {"rack-from-crate", "crate-racks"}:
+        rp = argparse.ArgumentParser(
+            prog="earcrate rack-from-crate",
+            description="Search approved EarAtoms for exact MIDI substitution slots, assemble multi-zone racks, and preserve every event under a per-zone transpose invariant.",
+        )
+        rp.add_argument("midi", help="finished MIDI arrangement whose events must remain unchanged")
+        rp.add_argument("--profile", default="girl_talk_v1", help="approved EarCrate taste profile to search")
+        rp.add_argument("--output", default="", help="rack build directory; default is working_root/rack_builds/<MIDI hash>")
+        rp.add_argument("--top-k", type=int, default=8, help="candidate receipts retained per rack zone or drum note")
+        rp.add_argument("--max-transpose", type=float, default=18.0, help="maximum allowed static transposition for any individual rack zone")
+        rp.add_argument("--max-zones", type=int, default=8, help="maximum zones the search may assemble for one pitched lane")
+        rp.add_argument("--combination-beam", type=int, default=64, help="bounded deterministic beam for choosing a coherent set of zones")
+        rp.add_argument("--loopability-threshold", type=float, default=0.58)
+        rp.add_argument("--sample-rate", type=int, default=44100)
+        rp.add_argument("--apply", action="store_true", help="materialize WAV slices, seal racks, compile SFZ and binding; default is dry-run search")
+        rp.add_argument("--overwrite", action="store_true")
+        rp.add_argument("--no-sfz", action="store_true")
+        rp.add_argument("--render", default="", help="optional WAV path to render immediately after a complete applied build")
+        rp.add_argument("--stems-dir", default="", help="optional per-track rack-render stem directory")
+        ns = rp.parse_args(argv[1:])
+        core = EarcrateCore()
+        ledger = midi_read(Path(ns.midi))
+        atoms = core.approved_atom_pool(ns.profile)
+        output_root = Path(ns.output).expanduser().resolve() if ns.output else None
+        if ns.apply and output_root is None:
+            cfg = core.ensure_config()
+            output_root = (cfg.working_root / "rack_builds" / str(ledger["semantic_sha256"])[:16]).resolve()
+        result = rack_build_from_atoms(
+            ledger,
+            atoms,
+            output_root,
+            taste_profile=ns.profile,
+            top_k=ns.top_k,
+            maximum_transpose_semitones=ns.max_transpose,
+            loopability_threshold=ns.loopability_threshold,
+            max_zones_per_slot=ns.max_zones,
+            combination_beam_width=ns.combination_beam,
+            sample_rate=ns.sample_rate,
+            apply=bool(ns.apply),
+            overwrite=bool(ns.overwrite),
+            compile_sfz=not ns.no_sfz,
+        )
+        render_receipt = None
+        if ns.render:
+            if not ns.apply:
+                raise ValueError("--render requires --apply")
+            render_receipt = rack_render_ledger(
+                ledger,
+                result["binding"],
+                result["rack_revisions"],
+                Path(ns.render),
+                stems_dir=Path(ns.stems_dir) if ns.stems_dir else None,
+                sample_rate=ns.sample_rate,
+                overwrite=bool(ns.overwrite),
+            )
+        if result.get("dry_run"):
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0 if result.get("complete") else 3
+        summary = {
+            "ok": bool(result.get("ok")),
+            "dry_run": False,
+            "complete": bool(result.get("complete")),
+            "semantic_sha256": result.get("semantic_sha256"),
+            "demand_sha256": result.get("demand_sha256"),
+            "proposal_sha256": result.get("proposal_sha256"),
+            "binding_sha256": result.get("binding_sha256"),
+            "build_sha256": result.get("build_sha256"),
+            "build_path": result.get("build_path"),
+            "binding_path": result.get("binding_path"),
+            "zone_count": result.get("zone_count"),
+            "multi_zone_slot_count": result.get("multi_zone_slot_count"),
+            "maximum_transpose_semitones": result.get("maximum_transpose_semitones"),
+            "maximum_realized_transpose_semitones": result.get("maximum_realized_transpose_semitones"),
+            "materialized_sample_count": len(result.get("materializations") or []),
+            "racks": result.get("racks") or [],
+            "render": render_receipt,
+        }
+        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if summary["complete"] else 3
     if argv and argv[0] == "judge":
         jp = argparse.ArgumentParser(prog="earcrate judge", description="Judge a render against the v1.1 reference gates")
         jp.add_argument("render")
@@ -93,8 +177,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         cp.add_argument("--analysis-seconds", type=int, default=0)
         ns = cp.parse_args(argv[1:])
         data = {"music_folder": ns.music, "workspace_folder": ns.workspace}
-        if ns.workers is not None: data["workers"] = ns.workers
-        if ns.analysis_seconds: data["analysis_seconds"] = ns.analysis_seconds
+        if ns.workers is not None:
+            data["workers"] = ns.workers
+        if ns.analysis_seconds:
+            data["analysis_seconds"] = ns.analysis_seconds
         core = EarcrateCore()
         print(json.dumps(core.configure_workspace(data), ensure_ascii=False, indent=2))
         return 0
@@ -126,7 +212,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         ns = rp.parse_args(argv[1:])
         core = EarcrateCore()
         data = {"root": ns.root, "apply": ns.apply}
-        if ns.signature: data["signature"] = ns.signature
+        if ns.signature:
+            data["signature"] = ns.signature
         print(json.dumps(core.reorganize_source(data), ensure_ascii=False, indent=2))
         return 0
     if argv and argv[0] == "reorganize-rollback":
@@ -153,10 +240,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         ap.add_argument("--signature", default="")
         ns = ap.parse_args(argv[1:])
         core = EarcrateCore()
-        d = {"min_score": ns.min_score, "apply": ns.apply}
-        if ns.proposals: d["proposals_path"] = ns.proposals
-        if ns.signature: d["signature"] = ns.signature
-        print(json.dumps(core.apply_identities(d), ensure_ascii=False, indent=2))
+        data = {"min_score": ns.min_score, "apply": ns.apply}
+        if ns.proposals:
+            data["proposals_path"] = ns.proposals
+        if ns.signature:
+            data["signature"] = ns.signature
+        print(json.dumps(core.apply_identities(data), ensure_ascii=False, indent=2))
         return 0
     if argv and argv[0] == "identify-rollback":
         rp = argparse.ArgumentParser(prog="earcrate identify-rollback", description="Restore the tags a retag pass overwrote, using its journal. Dry-run preview by default; --apply to rewrite tags back.")
@@ -180,6 +269,6 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     import multiprocessing as _mp
-    _mp.freeze_support()  # required for spawn-based workers in frozen Windows builds
-    raise SystemExit(main())
 
+    _mp.freeze_support()
+    raise SystemExit(main())

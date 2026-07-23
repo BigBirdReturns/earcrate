@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schemas/earcrate_performance_demand_v1.schema.json",
+  "title": "EarCrate PerformanceDemand v1",
+  "type": "object",
+  "required": ["schema_version", "kind", "semantic_sha256", "ticks_per_beat", "pitch_bend_range_semitones", "selected_event_count", "slot_count", "slots", "demand_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "earcrate_performance_demand"},
+    "semantic_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ticks_per_beat": {"type": "integer", "minimum": 1},
+    "pitch_bend_range_semitones": {"type": "number", "exclusiveMinimum": 0},
+    "selected_event_count": {"type": "integer", "minimum": 0},
+    "slot_count": {"type": "integer", "minimum": 0},
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slot_id", "track_index", "track_name", "channel", "program", "gm_family", "role_hint", "mode", "event_count", "maximum_polyphony", "note_requirements", "controls", "events", "search_query"],
+        "properties": {
+          "slot_id": {"type": "string", "minLength": 1},
+          "track_index": {"type": "integer", "minimum": 0},
+          "channel": {"type": "integer", "minimum": 0, "maximum": 15},
+          "program": {"type": "integer", "minimum": 0, "maximum": 127},
+          "mode": {"enum": ["pitched", "trigger"]},
+          "maximum_polyphony": {"type": "integer", "minimum": 0},
+          "events": {"type": "array", "minItems": 1}
+        }
+      }
+    },
+    "demand_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

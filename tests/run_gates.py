@@ -28,21 +28,47 @@ for _thread_var in (
     "VECLIB_MAXIMUM_THREADS",
     "BLIS_NUM_THREADS",
 ):
-    # A gate runner must be deterministic even when the parent shell exports a
-    # high native thread count. Process-pool gates plus threaded BLAS otherwise
-    # oversubscribe hard enough to segfault on ordinary CI/local machines.
     os.environ[_thread_var] = "1"
 
-# Sandbox the app-global workspace pointer for the whole suite. Without this,
-# every gate that constructs EarcrateCore() and configures a temp workspace
-# writes the REAL repo-root pointer file — so running the shipped test suite
-# silently re-points a user's configured workspace at a deleted temp fixture.
-# UNCONDITIONAL (not setdefault): a user who exports EARCRATE_HOME at their real
-# workspace and then runs the suite must get the sandbox too — a test runner
-# never has a legitimate reason to write a real workspace pointer.
 os.environ["EARCRATE_HOME"] = tempfile.mkdtemp(prefix="earcrate_gates_home_")
 
-MODULES = ("test_gates", "test_tastespec_vertical", "test_first_minute_fixes", "test_reference_study", "test_stem_warmer", "test_transitions", "test_beat_features", "test_materials", "test_analysis_wiring", "test_album", "test_remix_builder", "test_reference_recall", "test_musicbrainz", "test_external_remix", "test_workqueue")
+MODULES = (
+    "test_gates",
+    "test_tastespec_vertical",
+    "test_first_minute_fixes",
+    "test_reference_study",
+    "test_reference_bundle_local",
+    "test_stem_warmer",
+    "test_transitions",
+    "test_beat_features",
+    "test_materials",
+    "test_analysis_wiring",
+    "test_album",
+    "test_remix_builder",
+    "test_reference_recall",
+    "test_musicbrainz",
+    "test_external_remix",
+    "test_workqueue",
+    "test_midi",
+    "test_midi_anatomy",
+    "test_midi_arranger",
+    "test_player_piano_kernel",
+    "test_live_dj_runtime",
+    "test_live_crate_runtime",
+    "test_live_long_set",
+    "test_live_engine_step",
+    "test_live_stream_runtime",
+    "test_live_audio_callback",
+    "test_live_audio_cli",
+    "test_live_technique_registry",
+    "test_live_performance_host",
+    "test_live_activity_receipts",
+    "test_note_provider",
+    "test_rack",
+    "test_rack_library",
+    "test_rack_multizone",
+    "test_oss_governance",
+)
 
 
 def _cases():
@@ -57,16 +83,34 @@ def _cases():
             raise RuntimeError(f"gate module has no discovered tests: {module_name}")
 
 
+# Vars that app code mutates as a side effect of merely constructing
+# EarcrateCore: `_seed_from_machine_defaults` calls os.environ.setdefault on
+# EARCRATE_STEMS and EARCRATE_CACHE_ROOT. Without a restore between gates, one
+# gate that exercises auto-seed silently changes the stem provider for every
+# gate after it, and unrelated "provider is noop" gates fail by ordering alone.
+# pytest gets this from tests/conftest.py; this runner needs its own copy
+# because it imports the modules directly and never loads a conftest.
+_LEAKY_VARS = ("EARCRATE_STEMS", "EARCRATE_CACHE_ROOT", "EARCRATE_DEFAULTS", "EARCRATE_HOME")
+
+
 def _invoke(fn):
-    params = list(inspect.signature(fn).parameters.values())
-    if not params:
-        fn()
-        return
-    if len(params) == 1 and params[0].name == "tmp_path":
-        fn(Path(tempfile.mkdtemp(prefix="earcrate-gate-")))
-        return
-    names = ", ".join(p.name for p in params)
-    raise TypeError(f"unsupported gate fixture(s): {names}")
+    saved = {k: os.environ.get(k) for k in _LEAKY_VARS}
+    try:
+        params = list(inspect.signature(fn).parameters.values())
+        if not params:
+            fn()
+            return
+        if len(params) == 1 and params[0].name == "tmp_path":
+            fn(Path(tempfile.mkdtemp(prefix="earcrate-gate-")))
+            return
+        names = ", ".join(p.name for p in params)
+        raise TypeError(f"unsupported gate fixture(s): {names}")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def main(argv=None) -> int:

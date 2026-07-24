@@ -1,4 +1,4 @@
-"""Exact sample racks, multi-zone library proposals, bindings, SFZ export, and rendering."""
+"""Exact sample racks, multi-zone library proposals, bindings, SFZ export, rendering, and relocation."""
 
 from earcrate.rack.binding_stable import (
     rack_compile_binding,
@@ -25,6 +25,12 @@ from earcrate.rack.model import (
 )
 from earcrate.rack.render_fix import rack_compile_render_program, rack_render_ledger
 from earcrate.rack.sfz import rack_compile_sfz
+from earcrate.rack.portable import (
+    PORTABLE_BUNDLE_SCHEMA,
+    PORTABLE_REBASE_SCHEMA,
+    rack_rebase_portable_revision,
+    rack_rebase_portable_bundle,
+)
 
 __all__ = [
     "RackError",
@@ -48,4 +54,8 @@ __all__ = [
     "rack_validate_library_proposal",
     "rack_validate_revision",
     "rack_verify_sources",
+    "PORTABLE_BUNDLE_SCHEMA",
+    "PORTABLE_REBASE_SCHEMA",
+    "rack_rebase_portable_revision",
+    "rack_rebase_portable_bundle",
 ]

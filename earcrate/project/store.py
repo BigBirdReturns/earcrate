@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -13,6 +14,7 @@ from .util import (
     ValidationError,
     append_jsonl_fsync,
     atomic_write_json,
+    sha256_file,
     ensure_within,
     now_utc,
     random_id,
@@ -34,6 +36,61 @@ class ProjectStore:
         self.runs_root = self.root / "runs"
         self.projects_root.mkdir(parents=True, exist_ok=True)
         self.runs_root.mkdir(parents=True, exist_ok=True)
+
+    def artifacts_dir(self, project_id: str) -> Path:
+        path = self.project_dir(project_id) / "artifacts"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def artifact_path(self, project_id: str, relative_path: str) -> Path:
+        raw = str(relative_path or "")
+        if not raw or Path(raw).is_absolute():
+            raise ValidationError("artifact path must be project-relative")
+        return ensure_within(self.project_dir(project_id) / raw, self.project_dir(project_id))
+
+    def import_artifact(self, project_id: str, source: str | Path, *, label: str = "artifact") -> dict[str, Any]:
+        source_path = Path(source).expanduser().resolve()
+        if not source_path.is_file():
+            raise ProjectError(f"artifact not found: {source_path}")
+        digest = sha256_file(source_path)
+        suffix = "".join(source_path.suffixes)[-24:] or ".bin"
+        safe_label = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(label)).strip("_") or "artifact"
+        name = f"{safe_label}-{digest[:16]}{suffix}"
+        destination = ensure_within(self.artifacts_dir(project_id) / name, self.artifacts_dir(project_id))
+        if destination.exists():
+            if sha256_file(destination) != digest:
+                raise ValidationError(f"artifact collision at {destination}")
+        else:
+            temporary = destination.with_name(f".{destination.name}.{random_id('tmp')}")
+            try:
+                with source_path.open("rb") as source_handle, temporary.open("xb") as handle:
+                    shutil.copyfileobj(source_handle, handle, length=1024 * 1024)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                if sha256_file(temporary) != digest:
+                    raise ValidationError("artifact changed while being imported")
+                os.replace(temporary, destination)
+            finally:
+                with contextlib.suppress(FileNotFoundError):
+                    temporary.unlink()
+        relative = destination.relative_to(self.project_dir(project_id)).as_posix()
+        return {
+            "relative_path": relative,
+            "raw_sha256": digest,
+            "bytes": int(destination.stat().st_size),
+            "original_name": source_path.name,
+            "original_path": str(source_path),
+        }
+
+    def resolve_artifact(self, project_id: str, artifact: Mapping[str, Any]) -> Path:
+        path = self.artifact_path(project_id, str(artifact.get("relative_path") or ""))
+        if not path.is_file():
+            raise ProjectError(f"project artifact is missing: {path}")
+        expected = str(artifact.get("raw_sha256") or "")
+        actual = sha256_file(path)
+        if expected and expected != actual:
+            raise ValidationError(f"project artifact hash mismatch: {path}")
+        return path
 
     def project_dir(self, project_id: str) -> Path:
         if not project_id or any(ch in project_id for ch in "/\\:"):
@@ -67,8 +124,10 @@ class ProjectStore:
     def create_project(self, name: str, revision: Mapping[str, Any], project_id: str | None = None) -> dict[str, Any]:
         pid = str(project_id or revision.get("project_id") or random_id("project"))
         pdir = self.project_dir(pid)
-        if pdir.exists() and any(pdir.iterdir()):
-            raise ProjectError(f"project already exists: {pid}")
+        if pdir.exists():
+            unexpected = [child for child in pdir.iterdir() if child.name != "artifacts"]
+            if unexpected:
+                raise ProjectError(f"project already exists: {pid}")
         pdir.mkdir(parents=True, exist_ok=True)
         (pdir / "revisions").mkdir(parents=True, exist_ok=True)
         (pdir / "exports").mkdir(parents=True, exist_ok=True)

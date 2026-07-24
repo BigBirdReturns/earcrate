@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schemas/earcrate_song_genome_v1.schema.json",
+  "title": "EarCrate SongGenome v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "body",
+    "persona",
+    "observation_ledger_sha256",
+    "observation_ids",
+    "time_map",
+    "canonical_events",
+    "instances",
+    "recurrence_edges",
+    "arms",
+    "execution_policy",
+    "genome_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "earcrate/song-genome@1"},
+    "body": {
+      "type": "object",
+      "required": ["body_sha256", "decoded_pcm_sha256", "sample_rate", "channels", "frames", "duration_seconds"]
+    },
+    "canonical_events": {"type": "array"},
+    "instances": {"type": "array"},
+    "recurrence_edges": {"type": "array"},
+    "genome_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": true
+}

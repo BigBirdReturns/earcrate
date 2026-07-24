@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_source_phrase_v1.schema.json",
+  "title": "EarCrate executable source phrase v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "phrase_id",
+    "phrase_sha256",
+    "identity_label",
+    "source_role",
+    "source_recording",
+    "source_region",
+    "destination_region",
+    "attack_observations",
+    "identity_anchors",
+    "transform",
+    "mix_policy",
+    "gain_db",
+    "pan",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {"const": "earcrate/source-phrase@1"},
+    "phrase_id": {"type": "string", "minLength": 1},
+    "phrase_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity_label": {"type": "string", "minLength": 1},
+    "source_role": {"type": "string", "minLength": 1},
+    "source_recording": {
+      "type": "object",
+      "required": ["path", "byte_sha256", "duration_seconds", "frames", "sample_rate"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "byte_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "frames": {"type": "integer", "minimum": 1},
+        "sample_rate": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "source_region": {
+      "type": "object",
+      "required": ["start_seconds", "end_seconds", "duration_seconds", "pcm_sha256_44100_stereo_f32"],
+      "properties": {
+        "start_seconds": {"type": "number", "minimum": 0},
+        "end_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "pcm_sha256_44100_stereo_f32": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "destination_region": {
+      "type": "object",
+      "required": ["start_seconds", "end_seconds", "duration_seconds"],
+      "properties": {
+        "start_seconds": {"type": "number", "minimum": 0},
+        "end_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "attack_observations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["attack_id", "source_relative_seconds", "destination_seconds", "strength"],
+        "properties": {
+          "attack_id": {"type": "string", "minLength": 1},
+          "source_relative_seconds": {"type": "number", "minimum": 0},
+          "destination_seconds": {"type": "number", "minimum": 0},
+          "strength": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "identity_anchors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["anchor_id", "source_relative_seconds", "destination_seconds", "strength"],
+        "properties": {
+          "anchor_id": {"type": "string", "minLength": 1},
+          "source_relative_seconds": {"type": "number", "minimum": 0},
+          "destination_seconds": {"type": "number", "minimum": 0},
+          "strength": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "transform": {
+      "type": "object",
+      "required": ["time_ratio", "pitch_shift_semitones", "tuning_cents", "mode"],
+      "properties": {
+        "time_ratio": {"type": "number", "exclusiveMinimum": 0},
+        "pitch_shift_semitones": {"type": "number"},
+        "tuning_cents": {"type": "number"},
+        "mode": {"enum": ["identity", "phase_vocoder"]}
+      },
+      "additionalProperties": false
+    },
+    "mix_policy": {"type": "object"},
+    "gain_db": {"type": "number"},
+    "pan": {"type": "number", "minimum": -1, "maximum": 1},
+    "provenance": {
+      "type": "object",
+      "required": ["origin_kind", "publication_eligible", "comparison_reference_sha256", "derived_from_reference_sha256", "provider_receipt"],
+      "properties": {
+        "origin_kind": {"type": "string", "minLength": 1},
+        "publication_eligible": {"type": "boolean"},
+        "comparison_reference_sha256": {"type": "string"},
+        "derived_from_reference_sha256": {"type": "string"},
+        "provider_receipt": {"type": "object"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

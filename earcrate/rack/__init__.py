@@ -1,18 +1,31 @@
-"""EarCrate exact sample-instrument authority."""
+"""Exact sample racks, multi-zone library proposals, bindings, SFZ export, rendering, and relocation."""
 
-from .model import (
-    rack_draft_template,
-    rack_load_revision,
-    rack_sample_identity,
-    rack_seal_draft,
-    rack_validate_revision,
+from earcrate.rack.binding_stable import (
+    rack_compile_binding,
+    rack_load_binding,
+    rack_load_many,
+    rack_validate_binding,
 )
-from .demand import rack_compile_demands
-from .binding import rack_compile_binding
-from .sfz import rack_compile_sfz
-from .render import rack_render_binding
-from .multizone import rack_propose_from_atoms
-from .portable import (
+from earcrate.rack.demand import rack_compile_demands, rack_validate_demands
+from earcrate.rack.multizone import (
+    rack_build_from_atoms,
+    rack_materialize_library_proposal,
+    rack_propose_from_atoms,
+    rack_validate_library_proposal,
+)
+from earcrate.rack.model import (
+    RackError,
+    rack_atomic_json,
+    rack_capabilities,
+    rack_load_revision,
+    rack_seal_draft,
+    rack_template,
+    rack_validate_revision,
+    rack_verify_sources,
+)
+from earcrate.rack.render_fix import rack_compile_render_program, rack_render_ledger
+from earcrate.rack.sfz import rack_compile_sfz
+from earcrate.rack.portable import (
     PORTABLE_BUNDLE_SCHEMA,
     PORTABLE_REBASE_SCHEMA,
     rack_rebase_portable_revision,
@@ -20,16 +33,27 @@ from .portable import (
 )
 
 __all__ = [
-    "rack_draft_template",
-    "rack_load_revision",
-    "rack_sample_identity",
-    "rack_seal_draft",
-    "rack_validate_revision",
-    "rack_compile_demands",
+    "RackError",
+    "rack_atomic_json",
+    "rack_build_from_atoms",
+    "rack_capabilities",
     "rack_compile_binding",
+    "rack_compile_demands",
+    "rack_compile_render_program",
     "rack_compile_sfz",
-    "rack_render_binding",
+    "rack_load_binding",
+    "rack_load_many",
+    "rack_load_revision",
+    "rack_materialize_library_proposal",
     "rack_propose_from_atoms",
+    "rack_render_ledger",
+    "rack_seal_draft",
+    "rack_template",
+    "rack_validate_binding",
+    "rack_validate_demands",
+    "rack_validate_library_proposal",
+    "rack_validate_revision",
+    "rack_verify_sources",
     "PORTABLE_BUNDLE_SCHEMA",
     "PORTABLE_REBASE_SCHEMA",
     "rack_rebase_portable_revision",

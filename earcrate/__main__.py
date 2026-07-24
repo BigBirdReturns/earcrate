@@ -1,5 +1,10 @@
 import sys
 
+if len(sys.argv) > 1 and sys.argv[1] == "reader":
+    from earcrate.reader.cli import reader_main
+
+    sys.exit(reader_main(sys.argv[2:]))
+
 if len(sys.argv) > 1 and sys.argv[1] == "project":
     from earcrate.project.gate8_cli import main as project_main
 

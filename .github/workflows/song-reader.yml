@@ -1,0 +1,65 @@
+name: song-reader
+
+on:
+  push:
+    branches:
+      - agent/song-reader-cephalopod-foundation
+  pull_request:
+    paths:
+      - "earcrate/reader/**"
+      - "earcrate/project/compiler_*.py"
+      - "tests/test_song_reader_cephalopod.py"
+      - "tests/test_project_gate8_integration.py"
+      - "tests/run_gates.py"
+      - "build/make_singlefile.py"
+      - "earcrate/__main__.py"
+      - ".github/workflows/song-reader.yml"
+
+jobs:
+  reader-proof:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install ffmpeg on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Install ffmpeg on Windows
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install ffmpeg -y --no-progress
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Run cephalopod reader gates
+        run: python -m pytest -vv --tb=long --junitxml=reader-tests.xml tests/test_song_reader_cephalopod.py tests/test_project_gate8_integration.py
+      - name: Retain reader test ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: song-reader-tests-${{ runner.os }}-${{ github.run_id }}
+          path: reader-tests.xml
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Verify package and standalone surfaces
+        run: |
+          python -m earcrate reader capabilities
+          python build/make_singlefile.py
+          python dist/earcrate.py reader capabilities
+      - name: Compile reader package
+        run: python -m compileall -q earcrate/reader

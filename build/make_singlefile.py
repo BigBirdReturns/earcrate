@@ -13,6 +13,7 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "rack/model.py", "rack/demand.py", "rack/binding.py", "rack/binding_stable.py", "rack/sfz.py", "rack/render.py", "rack/render_fix.py", "rack/library.py", "rack/library_fix.py", "rack/multizone.py", "rack/portable.py",
          "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/arranger.py", "midi/arranger_fix.py",
          "music/model.py", "music/law_context.py", "music/law_voice.py", "music/law_harmony.py", "music/laws.py", "music/equations.py", "music/player_piano.py", "music/heritage.py", "music/director.py", "music/source_phrase_model.py", "music/source_phrase_audio.py",
+         "reader/model.py", "reader/body.py", "reader/personas.py", "reader/arms/pulse.py", "reader/arms/layers.py", "reader/arms/recurrence.py", "reader/arms/residual.py", "reader/render.py", "reader/visualize.py", "reader/nervous_system.py", "reader/cli.py",
          "study/reference.py", "study/reference_grid.py", "study/reference_bundle.py", "study/reference_cli.py",
          "live/model.py", "live/operators.py", "live/capabilities.py", "live/instrumentation.py", "live/planner.py", "live/engine.py", "live/runtime.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/performance.py", "live/audio_cli.py", "live/cli.py",
          "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
@@ -30,7 +31,7 @@ PROJECT_STRIP = re.compile(r"^(from\s+\.|from\s+earcrate\.project(?:\.|\s)|impor
 PROJECT_IMPORT_SOURCES = {
     "compiler_entry.py": "from earcrate.project.compiler_clip import _build_clip\nfrom earcrate.project.compiler_deck import _candidate_signature, _select_deck\nfrom earcrate.project.compiler_beam import _beam_search\n",
     "compiler_gate.py": "from earcrate.project.compiler_source_common import HARD_TECHNIQUES\n",
-    "compiler_legacy.py": "from earcrate.project.compiler_source_common import EAR_TO_RENDER, prepare_source_asset\n",
+    "compiler_legacy.py": "from earcrate.project.compiler_source_common import EAR_TO_RENDER, HARD_TECHNIQUES, prepare_source_asset\n",
     "compiler.py": "from earcrate.project.compiler_entry import compile_project\nfrom earcrate.project.compiler_gate import static_gate\nfrom earcrate.project.compiler_legacy import import_legacy_arrangement\nfrom earcrate.project.compiler_source_common import EAR_TO_RENDER, HARD_TECHNIQUES, prepare_source_asset\nfrom earcrate.project.compiler_source_crate import prepare_crate_sources\nfrom earcrate.project.compiler_source_manifest import load_source_manifest, prepare_manifest_sources\n",
 }
 
@@ -108,6 +109,7 @@ for rel in ORDER:
         needle = "    argv = list(sys.argv[1:] if argv is None else argv)"
         replacement = (
             needle
+            + "\n    if argv and argv[0] == \"reader\":\n        return reader_main(argv[1:])"
             + "\n    if argv and argv[0] == \"project\":\n        return project_main(argv[1:])"
             + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
             + "\n    if argv and argv[0] == \"live\":\n        return live_cli_main(argv[1:])"

@@ -1,0 +1,84 @@
+{
+  "schema": "earcrate/song-reader-thesis-proof@1",
+  "proof_sha256": "19ecd9a1af5db2cb3279f31041cc8f2b9ca66b1ddf10a78f7493bba4582da11f",
+  "source": {
+    "title": "Pretty Lights - Empire State Of Mind Remix (Jay-Z, Biggie) [Unreleased 2010 Remixes]",
+    "window_start_seconds": 0.0,
+    "window_duration_seconds": 30.0,
+    "source_byte_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+    "decoded_body_sha256": "d799e8381790fc177251f72dc632b8410e3632b8c705c34adf1984b7ad03c4ff",
+    "source_audio_bundled": false
+  },
+  "reader": {
+    "persona_id": "remix_prettylights_reader_v2",
+    "genome_sha256": "f6057fba1cb55605c7a3eb84aec354c22aabf9baab9adee605ad98e9df767cb2",
+    "tempo_bpm": 92.28515625,
+    "phrase_heartbeat_beats": 8,
+    "phrase_starts_seconds": [
+      0.13931972789115646,
+      5.38702947845805,
+      10.588299319727891,
+      15.81278911564626,
+      21.0140589569161,
+      26.23854875283447
+    ],
+    "foreground_start_seconds": 21.350748299319726,
+    "observations": 237,
+    "canonical_events": 76,
+    "instances": 186,
+    "recurrent_events": 73,
+    "recurrent_instances": 183,
+    "audible_recurrent_instances_using_same_time_pcm": 0
+  },
+  "raw_correspondence": {
+    "rejected_158_event_neutral": {
+      "onset_envelope_correlation": -0.01674677757076187,
+      "mel_frame_cosine_mean": 0.7652925252914429,
+      "chroma_frame_cosine_mean": 0.6997385621070862,
+      "raw_waveform_correlation": 0.009325519895285173
+    },
+    "rejected_full_song_generator": {
+      "onset_envelope_correlation": -0.02005750255910567,
+      "mel_frame_cosine_mean": 0.7844879031181335,
+      "chroma_frame_cosine_mean": 0.6806685328483582,
+      "raw_waveform_correlation": -0.007411464096173731
+    },
+    "recurrence_leave_one_out": {
+      "onset_envelope_correlation": 0.5020611898494902,
+      "mel_frame_cosine_mean": 0.8712137341499329,
+      "chroma_frame_cosine_mean": 0.7407289147377014,
+      "raw_waveform_correlation": -0.009321263008764662
+    },
+    "song_genome_diagnostic": {
+      "onset_envelope_correlation": 0.7811532798525536,
+      "mel_frame_cosine_mean": 0.9136376976966858,
+      "chroma_frame_cosine_mean": 0.7890928387641907,
+      "raw_waveform_correlation": 0.3614814074579736
+    }
+  },
+  "artifacts": {
+    "recurrence_wav_sha256": "2d65aa40eb01729c6d6d7b553ce87975cfa632b1eb4f8a5d507e4860e0b38040",
+    "diagnostic_wav_sha256": "9b4824df00ee0d743492df8b15f3f5bddd2e615b7eaf11fa0524d8da5d5f4a44",
+    "reference_then_candidate_wav_sha256": "0e716ab0649ff6564e7050f03248a1362512f75408b2243ffc69d3559396a6ca"
+  },
+  "gates": {
+    "layer_reconstruction_ok": true,
+    "nontrivial_phrase_cycle_ok": true,
+    "recurrence_coverage_ok": true,
+    "leave_one_out_source_ok": true,
+    "recurrence_onset_ok": true,
+    "recurrence_timbre_ok": true,
+    "diagnostic_onset_ok": true,
+    "diagnostic_timbre_ok": true,
+    "symbolic_audio_contribution_ok": true
+  },
+  "boundary": {
+    "thesis_ok": true,
+    "reference_conditioned_mastering_used": false,
+    "invented_midi_harmony_used": false,
+    "symbolic_pcm_contribution": false,
+    "reference_derived_unique_audio_used": true,
+    "publication_eligible": false,
+    "publication_ok": false
+  }
+}

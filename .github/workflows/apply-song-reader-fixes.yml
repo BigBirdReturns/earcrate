@@ -1,0 +1,51 @@
+name: Apply song-reader integration fixes
+
+on:
+  push:
+    branches:
+      - agent/song-reader-cephalopod-foundation
+
+permissions:
+  contents: write
+
+concurrency:
+  group: song-reader-integration-fix
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[reader-fix-bootstrap]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/song-reader-cephalopod-foundation
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Apply exact repairs
+        run: python .gate8/apply_song_reader_ci_fixes.py
+      - name: Verify focused authority
+        run: |
+          python -m pytest -q tests/test_song_reader_cephalopod.py tests/test_project_gate8_integration.py
+          python build/make_singlefile.py
+          python dist/earcrate.py reader capabilities
+          python dist/earcrate.py project capabilities
+          git diff --check
+      - name: Commit repaired tree
+        run: |
+          git config user.name "EarCrate song-reader integration"
+          git config user.email "noreply@github.com"
+          git add -A
+          git commit -m "Repair stage-score custody and standalone director embedding"
+          git push origin HEAD:agent/song-reader-cephalopod-foundation

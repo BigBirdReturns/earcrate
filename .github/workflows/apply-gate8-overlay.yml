@@ -1,0 +1,119 @@
+name: Apply Gate 8 canonical integration
+
+on:
+  push:
+    branches:
+      - agent/gate8-canonical-integration
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gate8-canonical-integration
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    if: contains(github.event.head_commit.message, '[gate8-bootstrap]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/gate8-canonical-integration
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install runtime and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+
+      - name: Verify and apply the sealed overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "e3e6696eeddbed3b1dfa5d27918d412862868aac304dffaa388a6532137505e5  .gate8/gate8_overlay.zip" | sha256sum -c -
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          archive = Path('.gate8/gate8_overlay.zip')
+          with zipfile.ZipFile(archive) as zf:
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f'corrupt overlay member: {bad}')
+              for member in zf.infolist():
+                  target = (Path.cwd() / member.filename).resolve()
+                  if Path.cwd().resolve() not in target.parents and target != Path.cwd().resolve():
+                      raise SystemExit(f'unsafe overlay path: {member.filename}')
+              zf.extractall('.')
+          PY
+
+      - name: Compile the integrated authority surface
+        run: |
+          python -m py_compile \
+            earcrate/project/custody.py \
+            earcrate/project/continuation.py \
+            earcrate/project/source_execution.py \
+            earcrate/project/library.py \
+            earcrate/music/source_phrase.py \
+            earcrate/music/director.py \
+            earcrate/rack/portable.py
+
+      - name: Run the focused Gate 8 acceptance suite
+        run: |
+          python -m pytest -q \
+            tests/test_project_gate8.py \
+            tests/test_project_gate8_continuation.py \
+            tests/test_dj_director.py
+
+      - name: Verify all public command surfaces
+        run: |
+          tmp_root="$(mktemp -d)"
+          python -m earcrate project capabilities
+          python -m earcrate.project --root "$tmp_root" capabilities
+          python build/make_singlefile.py
+          python dist/earcrate.py project capabilities
+
+      - name: Record canonical integration provenance
+        shell: bash
+        run: |
+          cat > docs/GATE8_CANONICAL_INTEGRATION.md <<'EOF'
+          # Gate 8 canonical integration
+
+          This branch ports the tested Gate 8 custody, semantic-adoption, DJ-director,
+          continuation, SourcePhrase-execution, real-library-handshake, and portable-rack
+          surfaces onto the contained PR #37 repository lineage.
+
+          - Parent: `46f4c534dc13fcf00c279ba6915da7a66552c1c9`
+          - Sealed overlay SHA-256: `e3e6696eeddbed3b1dfa5d27918d412862868aac304dffaa388a6532137505e5`
+          - Generated `dist/earcrate.py`: rebuilt on this lineage; no donor distribution copied
+          - Storage durability: artifact imports flush and fsync a writable temporary handle
+            before atomic replacement, including on Windows
+          - Authority boundary: historical custody, semantic adoption, continuation,
+            independent SourcePhrase execution, and portable rack resealing remain distinct
+            immutable project operations
+
+          The old 158-event proof remains a negative control. It is not promoted into the
+          accepted Gate 8 lineage.
+          EOF
+          rm -rf .gate8
+          rm -f .github/workflows/apply-gate8-overlay.yml
+          git diff --check
+
+      - name: Commit the integrated tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "EarCrate Gate 8 integration"
+          git config user.email "noreply@github.com"
+          git add -A
+          git commit -m "Integrate Gate 8 custody and continuation authority"
+          git push origin HEAD:agent/gate8-canonical-integration

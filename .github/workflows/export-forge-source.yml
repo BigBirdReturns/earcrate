@@ -1,0 +1,34 @@
+name: Export forge source snapshot
+
+on:
+  push:
+    branches:
+      - agent/forge-material-breeder-v0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build exact source archive
+        shell: bash
+        run: |
+          git archive --format=zip --output=earcrate-forge-source.zip HEAD
+          sha256sum earcrate-forge-source.zip > earcrate-forge-source.zip.sha256
+          git rev-parse HEAD > SOURCE_COMMIT.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: earcrate-forge-source
+          path: |
+            earcrate-forge-source.zip
+            earcrate-forge-source.zip.sha256
+            SOURCE_COMMIT.txt
+          if-no-files-found: error
+          retention-days: 7

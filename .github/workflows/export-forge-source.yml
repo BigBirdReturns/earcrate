@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/forge-material-breeder-v0
+  pull_request:
+    branches:
+      - agent/song-reader-cephalopod-foundation
   workflow_dispatch:
 
 permissions:

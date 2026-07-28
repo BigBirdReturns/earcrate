@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """The Bad Plus / Aphex Twin ``Flim`` community-symbolic acceptance specimen."""
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -42,31 +41,30 @@ def flim_load_builtin() -> tuple[dict[str, Any], dict[str, Any]]:
     manifest_name = f"{FLIM_SPECIMEN_ID}.json"
     report_name = f"{FLIM_SPECIMEN_ID}.community-symbolic.json"
     if manifest_name in EMBEDDED_SPECIMENS and report_name in EMBEDDED_SPECIMENS:
-        manifest_text = EMBEDDED_SPECIMENS[manifest_name]
-        report_text = EMBEDDED_SPECIMENS[report_name]
-        manifest = json.loads(manifest_text)
-        report = json.loads(report_text)
-        report_raw_sha256 = hashlib.sha256(report_text.encode("utf-8")).hexdigest()
+        manifest = json.loads(EMBEDDED_SPECIMENS[manifest_name])
+        report = json.loads(EMBEDDED_SPECIMENS[report_name])
     else:
         root = flim_repository_root() / "specimens"
-        manifest_path = root / manifest_name
-        report_path = root / report_name
-        manifest = specimen_read_json(manifest_path)
-        report = specimen_read_json(report_path)
-        report_raw_sha256 = hashlib.sha256(report_path.read_bytes()).hexdigest()
+        manifest = specimen_read_json(root / manifest_name)
+        report = specimen_read_json(root / report_name)
+
     normalized = specimen_normalize_manifest(manifest)
     if str(normalized["specimen_id"]) != FLIM_SPECIMEN_ID:
         raise SpecimenError("built-in Flim manifest belongs to another specimen")
     evidence_tier = str((normalized.get("metadata") or {}).get("evidence_tier") or manifest.get("evidence_tier") or "")
     if evidence_tier != "community_symbolic_witness":
         raise SpecimenError("Flim must remain in the community-symbolic evidence tier")
-    report_artifact = next(row for row in normalized["artifacts"] if row["artifact_id"] == "community_symbolic_report")
-    if str(report_artifact.get("expected_sha256") or "") != report_raw_sha256:
-        raise SpecimenError("Flim repository-managed report identity drifted from its manifest")
+
+    sealed_report = community_validate_report(report, specimen_id=FLIM_SPECIMEN_ID)
+    report_artifact = next(
+        row for row in normalized["artifacts"] if row["artifact_id"] == "community_symbolic_report"
+    )
+    if str(report_artifact.get("expected_sha256") or "") != str(sealed_report["report_sha256"]):
+        raise SpecimenError("Flim canonical report identity drifted from its manifest")
+
     pack = next(row for row in normalized["artifacts"] if row["artifact_id"] == "community_proof_pack")
     if str(pack.get("expected_sha256") or "") != FLIM_PROOF_PACK_SHA256:
         raise SpecimenError("Flim proof-pack identity drifted from the supplied report")
-    sealed_report = community_validate_report(report, specimen_id=FLIM_SPECIMEN_ID)
     return normalized, sealed_report
 
 
@@ -91,6 +89,7 @@ def flim_capability() -> dict[str, Any]:
         "evidence_tier": str((manifest.get("metadata") or {}).get("evidence_tier") or "community_symbolic_witness"),
         "proof_pack_sha256": FLIM_PROOF_PACK_SHA256,
         "report_sha256": str(report["report_sha256"]),
+        "report_identity": "canonical_json",
         "witness_note_count": int(report["witness"]["total_midi_note_ons"]),
         "continuation_note_count": int(report["adjacent_move"]["total_midi_note_ons"]),
         "transport_operation_count": int(report["transport"]["selected_event_count"]),

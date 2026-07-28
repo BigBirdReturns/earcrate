@@ -1,0 +1,71 @@
+name: Apply Flim community-symbolic witness
+
+on:
+  push:
+    branches:
+      - agent/children-buffalo-gate
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flim-community-symbolic-witness
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[flim-community-bootstrap]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/children-buffalo-gate
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Apply exact integration patches
+        run: python .gate8/apply_flim_community_witness.py
+      - name: Verify community tier and adjacent-move authority
+        run: |
+          set -o pipefail
+          python -m pytest -q \
+            tests/test_buffalo_specimen.py \
+            tests/test_children_continuation.py \
+            tests/test_flim_community_witness.py 2>&1 | tee flim-community-bootstrap.log
+          python -m earcrate buffalo capability
+          python -m earcrate buffalo flim-report
+          python build/make_singlefile.py
+          python dist/earcrate.py buffalo flim-report
+          python scripts/oss_audit.py
+          git diff --check
+      - name: Retain focused ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flim-community-bootstrap-${{ github.run_id }}
+          path: flim-community-bootstrap.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Commit integrated evidence tier
+        run: |
+          rm -f flim-community-bootstrap.log
+          git config user.name "EarCrate Flim integration"
+          git config user.email "noreply@github.com"
+          git add -A
+          git commit -m "Add Flim community-symbolic witness tier"
+          git push origin HEAD:agent/children-buffalo-gate

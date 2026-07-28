@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import librosa
 import numpy as np
 import soundfile as sf
 
+from earcrate.reader.arms.residual import _reader_onset_peak_frames, reader_residual_arm
 from earcrate.reader.cli import reader_capabilities
 from earcrate.reader.model import ReaderError, reader_seal, reader_validate_genome
 from earcrate.reader.nervous_system import reader_read_song
@@ -121,3 +123,45 @@ def test_cephalopod_reader_discovers_and_executes_recurrence(tmp_path: Path) -> 
     assert (output / "RECURRENCE_LEAVE_ONE_OUT.wav").is_file()
     assert (output / "SONG_GENOME_DIAGNOSTIC.wav").is_file()
     assert (output / "EVENT_ATLAS.svg").is_file()
+
+
+def test_residual_peak_selector_is_deterministic_finite_and_wait_bounded() -> None:
+    envelope = np.array([0.0, 1.0, 0.0, np.nan, 0.0, 2.0, 1.5, 3.0, 0.0, np.inf, 0.0])
+    first = _reader_onset_peak_frames(envelope, delta=0.12, wait=2)
+    second = _reader_onset_peak_frames(envelope.copy(), delta=0.12, wait=2)
+    assert first.tolist() == [1, 7]
+    assert np.array_equal(first, second)
+    assert np.all(np.diff(first) > 2)
+
+
+def test_residual_arm_does_not_call_librosa_jit_peak_picker(monkeypatch) -> None:
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("residual arm called librosa.onset.onset_detect")
+
+    monkeypatch.setattr(librosa.onset, "onset_detect", forbidden)
+    sample_rate = 8_000
+    duration_seconds = 8.0
+    frames = int(sample_rate * duration_seconds)
+    time = np.arange(frames, dtype=np.float64) / sample_rate
+    mono = (0.08 * np.sin(2.0 * np.pi * 330.0 * time)).astype(np.float32)
+    for second in (0.5, 2.5, 4.5, 6.5):
+        start = int(second * sample_rate)
+        stop = min(frames, start + int(0.08 * sample_rate))
+        mono[start:stop] += np.hanning(stop - start).astype(np.float32) * 0.35
+    reference = np.stack([mono, mono], axis=1)
+    recurrence = np.zeros_like(reference)
+    result = reader_residual_arm(
+        reference,
+        recurrence,
+        {"phrase_starts": [0.0, 2.0, 4.0, 6.0]},
+        sample_rate,
+        {
+            "body_sha256": "a" * 64,
+            "frames": frames,
+            "duration_seconds": duration_seconds,
+        },
+        {"unique_residual": {}},
+    )
+    assert result["diagnostics"]["reference_derived_unique_audio_used"] is True
+    assert len(result["diagnostics"]["phrase_onset_density"]) == 4
+    assert np.all(np.isfinite(result["diagnostics"]["phrase_onset_density"]))

@@ -11,6 +11,7 @@ from .model import compute_revision_sha, seal_revision, summarize_revision
 from .render import preview_project, render_project, verify_render
 from .store import ProjectStore as LegacyProjectStore
 from .gate8_store import Gate8ProjectStore
+from .causal_revision import causal_seal_revision
 from .custody import (
     project_seed_selection_receipt,
     project_import_causal_score,
@@ -49,12 +50,19 @@ def _compatible_score_family(score: Mapping[str, Any]) -> str:
     raise ValidationError("unsupported causal-score artifact family")
 
 
-# Package mode and the generated single-file project bootstrap both load custody
-# before this facade. Patch the private family discriminator in that already-loaded
-# module so old accepted artifacts retain exact historical bytes on every surface.
+# Package mode and the generated single-file project bootstrap both load these
+# modules before this facade. Patch the exact historical compatibility seams in
+# the already-loaded modules so every surface uses the same authorities.
 _custody_module = _project_sys.modules.get(__name__ + ".custody")
 if _custody_module is not None:
     setattr(_custody_module, "_score_family", _compatible_score_family)
+
+_continuation_module = _project_sys.modules.get(__name__ + ".continuation")
+if _continuation_module is not None:
+    # Causal-score continuations are not audio-clip revisions. Using the generic
+    # clip validator incorrectly demands a compiled TasteSpec policy and rejects a
+    # semantically adopted causal child. Preserve the causal authority instead.
+    setattr(_continuation_module, "seal_revision", causal_seal_revision)
 
 ProjectStore = Gate8ProjectStore
 
@@ -75,6 +83,7 @@ __all__ = [
     "compute_revision_sha",
     "seal_revision",
     "summarize_revision",
+    "causal_seal_revision",
     "project_seed_selection_receipt",
     "project_import_causal_score",
     "project_verify_custody",

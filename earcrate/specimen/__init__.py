@@ -5,7 +5,7 @@ from .children import (
     children_load_bindings,
     children_load_builtin,
 )
-from .continuation import (
+from .continuation_dense import (
     CHILDREN_CONTINUATION_BARS,
     CHILDREN_CONTINUATION_KIND,
     CHILDREN_CONTINUATION_SCHEMA_VERSION,

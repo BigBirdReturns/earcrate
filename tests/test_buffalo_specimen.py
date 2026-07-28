@@ -43,17 +43,31 @@ def _path() -> list[int]:
     return order
 
 
-def _midi(path: Path) -> None:
+def _midi(path: Path, occurrences: list[dict], per_measure: dict[str, dict]) -> None:
     midi = mido.MidiFile(type=1, ticks_per_beat=PPQ)
     conductor = mido.MidiTrack()
     conductor.append(mido.MetaMessage("set_tempo", tempo=round(60_000_000 / 130), time=0))
     conductor.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
     midi.tracks.append(conductor)
-    for name, channel, note in (("Right Hand", 0, 77), ("Left Hand", 1, 49)):
+    for name, channel, staff in (("Right Hand", 0, "treble"), ("Left Hand", 1, "bass")):
+        absolute = []
+        for occurrence in occurrences:
+            measure = per_measure[str(int(occurrence["measure"]))]
+            base = int(round(float(occurrence["start_beat"]) * PPQ))
+            for event in measure[staff]:
+                start = base + int(round(float(event["beat"]) * PPQ))
+                duration = max(1, int(round(float(event["duration"]) * PPQ)))
+                note = int(event["midi"])
+                absolute.append((start, 1, mido.Message("note_on", channel=channel, note=note, velocity=88, time=0)))
+                absolute.append((start + duration, 0, mido.Message("note_off", channel=channel, note=note, velocity=0, time=0)))
+        absolute.sort(key=lambda row: (row[0], row[1], str(row[2])))
         track = mido.MidiTrack()
         track.append(mido.MetaMessage("track_name", name=name, time=0))
-        track.append(mido.Message("note_on", channel=channel, note=note, velocity=88, time=0))
-        track.append(mido.Message("note_off", channel=channel, note=note, velocity=0, time=PPQ))
+        previous = 0
+        for tick, _priority, message in absolute:
+            track.append(message.copy(time=int(tick) - previous))
+            previous = int(tick)
+        track.append(mido.MetaMessage("end_of_track", time=0))
         midi.tracks.append(track)
     midi.save(path)
 
@@ -79,6 +93,23 @@ def _fixture(tmp_path: Path) -> tuple[dict, dict, dict[str, str]]:
     per_measure["1"]["bass"] = [
         {"kind": "note", "midi": 49, "pitch": "Db3", "beat": 0.0, "duration": 1.0}
     ]
+    tail_pitches = {
+        50: (77, 49),
+        51: (80, 49),
+        52: (82, 49),
+        65: (77, 49),
+        66: (75, 49),
+        67: (73, 49),
+        68: (72, 49),
+        69: (77, 41),
+    }
+    for measure, (treble_pitch, bass_pitch) in tail_pitches.items():
+        per_measure[str(measure)]["treble"] = [
+            {"kind": "note", "midi": treble_pitch, "pitch": f"midi-{treble_pitch}", "beat": 0.0, "duration": 1.0}
+        ]
+        per_measure[str(measure)]["bass"] = [
+            {"kind": "note", "midi": bass_pitch, "pitch": f"midi-{bass_pitch}", "beat": 0.0, "duration": 1.0}
+        ]
     occurrence_counts: dict[int, int] = {}
     occurrences = []
     for index, measure in enumerate(_path()):
@@ -91,6 +122,11 @@ def _fixture(tmp_path: Path) -> tuple[dict, dict, dict[str, str]]:
                 "start_beat": index * 4.0,
             }
         )
+    linear_counts = {
+        staff: sum(len(per_measure[str(int(row["measure"]))][staff]) for row in occurrences)
+        for staff in ("treble", "bass")
+    }
+    total_note_count = sum(linear_counts.values())
     extraction = {
         "schema_version": 1,
         "kind": "children_vector_score_extraction",
@@ -108,13 +144,13 @@ def _fixture(tmp_path: Path) -> tuple[dict, dict, dict[str, str]]:
         "method": {"type": "synthetic test fixture"},
         "measure_events": per_measure,
         "occurrences": occurrences,
-        "linear_note_counts": {"treble": 1, "bass": 1},
+        "linear_note_counts": linear_counts,
     }
     extraction_path = tmp_path / "extraction.json"
     extraction_path.write_text(json.dumps(extraction, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     midi_path = tmp_path / "score.mid"
-    _midi(midi_path)
+    _midi(midi_path, occurrences, per_measure)
     proof = {
         "schema_version": 1,
         "kind": "children_proof_receipt",
@@ -123,7 +159,7 @@ def _fixture(tmp_path: Path) -> tuple[dict, dict, dict[str, str]]:
         "printed_measures": 69,
         "linearized_measures": 105,
         "tempo_bpm": 130.0,
-        "midi": {"note_count": 2, "instrument_count": 2},
+        "midi": {"note_count": total_note_count, "instrument_count": 2},
     }
     proof_path = tmp_path / "proof.json"
     proof_path.write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -204,7 +240,7 @@ def _fixture(tmp_path: Path) -> tuple[dict, dict, dict[str, str]]:
             "key_signature": {"fifths": -4, "tonic_pc": 5, "mode": "minor"},
             "printed_measure_count": 69,
             "performed_measure_count": 105,
-            "midi_note_count": 2,
+            "midi_note_count": total_note_count,
             "midi_instrument_names": ["Right Hand", "Left Hand"],
             "mix_selected_event_count": 2,
             "mix_executed_event_count": 2,
@@ -241,7 +277,7 @@ def test_children_score_branch_compiles_all_score_side_organs_and_blocks_missing
     result = _compile(tmp_path, "one")
     receipt = result["receipt"]
     assert result["ok"] is True and result["complete"] is True
-    assert receipt["counts"]["notes"] == 2
+    assert receipt["counts"]["notes"] == 24
     assert receipt["counts"]["printed_measures"] == 69
     assert receipt["counts"]["performed_measures"] == 105
     assert receipt["counts"]["printed_chord_symbols"] == 36
@@ -441,7 +477,7 @@ def test_buffalo_single_file_dispatch_and_embedded_specimen(tmp_path: Path) -> N
     assert run.returncode == 0, run.stdout + run.stderr
     payload = json.loads(run.stdout)
     assert payload["ready"] is True
-    assert payload["specimen_ids"] == ["children_v1"]
+    assert payload["specimen_ids"] == ["children_v1", "flim_bad_plus_v1"]
     namespace_run = subprocess.run(
         [sys.executable, str(artifact), "buffalo", "children-bindings", str(tmp_path / "bindings.json")],
         cwd=root,
@@ -462,3 +498,4 @@ def test_buffalo_harvest_registers_reader_transports_and_cross_organ_gate() -> N
     assert rows["cephalopod_observation_ledger_and_song_genome"]["disposition"] == "preserve"
     assert rows["mixscore_independent_source_transports"]["disposition"] == "preserve"
     assert rows["cross_organ_specimen_gate"]["disposition"] == "preserve"
+    assert rows["community_symbolic_witnesses"]["disposition"] == "preserve"

@@ -14,6 +14,7 @@
           "branch": {
             "enum": [
               "score",
+              "symbolic",
               "audio",
               "convergence",
               "performance",
@@ -81,6 +82,16 @@
     },
     "credited_composer": {
       "type": "string"
+    },
+    "evidence_tier": {
+      "enum": [
+        "unspecified",
+        "authoritative_score",
+        "community_symbolic_witness",
+        "blind_audio_inference",
+        "cross_modal_accepted",
+        "performance_realization"
+      ]
     },
     "expected": {
       "type": "object"

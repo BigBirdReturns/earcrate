@@ -28,6 +28,7 @@ BUFFALO_GATE_RECEIPT_SCHEMA_VERSION = 1
 
 BRANCHES = (
     "score",
+    "symbolic",
     "audio",
     "convergence",
     "performance",
@@ -36,11 +37,12 @@ BRANCHES = (
 )
 BRANCH_ALLOWED_ANCESTORS: dict[str, frozenset[str]] = {
     "score": frozenset({"score"}),
+    "symbolic": frozenset({"symbolic"}),
     "audio": frozenset({"audio"}),
-    "convergence": frozenset({"score", "audio", "convergence"}),
-    "performance": frozenset({"score", "audio", "convergence", "performance"}),
+    "convergence": frozenset({"score", "symbolic", "audio", "convergence"}),
+    "performance": frozenset({"score", "symbolic", "audio", "convergence", "performance"}),
     "review": frozenset({"performance", "review"}),
-    "evolution": frozenset({"score", "audio", "convergence", "performance", "review", "evolution"}),
+    "evolution": frozenset({"score", "symbolic", "audio", "convergence", "performance", "review", "evolution"}),
 }
 GATE_STATUSES = {"passed", "blocked", "failed", "not_run"}
 

@@ -104,6 +104,13 @@ MUSIC_BUFFALO_HARVEST: tuple[dict[str, Any], ...] = (
         "reason": "sample-based performance requires independent playheads, cue jumps, loops, fades, cuts, and exact stem reconciliation",
     },
     {
+        "organ": "community_symbolic_witnesses",
+        "sources": ["public community notation", "instrument-part witnesses", "pattern recipes", "catalog identity"],
+        "destination": "explicit intermediate evidence tier feeding editable PerformanceScores and adjacent-move tests",
+        "disposition": "preserve",
+        "reason": "community symbolic evidence can prove reconstruction, composition, and transport while remaining categorically distinct from blind recording inference",
+    },
+    {
         "organ": "cross_organ_specimen_gate",
         "sources": ["earcrate.specimen", "content-addressed acceptance specimens", "cross-modal convergence reports"],
         "destination": "whole-organism acceptance, review circulation, and evolutionary evidence",

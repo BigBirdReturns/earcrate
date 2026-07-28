@@ -184,7 +184,21 @@ def specimen_build_buffalo_gate(
         )
 
     continuation = continuation_receipt
-    continuation_ok = bool(continuation and continuation.get("legal") is True and continuation.get("negative_control_refused") is True)
+    continuation_midi = dict((continuation or {}).get("midi") or {})
+    continuation_novelty = dict((continuation or {}).get("novelty") or {})
+    continuation_ok = bool(
+        continuation
+        and continuation.get("legal") is True
+        and continuation.get("negative_control_refused") is True
+        and continuation.get("rhythmic_identity_passed") is True
+        and int(continuation.get("open_obligation_count", -1)) == 0
+        and int(continuation_midi.get("selected_event_count") or 0) > 0
+        and int(continuation_midi.get("selected_event_count") or 0) == int(continuation_midi.get("executed_event_count") or -1)
+        and int(continuation_midi.get("refused_event_count") or 0) == 0
+        and continuation_novelty.get("literal_copy_detected") is False
+        and continuation_novelty.get("pitch_sequence_changed") is True
+        and continuation_novelty.get("harmony_sequence_changed") is True
+    )
     organs.append(
         _organ(
             "proof_carrying_adjacent_move",

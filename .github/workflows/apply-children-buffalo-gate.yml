@@ -39,15 +39,27 @@ jobs:
       - name: Apply content-addressed specimen payload
         run: python .gate8/apply_children_buffalo_payload.py
       - name: Verify cross-organ authority
+        shell: bash
         run: |
-          python -m pytest -q tests/test_buffalo_specimen.py tests/test_mixscore.py
-          python build/make_singlefile.py
-          python -m earcrate buffalo capability
-          python -m earcrate mix capability
-          python dist/earcrate.py buffalo capability
-          python dist/earcrate.py mix capability
-          python scripts/oss_audit.py
-          git diff --check
+          set -o pipefail
+          {
+            python -m pytest -q tests/test_buffalo_specimen.py tests/test_mixscore.py
+            python build/make_singlefile.py
+            python -m earcrate buffalo capability
+            python -m earcrate mix capability
+            python dist/earcrate.py buffalo capability
+            python dist/earcrate.py mix capability
+            python scripts/oss_audit.py
+            git diff --check
+          } 2>&1 | tee children-buffalo-bootstrap.log
+      - name: Retain bootstrap verification log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: children-buffalo-bootstrap-${{ github.run_id }}
+          path: children-buffalo-bootstrap.log
+          if-no-files-found: warn
+          retention-days: 30
       - name: Refuse bundled source media
         shell: bash
         run: |

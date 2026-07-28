@@ -13,6 +13,12 @@ from .children import (
     children_load_builtin,
 )
 from .continuation_dense import children_compose_adjacent_move
+from .flim import (
+    FLIM_SPECIMEN_ID,
+    flim_bind_proof_pack,
+    flim_capability,
+    flim_load_builtin,
+)
 from .gate import specimen_build_buffalo_gate
 from .model import (
     SpecimenError,
@@ -28,12 +34,28 @@ def specimen_capability() -> dict[str, Any]:
         "schema_version": 1,
         "kind": "earcrate_buffalo_gate_capability",
         "ready": True,
-        "specimen_ids": [CHILDREN_SPECIMEN_ID],
-        "commands": ["capability", "children-bindings", "children-score", "children-continuation", "gate"],
+        "specimen_ids": [CHILDREN_SPECIMEN_ID, FLIM_SPECIMEN_ID],
+        "commands": [
+            "capability",
+            "children-bindings",
+            "children-score",
+            "children-continuation",
+            "flim-report",
+            "flim-import",
+            "gate",
+        ],
+        "evidence_ladder": [
+            "authoritative_score",
+            "community_symbolic_witness",
+            "blind_audio_inference",
+            "cross_modal_accepted",
+            "performance_realization",
+        ],
         "branch_isolation": {
             "score": ["score"],
+            "symbolic": ["symbolic"],
             "audio": ["audio"],
-            "convergence": ["score", "audio", "convergence"],
+            "convergence": ["score", "symbolic", "audio", "convergence"],
         },
         "score_branch": {
             "custody": True,
@@ -49,6 +71,15 @@ def specimen_capability() -> dict[str, Any]:
             "illegal_negative_control": True,
             "continuation_midi_lowering": True,
         },
+        "community_symbolic_branch": {
+            "exact_pack_custody": True,
+            "reported_observation_ledger": True,
+            "target_conditioned_performance_score": True,
+            "proof_carrying_adjacent_move": True,
+            "mixscore_handoff": True,
+            "blind_audio_inference": False,
+            "whole_organism_passed": False,
+        },
         "full_gate_requires": [
             "independent audio ObservationLedger",
             "cross-modal convergence",
@@ -59,7 +90,7 @@ def specimen_capability() -> dict[str, Any]:
         ],
         "requires_network": False,
         "requires_cloud": False,
-        "authority": "Specimen identities, evidence lineage, form, answer keys, convergence reports, and Buffalo Gate receipts remain EarCrate data",
+        "authority": "Specimen identities, evidence tiers, branch lineage, form, answer keys, witness reports, convergence reports, and Buffalo Gate receipts remain EarCrate data",
     }
     value["capability_sha256"] = specimen_sha256_json(value)
     return value
@@ -126,6 +157,17 @@ def specimen_cli_main(argv: Sequence[str] | None = None) -> int:
     continuation_parser.add_argument("--sample-rate", type=int, default=8000)
     continuation_parser.add_argument("--overwrite", action="store_true")
 
+    subparsers.add_parser(
+        "flim-report",
+        help="validate and show the repository-managed Flim community-symbolic evidence contract",
+    )
+    flim_import = subparsers.add_parser(
+        "flim-import",
+        help="bind the exact external Flim compact proof pack without claiming blind-audio inference",
+    )
+    flim_import.add_argument("pack")
+    flim_import.add_argument("output")
+
     gate_parser = subparsers.add_parser("gate", help="assemble the current Buffalo Gate receipt")
     gate_parser.add_argument("score_dir")
     gate_parser.add_argument("output")
@@ -168,6 +210,14 @@ def specimen_cli_main(argv: Sequence[str] | None = None) -> int:
                 overwrite=bool(args.overwrite),
             )
             _json(result)
+            return 0
+        if args.command == "flim-report":
+            _manifest, report = flim_load_builtin()
+            _json({"ok": True, "capability": flim_capability(), "report": report})
+            return 0
+        if args.command == "flim-import":
+            receipt = flim_bind_proof_pack(args.pack, args.output)
+            _json({"ok": True, "receipt_path": str(Path(args.output).expanduser().resolve()), "receipt": receipt})
             return 0
         if args.command == "gate":
             manifest, _annotations = _manifest_annotations(args)

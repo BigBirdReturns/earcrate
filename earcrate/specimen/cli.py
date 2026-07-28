@@ -12,6 +12,7 @@ from .children import (
     children_load_bindings,
     children_load_builtin,
 )
+from .continuation import children_compose_adjacent_move
 from .gate import specimen_build_buffalo_gate
 from .model import (
     SpecimenError,
@@ -28,7 +29,7 @@ def specimen_capability() -> dict[str, Any]:
         "kind": "earcrate_buffalo_gate_capability",
         "ready": True,
         "specimen_ids": [CHILDREN_SPECIMEN_ID],
-        "commands": ["capability", "children-bindings", "children-score", "gate"],
+        "commands": ["capability", "children-bindings", "children-score", "children-continuation", "gate"],
         "branch_isolation": {
             "score": ["score"],
             "audio": ["audio"],
@@ -42,11 +43,14 @@ def specimen_capability() -> dict[str, Any]:
             "music_events": True,
             "harmony_frames": True,
             "mixscore_evidence": True,
+            "proof_carrying_adjacent_move": True,
+            "illegal_negative_control": True,
+            "continuation_midi_lowering": True,
         },
         "full_gate_requires": [
             "independent audio ObservationLedger",
             "cross-modal convergence",
-            "proof-carrying adjacent move with negative control",
+            "sealed specimen-specific adjacent-move receipt",
             "sealed-rack realization",
             "review-patch selective recomputation",
             "campaign evidence that changes a later decision",
@@ -110,6 +114,16 @@ def specimen_cli_main(argv: Sequence[str] | None = None) -> int:
     score_parser.add_argument("--annotations")
     score_parser.add_argument("--overwrite", action="store_true")
 
+    continuation_parser = subparsers.add_parser(
+        "children-continuation",
+        help="compose and prove a novel Children-adjacent continuation from the sealed score answer key",
+    )
+    continuation_parser.add_argument("score_dir", help="directory emitted by children-score")
+    continuation_parser.add_argument("output_dir")
+    continuation_parser.add_argument("--bars", type=int, default=8)
+    continuation_parser.add_argument("--sample-rate", type=int, default=8000)
+    continuation_parser.add_argument("--overwrite", action="store_true")
+
     gate_parser = subparsers.add_parser("gate", help="assemble the current Buffalo Gate receipt")
     gate_parser.add_argument("score_dir")
     gate_parser.add_argument("output")
@@ -138,6 +152,17 @@ def specimen_cli_main(argv: Sequence[str] | None = None) -> int:
                 annotations=annotations,
                 bindings=bindings,
                 output_dir=args.output_dir,
+                overwrite=bool(args.overwrite),
+            )
+            _json(result)
+            return 0
+        if args.command == "children-continuation":
+            score_root = Path(args.score_dir).expanduser().resolve()
+            result = children_compose_adjacent_move(
+                score_root / "score.answer-key.json",
+                args.output_dir,
+                bars=int(args.bars),
+                sample_rate=int(args.sample_rate),
                 overwrite=bool(args.overwrite),
             )
             _json(result)

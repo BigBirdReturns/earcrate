@@ -1,1 +1,1 @@
-content-addressed integration trigger
+content-addressed integration trigger v2

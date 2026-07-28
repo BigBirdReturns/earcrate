@@ -1,0 +1,120 @@
+{
+  "artifacts": [
+    {
+      "artifact_id": "community_symbolic_report",
+      "branch": "symbolic",
+      "expected_sha256": "1709b774fec8824547db8d7a385c8beef19ba4f4f39afdab5ecb95e56335d2f5",
+      "media_kind": "application/vnd.earcrate.community-symbolic-report+json",
+      "metadata": {
+        "source_document_sha256": "962620ae1fb44daab07f2927fcd978f429b57e019f64a544085a7a116cd0954a"
+      },
+      "path_hint": "specimens/flim_bad_plus_v1.community-symbolic.json",
+      "repository_managed": true,
+      "required_for": [
+        "community_symbolic_gate"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "community_proof_pack",
+      "branch": "symbolic",
+      "expected_sha256": "a7dabd71af884a4933b7e3c8077bc9d5e7b2e69de3fa9d370fd8b592d09cdf52",
+      "media_kind": "application/zip",
+      "metadata": {
+        "compact": true,
+        "source_media_bundled_in_repository": false
+      },
+      "path_hint": "flim_bad_plus_proof_compact.zip",
+      "repository_managed": false,
+      "required_for": [
+        "community_symbolic_gate",
+        "symbolic_witness",
+        "adjacent_move",
+        "mixscore_realization"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "reference_recording",
+      "branch": "audio",
+      "expected_sha256": null,
+      "media_kind": "audio/*",
+      "metadata": {},
+      "path_hint": "user-supplied owned or licensed exact recording",
+      "repository_managed": false,
+      "required_for": [
+        "blind_audio_inference",
+        "cross_modal_convergence"
+      ],
+      "status": "unbound"
+    },
+    {
+      "artifact_id": "approved_private_library",
+      "branch": "performance",
+      "expected_sha256": null,
+      "media_kind": "application/vnd.earcrate.approved-material-ledger+json",
+      "metadata": {},
+      "path_hint": "configured EarCrate workspace",
+      "repository_managed": false,
+      "required_for": [
+        "rights_eligible_realization"
+      ],
+      "status": "unbound"
+    }
+  ],
+  "credited_artist": "The Bad Plus",
+  "credited_composer": "Aphex Twin",
+  "evidence_tier": "community_symbolic_witness",
+  "expected": {
+    "adjacent_move": {
+      "bars": 16,
+      "bass_events": 64,
+      "drum_events": 304,
+      "duration_seconds": 29.8,
+      "master_stem_max_abs": 0.0,
+      "piano_events": 170,
+      "total_midi_note_ons": 538,
+      "transition_proof_count": 15
+    },
+    "bars": 56,
+    "beats": 224,
+    "meter": {
+      "denominator": 4,
+      "numerator": 4
+    },
+    "tempo_bpm": 138.0,
+    "transport": {
+      "executed_event_count": 6,
+      "master_stem_max_abs": 0.0,
+      "refused_event_count": 0,
+      "selected_event_count": 6
+    },
+    "witness": {
+      "acoustic_bass_events": 222,
+      "drum_events": 1152,
+      "duration_seconds": 99.339,
+      "master_stem_max_abs": 0.0,
+      "midi_tracks": 4,
+      "piano_events": 638,
+      "total_midi_note_ons": 2012
+    }
+  },
+  "kind": "earcrate_specimen_manifest",
+  "metadata": {
+    "blind_audio_gate_status": "blocked",
+    "evidence_tier": "community_symbolic_witness",
+    "position_in_evidence_ladder": "between authoritative score control and blind recording inference",
+    "whole_organism_gate_status": "blocked"
+  },
+  "rights": {
+    "community_sources_external": true,
+    "note": "The repository stores identities, evidence-tier declarations, schemas, and receipts; target and community source media remain external.",
+    "proof_pack_external": true,
+    "software_receipts_may_be_committed": true,
+    "source_media_committed": false,
+    "target_recording_external": true
+  },
+  "schema_version": 1,
+  "specimen_id": "flim_bad_plus_v1",
+  "title": "Flim — The Bad Plus community-symbolic witness"
+}

@@ -67,7 +67,7 @@
         "refused_event_count",
         "program_sha256",
         "execution_sha256",
-        "neutral_wav_sha256"
+        "neutral_pcm_f32le_sha256"
       ],
       "properties": {
         "semantic_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -76,7 +76,7 @@
         "refused_event_count": {"const": 0},
         "program_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "execution_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "neutral_wav_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "neutral_pcm_f32le_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "stem_count": {"type": "integer", "minimum": 0}
       },
       "additionalProperties": true

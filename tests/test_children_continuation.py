@@ -42,7 +42,7 @@ def test_children_adjacent_move_is_legal_novel_deterministic_and_refuses_negativ
     assert receipt["receipt_sha256"] == second["receipt"]["receipt_sha256"]
     assert receipt["composition_sha256"] == second["receipt"]["composition_sha256"]
     assert receipt["midi"]["semantic_sha256"] == second["receipt"]["midi"]["semantic_sha256"]
-    assert receipt["midi"]["neutral_wav_sha256"] == second["receipt"]["midi"]["neutral_wav_sha256"]
+    assert receipt["midi"]["neutral_pcm_f32le_sha256"] == second["receipt"]["midi"]["neutral_pcm_f32le_sha256"]
 
     gate = specimen_build_buffalo_gate(
         manifest=specimen_read_json(score_root / "specimen.manifest.bound.json"),

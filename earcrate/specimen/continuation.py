@@ -10,9 +10,13 @@ terminal-tension negative control. It never consults the commercial recording or
 private library.
 """
 
+import hashlib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+import numpy as np
+import soundfile as sf
 
 from earcrate.midi.codec import midi_write
 from earcrate.midi.model import midi_seal_ledger
@@ -429,6 +433,20 @@ def _continuation_midi(
     return ledger
 
 
+
+def _canonical_pcm_sha256(path: str | Path) -> str:
+    """Hash decoded stereo float PCM, independent of WAV container metadata."""
+    audio, sample_rate = sf.read(
+        str(Path(path).expanduser().resolve()),
+        always_2d=True,
+        dtype="float32",
+    )
+    payload = int(sample_rate).to_bytes(4, "little")
+    payload += int(audio.shape[1]).to_bytes(2, "little")
+    payload += np.asarray(audio, dtype="<f4").tobytes(order="C")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def children_compose_adjacent_move(
     answer_key: str | Path | Mapping[str, Any],
     output_dir: str | Path,
@@ -637,6 +655,7 @@ def children_compose_adjacent_move(
             "refused_event_count": int(render["refused_event_count"]),
             "program_sha256": str(render["program_sha256"]),
             "execution_sha256": str(render["execution_sha256"]),
+            "neutral_pcm_f32le_sha256": _canonical_pcm_sha256(neutral_path),
             "neutral_wav_sha256": str(render["output_sha256"]),
             "stem_count": len(render.get("stems") or []),
         },
@@ -647,7 +666,14 @@ def children_compose_adjacent_move(
             "source_media_bundled": False,
         },
     }
-    receipt["receipt_sha256"] = specimen_sha256_json(receipt)
+    receipt["receipt_hash_policy"] = {
+        "authority": "decoded stereo float32 PCM",
+        "excluded_delivery_fields": ["midi.neutral_wav_sha256"],
+        "reason": "WAV container metadata is not musical identity",
+    }
+    receipt_payload = deepcopy(receipt)
+    receipt_payload["midi"].pop("neutral_wav_sha256", None)
+    receipt["receipt_sha256"] = specimen_sha256_json(receipt_payload)
     receipt_path = destination / "children.adjacent.receipt.json"
     specimen_write_json_atomic(receipt_path, receipt)
     return {

@@ -24,6 +24,9 @@ on:
       - ".gate8/apply_flim_community_witness.py"
       - ".github/workflows/song-reader.yml"
 
+permissions:
+  contents: write
+
 jobs:
   reader-proof:
     strategy:
@@ -39,6 +42,9 @@ jobs:
       NUMEXPR_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: agent/children-buffalo-gate
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -109,3 +115,12 @@ jobs:
           retention-days: 30
       - name: Compile reader and specimen packages
         run: python -m compileall -q earcrate/reader earcrate/specimen
+      - name: Commit the verified integrated tree
+        if: runner.os == 'Linux'
+        run: |
+          rm -f .gate8/flim_community_bootstrap.trigger
+          git config user.name "EarCrate Flim integration"
+          git config user.email "noreply@github.com"
+          git add -A
+          git commit -m "Add Flim community-symbolic witness tier"
+          git push origin HEAD:agent/children-buffalo-gate

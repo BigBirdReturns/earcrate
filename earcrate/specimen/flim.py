@@ -57,7 +57,8 @@ def flim_load_builtin() -> tuple[dict[str, Any], dict[str, Any]]:
     normalized = specimen_normalize_manifest(manifest)
     if str(normalized["specimen_id"]) != FLIM_SPECIMEN_ID:
         raise SpecimenError("built-in Flim manifest belongs to another specimen")
-    if str(normalized.get("evidence_tier") or "") != "community_symbolic_witness":
+    evidence_tier = str((normalized.get("metadata") or {}).get("evidence_tier") or manifest.get("evidence_tier") or "")
+    if evidence_tier != "community_symbolic_witness":
         raise SpecimenError("Flim must remain in the community-symbolic evidence tier")
     report_artifact = next(row for row in normalized["artifacts"] if row["artifact_id"] == "community_symbolic_report")
     if str(report_artifact.get("expected_sha256") or "") != report_raw_sha256:
@@ -87,7 +88,7 @@ def flim_capability() -> dict[str, Any]:
         "kind": "earcrate_flim_community_symbolic_capability",
         "ready": True,
         "specimen_id": FLIM_SPECIMEN_ID,
-        "evidence_tier": str(manifest["evidence_tier"]),
+        "evidence_tier": str((manifest.get("metadata") or {}).get("evidence_tier") or "community_symbolic_witness"),
         "proof_pack_sha256": FLIM_PROOF_PACK_SHA256,
         "report_sha256": str(report["report_sha256"]),
         "witness_note_count": int(report["witness"]["total_midi_note_ons"]),

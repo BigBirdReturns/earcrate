@@ -97,7 +97,10 @@ def specimen_capability() -> dict[str, Any]:
 
 
 def _json(value: Any, *, stream: Any = sys.stdout) -> None:
-    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True), file=stream)
+    # Escape non-ASCII code points so CLI output remains valid on Windows consoles
+    # whose active code page cannot encode musical symbols such as the flat sign.
+    # JSON consumers recover the original Unicode values when parsing the escapes.
+    print(json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True), file=stream)
 
 
 def _manifest_annotations(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:

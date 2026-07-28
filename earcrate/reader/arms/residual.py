@@ -18,6 +18,50 @@ def _reader_bandpass(signal: np.ndarray, sample_rate: int, low_hz: float, high_h
     return sosfiltfilt(butter(4, [low, high], btype="bandpass", fs=sample_rate, output="sos"), signal).astype(np.float32)
 
 
+def _reader_onset_peak_frames(
+    onset_envelope: np.ndarray,
+    *,
+    delta: float = 0.12,
+    wait: int = 2,
+) -> np.ndarray:
+    """Select deterministic local onset peaks without a JIT peak-picker.
+
+    ``librosa.onset.onset_detect`` delegates to a numba-backed peak picker in
+    supported installations. On long commercial recordings that JIT boundary can
+    fail below Python rather than raising a recoverable exception. The reader only
+    needs stable local maxima for residual density and foreground entry, so keep that
+    small authority explicit, finite, and pure NumPy.
+    """
+
+    envelope = np.nan_to_num(
+        np.asarray(onset_envelope, dtype=np.float64),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+    if envelope.size == 0:
+        return np.zeros(0, dtype=np.int64)
+    if envelope.size < 3:
+        return np.flatnonzero(envelope > 0.0).astype(np.int64, copy=False)
+
+    threshold = float(np.median(envelope) + float(delta) * np.std(envelope))
+    candidates = np.flatnonzero(
+        (envelope[1:-1] > envelope[:-2])
+        & (envelope[1:-1] >= envelope[2:])
+        & (envelope[1:-1] >= threshold)
+    ) + 1
+
+    accepted: list[int] = []
+    minimum_distance = max(0, int(wait))
+    for candidate in candidates.tolist():
+        current = int(candidate)
+        if not accepted or current - accepted[-1] > minimum_distance:
+            accepted.append(current)
+        elif envelope[current] > envelope[accepted[-1]]:
+            accepted[-1] = current
+    return np.asarray(accepted, dtype=np.int64)
+
+
 def reader_residual_arm(
     reference: np.ndarray,
     recurrence_render: np.ndarray,
@@ -43,15 +87,7 @@ def reader_residual_arm(
         segment = center[start:end]
         center_energy.append(float(np.sqrt(np.mean(segment ** 2) + 1e-12)))
         phrase_onset = librosa.onset.onset_strength(y=segment, sr=sample_rate, hop_length=256)
-        phrase_hits = librosa.onset.onset_detect(
-            onset_envelope=phrase_onset,
-            sr=sample_rate,
-            hop_length=256,
-            units="time",
-            backtrack=False,
-            delta=0.12,
-            wait=2,
-        )
+        phrase_hits = _reader_onset_peak_frames(phrase_onset, delta=0.12, wait=2)
         onset_density.append(float(len(phrase_hits) / max(phrase_durations[index], 1e-6)))
     split = max(1, len(center_energy) // 2)
     baseline_energy = float(np.median(center_energy[:split]))
@@ -80,15 +116,8 @@ def reader_residual_arm(
     frame_end = min(int(body["frames"]), int(round(phrase_end * sample_rate)))
 
     onset = librosa.onset.onset_strength(y=center[frame_start:frame_end], sr=sample_rate, hop_length=256)
-    onset_times = librosa.onset.onset_detect(
-        onset_envelope=onset,
-        sr=sample_rate,
-        hop_length=256,
-        units="time",
-        backtrack=False,
-        delta=0.12,
-        wait=2,
-    )
+    onset_frames = _reader_onset_peak_frames(onset, delta=0.12, wait=2)
+    onset_times = onset_frames.astype(np.float64) * (256.0 / float(sample_rate))
     eligible_onsets = [float(value) for value in onset_times if float(value) >= 0.20]
     foreground_offset = eligible_onsets[0] if eligible_onsets else (float(onset_times[0]) if len(onset_times) else 0.0)
     foreground_start = min(phrase_end, phrase_start + foreground_offset)

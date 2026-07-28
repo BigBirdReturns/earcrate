@@ -14,13 +14,17 @@ ARCHIVE_SHA256 = "1c5c9494a8d794599555094e6aa3d5b1e5af443e75577d57a276849bfc6c0a
 PARTS = tuple(f"part{index:02d}" for index in range(6))
 EXPECTED_FILES = 25
 EXTRACTED_BUILDER_SHA256 = "20d1c89eaf73533356fc0e5eb917bdef8a3e44301648f1400ead5691fb7a64e0"
-PATCHED_BUILDER_SHA256 = "1ca82a8f0336990810497ba8d102df99b0e372818491c9bb15ce99d616166978"
+PATCHED_BUILDER_SHA256 = "750fea60c0a6d9eea29ea9ed6dc656039e9d7f79c3754a9d512d21776a315329"
 DIRECTOR_AGGREGATE = '"music/player_piano.py", "music/heritage.py", "music/director.py", "music/source_phrase_model.py", "music/source_phrase_audio.py",'
 DIRECTOR_COMPONENTS = '"music/player_piano.py", "music/heritage.py", "music/director_validation.py", "music/director_render.py", "music/source_phrase_model.py", "music/source_phrase_audio.py",'
 PROJECT_SOURCES_ANCHOR = "project_sources = {rel: _strip_project_imports("
 PACKAGE_INSERT_ANCHOR = "parts.insert(-1, project_bootstrap)\nparts.insert(-1, specimen_bootstrap)"
 PROJECT_PACKAGE_ANCHOR = '_project_sys.modules["earcrate.project"] = _project_package\n'
 SPECIMEN_PACKAGE_ANCHOR = '_specimen_sys.modules["earcrate.specimen"] = _specimen_package\n'
+PROJECT_SEED_ANCHOR = "_project_seed = dict(globals())"
+PROJECT_SEED_FILTERED = '_project_seed = {k: v for k, v in globals().items() if not k.startswith("__")}'
+SPECIMEN_SEED_ANCHOR = "_specimen_seed = dict(globals())"
+SPECIMEN_SEED_FILTERED = '_specimen_seed = {k: v for k, v in globals().items() if not k.startswith("__")}'
 FLAT_PACKAGE_BOOTSTRAP = 'flat_package_bootstrap = r\'\'\'\n# ===== flattened package namespace bootstrap =====\n# Project and specimen modules retain explicit cross-organ imports. The ordinary\n# single-file modules above are concatenated into one namespace, so expose that\n# exact namespace through package-shaped module shims before executing the embedded\n# package modules. Shims contain no second implementation; they are import views\n# over the already-loaded authority.\nimport sys as _flat_sys\nimport types as _flat_types\n_flat_seed = {k: v for k, v in globals().items() if not k.startswith("__")}\n_flat_root = _flat_sys.modules.get("earcrate")\nif not isinstance(_flat_root, _flat_types.ModuleType):\n    _flat_root = _flat_types.ModuleType("earcrate")\n    _flat_sys.modules["earcrate"] = _flat_root\n_flat_root.__dict__.update(dict(_flat_seed))\n_flat_root.__package__ = "earcrate"\n_flat_root.__path__ = []\n\ndef _flat_ensure_module(_flat_name, _flat_is_package):\n    _flat_module = _flat_sys.modules.get(_flat_name)\n    if not isinstance(_flat_module, _flat_types.ModuleType):\n        _flat_module = _flat_types.ModuleType(_flat_name)\n        _flat_sys.modules[_flat_name] = _flat_module\n    _flat_module.__dict__.update(dict(_flat_seed))\n    _flat_module.__package__ = _flat_name if _flat_is_package else _flat_name.rpartition(".")[0]\n    _flat_module.__file__ = "<embedded>/" + _flat_name.replace(".", "/") + ".py"\n    if _flat_is_package:\n        _flat_module.__path__ = []\n    _flat_parent_name, _, _flat_child = _flat_name.rpartition(".")\n    _flat_parent = _flat_sys.modules.get(_flat_parent_name)\n    if isinstance(_flat_parent, _flat_types.ModuleType):\n        setattr(_flat_parent, _flat_child, _flat_module)\n    return _flat_module\n\nfor _flat_rel in __FLAT_ORDER__:\n    _flat_components = _flat_rel[:-3].split("/")\n    _flat_is_init = bool(_flat_components and _flat_components[-1] == "__init__")\n    if _flat_is_init:\n        _flat_components = _flat_components[:-1]\n    for _flat_index in range(len(_flat_components)):\n        _flat_name = "earcrate." + ".".join(_flat_components[: _flat_index + 1])\n        _flat_is_package = _flat_index < len(_flat_components) - 1 or _flat_is_init\n        _flat_ensure_module(_flat_name, _flat_is_package)\n\n# Aggregate facades intentionally omitted from concatenation because their imports\n# would be stripped. Preserve their public import paths as views of the same seed.\nfor _flat_alias in ("earcrate.music.director", "earcrate.music.source_phrase"):\n    _flat_ensure_module(_flat_alias, False)\n\'\'\'.replace("__FLAT_ORDER__", repr(ORDER))\n\n'
 FORBIDDEN_MEDIA_SUFFIXES = {
     ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mid", ".midi",
@@ -94,6 +98,18 @@ def _repair_standalone_embedding() -> None:
         SPECIMEN_PACKAGE_ANCHOR,
         SPECIMEN_PACKAGE_ANCHOR + 'setattr(_specimen_sys.modules["earcrate"], "specimen", _specimen_package)\n',
         "specimen package attachment",
+    )
+    text = _replace_once(
+        text,
+        PROJECT_SEED_ANCHOR,
+        PROJECT_SEED_FILTERED,
+        "project bootstrap seed isolation",
+    )
+    text = _replace_once(
+        text,
+        SPECIMEN_SEED_ANCHOR,
+        SPECIMEN_SEED_FILTERED,
+        "specimen bootstrap seed isolation",
     )
     temporary = builder.with_name(f".{builder.name}.children-buffalo-standalone.tmp")
     temporary.write_text(text, encoding="utf-8")

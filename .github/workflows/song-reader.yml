@@ -7,10 +7,16 @@ on:
   pull_request:
     paths:
       - "earcrate/reader/**"
+      - "earcrate/specimen/**"
       - "earcrate/project/compiler_*.py"
+      - "earcrate/project/custody.py"
+      - "earcrate/project/continuation.py"
       - "tests/test_song_reader_cephalopod.py"
       - "tests/test_project_gate8_integration.py"
+      - "tests/test_buffalo_specimen.py"
+      - "tests/test_children_continuation.py"
       - "tests/run_gates.py"
+      - "schemas/earcrate_children_adjacent_move_receipt_v1.schema.json"
       - "build/make_singlefile.py"
       - "earcrate/__main__.py"
       - ".github/workflows/song-reader.yml"
@@ -22,7 +28,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       OMP_NUM_THREADS: "1"
       OPENBLAS_NUM_THREADS: "1"
@@ -46,8 +52,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install pytest
-      - name: Run cephalopod reader gates
-        run: python -m pytest -vv --tb=long --junitxml=reader-tests.xml tests/test_song_reader_cephalopod.py tests/test_project_gate8_integration.py
+      - name: Run cephalopod, custody, and Buffalo continuation gates
+        run: >-
+          python -m pytest -vv --tb=long --junitxml=reader-tests.xml
+          tests/test_song_reader_cephalopod.py
+          tests/test_project_gate8_integration.py
+          tests/test_buffalo_specimen.py
+          tests/test_children_continuation.py
       - name: Retain reader test ledger
         if: always()
         uses: actions/upload-artifact@v4
@@ -59,7 +70,9 @@ jobs:
       - name: Verify package and standalone surfaces
         run: |
           python -m earcrate reader capabilities
+          python -m earcrate buffalo capability
           python build/make_singlefile.py
           python dist/earcrate.py reader capabilities
-      - name: Compile reader package
-        run: python -m compileall -q earcrate/reader
+          python dist/earcrate.py buffalo capability
+      - name: Compile reader and specimen packages
+        run: python -m compileall -q earcrate/reader earcrate/specimen

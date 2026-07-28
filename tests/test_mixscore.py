@@ -8,7 +8,6 @@ from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
-import pytest
 import soundfile as sf
 
 from earcrate.mix.model import (
@@ -79,8 +78,12 @@ def test_mixscore_is_deterministic_and_refuses_changed_source_identity(tmp_path:
     audio, sample_rate = sf.read(source, dtype="float32", always_2d=True)
     audio[0, 0] = np.float32(audio[0, 0] + 0.125)
     sf.write(source, audio, sample_rate, subtype="FLOAT")
-    with pytest.raises(MixScoreError, match="source identity changed"):
+    try:
         mixscore_render(score, base_dir=base_dir)
+    except MixScoreError as exc:
+        assert "source identity changed" in str(exc)
+    else:
+        raise AssertionError("modified source identity was not refused")
 
 
 def test_mixscore_capability_and_cli_demo_use_the_real_renderer(tmp_path: Path) -> None:

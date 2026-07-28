@@ -12,7 +12,7 @@ from .children import (
     children_load_bindings,
     children_load_builtin,
 )
-from .continuation import children_compose_adjacent_move
+from .continuation_dense import children_compose_adjacent_move
 from .gate import specimen_build_buffalo_gate
 from .model import (
     SpecimenError,
@@ -44,6 +44,8 @@ def specimen_capability() -> dict[str, Any]:
             "harmony_frames": True,
             "mixscore_evidence": True,
             "proof_carrying_adjacent_move": True,
+            "rhythmic_identity_obligation": True,
+            "pitch_and_harmony_novelty": True,
             "illegal_negative_control": True,
             "continuation_midi_lowering": True,
         },
@@ -92,7 +94,7 @@ def _bindings_template(path: str | Path) -> dict[str, Any]:
             "reference_recording": "",
             "approved_private_library": "",
         },
-        "note": "score_annotations is repository-managed and resolves from specimens/children_v1.annotations.json",
+        "note": "score_annotations is repository-managed; package and standalone modes materialize the exact embedded bytes when needed",
     }
     specimen_write_json_atomic(path, value)
     return {"ok": True, "path": str(Path(path).expanduser().resolve()), "specimen_id": CHILDREN_SPECIMEN_ID}
@@ -116,7 +118,7 @@ def specimen_cli_main(argv: Sequence[str] | None = None) -> int:
 
     continuation_parser = subparsers.add_parser(
         "children-continuation",
-        help="compose and prove a novel Children-adjacent continuation from the sealed score answer key",
+        help="compose and prove a rhythm-legible Children-adjacent continuation from the sealed score answer key",
     )
     continuation_parser.add_argument("score_dir", help="directory emitted by children-score")
     continuation_parser.add_argument("output_dir")

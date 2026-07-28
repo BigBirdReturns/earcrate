@@ -1,5 +1,8 @@
 """EarCrate's canonical project and causal-performance engine."""
 
+import sys as _project_sys
+from typing import Any, Mapping
+
 from .commands import apply_command
 from .compiler import compile_project, import_legacy_arrangement, prepare_source_asset
 from .export import export_project
@@ -20,6 +23,38 @@ from .custody import (
 from .library import project_real_library_handshake
 from .continuation import project_extend_causal_score, project_verify_causal_continuation
 from .source_execution import project_execute_registered_source_phrase
+from .util import ValidationError
+
+
+def _compatible_score_family(score: Mapping[str, Any]) -> str:
+    """Recognize both sealed and early structural DJ stage-score artifacts.
+
+    The first director artifacts predate the explicit ``schema`` string but already
+    contain the complete version-1 stage-score contract. Historical custody must
+    preserve those exact bytes rather than rewriting them just to add a marker.
+    """
+    if str(score.get("schema") or "") == "earcrate/dj-stage-score@1":
+        return "dj_stage_score"
+    if (
+        int(score.get("schema_version") or 0) == 1
+        and str(score.get("stage_id") or "")
+        and isinstance(score.get("sections"), list)
+        and isinstance(score.get("events"), list)
+        and int(score.get("ticks_per_beat") or 0) > 0
+        and int(score.get("total_ticks") or 0) > 0
+    ):
+        return "dj_stage_score"
+    if str(score.get("kind") or "") == "earcrate_player_piano_composition":
+        return "player_piano_composition"
+    raise ValidationError("unsupported causal-score artifact family")
+
+
+# Package mode and the generated single-file project bootstrap both load custody
+# before this facade. Patch the private family discriminator in that already-loaded
+# module so old accepted artifacts retain exact historical bytes on every surface.
+_custody_module = _project_sys.modules.get(__name__ + ".custody")
+if _custody_module is not None:
+    setattr(_custody_module, "_score_family", _compatible_score_family)
 
 ProjectStore = Gate8ProjectStore
 

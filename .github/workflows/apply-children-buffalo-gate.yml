@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/children-buffalo-gate
+  pull_request:
+    branches:
+      - agent/song-reader-cephalopod-foundation
 
 permissions:
   contents: write
@@ -14,7 +17,7 @@ concurrency:
 
 jobs:
   apply:
-    if: contains(github.event.head_commit.message, '[children-buffalo-bootstrap]')
+    if: github.event_name == 'pull_request' || contains(github.event.head_commit.message, '[children-buffalo-bootstrap]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

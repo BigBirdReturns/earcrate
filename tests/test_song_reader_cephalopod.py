@@ -134,34 +134,39 @@ def test_residual_peak_selector_is_deterministic_finite_and_wait_bounded() -> No
     assert np.all(np.diff(first) > 2)
 
 
-def test_residual_arm_does_not_call_librosa_jit_peak_picker(monkeypatch) -> None:
+def test_residual_arm_does_not_call_librosa_jit_peak_picker() -> None:
     def forbidden(*_args, **_kwargs):
         raise AssertionError("residual arm called librosa.onset.onset_detect")
 
-    monkeypatch.setattr(librosa.onset, "onset_detect", forbidden)
-    sample_rate = 8_000
-    duration_seconds = 8.0
-    frames = int(sample_rate * duration_seconds)
-    time = np.arange(frames, dtype=np.float64) / sample_rate
-    mono = (0.08 * np.sin(2.0 * np.pi * 330.0 * time)).astype(np.float32)
-    for second in (0.5, 2.5, 4.5, 6.5):
-        start = int(second * sample_rate)
-        stop = min(frames, start + int(0.08 * sample_rate))
-        mono[start:stop] += np.hanning(stop - start).astype(np.float32) * 0.35
-    reference = np.stack([mono, mono], axis=1)
-    recurrence = np.zeros_like(reference)
-    result = reader_residual_arm(
-        reference,
-        recurrence,
-        {"phrase_starts": [0.0, 2.0, 4.0, 6.0]},
-        sample_rate,
-        {
-            "body_sha256": "a" * 64,
-            "frames": frames,
-            "duration_seconds": duration_seconds,
-        },
-        {"unique_residual": {}},
-    )
+    original = librosa.onset.onset_detect
+    librosa.onset.onset_detect = forbidden
+    try:
+        sample_rate = 8_000
+        duration_seconds = 8.0
+        frames = int(sample_rate * duration_seconds)
+        time = np.arange(frames, dtype=np.float64) / sample_rate
+        mono = (0.08 * np.sin(2.0 * np.pi * 330.0 * time)).astype(np.float32)
+        for second in (0.5, 2.5, 4.5, 6.5):
+            start = int(second * sample_rate)
+            stop = min(frames, start + int(0.08 * sample_rate))
+            mono[start:stop] += np.hanning(stop - start).astype(np.float32) * 0.35
+        reference = np.stack([mono, mono], axis=1)
+        recurrence = np.zeros_like(reference)
+        result = reader_residual_arm(
+            reference,
+            recurrence,
+            {"phrase_starts": [0.0, 2.0, 4.0, 6.0]},
+            sample_rate,
+            {
+                "body_sha256": "a" * 64,
+                "frames": frames,
+                "duration_seconds": duration_seconds,
+            },
+            {"unique_residual": {}},
+        )
+    finally:
+        librosa.onset.onset_detect = original
+
     assert result["diagnostics"]["reference_derived_unique_audio_used"] is True
     assert len(result["diagnostics"]["phrase_onset_density"]) == 4
     assert np.all(np.isfinite(result["diagnostics"]["phrase_onset_density"]))

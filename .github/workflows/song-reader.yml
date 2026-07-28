@@ -74,5 +74,13 @@ jobs:
           python build/make_singlefile.py
           python dist/earcrate.py reader capabilities
           python dist/earcrate.py buffalo capability
+      - name: Retain standalone Buffalo artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: earcrate-standalone-buffalo-${{ github.run_id }}
+          path: dist/earcrate.py
+          if-no-files-found: error
+          retention-days: 30
       - name: Compile reader and specimen packages
         run: python -m compileall -q earcrate/reader earcrate/specimen

@@ -15,10 +15,13 @@ on:
       - "tests/test_project_gate8_integration.py"
       - "tests/test_buffalo_specimen.py"
       - "tests/test_children_continuation.py"
+      - "tests/test_flim_community_witness.py"
       - "tests/run_gates.py"
       - "schemas/earcrate_children_adjacent_move_receipt_v1.schema.json"
+      - "schemas/earcrate_community_symbolic_*.schema.json"
       - "build/make_singlefile.py"
       - "earcrate/__main__.py"
+      - ".gate8/apply_flim_community_witness.py"
       - ".github/workflows/song-reader.yml"
 
 jobs:
@@ -28,7 +31,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       OMP_NUM_THREADS: "1"
       OPENBLAS_NUM_THREADS: "1"
@@ -52,13 +55,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install pytest
-      - name: Run cephalopod, custody, and Buffalo continuation gates
+      - name: Materialize exact Flim integration tree
+        run: python .gate8/apply_flim_community_witness.py
+      - name: Run cephalopod, custody, Buffalo continuation, and Flim gates
         run: >-
           python -m pytest -vv --tb=long --junitxml=reader-tests.xml
           tests/test_song_reader_cephalopod.py
           tests/test_project_gate8_integration.py
           tests/test_buffalo_specimen.py
           tests/test_children_continuation.py
+          tests/test_flim_community_witness.py
       - name: Retain reader test ledger
         if: always()
         uses: actions/upload-artifact@v4
@@ -71,15 +77,34 @@ jobs:
         run: |
           python -m earcrate reader capabilities
           python -m earcrate buffalo capability
+          python -m earcrate buffalo flim-report
           python build/make_singlefile.py
           python dist/earcrate.py reader capabilities
           python dist/earcrate.py buffalo capability
+          python dist/earcrate.py buffalo flim-report
       - name: Retain standalone Buffalo artifact
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: earcrate-standalone-buffalo-${{ github.run_id }}
           path: dist/earcrate.py
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain integrated source tree
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flim-integrated-source-${{ github.run_id }}
+          path: |
+            build/make_singlefile.py
+            earcrate/music/heritage.py
+            earcrate/specimen/model.py
+            earcrate/specimen/gate.py
+            tests/test_buffalo_specimen.py
+            schemas/earcrate_specimen_manifest_v1.schema.json
+            schemas/earcrate_observation_ledger_v1.schema.json
+            schemas/earcrate_children_adjacent_move_receipt_v1.schema.json
+            .github/workflows/song-reader.yml
           if-no-files-found: error
           retention-days: 30
       - name: Compile reader and specimen packages

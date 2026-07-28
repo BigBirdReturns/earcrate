@@ -1,0 +1,142 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_form_graph_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "edges": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "edge_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "edge_kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "evidence_observation_ids": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "from_node": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "guard": {
+            "type": "object"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "to_node": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "edge_id",
+          "from_node",
+          "to_node",
+          "edge_kind",
+          "guard",
+          "actions",
+          "priority",
+          "evidence_observation_ids"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "entry_node": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "form_graph_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_form_graph"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "nodes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "beats": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "markers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "node_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "printed_measure": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "node_id",
+          "printed_measure",
+          "beats",
+          "markers",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "repeat_regions": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "specimen_id": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "entry_node",
+    "nodes",
+    "edges",
+    "repeat_regions",
+    "metadata",
+    "form_graph_sha256"
+  ],
+  "title": "EarCrate printed form graph v1",
+  "type": "object"
+}

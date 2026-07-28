@@ -12,11 +12,13 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "midi/model.py", "midi/codec.py", "midi/render.py",
          "rack/model.py", "rack/demand.py", "rack/binding.py", "rack/binding_stable.py", "rack/sfz.py", "rack/render.py", "rack/render_fix.py", "rack/library.py", "rack/library_fix.py", "rack/multizone.py", "rack/portable.py",
          "midi/anatomy_grid.py", "midi/anatomy_structure.py", "midi/anatomy.py", "midi/arranger.py", "midi/arranger_fix.py",
-         "music/model.py", "music/law_context.py", "music/law_voice.py", "music/law_harmony.py", "music/laws.py", "music/equations.py", "music/player_piano.py", "music/heritage.py", "music/director.py", "music/source_phrase_model.py", "music/source_phrase_audio.py",
+         "music/model.py", "music/law_context.py", "music/law_voice.py", "music/law_harmony.py", "music/laws.py", "music/equations.py", "music/player_piano.py", "music/heritage.py", "music/director_validation.py", "music/director_render.py", "music/source_phrase_model.py", "music/source_phrase_audio.py",
          "reader/model.py", "reader/body.py", "reader/personas.py", "reader/arms/pulse.py", "reader/arms/layers.py", "reader/arms/recurrence.py", "reader/arms/residual.py", "reader/render.py", "reader/visualize.py", "reader/nervous_system.py", "reader/cli.py",
          "study/reference.py", "study/reference_grid.py", "study/reference_bundle.py", "study/reference_cli.py",
+         "mix/model.py", "mix/audio.py", "mix/transport.py", "mix/automation.py", "mix/render.py", "mix/cli.py",
          "live/model.py", "live/operators.py", "live/capabilities.py", "live/instrumentation.py", "live/planner.py", "live/engine.py", "live/runtime.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/performance.py", "live/audio_cli.py", "live/cli.py",
          "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
+SPECIMEN_FILES = ["model.py", "convergence.py", "children.py", "gate.py", "cli.py", "__init__.py"]
 PROJECT_FILES = [
     "util.py", "model.py", "causal_revision.py", "policy.py", "store.py", "gate8_store.py", "buffalo.py",
     "compiler_source_common.py", "compiler_source_crate.py", "compiler_source_manifest.py",
@@ -84,6 +86,7 @@ import base64
 html_b64 = base64.b64encode((PKG / "ui/static/index.html").read_bytes()).decode("ascii")
 profiles_b64 = {f.stem: base64.b64encode(f.read_bytes()).decode("ascii")
                 for f in sorted((ROOT / "profiles").glob("*.json")) if f.stem != "tastespec.schema"}
+specimen_text = {f.name: f.read_text(encoding="utf-8") for f in sorted((ROOT / "specimens").glob("*.json"))}
 parts = ["#!/usr/bin/env python3\nfrom __future__ import annotations\n# Auto-built from the earcrate package. Do not edit; edit the package.\nimport base64 as _b64\n"]
 for rel in ORDER:
     src = (PKG / rel).read_text(encoding="utf-8")
@@ -92,7 +95,7 @@ for rel in ORDER:
     if bad:
         raise SystemExit("indented earcrate imports would break the single-file dist at call time:\n  " + "\n  ".join(bad))
     body = "\n".join(lines)
-    if rel in {"study/reference_cli.py", "live/cli.py", "live/audio_cli.py"}:
+    if rel in {"study/reference_cli.py", "mix/cli.py", "specimen/cli.py", "live/cli.py", "live/audio_cli.py"}:
         marker = '\nif __name__ == "__main__":'
         if marker in body:
             body = body.split(marker, 1)[0]
@@ -112,6 +115,8 @@ for rel in ORDER:
             + "\n    if argv and argv[0] == \"reader\":\n        return reader_main(argv[1:])"
             + "\n    if argv and argv[0] == \"project\":\n        return project_main(argv[1:])"
             + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"mix\":\n        return mixscore_cli_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"buffalo\":\n        return specimen_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"live\":\n        return live_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"live-audio\":\n        return live_audio_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"reference\":\n        return reference_cli_main(argv[1:])"
@@ -120,6 +125,64 @@ for rel in ORDER:
             raise SystemExit("cli.py command dispatch insertion point is missing")
         body = body.replace(needle, replacement, 1)
     parts.append(f"\n# ===== {rel} =====\n" + body)
+
+specimen_sources = {}
+for rel in SPECIMEN_FILES:
+    source = (PKG / "specimen" / rel).read_text(encoding="utf-8")
+    if rel == "children.py":
+        source = source.replace("EMBEDDED_SPECIMENS: dict[str, str] = {}",
+                                "EMBEDDED_SPECIMENS: dict[str, str] = " + repr(specimen_text))
+    specimen_sources[rel] = "\n".join(_strip_package_imports(source))
+
+flat_package_bootstrap = r'''
+# ===== flattened package namespace bootstrap =====
+# Project and specimen modules retain explicit cross-organ imports. The ordinary
+# single-file modules above are concatenated into one namespace, so expose that
+# exact namespace through package-shaped module shims before executing the embedded
+# package modules. Shims contain no second implementation; they are import views
+# over the already-loaded authority.
+import sys as _flat_sys
+import types as _flat_types
+_flat_seed = {k: v for k, v in globals().items() if not k.startswith("__")}
+_flat_root = _flat_sys.modules.get("earcrate")
+if not isinstance(_flat_root, _flat_types.ModuleType):
+    _flat_root = _flat_types.ModuleType("earcrate")
+    _flat_sys.modules["earcrate"] = _flat_root
+_flat_root.__dict__.update(dict(_flat_seed))
+_flat_root.__package__ = "earcrate"
+_flat_root.__path__ = []
+
+def _flat_ensure_module(_flat_name, _flat_is_package):
+    _flat_module = _flat_sys.modules.get(_flat_name)
+    if not isinstance(_flat_module, _flat_types.ModuleType):
+        _flat_module = _flat_types.ModuleType(_flat_name)
+        _flat_sys.modules[_flat_name] = _flat_module
+    _flat_module.__dict__.update(dict(_flat_seed))
+    _flat_module.__package__ = _flat_name if _flat_is_package else _flat_name.rpartition(".")[0]
+    _flat_module.__file__ = "<embedded>/" + _flat_name.replace(".", "/") + ".py"
+    if _flat_is_package:
+        _flat_module.__path__ = []
+    _flat_parent_name, _, _flat_child = _flat_name.rpartition(".")
+    _flat_parent = _flat_sys.modules.get(_flat_parent_name)
+    if isinstance(_flat_parent, _flat_types.ModuleType):
+        setattr(_flat_parent, _flat_child, _flat_module)
+    return _flat_module
+
+for _flat_rel in __FLAT_ORDER__:
+    _flat_components = _flat_rel[:-3].split("/")
+    _flat_is_init = bool(_flat_components and _flat_components[-1] == "__init__")
+    if _flat_is_init:
+        _flat_components = _flat_components[:-1]
+    for _flat_index in range(len(_flat_components)):
+        _flat_name = "earcrate." + ".".join(_flat_components[: _flat_index + 1])
+        _flat_is_package = _flat_index < len(_flat_components) - 1 or _flat_is_init
+        _flat_ensure_module(_flat_name, _flat_is_package)
+
+# Aggregate facades intentionally omitted from concatenation because their imports
+# would be stripped. Preserve their public import paths as views of the same seed.
+for _flat_alias in ("earcrate.music.director", "earcrate.music.source_phrase"):
+    _flat_ensure_module(_flat_alias, False)
+'''.replace("__FLAT_ORDER__", repr(ORDER))
 
 project_sources = {rel: _strip_project_imports(PROJECT_IMPORT_SOURCES.get(rel, "") + "\n" + (PKG / "project" / rel).read_text(encoding="utf-8")) for rel in PROJECT_FILES}
 project_bootstrap = r'''
@@ -130,8 +193,9 @@ _project_package = _project_types.ModuleType("earcrate.project")
 _project_package.__package__ = "earcrate.project"
 _project_package.__path__ = []
 _project_sys.modules["earcrate.project"] = _project_package
+setattr(_project_sys.modules["earcrate"], "project", _project_package)
 _project_sources = __PROJECT_SOURCES__
-_project_seed = dict(globals())
+_project_seed = {k: v for k, v in globals().items() if not k.startswith("__")}
 _project_modules = {}
 for _project_rel in __PROJECT_FILES__:
     _project_name = "earcrate.project" if _project_rel == "__init__.py" else "earcrate.project." + _project_rel[:-3]
@@ -153,12 +217,46 @@ for _project_rel, _project_module in _project_modules.items():
             setattr(_project_package, _project_export, getattr(_project_module, _project_export))
 project_main = _project_modules["gate8_cli.py"].main
 '''.replace("__PROJECT_SOURCES__", repr(project_sources)).replace("__PROJECT_FILES__", repr(PROJECT_FILES))
+specimen_bootstrap = r'''
+# ===== specimen package bootstrap =====
+import sys as _specimen_sys
+import types as _specimen_types
+_specimen_package = _specimen_types.ModuleType("earcrate.specimen")
+_specimen_package.__package__ = "earcrate.specimen"
+_specimen_package.__path__ = []
+_specimen_sys.modules["earcrate.specimen"] = _specimen_package
+setattr(_specimen_sys.modules["earcrate"], "specimen", _specimen_package)
+_specimen_sources = __SPECIMEN_SOURCES__
+_specimen_seed = {k: v for k, v in globals().items() if not k.startswith("__")}
+_specimen_modules = {}
+for _specimen_rel in __SPECIMEN_FILES__:
+    _specimen_name = "earcrate.specimen" if _specimen_rel == "__init__.py" else "earcrate.specimen." + _specimen_rel[:-3]
+    _specimen_module = _specimen_package if _specimen_rel == "__init__.py" else _specimen_types.ModuleType(_specimen_name)
+    _specimen_module.__package__ = "earcrate.specimen"
+    _specimen_module.__file__ = "<embedded>/earcrate/specimen/" + _specimen_rel
+    _specimen_module.__dict__.update(dict(_specimen_seed))
+    _specimen_sys.modules[_specimen_name] = _specimen_module
+    exec(compile(_specimen_sources[_specimen_rel], _specimen_module.__file__, "exec"), _specimen_module.__dict__)
+    _specimen_modules[_specimen_rel] = _specimen_module
+    _specimen_seed.update({k: v for k, v in _specimen_module.__dict__.items() if not k.startswith("__")})
+for _specimen_rel, _specimen_module in _specimen_modules.items():
+    if _specimen_rel == "__init__.py":
+        continue
+    setattr(_specimen_package, _specimen_rel[:-3], _specimen_module)
+for _specimen_rel, _specimen_module in _specimen_modules.items():
+    for _specimen_export in getattr(_specimen_module, "__all__", ()):
+        if hasattr(_specimen_module, _specimen_export):
+            setattr(_specimen_package, _specimen_export, getattr(_specimen_module, _specimen_export))
+specimen_cli_main = _specimen_modules["cli.py"].specimen_cli_main
+'''.replace("__SPECIMEN_SOURCES__", repr(specimen_sources)).replace("__SPECIMEN_FILES__", repr(SPECIMEN_FILES))
+parts.insert(-1, flat_package_bootstrap)
 parts.insert(-1, project_bootstrap)
+parts.insert(-1, specimen_bootstrap)
 out = "\n".join(parts)
 if "if __name__" not in out.split("# ===== cli.py =====")[-1]:
     out += '\nif __name__ == "__main__":\n    import sys\n    sys.exit(main())\n'
 _h = hashlib.sha256()
-for _f in sorted(PKG.rglob("*.py")) + [PKG / "ui" / "static/index.html"]:
+for _f in sorted(PKG.rglob("*.py")) + [PKG / "ui" / "static/index.html"] + sorted((ROOT / "specimens").glob("*.json")):
     _h.update(_f.read_bytes())
 out = out.replace('"__BUILD_STAMP__"', f'"{_h.hexdigest()[:7]}"')
 dist = ROOT / "dist"

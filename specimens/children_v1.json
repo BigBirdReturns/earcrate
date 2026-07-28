@@ -1,0 +1,148 @@
+{
+  "artifacts": [
+    {
+      "artifact_id": "score_pdf",
+      "branch": "score",
+      "expected_sha256": "e029e1a3030800d7fb04c9f5163acb9270579a571d57f63eb63787df692d5845",
+      "media_kind": "application/pdf",
+      "path_hint": "Children-Sheet-Music-Robert-Miles-thepianonotes.com_.pdf",
+      "required_for": [
+        "score_gate"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "score_annotations",
+      "branch": "score",
+      "expected_sha256": "19a74cf70e23b44512b8e8481303a68148eb809f544548f3b39ae176bb6d4f7a",
+      "media_kind": "application/vnd.earcrate.children-score-annotations+json",
+      "path_hint": "specimens/children_v1.annotations.json",
+      "repository_managed": true,
+      "required_for": [
+        "score_gate"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "score_extraction",
+      "branch": "score",
+      "expected_sha256": "dfa85df39198afd6ff56fc0403d9f0c26a1b0fcfaea62d4f1d3fbc5e8691f219",
+      "media_kind": "application/vnd.earcrate.children-score-extraction+json",
+      "path_hint": "children_score_extraction.json",
+      "required_for": [
+        "score_gate"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "score_reconstruction_midi",
+      "branch": "score",
+      "expected_sha256": "7d7342ef9d60228be4f94464764edf293b2052f6667676cdaf137a1dc94655c9",
+      "media_kind": "audio/midi",
+      "path_hint": "children_score_reconstruction.mid",
+      "required_for": [
+        "score_gate",
+        "midi_realization"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "score_proof_receipt",
+      "branch": "score",
+      "expected_sha256": "e62bdbd86a6c7e4582169d14a83f3809c06d6fda10d798bd94ab46eb453248e6",
+      "media_kind": "application/vnd.earcrate.children-proof-receipt+json",
+      "path_hint": "children_proof_receipt.json",
+      "required_for": [
+        "score_gate"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "mix_score",
+      "branch": "performance",
+      "expected_sha256": "701eaa57aa48041ea17c99b52ceda202b79a70b82ae13f68cada2e1a2659b1cd",
+      "media_kind": "application/vnd.earcrate.mix-score+json",
+      "path_hint": "children_two_deck.mixscore.json",
+      "required_for": [
+        "mixscore_realization"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "mix_execution_ledger",
+      "branch": "performance",
+      "expected_sha256": "21353740ee1e3543945cb7fbfd4ddd3d1d4f02a54506d202959408c02666a96a",
+      "media_kind": "application/vnd.earcrate.mix-execution-ledger+json",
+      "path_hint": "children_two_deck.events.json",
+      "required_for": [
+        "mixscore_realization"
+      ],
+      "status": "bound"
+    },
+    {
+      "artifact_id": "reference_recording",
+      "branch": "audio",
+      "expected_sha256": null,
+      "media_kind": "audio/*",
+      "path_hint": "user-supplied owned or licensed recording",
+      "required_for": [
+        "audio_inference",
+        "cross_modal_convergence"
+      ],
+      "status": "unbound"
+    },
+    {
+      "artifact_id": "approved_private_library",
+      "branch": "performance",
+      "expected_sha256": null,
+      "media_kind": "application/vnd.earcrate.approved-material-ledger+json",
+      "path_hint": "configured EarCrate workspace",
+      "required_for": [
+        "rack_realization"
+      ],
+      "status": "unbound"
+    }
+  ],
+  "credited_artist": "Robert Miles",
+  "credited_composer": "Roberto Concina",
+  "expected": {
+    "key_signature": {
+      "fifths": -4,
+      "mode": "minor",
+      "tonic_pc": 5
+    },
+    "meter": {
+      "denominator": 4,
+      "numerator": 4
+    },
+    "midi_instrument_names": [
+      "Right Hand",
+      "Left Hand"
+    ],
+    "midi_note_count": 1257,
+    "mix_executed_event_count": 19,
+    "mix_refused_event_count": 0,
+    "mix_selected_event_count": 19,
+    "mix_stem_reconciliation_max_abs": 0.0,
+    "performed_measure_count": 105,
+    "printed_measure_count": 69,
+    "tempo_bpm": 130.0
+  },
+  "kind": "earcrate_specimen_manifest",
+  "metadata": {
+    "audio_answer_status": "unbound",
+    "cross_modal_gate_status": "pending_audio",
+    "score_adapter": "children_vector_score_adapter_v1",
+    "score_answer_key_status": "bound"
+  },
+  "rights": {
+    "note": "Music rights remain separate from EarCrate software rights. Repository data carries identities, schemas, annotations, policies, and receipts, not the score PDF or commercial recording.",
+    "recording_media_external": true,
+    "score_media_external": true,
+    "software_receipts_may_be_committed": true,
+    "source_media_committed": false
+  },
+  "schema_version": 1,
+  "specimen_id": "children_v1",
+  "title": "Children"
+}

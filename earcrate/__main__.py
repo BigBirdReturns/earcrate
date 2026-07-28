@@ -15,6 +15,16 @@ if len(sys.argv) > 1 and sys.argv[1] == "midi":
 
     sys.exit(midi_main(sys.argv[2:]))
 
+if len(sys.argv) > 1 and sys.argv[1] == "mix":
+    from earcrate.mix.cli import mixscore_cli_main
+
+    sys.exit(mixscore_cli_main(sys.argv[2:]))
+
+if len(sys.argv) > 1 and sys.argv[1] == "buffalo":
+    from earcrate.specimen.cli import specimen_cli_main
+
+    sys.exit(specimen_cli_main(sys.argv[2:]))
+
 if len(sys.argv) > 1 and sys.argv[1] == "live":
     from earcrate.live.cli import live_cli_main
 

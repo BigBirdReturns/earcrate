@@ -1,0 +1,126 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_children_score_annotations_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "chord_symbols": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "page": {
+            "maximum": 4,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "printed_measure": {
+            "maximum": 69,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "printed_measure",
+          "label",
+          "page",
+          "bbox"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "chord_vocabulary": {
+      "minProperties": 1,
+      "type": "object"
+    },
+    "form_markers": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "interpretive_limits": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "key_signature": {
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_children_score_annotations"
+    },
+    "meter": {
+      "type": "object"
+    },
+    "page_count": {
+      "const": 4
+    },
+    "performance_path_interpretation": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "provider": {
+      "type": "object"
+    },
+    "repeat_regions": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_pdf_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "specimen_id": {
+      "const": "children_v1"
+    },
+    "tempo": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "source_pdf_sha256",
+    "page_count",
+    "tempo",
+    "meter",
+    "key_signature",
+    "chord_vocabulary",
+    "chord_symbols",
+    "form_markers",
+    "repeat_regions",
+    "performance_path_interpretation",
+    "interpretive_limits",
+    "provider"
+  ],
+  "title": "EarCrate Children printed-score annotations v1",
+  "type": "object"
+}

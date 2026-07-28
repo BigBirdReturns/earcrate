@@ -1,0 +1,123 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_buffalo_gate_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buffalo_gate_passed": {
+      "type": "boolean"
+    },
+    "kind": {
+      "const": "earcrate_buffalo_gate_receipt"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "organs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_sha256s": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "checks": {
+            "type": "object"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "organ_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "blocked",
+              "failed",
+              "not_run"
+            ]
+          }
+        },
+        "required": [
+          "organ_id",
+          "status",
+          "required",
+          "artifact_sha256s",
+          "checks",
+          "blockers",
+          "failures",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "overall_status": {
+      "enum": [
+        "passed",
+        "blocked",
+        "failed"
+      ]
+    },
+    "passed_required_organ_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "required_organ_count": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "specimen_id": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "manifest_sha256",
+    "overall_status",
+    "buffalo_gate_passed",
+    "organs",
+    "required_organ_count",
+    "passed_required_organ_count",
+    "metadata",
+    "receipt_sha256"
+  ],
+  "title": "EarCrate whole-organism Buffalo Gate receipt v1",
+  "type": "object"
+}

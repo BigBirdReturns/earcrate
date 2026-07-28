@@ -1,0 +1,191 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_observation_ledger_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowed_ancestor_branches": {
+      "items": {
+        "enum": [
+          "score",
+          "audio",
+          "convergence",
+          "performance",
+          "review",
+          "evolution"
+        ]
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "branch": {
+      "enum": [
+        "score",
+        "audio",
+        "convergence",
+        "performance",
+        "review",
+        "evolution"
+      ]
+    },
+    "inputs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "ancestor_branches": {
+            "items": {
+              "enum": [
+                "score",
+                "audio",
+                "convergence",
+                "performance",
+                "review",
+                "evolution"
+              ]
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "artifact_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "branch": {
+            "enum": [
+              "score",
+              "audio",
+              "convergence",
+              "performance",
+              "review",
+              "evolution"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "branch",
+          "sha256",
+          "ancestor_branches",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_observation_ledger"
+    },
+    "ledger_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "observations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "object"
+          },
+          "branch": {
+            "enum": [
+              "score",
+              "audio",
+              "convergence",
+              "performance",
+              "review",
+              "evolution"
+            ]
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "observation_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provider": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provider_version": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "raw_evidence": {
+            "type": "object"
+          },
+          "source_artifact_ids": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "specimen_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "observation_id",
+          "specimen_id",
+          "branch",
+          "kind",
+          "address",
+          "value",
+          "confidence",
+          "source_artifact_ids",
+          "provider",
+          "provider_version",
+          "raw_evidence",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "specimen_id": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "branch",
+    "allowed_ancestor_branches",
+    "inputs",
+    "observations",
+    "metadata",
+    "ledger_sha256"
+  ],
+  "title": "EarCrate branch-isolated observation ledger v1",
+  "type": "object"
+}

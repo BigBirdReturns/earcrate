@@ -4,13 +4,12 @@ import hashlib
 import math
 import re
 import subprocess
-from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
-import scipy.signal as scipy_signal
 
+from earcrate.analyze.decode import resample_or_fit
 from earcrate.mix.model import MixScoreError
 
 
@@ -21,9 +20,11 @@ def _mixscore_file_sha256(path: Path) -> str:
             hasher.update(chunk)
     return hasher.hexdigest()
 
+
 def _mixscore_pcm_sha256(audio: np.ndarray) -> str:
     payload = np.asarray(audio, dtype="<f4", order="C").tobytes(order="C")
     return hashlib.sha256(payload).hexdigest()
+
 
 def _mixscore_resample_exact(audio: np.ndarray, target_frames: int) -> np.ndarray:
     source = np.asarray(audio, dtype=np.float32)
@@ -35,24 +36,10 @@ def _mixscore_resample_exact(audio: np.ndarray, target_frames: int) -> np.ndarra
         raise MixScoreError("cannot resample an empty source span")
     if source.shape[0] == target_frames:
         return source.astype(np.float32, copy=True)
-    if source.shape[0] < 32 or target_frames < 32:
-        old_x = np.linspace(0.0, 1.0, source.shape[0], endpoint=False, dtype=np.float64)
-        new_x = np.linspace(0.0, 1.0, target_frames, endpoint=False, dtype=np.float64)
-        return np.column_stack(
-            [np.interp(new_x, old_x, source[:, channel]) for channel in range(2)]
-        ).astype(np.float32)
-    ratio = Fraction(int(target_frames), int(source.shape[0])).limit_denominator(4096)
-    channels = []
-    for channel in range(2):
-        rendered = scipy_signal.resample_poly(
-            source[:, channel].astype(np.float64),
-            ratio.numerator,
-            ratio.denominator,
-        ).astype(np.float32)
-        if rendered.size < target_frames:
-            rendered = np.pad(rendered, (0, target_frames - rendered.size))
-        channels.append(rendered[:target_frames])
-    return np.column_stack(channels).astype(np.float32)
+    return np.column_stack(
+        [resample_or_fit(source[:, channel], target_frames) for channel in range(2)]
+    ).astype(np.float32)
+
 
 def _mixscore_decode_stereo(path: Path, sample_rate: int) -> np.ndarray:
     args = [
@@ -92,6 +79,7 @@ def _mixscore_decode_stereo(path: Path, sample_rate: int) -> np.ndarray:
         raise MixScoreError(f"decoded source contains non-finite PCM: {path}")
     return audio
 
+
 def _mixscore_resolve_path(path_text: str, base_dir: Path) -> Path:
     path = Path(path_text).expanduser()
     if not path.is_absolute():
@@ -101,12 +89,15 @@ def _mixscore_resolve_path(path_text: str, base_dir: Path) -> Path:
         raise MixScoreError(f"MixScore asset does not exist: {resolved}")
     return resolved
 
+
 def _mixscore_beat_to_frame(beat: float, *, sample_rate: int, bpm: float) -> int:
     return max(0, int(round(float(beat) * float(sample_rate) * 60.0 / float(bpm))))
+
 
 def _mixscore_source_beat_to_frame(asset: Mapping[str, Any], source_beat: float, sample_rate: int) -> int:
     seconds = float(asset["downbeat_seconds"]) + float(source_beat) * 60.0 / float(asset["source_bpm"])
     return max(0, int(round(seconds * sample_rate)))
+
 
 def _mixscore_deck_speed(state: Mapping[str, Any], loaded: Mapping[str, Any], master_bpm: float) -> float:
     base = float(master_bpm) / float(loaded["asset"]["source_bpm"]) if bool(state["sync"]) else 1.0
@@ -114,6 +105,7 @@ def _mixscore_deck_speed(state: Mapping[str, Any], loaded: Mapping[str, Any], ma
     if not 0.01 <= speed <= 16.0:
         raise MixScoreError(f"deck {state['deck_id']} playback speed {speed:.6f} is outside the renderer range")
     return speed
+
 
 def _mixscore_circular_loop_audio(
     loaded: Mapping[str, Any],
@@ -135,6 +127,7 @@ def _mixscore_circular_loop_audio(
         loop[:fade] = blend
         loop[-fade:] = blend
     return loop
+
 
 def _mixscore_render_transport_span(
     state: dict[str, Any],
@@ -175,6 +168,7 @@ def _mixscore_render_transport_span(
         state["source_frame"] = float(loop_start + ((phase + source_frames) % loop_length))
     return _mixscore_resample_exact(source, output_frames)
 
+
 def _mixscore_apply_pan(audio: np.ndarray, pan: np.ndarray) -> np.ndarray:
     output = np.asarray(audio, dtype=np.float32).copy()
     negative = pan < 0.0
@@ -187,11 +181,13 @@ def _mixscore_apply_pan(audio: np.ndarray, pan: np.ndarray) -> np.ndarray:
     output[:, 1] *= right
     return output
 
+
 def _mixscore_crossfader_side_gain(position: np.ndarray, side: str) -> np.ndarray:
     if side == "NONE":
         return np.ones_like(position, dtype=np.float32)
     theta = (np.asarray(position, dtype=np.float64) + 1.0) * math.pi / 4.0
     return (np.cos(theta) if side == "A" else np.sin(theta)).astype(np.float32)
+
 
 def _mixscore_safe_name(value: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value)).strip("-._")

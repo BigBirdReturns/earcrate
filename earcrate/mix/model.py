@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import tempfile
 from copy import deepcopy
 from pathlib import Path
@@ -426,6 +427,7 @@ def mixscore_seal(score: Mapping[str, Any]) -> dict[str, Any]:
 def mixscore_validate(score: Mapping[str, Any]) -> None:
     mixscore_seal(score)
 
+
 def mixscore_load(path: str | Path) -> tuple[dict[str, Any], Path]:
     score_path = Path(path).expanduser().resolve()
     try:
@@ -461,10 +463,11 @@ def mixscore_write_json(path: str | Path, value: Mapping[str, Any]) -> None:
 
 
 def mixscore_capability() -> dict[str, Any]:
+    ffmpeg_available = shutil.which("ffmpeg") is not None
     value = {
         "schema_version": MIX_SCORE_SCHEMA_VERSION,
         "kind": MIX_SCORE_KIND,
-        "ready": True,
+        "ready": ffmpeg_available,
         "renderer": "deterministic_offline_n_deck_source_transport",
         "time_domains": ["master_beat", "source_beat", "source_frame"],
         "operations": list(MIX_OPERATIONS),
@@ -489,6 +492,7 @@ def mixscore_capability() -> dict[str, Any]:
         "requires_network": False,
         "requires_cloud": False,
         "requires_gpu": False,
+        "requirements": {"ffmpeg": ffmpeg_available},
         "authority": "MixScore, source identities, event execution ledger, stems, and render receipt remain EarCrate data",
     }
     value["capability_sha256"] = mixscore_sha256_json(value)

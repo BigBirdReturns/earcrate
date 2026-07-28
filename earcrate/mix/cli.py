@@ -38,6 +38,8 @@ def _mixscore_scaffold(
     source_b_path = Path(source_b).expanduser().resolve()
     if not source_a_path.is_file() or not source_b_path.is_file():
         raise MixScoreError("mix scaffold sources must both exist")
+    if output_path in {source_a_path, source_b_path}:
+        raise MixScoreError("mix scaffold refuses to overwrite either source file")
     beats_per_bar = 4
     end_beat = float(bars * beats_per_bar)
     entry_beat = float(beats_per_bar)

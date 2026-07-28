@@ -177,10 +177,10 @@ current implementation has independent key lock. A future optional stretch provi
 can replace this one transform while preserving the same source transport, event,
 and receipt contracts.
 
-Resampling uses the existing anti-aliasing direction of the EarCrate deck path:
-polyphase FIR for normal spans and exact output-length reconciliation. Very short
-spans use bounded interpolation because polyphase filter setup is longer than the
-material itself.
+Resampling reuses EarCrate's existing anti-aliased `analyze.decode.resample_or_fit`
+primitive: polyphase FIR for normal spans and exact output-length reconciliation.
+Very short spans use bounded interpolation because polyphase filter setup is longer
+than the material itself.
 
 ## Exactness and refusal
 
@@ -192,13 +192,15 @@ A render is complete only when all selected events execute. The renderer refuses
 - jumps, nudges, or loops outside decoded source bounds;
 - stopping an already stopped deck or exiting a nonexistent loop;
 - source exhaustion while a deck remains selected for playback;
+- output artifacts that would overwrite a source, the input score, or one another;
 - a source whose byte hash differs from `expected_file_sha256`;
 - a source that changes while ffmpeg is decoding it;
 - an unaccounted event or a master/stem reconciliation mismatch.
 
-The first render binds unpinned assets to their observed file SHA-256 in the emitted
-sealed score. Re-rendering that sealed score therefore detects a swapped or modified
-source.
+`mix capability` reports the local ffmpeg requirement instead of claiming readiness
+when the decoder is unavailable. The first render binds unpinned assets to their
+observed file SHA-256 in the emitted sealed score. Re-rendering that sealed score
+therefore detects a swapped or modified source.
 
 Each output deck stem receives the same master attenuation. The numerical sum of all
 stems is recomputed and must reproduce the master before any files are committed.

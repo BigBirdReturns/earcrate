@@ -13,8 +13,8 @@ distribution terms.
 Adopt now:
 
 - the existing ffmpeg decode boundary for broad source-format support;
-- NumPy float32 buffers, SciPy polyphase resampling, and SoundFile float WAVs for the
-  deterministic offline proof;
+- NumPy float32 buffers, the existing `analyze.decode.resample_or_fit` SciPy
+  polyphase primitive, and SoundFile float WAVs for the deterministic offline proof;
 - the existing EarCrate source hashing, exact execution-ledger, per-bus stem, guarded
   write, and no-fallback patterns;
 - the existing equal-power DJ fade law and varispeed deck discipline;

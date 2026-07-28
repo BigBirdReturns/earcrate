@@ -18,6 +18,7 @@ from earcrate.mix.audio import (
     _mixscore_file_sha256,
     _mixscore_pcm_sha256,
     _mixscore_render_transport_span,
+    _mixscore_resolve_path,
     _mixscore_safe_name,
 )
 from earcrate.mix.automation import (
@@ -301,23 +302,65 @@ def mixscore_render_to_files(
     stems_dir: str | Path | None = None,
     base_dir: str | Path | None = None,
 ) -> dict[str, Any]:
+    input_score_path: Path | None = None
     if isinstance(score_or_path, Mapping):
-        score = deepcopy(dict(score_or_path))
+        score = mixscore_seal(deepcopy(dict(score_or_path)))
         root = Path(base_dir or ".").expanduser().resolve()
     else:
-        score, root = mixscore_load(score_or_path)
-    result = mixscore_render(score, base_dir=root)
+        input_score_path = Path(score_or_path).expanduser().resolve()
+        score, root = mixscore_load(input_score_path)
+
     output = Path(output_path).expanduser().resolve()
-    sample_rate = int(result["receipt"]["sample_rate"])
-    stem_root = Path(stems_dir).expanduser().resolve() if stems_dir is not None else output.parent / f"{output.stem}.stems"
+    stem_root = (
+        Path(stems_dir).expanduser().resolve()
+        if stems_dir is not None
+        else output.parent / f"{output.stem}.stems"
+    )
     stem_paths = {
-        deck_id: stem_root / f"{_mixscore_safe_name(deck_id)}.wav" for deck_id in sorted(result["stems"])
+        str(deck["deck_id"]): stem_root / f"{_mixscore_safe_name(str(deck['deck_id']))}.wav"
+        for deck in score["decks"]
     }
     base = output.with_suffix("")
     score_path = base.with_name(base.name + ".mixscore.sealed.json")
     ledger_path = base.with_name(base.name + ".events.json")
     receipt_path = base.with_name(base.name + ".receipt.json")
 
+    targets: dict[str, Path] = {
+        "master": output,
+        "sealed_score": score_path,
+        "execution_ledger": ledger_path,
+        "receipt": receipt_path,
+        **{f"stem:{deck_id}": path for deck_id, path in stem_paths.items()},
+    }
+    labels_by_path: dict[str, list[str]] = {}
+    for label, path in targets.items():
+        labels_by_path.setdefault(os.path.normcase(str(path)), []).append(label)
+    duplicate_targets = [labels for labels in labels_by_path.values() if len(labels) > 1]
+    if duplicate_targets:
+        raise MixScoreError(
+            "MixScore output paths collide: "
+            + "; ".join(", ".join(labels) for labels in duplicate_targets)
+        )
+
+    protected: dict[str, str] = {}
+    for asset in score["assets"]:
+        source_path = _mixscore_resolve_path(str(asset["path"]), root)
+        protected[os.path.normcase(str(source_path))] = f"asset:{asset['asset_id']}"
+    if input_score_path is not None:
+        protected[os.path.normcase(str(input_score_path))] = "input_score"
+    destructive = [
+        (label, protected[os.path.normcase(str(path))], path)
+        for label, path in targets.items()
+        if os.path.normcase(str(path)) in protected
+    ]
+    if destructive:
+        raise MixScoreError(
+            "MixScore refuses to overwrite protected inputs: "
+            + "; ".join(f"{label} -> {owner} ({path})" for label, owner, path in destructive)
+        )
+
+    result = mixscore_render(score, base_dir=root)
+    sample_rate = int(result["receipt"]["sample_rate"])
     for deck_id, path in stem_paths.items():
         _mixscore_atomic_wav(path, result["stems"][deck_id], sample_rate)
     _mixscore_atomic_wav(output, result["audio"], sample_rate)

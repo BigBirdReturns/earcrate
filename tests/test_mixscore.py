@@ -16,7 +16,7 @@ from earcrate.mix.model import (
     mixscore_load,
     mixscore_seal,
 )
-from earcrate.mix.render import mixscore_build_demo, mixscore_render
+from earcrate.mix.render import mixscore_build_demo, mixscore_render, mixscore_render_to_files
 
 
 def _rms(audio: np.ndarray) -> float:
@@ -86,12 +86,44 @@ def test_mixscore_is_deterministic_and_refuses_changed_source_identity(tmp_path:
         raise AssertionError("modified source identity was not refused")
 
 
+def test_mixscore_refuses_output_collisions_with_sources_and_score(tmp_path: Path) -> None:
+    demo = mixscore_build_demo(tmp_path / "base", sample_rate=8_000)
+    source_path = Path(demo["asset_paths"][0])
+    source_before = source_path.read_bytes()
+    try:
+        mixscore_render_to_files(
+            demo["score_path"],
+            source_path,
+            stems_dir=tmp_path / "collision-stems",
+        )
+    except MixScoreError as exc:
+        assert "refuses to overwrite protected inputs" in str(exc)
+    else:
+        raise AssertionError("render was allowed to overwrite a source asset")
+    assert source_path.read_bytes() == source_before
+
+    score_path = Path(demo["score_path"])
+    score_before = score_path.read_bytes()
+    try:
+        mixscore_render_to_files(
+            score_path,
+            score_path,
+            stems_dir=tmp_path / "score-collision-stems",
+        )
+    except MixScoreError as exc:
+        assert "refuses to overwrite protected inputs" in str(exc)
+    else:
+        raise AssertionError("render was allowed to overwrite its input score")
+    assert score_path.read_bytes() == score_before
+
+
 def test_mixscore_capability_and_cli_demo_use_the_real_renderer(tmp_path: Path) -> None:
     capability = mixscore_capability()
     assert capability["ready"] is True
     assert capability["features"]["independent_playheads"] is True
     assert capability["features"]["simultaneous_decks"] is True
     assert capability["requires_network"] is False
+    assert capability["requirements"]["ffmpeg"] is True
 
     output = tmp_path / "cli-demo"
     env = dict(os.environ)

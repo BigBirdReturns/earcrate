@@ -18,7 +18,7 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "mix/model.py", "mix/audio.py", "mix/transport.py", "mix/automation.py", "mix/render.py", "mix/cli.py",
          "live/model.py", "live/operators.py", "live/capabilities.py", "live/instrumentation.py", "live/planner.py", "live/engine.py", "live/runtime.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/performance.py", "live/audio_cli.py", "live/cli.py",
          "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
-SPECIMEN_FILES = ["model.py", "convergence.py", "children.py", "gate.py", "cli.py", "__init__.py"]
+SPECIMEN_FILES = ["model.py", "convergence.py", "children.py", "continuation.py", "gate.py", "cli.py", "__init__.py"]
 PROJECT_FILES = [
     "util.py", "model.py", "causal_revision.py", "policy.py", "store.py", "gate8_store.py", "buffalo.py",
     "compiler_source_common.py", "compiler_source_crate.py", "compiler_source_manifest.py",

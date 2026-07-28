@@ -62,7 +62,15 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest
       - name: Materialize exact Flim integration tree
-        run: python .gate8/apply_flim_community_witness.py
+        run: python .gate8/apply_flim_community_witness.py > materialize.log 2>&1
+      - name: Retain materialization ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flim-materialize-${{ runner.os }}-${{ github.run_id }}
+          path: materialize.log
+          if-no-files-found: warn
+          retention-days: 30
       - name: Run cephalopod, custody, Buffalo continuation, and Flim gates
         run: >-
           python -m pytest -vv --tb=long --junitxml=reader-tests.xml

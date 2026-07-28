@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from earcrate.specimen.continuation import children_compose_adjacent_move
+from earcrate.specimen.continuation_dense import children_compose_adjacent_move
 from earcrate.specimen.gate import specimen_build_buffalo_gate
 from earcrate.specimen.model import specimen_read_json
 from test_buffalo_specimen import _compile
@@ -31,7 +31,12 @@ def test_children_adjacent_move_is_legal_novel_deterministic_and_refuses_negativ
     assert receipt["negative_control_refused"] is True
     assert receipt["negative_control"]["commit_refused"] is True
     assert receipt["negative_control"]["proof"]["legal"] is False
+    assert receipt["rhythmic_identity_passed"] is True
+    assert receipt["rhythmic_obligation"]["rhythmic_identity_passed"] is True
+    assert receipt["rhythmic_obligation"]["duration_multiset_preserved"] is True
     assert receipt["novelty"]["literal_copy_detected"] is False
+    assert receipt["novelty"]["pitch_sequence_changed"] is True
+    assert receipt["novelty"]["harmony_sequence_changed"] is True
     assert receipt["open_obligation_count"] == 0
     assert receipt["committed_event_count"] > 0
     assert receipt["midi"]["selected_event_count"] == receipt["committed_event_count"]
@@ -71,6 +76,9 @@ def test_children_adjacent_move_schema_matches_runtime(tmp_path: Path) -> None:
     assert schema["properties"]["kind"]["const"] == receipt["kind"]
     assert schema["properties"]["legal"]["const"] is True
     assert schema["properties"]["negative_control_refused"]["const"] is True
+    assert schema["properties"]["rhythmic_identity_passed"]["const"] is True
+    assert schema["properties"]["novelty"]["properties"]["pitch_sequence_changed"]["const"] is True
+    assert schema["properties"]["novelty"]["properties"]["harmony_sequence_changed"]["const"] is True
 
 
 def test_children_adjacent_move_package_cli_and_single_file_execute_the_same_authority(tmp_path: Path) -> None:
@@ -101,6 +109,7 @@ def test_children_adjacent_move_package_cli_and_single_file_execute_the_same_aut
     package_payload = json.loads(package.stdout)
     assert package_payload["legal"] is True
     assert package_payload["negative_control_refused"] is True
+    assert package_payload["rhythmic_identity_passed"] is True
 
     build = subprocess.run(
         [sys.executable, str(root / "build" / "make_singlefile.py")],
@@ -131,5 +140,6 @@ def test_children_adjacent_move_package_cli_and_single_file_execute_the_same_aut
     single_payload = json.loads(single.stdout)
     assert single_payload["legal"] is True
     assert single_payload["negative_control_refused"] is True
+    assert single_payload["rhythmic_identity_passed"] is True
     assert package_payload["receipt"]["receipt_sha256"] == single_payload["receipt"]["receipt_sha256"]
     assert package_payload["receipt"]["midi"]["semantic_sha256"] == single_payload["receipt"]["midi"]["semantic_sha256"]

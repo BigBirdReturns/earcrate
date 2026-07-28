@@ -43,7 +43,7 @@ def _manifest_for_pack(manifest: dict, pack: Path) -> dict:
 def test_flim_report_preserves_the_intermediate_evidence_tier() -> None:
     manifest, report = flim_load_builtin()
     assert manifest["specimen_id"] == FLIM_SPECIMEN_ID
-    assert manifest["evidence_tier"] == "community_symbolic_witness"
+    assert manifest["metadata"]["evidence_tier"] == "community_symbolic_witness"
     assert report["proof_pack"]["sha256"] == FLIM_PROOF_PACK_SHA256
     assert report["witness"]["total_midi_note_ons"] == 2012
     assert report["adjacent_move"]["total_midi_note_ons"] == 538
@@ -100,7 +100,7 @@ def test_flim_manifest_and_report_match_their_schemas() -> None:
     receipt_schema = json.loads((root / "schemas" / "earcrate_community_symbolic_pack_receipt_v1.schema.json").read_text(encoding="utf-8"))
     assert manifest_schema["properties"]["evidence_tier"]["enum"]
     assert "symbolic" in manifest_schema["properties"]["artifacts"]["items"]["properties"]["branch"]["enum"]
-    assert normalized["evidence_tier"] == report_schema["properties"]["evidence_tier"]["const"]
+    assert normalized["metadata"]["evidence_tier"] == report_schema["properties"]["evidence_tier"]["const"]
     assert receipt_schema["properties"]["whole_organism_passed"]["const"] is False
 
 

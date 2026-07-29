@@ -1,23 +1,22 @@
 name: Export floor base
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/open-music-evidence-floor
+      - agent/children-buffalo-gate
+    paths:
+      - ".floor-export-trigger"
+      - ".github/workflows/export-floor-base.yml"
 
 permissions:
   contents: read
 
 jobs:
   export:
-    if: contains(github.event.head_commit.message, '[floor-export]')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: agent/open-music-evidence-floor
-          fetch-depth: 1
       - name: Build source archive
         run: |
           python - <<'PY'

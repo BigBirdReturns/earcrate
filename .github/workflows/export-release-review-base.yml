@@ -1,0 +1,43 @@
+name: Export release review base
+
+on:
+  push:
+    branches:
+      - agent/release-review-floor-v1
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: contains(github.event.head_commit.message, '[release-review-export]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/release-review-floor-v1
+          fetch-depth: 1
+      - name: Build source archive
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root = Path('.')
+          out = Path('earcrate-release-review-base.zip')
+          skip_roots = {'.git', '.pytest_cache', '__pycache__'}
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+              for path in sorted(root.rglob('*')):
+                  if not path.is_file() or path == out:
+                      continue
+                  if any(part in skip_roots for part in path.parts):
+                      continue
+                  zf.write(path, path.as_posix())
+          print(out, out.stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: earcrate-release-review-base-${{ github.run_id }}
+          path: earcrate-release-review-base.zip
+          if-no-files-found: error
+          retention-days: 2

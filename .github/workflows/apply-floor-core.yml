@@ -1,0 +1,43 @@
+name: Apply Floor core
+
+on:
+  push:
+    branches:
+      - agent/open-music-evidence-floor
+
+permissions:
+  contents: write
+
+concurrency:
+  group: floor-core-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[floor-core-bootstrap]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/open-music-evidence-floor
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Materialize core protocol
+        run: python .floor-bootstrap/apply.py
+      - name: Verify core protocol
+        run: |
+          python -m compileall -q earcrate/floor
+          python -m earcrate.floor capability
+          python -m earcrate.floor demo build/floor-core-demo
+          git diff --check
+      - name: Commit core protocol
+        run: |
+          rm -rf build/floor-core-demo
+          git config user.name "EarCrate Floor integration"
+          git config user.email "noreply@github.com"
+          git add -A
+          git commit -m "Add Open Music Evidence Floor core"
+          git push origin HEAD:agent/open-music-evidence-floor

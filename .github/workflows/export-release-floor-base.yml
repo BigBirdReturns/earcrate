@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - agent/release-candidate-review-gate
+  pull_request:
+    branches:
+      - agent/open-music-evidence-floor
+    paths:
+      - ".release-floor-export-trigger"
+      - ".github/workflows/export-release-floor-base.yml"
 
 permissions:
   contents: read
@@ -15,7 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/release-candidate-review-gate
           fetch-depth: 1
       - name: Build source archive
         run: |

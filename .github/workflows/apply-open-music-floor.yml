@@ -1,0 +1,74 @@
+name: Apply open music evidence floor
+
+on:
+  push:
+    branches:
+      - agent/open-music-evidence-floor
+
+permissions:
+  contents: write
+
+concurrency:
+  group: open-music-evidence-floor
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[floor-bootstrap]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/open-music-evidence-floor
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Materialize reviewed Floor implementation
+        run: python .floor-open-bootstrap/apply.py
+      - name: Verify focused Floor gates
+        run: |
+          set -o pipefail
+          python -m pytest -q tests/test_floor_protocol.py 2>&1 | tee floor-bootstrap.log
+          python -m earcrate floor capability
+          python -m earcrate floor gaps
+          python -m earcrate floor scaffold build/floor-reference
+          python -m earcrate floor conformance build/floor-reference/reference.floor-provider.json build/floor-reference/request.json build/floor-conformance --repeat 2
+          python build/make_singlefile.py
+          python dist/earcrate.py floor capability
+          python dist/earcrate.py floor scaffold build/floor-reference-single
+          python dist/earcrate.py floor conformance build/floor-reference-single/reference.floor-provider.json build/floor-reference-single/request.json build/floor-conformance-single --repeat 2
+          python VERIFY_PACKAGE.py --skip-gates
+          python scripts/oss_audit.py
+          git diff --check
+      - name: Retain focused ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-music-floor-bootstrap-${{ github.run_id }}
+          path: floor-bootstrap.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Commit ordinary review tree
+        run: |
+          rm -rf build/floor-reference build/floor-conformance build/floor-reference-single build/floor-conformance-single
+          rm -f dist/earcrate.py floor-bootstrap.log
+          git config user.name "EarCrate Floor integration"
+          git config user.email "noreply@github.com"
+          git add -A
+          git commit -m "Establish open music evidence floor"
+          git push origin HEAD:agent/open-music-evidence-floor

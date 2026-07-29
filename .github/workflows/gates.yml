@@ -12,6 +12,30 @@ jobs:
       BLIS_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Export exact release-candidate base tree
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root = Path('.')
+          out = Path('earcrate-release-base.zip')
+          skip = {'.git', '.pytest_cache', '__pycache__'}
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+              for path in sorted(root.rglob('*')):
+                  if not path.is_file() or path == out:
+                      continue
+                  if any(part in skip for part in path.parts):
+                      continue
+                  zf.write(path, path.as_posix())
+          print(out, out.stat().st_size)
+          PY
+      - name: Retain exact release-candidate base tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: earcrate-release-base-${{ github.run_id }}
+          path: earcrate-release-base.zip
+          if-no-files-found: error
+          retention-days: 2
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: ffmpeg (self-test doctor requires ffmpeg/ffprobe)

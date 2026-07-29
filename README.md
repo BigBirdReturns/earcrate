@@ -17,6 +17,22 @@ per-stage receipts. No fallback render is allowed.
 - Dev: `python -m earcrate`
 - Single file: `python build/make_singlefile.py` then `python dist/earcrate.py`
 
+## Open Music Evidence Floor
+
+EarCrate exposes a language-agnostic provider protocol for external MIR, ML, DSP, rights, transport, and review tools. Providers receive one content-addressed request on stdin, emit one evidence result on stdout, and write derived files only beneath a negotiated artifact directory. They may propose observations, candidates, measurements, refusals, derived artifacts, or unapplied review patches; they may not silently write canonical musical state.
+
+```text
+python -m earcrate floor capability
+python -m earcrate floor gaps
+python -m earcrate floor scaffold build/reference-floor-provider
+python -m earcrate floor conformance \
+  build/reference-floor-provider/reference.floor-provider.json \
+  build/reference-floor-provider/request.json \
+  build/reference-floor-conformance --repeat 2
+```
+
+See `docs/OPEN_MUSIC_EVIDENCE_FLOOR.md` and `docs/FLOOR_PROVIDER_PROTOCOL_V1.md`.
+
 ## Exact MIDI and the neutral player piano
 
 MIDI enters through a source-independent, content-hashed event ledger. Mido is

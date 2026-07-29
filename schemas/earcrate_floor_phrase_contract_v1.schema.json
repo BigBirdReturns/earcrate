@@ -1,0 +1,89 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_phrase_contract_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "contract_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "entry_grammar": {
+      "type": "object"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "exit_grammar": {
+      "type": "object"
+    },
+    "future_obligations": {
+      "type": "array"
+    },
+    "hard_constraints": {
+      "type": "object"
+    },
+    "identity_obligations": {
+      "minItems": 1,
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_phrase_contract"
+    },
+    "length_beats": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "meter": {
+      "type": "object"
+    },
+    "phrase_contract_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "rights": {
+      "type": "object"
+    },
+    "role": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "soft_objectives": {
+      "type": "array"
+    },
+    "start_beat": {
+      "type": "string"
+    },
+    "transforms": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "contract_id",
+    "role",
+    "start_beat",
+    "length_beats",
+    "meter",
+    "transforms",
+    "hard_constraints",
+    "soft_objectives",
+    "identity_obligations",
+    "future_obligations",
+    "evidence_refs",
+    "rights",
+    "metadata",
+    "phrase_contract_sha256"
+  ],
+  "title": "EarCrate Floor phrase contract v1",
+  "type": "object"
+}

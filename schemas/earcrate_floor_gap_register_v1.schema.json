@@ -1,0 +1,43 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_gap_register_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "counts": {
+      "type": "object"
+    },
+    "gap_register_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "gaps": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_gap_register"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "standards": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "gaps",
+    "counts",
+    "standards",
+    "gap_register_sha256"
+  ],
+  "title": "EarCrate Floor interoperability gap register v1",
+  "type": "object"
+}

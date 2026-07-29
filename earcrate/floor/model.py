@@ -1,438 +1,1048 @@
 from __future__ import annotations
 
-"""Language-neutral, content-addressed objects for EarCrate Floor."""
+"""Canonical objects for the EarCrate Open Music Evidence Floor.
+
+The Floor is deliberately smaller than a DAW, model runtime, or musical planner. It
+standardizes custody, evidence tier, provider authority, source/performance time,
+phrase substitutability, review proposals, evaluation, and portable receipts. A
+provider may measure or propose. It may not silently become musical authority.
+"""
 
 import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
-VERSION = 1
-PROTOCOL = "stdio-json-v1"
-K_MANIFEST = "earcrate_floor_provider_manifest"
-K_REQUEST = "earcrate_floor_provider_request"
-K_RESULT = "earcrate_floor_provider_result"
-K_TIME_MAP = "earcrate_floor_time_map"
-K_PHRASE = "earcrate_floor_phrase_contract"
-K_RIGHTS = "earcrate_floor_rights_envelope"
-K_REVIEW = "earcrate_floor_review_patch"
-K_RECEIPT = "earcrate_floor_invocation_receipt"
-K_POLICY = "earcrate_floor_evaluation_policy"
-K_EVALUATION = "earcrate_floor_evaluation_ledger"
-K_TOURNAMENT = "earcrate_floor_tournament_report"
-K_CRATE = "earcrate_floor_crate"
+FLOOR_PROTOCOL_VERSION = 1
+FLOOR_SCHEMA_VERSION = 1
 
-BRANCHES = ("score", "symbolic", "audio", "convergence", "performance", "review", "evolution")
-TIERS = (
-    "unspecified", "authoritative_score", "community_symbolic_witness",
-    "blind_audio_inference", "cross_modal_accepted", "performance_realization",
-    "human_review", "campaign_evidence",
+FLOOR_EVIDENCE_BRANCHES = (
+    "score",
+    "symbolic",
+    "audio",
+    "convergence",
+    "performance",
+    "review",
+    "evolution",
 )
-ANCESTORS = {
-    "score": {"score"}, "symbolic": {"symbolic"}, "audio": {"audio"},
-    "convergence": {"score", "symbolic", "audio", "convergence"},
-    "performance": {"score", "symbolic", "audio", "convergence", "performance"},
-    "review": {"performance", "review"},
-    "evolution": set(BRANCHES),
-}
-BRANCH_TIERS = {
-    "score": {"unspecified", "authoritative_score"},
-    "symbolic": {"unspecified", "community_symbolic_witness"},
-    "audio": {"unspecified", "blind_audio_inference"},
-    "convergence": {"unspecified", "cross_modal_accepted"},
-    "performance": {"unspecified", "performance_realization"},
-    "review": {"unspecified", "human_review"},
-    "evolution": {"unspecified", "campaign_evidence"},
-}
-OUTPUT_KINDS = ("observation", "candidate", "measurement", "refusal", "derived_artifact", "review_patch")
-FORBIDDEN_AUTHORITY = {
-    "song_genome", "performance_score", "mix_score", "accepted_score",
-    "accepted_performance", "canonical_state", "selected_provider",
-    "selected_winner", "tournament_winner", "applied_review_patch",
-    "legal_determination", "rights_cleared", "whole_organism_passed",
+FLOOR_EVIDENCE_TIERS = (
+    "unspecified",
+    "authoritative_score",
+    "community_symbolic_witness",
+    "blind_audio_inference",
+    "cross_modal_accepted",
+    "performance_realization",
+    "human_review",
+    "campaign_evidence",
+)
+FLOOR_EMISSION_KINDS = (
+    "observation",
+    "candidate",
+    "measurement",
+    "refusal",
+    "derived_artifact",
+    "review_patch",
+)
+FLOOR_RESULT_STATUSES = ("success", "refused", "error")
+FLOOR_NETWORK_POLICIES = ("forbidden", "declared", "required")
+FLOOR_DETERMINISM_LEVELS = ("unknown", "best_effort", "repeatable", "bit_exact")
+FLOOR_TIME_MODES = ("continuous", "jump", "loop", "retrigger", "reverse", "hold")
+FLOOR_RIGHTS_STATUSES = (
+    "unknown",
+    "asserted",
+    "user_verified",
+    "provider_verified",
+    "externally_certified",
+)
+
+FLOOR_DEFAULT_FORBIDDEN_AUTHORITY = (
+    "SongGenome",
+    "PerformanceScore",
+    "MixScore",
+    "accepted_score",
+    "accepted_revision",
+    "canonical_state",
+    "canonical_song",
+    "selected_winner",
+    "tournament_winner",
+    "applied_review_patch",
+    "legal_determination",
+    "rights_cleared",
+    "whole_organism_passed",
     "buffalo_gate_passed",
-}
+)
+
+_PROVIDER_ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$")
+_CAPABILITY_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._/-]{0,126}[a-z0-9])?$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class FloorError(ValueError):
-    pass
+    """Raised when a Floor object cannot support its declared contract."""
 
 
-def jsonable(value: Any) -> Any:
+class FloorProtocolError(RuntimeError):
+    """Raised when provider execution violates the Floor wire protocol."""
+
+
+def floor_jsonable(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, bool)):
         return value
     if isinstance(value, float):
         if not math.isfinite(value):
-            raise FloorError("non-finite number in Floor object")
+            raise FloorError("Floor objects cannot contain non-finite numbers")
         return value
+    if isinstance(value, Fraction):
+        return floor_fraction(value)
     if isinstance(value, Mapping):
-        return {str(k): jsonable(v) for k, v in value.items()}
+        return {str(key): floor_jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [jsonable(v) for v in value]
+        return [floor_jsonable(item) for item in value]
     if isinstance(value, (set, frozenset)):
-        return sorted((jsonable(v) for v in value), key=lambda v: canonical_bytes(v))
+        return sorted((floor_jsonable(item) for item in value), key=lambda item: json.dumps(item, sort_keys=True))
     if isinstance(value, Path):
         return str(value)
     if hasattr(value, "to_dict"):
-        return jsonable(value.to_dict())
+        return floor_jsonable(value.to_dict())
     if hasattr(value, "item"):
-        return jsonable(value.item())
+        return floor_jsonable(value.item())
     return str(value)
 
 
-def canonical_bytes(value: Any) -> bytes:
-    return json.dumps(jsonable(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+def floor_canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(
+        floor_jsonable(value),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
 
 
-def sha_json(value: Any) -> str:
-    return hashlib.sha256(canonical_bytes(value)).hexdigest()
+def floor_sha256_json(value: Any) -> str:
+    return hashlib.sha256(floor_canonical_json_bytes(value)).hexdigest()
 
 
-def sha_file(path: str | Path) -> str:
-    h = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def floor_sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(bytes(value)).hexdigest()
 
 
-def read_json(path: str | Path) -> dict[str, Any]:
+def floor_sha256_file(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def floor_read_json(path: str | Path) -> dict[str, Any]:
     source = Path(path).expanduser().resolve()
     try:
         value = json.loads(source.read_text(encoding="utf-8"))
     except Exception as exc:
         raise FloorError(f"cannot read Floor JSON {source}: {exc}") from exc
     if not isinstance(value, dict):
-        raise FloorError("Floor JSON must contain an object")
+        raise FloorError(f"Floor JSON must contain an object: {source}")
     return value
 
 
-def write_json(path: str | Path, value: Mapping[str, Any]) -> Path:
+def floor_write_json_atomic(path: str | Path, value: Mapping[str, Any]) -> Path:
     target = Path(path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(jsonable(dict(value)), ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"
-    fd, temp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent))
-    temp = Path(temp_name)
+    payload = json.dumps(
+        floor_jsonable(dict(value)),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+        allow_nan=False,
+    ) + "\n"
+    descriptor, raw_temp = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent))
+    temp = Path(raw_temp)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text); f.flush(); os.fsync(f.fileno())
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(temp, target)
     finally:
-        if temp.exists(): temp.unlink()
+        temp.unlink(missing_ok=True)
     return target
 
 
-def _text(value: Any, field: str) -> str:
-    result = str(value or "").strip()
-    if not result: raise FloorError(f"{field} must be nonempty")
-    return result
+def _floor_text(value: Any, field: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise FloorError(f"{field} must be nonempty")
+    return text
 
 
-def _sha(value: Any, field: str, optional: bool = False) -> str | None:
-    result = str(value or "").strip().lower()
-    if optional and not result: return None
-    if len(result) != 64 or any(c not in "0123456789abcdef" for c in result):
+def _floor_sha(value: Any, field: str, *, optional: bool = False) -> str | None:
+    text = str(value or "").strip().lower()
+    if optional and not text:
+        return None
+    if not _SHA256_RE.fullmatch(text):
         raise FloorError(f"{field} must be a lowercase SHA-256")
-    return result
+    return text
 
 
-def _int(value: Any, field: str, positive: bool = False) -> int:
-    try: result = int(value)
-    except Exception as exc: raise FloorError(f"{field} must be an integer") from exc
-    if result < 0 or (positive and result == 0): raise FloorError(f"{field} must be {'positive' if positive else 'nonnegative'}")
-    return result
-
-
-def _float(value: Any, field: str) -> float:
-    try: result = float(value)
-    except Exception as exc: raise FloorError(f"{field} must be numeric") from exc
-    if not math.isfinite(result): raise FloorError(f"{field} must be finite")
-    return result
-
-
-def rational(value: Any, field: str = "time") -> str:
+def _floor_positive_int(value: Any, field: str, *, allow_zero: bool = False) -> int:
     try:
-        number = value if isinstance(value, Fraction) else Fraction(str(value))
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise FloorError(f"{field} must be an integer") from exc
+    if number < 0 or (number == 0 and not allow_zero):
+        qualifier = "nonnegative" if allow_zero else "positive"
+        raise FloorError(f"{field} must be {qualifier}")
+    return number
+
+
+def _floor_number(value: Any, field: str, *, minimum: float | None = None, maximum: float | None = None) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise FloorError(f"{field} must be numeric") from exc
+    if not math.isfinite(number):
+        raise FloorError(f"{field} must be finite")
+    if minimum is not None and number < minimum:
+        raise FloorError(f"{field} must be >= {minimum}")
+    if maximum is not None and number > maximum:
+        raise FloorError(f"{field} must be <= {maximum}")
+    return number
+
+
+def floor_fraction(value: Any, field: str = "time") -> str:
+    """Canonicalize a rational timeline value as an integer or ``n/d`` string."""
+    try:
+        if isinstance(value, Fraction):
+            fraction = value
+        elif isinstance(value, int):
+            fraction = Fraction(value, 1)
+        elif isinstance(value, float):
+            if not math.isfinite(value):
+                raise ValueError("non-finite")
+            fraction = Fraction(str(value))
+        else:
+            text = str(value).strip()
+            if not text:
+                raise ValueError("empty")
+            fraction = Fraction(text)
     except Exception as exc:
-        raise FloorError(f"{field} must be an exact rational") from exc
-    return str(number.numerator) if number.denominator == 1 else f"{number.numerator}/{number.denominator}"
+        raise FloorError(f"{field} must be a rational number") from exc
+    if fraction.denominator <= 0:
+        raise FloorError(f"{field} denominator must be positive")
+    if fraction.denominator == 1:
+        return str(fraction.numerator)
+    return f"{fraction.numerator}/{fraction.denominator}"
 
 
-def evidence(branch: Any, tier: Any, ancestors: Sequence[Any] = ()) -> tuple[str, str, list[str]]:
-    b = _text(branch, "evidence branch").lower()
-    t = str(tier or "unspecified").strip().lower()
-    if b not in BRANCHES: raise FloorError(f"unsupported evidence branch: {b}")
-    if t not in TIERS or t not in BRANCH_TIERS[b]: raise FloorError(f"tier {t!r} cannot be claimed by branch {b!r}")
-    rows = sorted({str(v).lower() for v in (ancestors or [b])} | {b})
-    if any(v not in BRANCHES for v in rows): raise FloorError("unknown ancestor branch")
-    bad = sorted(set(rows) - ANCESTORS[b])
-    if bad: raise FloorError(f"{b} evidence is tainted by forbidden ancestors: {bad}")
-    return b, t, rows
+def floor_fraction_value(value: Any, field: str = "time") -> Fraction:
+    return Fraction(floor_fraction(value, field))
 
 
-def _scan_authority(value: Any, path: str = "payload") -> None:
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            normalized = str(key).strip().lower().replace("-", "_").replace(" ", "_")
-            harmless = item is False or item is None or item == "" or item == 0
-            if normalized in FORBIDDEN_AUTHORITY and not harmless:
-                raise FloorError(f"provider output claims forbidden authority at {path}/{key}")
-            _scan_authority(item, f"{path}/{key}")
-    elif isinstance(value, (list, tuple)):
-        for i, item in enumerate(value): _scan_authority(item, f"{path}/{i}")
+def _floor_without_hash(value: Mapping[str, Any], field: str) -> dict[str, Any]:
+    out = deepcopy(dict(value))
+    out.pop(field, None)
+    return out
 
 
-def artifact_ref(raw: Mapping[str, Any], *, identity: bool = True, relative: bool = False, defaults: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    row = {**dict(defaults or {}), **dict(raw)}
-    b, t, a = evidence(row.get("branch", "audio"), row.get("tier", "unspecified"), row.get("ancestor_branches") or [])
-    path = str(row.get("path") or "")
-    if path and not relative: path = str(Path(path).expanduser().resolve())
+def _floor_check_supplied_hash(raw: Mapping[str, Any], sealed: Mapping[str, Any], field: str, label: str) -> None:
+    supplied = str(raw.get(field) or "")
+    if supplied and supplied != str(sealed.get(field) or ""):
+        raise FloorError(f"{field} does not match {label}")
+
+
+def _floor_semantic_artifact(raw: Mapping[str, Any], *, require_path: bool = False) -> dict[str, Any]:
+    artifact_id = _floor_text(raw.get("artifact_id"), "artifact_id")
+    sha256 = _floor_sha(raw.get("sha256"), f"artifact {artifact_id} sha256")
+    size = _floor_positive_int(raw.get("size_bytes", 0), f"artifact {artifact_id} size_bytes", allow_zero=True)
+    media_kind = _floor_text(raw.get("media_kind"), f"artifact {artifact_id} media_kind")
+    branch = str(raw.get("branch") or "").strip()
+    if branch and branch not in FLOOR_EVIDENCE_BRANCHES:
+        raise FloorError(f"artifact {artifact_id} branch is not recognized")
+    path = str(raw.get("path") or "")
+    uri = str(raw.get("uri") or "")
+    if require_path and not path:
+        raise FloorError(f"artifact {artifact_id} requires a local path")
     return {
-        "artifact_id": _text(row.get("artifact_id"), "artifact_id"),
-        "sha256": _sha(row.get("sha256"), "artifact sha256", optional=not identity),
-        "size_bytes": _int(row.get("size_bytes", 0), "artifact size_bytes"),
-        "media_type": _text(row.get("media_type", "application/octet-stream"), "artifact media_type"),
-        "role": str(row.get("role") or ""), "branch": b, "tier": t,
-        "ancestor_branches": a, "path": path, "uri": str(row.get("uri") or ""),
-        "metadata": deepcopy(dict(row.get("metadata") or {})),
-    }
-
-
-def semantic_artifact(row: Mapping[str, Any]) -> dict[str, Any]:
-    value = deepcopy(dict(row)); value.pop("path", None); value.pop("uri", None); return value
-
-
-def seal_manifest(value: Mapping[str, Any]) -> dict[str, Any]:
-    raw = deepcopy(dict(value))
-    if int(raw.get("schema_version", 0)) != VERSION or raw.get("kind") != K_MANIFEST: raise FloorError("unsupported provider manifest")
-    entry = dict(raw.get("entrypoint") or {}); protocol = str(entry.get("protocol") or PROTOCOL); argv = [str(v) for v in entry.get("argv") or []]
-    if protocol not in {PROTOCOL, "python-in-process-v1"}: raise FloorError("unsupported entrypoint protocol")
-    if protocol == PROTOCOL and not argv: raise FloorError("stdio provider requires argv")
-    runtime = dict(raw.get("runtime") or {}); det = str(runtime.get("determinism") or "unknown")
-    if det not in {"deterministic", "seeded", "best_effort", "unknown"}: raise FloorError("unsupported determinism declaration")
-    may_emit = sorted({_text(v, "may_emit") for v in (dict(raw.get("authority") or {}).get("may_emit") or OUTPUT_KINDS)})
-    unknown = sorted(set(may_emit) - set(OUTPUT_KINDS))
-    if unknown: raise FloorError(f"unsupported output kinds: {unknown}")
-    ev = dict(raw.get("evidence") or {})
-    accepted_branches = sorted({_text(v, "accepted branch").lower() for v in ev.get("accepted_branches") or BRANCHES})
-    accepted_tiers = sorted({str(v).lower() for v in ev.get("accepted_tiers") or TIERS})
-    if any(v not in BRANCHES for v in accepted_branches) or any(v not in TIERS for v in accepted_tiers): raise FloorError("invalid evidence declaration")
-    supply = dict(raw.get("supply_chain") or {})
-    models = []
-    for item in supply.get("model_artifacts") or []:
-        models.append({"artifact_id": _text(item.get("artifact_id"), "model artifact_id"), "sha256": _sha(item.get("sha256"), "model sha256"), "size_bytes": _int(item.get("size_bytes", 0), "model size"), "license_expression": str(item.get("license_expression") or "NOASSERTION"), "source_uri": str(item.get("source_uri") or "")})
-    out = {
-        "schema_version": VERSION, "kind": K_MANIFEST,
-        "provider_id": _text(raw.get("provider_id"), "provider_id"), "provider_version": _text(raw.get("provider_version"), "provider_version"),
-        "display_name": str(raw.get("display_name") or raw.get("provider_id") or ""), "description": str(raw.get("description") or ""),
-        "capabilities": sorted({_text(v, "capability") for v in raw.get("capabilities") or []}),
-        "entrypoint": {"protocol": protocol, "argv": argv, "working_directory": str(entry.get("working_directory") or "manifest_dir")},
-        "runtime": {"language": str(runtime.get("language") or "unknown"), "requires_network": bool(runtime.get("requires_network", False)), "determinism": det, "timeout_seconds": _int(runtime.get("timeout_seconds", 300), "timeout", True), "max_stdout_bytes": _int(runtime.get("max_stdout_bytes", 8<<20), "stdout limit", True), "max_stderr_bytes": _int(runtime.get("max_stderr_bytes", 8<<20), "stderr limit", True), "max_artifact_bytes": _int(runtime.get("max_artifact_bytes", 2<<30), "artifact limit", True)},
-        "evidence": {"accepted_branches": accepted_branches, "accepted_tiers": accepted_tiers},
-        "authority": {"may_emit": may_emit, "may_not_emit": sorted(FORBIDDEN_AUTHORITY | set(dict(raw.get("authority") or {}).get("may_not_emit") or [])), "canonical_authority": False, "may_apply_review_patches": False, "may_select_tournament_winner": False},
-        "supply_chain": {"license_expression": str(supply.get("license_expression") or "NOASSERTION"), "source_uri": str(supply.get("source_uri") or ""), "source_revision": str(supply.get("source_revision") or ""), "executable_sha256": _sha(supply.get("executable_sha256"), "executable sha256", True), "model_artifacts": sorted(models, key=lambda r:r["artifact_id"]), "signatures": deepcopy(list(supply.get("signatures") or []))},
+        "artifact_id": artifact_id,
+        "sha256": sha256,
+        "size_bytes": size,
+        "media_kind": media_kind,
+        "role": str(raw.get("role") or ""),
+        "branch": branch,
+        "ancestor_branches": sorted({str(item) for item in raw.get("ancestor_branches") or ([branch] if branch else [])}),
+        "path": path,
+        "uri": uri,
         "metadata": deepcopy(dict(raw.get("metadata") or {})),
     }
-    if not out["capabilities"]: raise FloorError("provider requires capabilities")
-    out["manifest_sha256"] = sha_json(out)
-    if raw.get("manifest_sha256") and raw["manifest_sha256"] != out["manifest_sha256"]: raise FloorError("manifest_sha256 mismatch")
-    return out
 
 
-def seal_request(value: Mapping[str, Any]) -> dict[str, Any]:
-    raw = deepcopy(dict(value))
-    if int(raw.get("schema_version", 0)) != VERSION or raw.get("kind") != K_REQUEST: raise FloorError("unsupported provider request")
-    ev = dict(raw.get("evidence") or {}); b,t,a = evidence(ev.get("branch","audio"), ev.get("tier","unspecified"), ev.get("ancestor_branches") or [])
-    inputs = [artifact_ref(v) for v in raw.get("inputs") or []]
-    if not inputs or len({v["artifact_id"] for v in inputs}) != len(inputs): raise FloorError("request requires unique input artifacts")
-    for item in inputs:
-        if set(item["ancestor_branches"]) - ANCESTORS[b]: raise FloorError("request input ancestry is forbidden")
-        if t == "blind_audio_inference" and item["branch"] != "audio": raise FloorError("blind audio request accepts audio inputs only")
-    network = dict(raw.get("network_policy") or {}); ap = dict(raw.get("artifact_policy") or {})
-    out = {"schema_version":VERSION,"kind":K_REQUEST,"capability":_text(raw.get("capability"),"capability"),"evidence":{"branch":b,"tier":t,"ancestor_branches":a,"prohibited_inputs":sorted({str(v) for v in ev.get("prohibited_inputs") or []})},"inputs":sorted(inputs,key=lambda r:r["artifact_id"]),"parameters":deepcopy(dict(raw.get("parameters") or {})),"seed":int(raw.get("seed",0)),"network_policy":{"allowed":bool(network.get("allowed",False)),"declared_hosts":sorted({str(v) for v in network.get("declared_hosts") or []})},"artifact_policy":{"output_dir":str(ap.get("output_dir") or ""),"max_total_bytes":_int(ap.get("max_total_bytes",2<<30),"max_total_bytes",True),"allow_source_media_copy":bool(ap.get("allow_source_media_copy",False))},"metadata":deepcopy(dict(raw.get("metadata") or {}))}
-    out["request_sha256"] = sha_json(out)
-    semantic = deepcopy(out); semantic["inputs"]=[semantic_artifact(v) for v in semantic["inputs"]]; semantic["artifact_policy"].pop("output_dir",None)
-    out["request_semantic_sha256"] = sha_json(semantic)
-    if raw.get("request_sha256") and raw["request_sha256"] != out["request_sha256"]: raise FloorError("request_sha256 mismatch")
-    if raw.get("request_semantic_sha256") and raw["request_semantic_sha256"] != out["request_semantic_sha256"]: raise FloorError("request semantic hash mismatch")
-    return out
-
-
-def seal_result(value: Mapping[str, Any], manifest: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
-    raw=deepcopy(dict(value)); m=seal_manifest(manifest); q=seal_request(request)
-    if int(raw.get("schema_version",VERSION))!=VERSION or raw.get("kind",K_RESULT)!=K_RESULT: raise FloorError("unsupported provider result")
-    for field, expected in (("provider_id",m["provider_id"]),("provider_version",m["provider_version"]),("manifest_sha256",m["manifest_sha256"]),("request_sha256",q["request_sha256"]),("request_semantic_sha256",q["request_semantic_sha256"])):
-        if str(raw.get(field) or expected)!=expected: raise FloorError(f"result {field} mismatch")
-    status=str(raw.get("status") or "ok")
-    if status not in {"ok","refused","failed"}: raise FloorError("invalid result status")
-    outputs=[]
-    for i,item in enumerate(raw.get("outputs") or []):
-        kind=_text(item.get("output_kind"),"output_kind")
-        if kind not in OUTPUT_KINDS or kind not in m["authority"]["may_emit"]: raise FloorError("output kind not permitted")
-        b,t,a=evidence(item.get("branch",q["evidence"]["branch"]),item.get("tier",q["evidence"]["tier"]),item.get("ancestor_branches") or q["evidence"]["ancestor_branches"])
-        if (b,t)!=(q["evidence"]["branch"],q["evidence"]["tier"]): raise FloorError("provider cannot relabel evidence")
-        confidence=_float(item.get("confidence",1),"confidence")
-        if not 0<=confidence<=1: raise FloorError("confidence outside [0,1]")
-        payload=jsonable(item.get("payload")); _scan_authority(payload,f"outputs/{i}")
-        if kind=="review_patch": seal_review(payload)
-        outputs.append({"output_id":_text(item.get("output_id") or f"output_{i:04d}","output_id"),"output_kind":kind,"branch":b,"tier":t,"ancestor_branches":a,"confidence":confidence,"evidence_refs":sorted({str(v) for v in item.get("evidence_refs") or []}),"payload":payload,"metadata":deepcopy(dict(item.get("metadata") or {}))})
-    if status=="ok" and not outputs: raise FloorError("successful result requires outputs")
-    defaults={"branch":q["evidence"]["branch"],"tier":q["evidence"]["tier"],"ancestor_branches":q["evidence"]["ancestor_branches"]}
-    artifacts=[artifact_ref(v,relative=True,defaults=defaults) for v in raw.get("artifacts") or []]
-    if len({v["artifact_id"] for v in artifacts})!=len(artifacts): raise FloorError("duplicate result artifact_id")
-    for item in artifacts:
-        if item["path"] and (Path(item["path"]).is_absolute() or ".." in Path(item["path"]).parts): raise FloorError("result artifact path must be contained and relative")
-    diagnostics=deepcopy(dict(raw.get("diagnostics") or {})); metadata=deepcopy(dict(raw.get("metadata") or {})); _scan_authority(diagnostics,"diagnostics"); _scan_authority(metadata,"metadata")
-    out={"schema_version":VERSION,"kind":K_RESULT,"provider_id":m["provider_id"],"provider_version":m["provider_version"],"manifest_sha256":m["manifest_sha256"],"request_sha256":q["request_sha256"],"request_semantic_sha256":q["request_semantic_sha256"],"status":status,"outputs":sorted(outputs,key=lambda r:r["output_id"]),"artifacts":sorted(artifacts,key=lambda r:r["artifact_id"]),"diagnostics":diagnostics,"metadata":metadata,"canonical_authority":False}
-    out["result_sha256"]=sha_json(out); semantic=deepcopy(out); semantic["artifacts"]=[semantic_artifact(v) for v in semantic["artifacts"]]; semantic.pop("diagnostics",None); out["result_semantic_sha256"]=sha_json(semantic)
-    return out
-
-
-def seal_time_map(value: Mapping[str,Any])->dict[str,Any]:
-    raw=deepcopy(dict(value))
-    if raw.get("kind")!=K_TIME_MAP or int(raw.get("schema_version",0))!=VERSION: raise FloorError("unsupported time map")
-    rows=[]; previous=None
-    for i,item in enumerate(raw.get("segments") or []):
-        ts,te=rational(item.get("target_start")),rational(item.get("target_end")); ss,se=rational(item.get("source_start")),rational(item.get("source_end")); op=_text(item.get("operation"),"operation")
-        if op not in {"continuous","jump","loop","retrigger","reverse","hold"}: raise FloorError("unsupported time operation")
-        if Fraction(te)<=Fraction(ts) or (previous is not None and Fraction(ts)<previous): raise FloorError("overlapping or empty target interval")
-        previous=Fraction(te); rows.append({"segment_id":_text(item.get("segment_id") or f"segment_{i:04d}","segment_id"),"target_start":ts,"target_end":te,"source_start":ss,"source_end":se,"operation":op,"loop_start":rational(item.get("loop_start",ss)),"loop_end":rational(item.get("loop_end",se)),"metadata":deepcopy(dict(item.get("metadata") or {}))})
-    if not rows: raise FloorError("time map requires segments")
-    out={"schema_version":VERSION,"kind":K_TIME_MAP,"source_artifact_id":_text(raw.get("source_artifact_id"),"source_artifact_id"),"target_domain":_text(raw.get("target_domain") or "performance_beats","target_domain"),"source_domain":_text(raw.get("source_domain") or "source_seconds","source_domain"),"segments":rows,"metadata":deepcopy(dict(raw.get("metadata") or {}))}; out["time_map_sha256"]=sha_json(out); return out
-
-
-def seal_rights(value: Mapping[str,Any])->dict[str,Any]:
-    raw=deepcopy(dict(value));
-    if raw.get("kind",K_RIGHTS)!=K_RIGHTS or int(raw.get("schema_version",VERSION))!=VERSION: raise FloorError("unsupported rights envelope")
-    assertions=[]
-    for i,item in enumerate(raw.get("assertions") or []): assertions.append({"assertion_id":_text(item.get("assertion_id") or f"assertion_{i:04d}","assertion_id"),"predicate":_text(item.get("predicate"),"predicate"),"value":jsonable(item.get("value")),"evidence_refs":sorted({str(v) for v in item.get("evidence_refs") or []}),"asserted_by":str(item.get("asserted_by") or "unknown")})
-    out={"schema_version":VERSION,"kind":K_RIGHTS,"asset_id":_text(raw.get("asset_id"),"asset_id"),"license_expression":str(raw.get("license_expression") or "NOASSERTION"),"policy":str(raw.get("policy") or "unknown"),"commercial_use":str(raw.get("commercial_use") or "unknown"),"attribution_required":str(raw.get("attribution_required") or "unknown"),"jurisdictions":sorted({str(v) for v in raw.get("jurisdictions") or []}),"purposes":sorted({str(v) for v in raw.get("purposes") or []}),"source_uri":str(raw.get("source_uri") or ""),"assertions":sorted(assertions,key=lambda r:r["assertion_id"]),"evidence_refs":sorted({str(v) for v in raw.get("evidence_refs") or []}),"legal_determination":False,"metadata":deepcopy(dict(raw.get("metadata") or {}))}; out["rights_sha256"]=sha_json(out); return out
-
-
-def seal_phrase(value: Mapping[str,Any])->dict[str,Any]:
-    raw=deepcopy(dict(value));
-    if raw.get("kind")!=K_PHRASE or int(raw.get("schema_version",0))!=VERSION: raise FloorError("unsupported phrase contract")
-    window=dict(raw.get("target_window") or {}); start,end=rational(window.get("start")),rational(window.get("end"));
-    if Fraction(end)<=Fraction(start): raise FloorError("empty phrase window")
-    meter=dict(raw.get("meter") or {}); transform=dict(raw.get("transform_policy") or {});
-    def rng(name, default):
-        values=list(transform.get(name) or default)
-        if len(values)!=2: raise FloorError(f"{name} requires [min,max]")
-        result=[_float(v,name) for v in values]
-        if result[0]>result[1]: raise FloorError(f"invalid {name} range")
-        return result
-    constraints=[]
-    for level in ("hard","soft"):
-        for i,item in enumerate(raw.get(f"{level}_constraints") or []): constraints.append((level,{"constraint_id":_text(item.get("constraint_id"),"constraint_id"),"kind":_text(item.get("kind"),"constraint kind"),"operator":_text(item.get("operator"),"constraint operator"),"value":jsonable(item.get("value")),"unit":str(item.get("unit") or ""),"reason":str(item.get("reason") or ""),"evidence_refs":sorted({str(v) for v in item.get("evidence_refs") or []})}))
-    ids=[row[1]["constraint_id"] for row in constraints]
-    if len(ids)!=len(set(ids)): raise FloorError("duplicate phrase constraint_id")
-    rights=seal_rights(raw.get("rights") or {"schema_version":1,"kind":K_RIGHTS,"asset_id":"unbound_phrase"})
-    out={"schema_version":VERSION,"kind":K_PHRASE,"role":_text(raw.get("role"),"role"),"target_window":{"start":start,"end":end,"unit":str(window.get("unit") or "beats")},"meter":{"numerator":_int(meter.get("numerator",4),"meter numerator",True),"denominator":_int(meter.get("denominator",4),"meter denominator",True)},"transform_policy":{"tempo_ratio":rng("tempo_ratio",[1,1]),"transpose_semitones":rng("transpose_semitones",[0,0]),"gain_db":rng("gain_db",[0,0]),"reverse_allowed":bool(transform.get("reverse_allowed",False)),"loop_allowed":bool(transform.get("loop_allowed",False)),"slice_allowed":bool(transform.get("slice_allowed",True)),"keylock_required":bool(transform.get("keylock_required",False))},"hard_constraints":sorted([r for level,r in constraints if level=="hard"],key=lambda r:r["constraint_id"]),"soft_constraints":sorted([r for level,r in constraints if level=="soft"],key=lambda r:r["constraint_id"]),"identity_obligations":deepcopy(list(raw.get("identity_obligations") or [])),"future_obligations":deepcopy(list(raw.get("future_obligations") or [])),"evidence_refs":sorted({str(v) for v in raw.get("evidence_refs") or []}),"rights":rights,"metadata":deepcopy(dict(raw.get("metadata") or {}))}; out["contract_sha256"]=sha_json(out); out["contract_id"]=f"phrase_{out['contract_sha256'][:24]}"; return out
-
-
-def seal_review(value: Mapping[str,Any])->dict[str,Any]:
-    raw=deepcopy(dict(value));
-    if raw.get("kind",K_REVIEW)!=K_REVIEW or int(raw.get("schema_version",VERSION))!=VERSION: raise FloorError("unsupported review patch")
-    if bool(raw.get("applied",False)): raise FloorError("review patches must arrive unapplied")
-    op=str(raw.get("operation") or "annotate")
-    if op not in {"add","replace","remove","annotate","rerank"}: raise FloorError("unsupported review operation")
-    pointer=str(raw.get("json_pointer") or "")
-    if pointer and not pointer.startswith("/"): raise FloorError("invalid JSON pointer")
-    out={"schema_version":VERSION,"kind":K_REVIEW,"target_revision_sha256":_sha(raw.get("target_revision_sha256"),"target revision"),"operation":op,"target_object_id":_text(raw.get("target_object_id"),"target_object_id"),"json_pointer":pointer,"value":jsonable(raw.get("value")),"reason":_text(raw.get("reason"),"reason"),"evidence_refs":sorted({str(v) for v in raw.get("evidence_refs") or []}),"invalidation_hints":sorted({str(v) for v in raw.get("invalidation_hints") or []}),"proposed_by":str(raw.get("proposed_by") or "unknown"),"applied":False,"metadata":deepcopy(dict(raw.get("metadata") or {}))}; out["patch_sha256"]=sha_json(out); out["patch_id"]=f"review_{out['patch_sha256'][:24]}"; return out
-
-
-def seal_receipt(value: Mapping[str,Any])->dict[str,Any]:
-    raw=deepcopy(dict(value));
-    if raw.get("kind",K_RECEIPT)!=K_RECEIPT or int(raw.get("schema_version",VERSION))!=VERSION: raise FloorError("unsupported invocation receipt")
-    checks=deepcopy(dict(raw.get("checks") or {})); required={"input_identities_verified","result_schema_verified","artifact_paths_contained","artifact_identities_verified","authority_boundary_verified"}
-    if required-set(checks): raise FloorError("invocation receipt omits required checks")
-    out={"schema_version":VERSION,"kind":K_RECEIPT,"provider_id":_text(raw.get("provider_id"),"provider_id"),"provider_version":_text(raw.get("provider_version"),"provider_version"),"manifest_sha256":_sha(raw.get("manifest_sha256"),"manifest sha"),"request_sha256":_sha(raw.get("request_sha256"),"request sha"),"request_semantic_sha256":_sha(raw.get("request_semantic_sha256"),"request semantic sha"),"result_sha256":_sha(raw.get("result_sha256"),"result sha"),"result_semantic_sha256":_sha(raw.get("result_semantic_sha256"),"result semantic sha"),"executable_sha256":_sha(raw.get("executable_sha256"),"executable sha",True),"argv":[str(v) for v in raw.get("argv") or []],"returncode":int(raw.get("returncode",0)),"stdout_sha256":_sha(raw.get("stdout_sha256"),"stdout sha"),"stderr_sha256":_sha(raw.get("stderr_sha256"),"stderr sha"),"input_artifacts":deepcopy(list(raw.get("input_artifacts") or [])),"output_artifacts":deepcopy(list(raw.get("output_artifacts") or [])),"repeatability":deepcopy(dict(raw.get("repeatability") or {})),"network_policy":deepcopy(dict(raw.get("network_policy") or {})),"checks":checks,"complete":bool(raw.get("complete",False)),"canonical_authority":False,"metadata":deepcopy(dict(raw.get("metadata") or {}))}; semantic=deepcopy(out); semantic["metadata"].pop("duration_seconds",None); out["receipt_semantic_sha256"]=sha_json(semantic); out["receipt_sha256"]=sha_json(out); return out
-
-
-def seal_policy(value: Mapping[str,Any])->dict[str,Any]:
-    raw=deepcopy(dict(value));
-    if raw.get("kind",K_POLICY)!=K_POLICY or int(raw.get("schema_version",VERSION))!=VERSION: raise FloorError("unsupported evaluation policy")
-    gates=[{"gate_id":_text(v.get("gate_id") or f"gate_{i}","gate_id"),"metric":_text(v.get("metric"),"metric"),"operator":_text(v.get("operator"),"operator"),"value":_float(v.get("value"),"gate value")} for i,v in enumerate(raw.get("hard_gates") or [])]
-    stages=[]
-    for i,stage in enumerate(raw.get("objective_stages") or []):
-        metrics=[]
-        for metric in stage.get("metrics") or []:
-            direction=str(metric.get("direction") or "max")
-            if direction not in {"max","min"}: raise FloorError("metric direction must be max/min")
-            metrics.append({"metric":_text(metric.get("metric"),"metric"),"weight":_float(metric.get("weight",1),"weight"),"direction":direction})
-        if not metrics: raise FloorError("objective stage requires metrics")
-        stages.append({"stage_id":_text(stage.get("stage_id") or f"stage_{i}","stage_id"),"metrics":metrics})
-    if not stages: raise FloorError("policy requires objective stages")
-    out={"schema_version":VERSION,"kind":K_POLICY,"policy_id":_text(raw.get("policy_id"),"policy_id"),"require_independent_evaluator":bool(raw.get("require_independent_evaluator",True)),"hard_gates":gates,"objective_stages":stages,"metadata":deepcopy(dict(raw.get("metadata") or {}))}; out["policy_sha256"]=sha_json(out); return out
-
-
-def _compare(actual:float,op:str,expected:float)->bool:
-    return {"gte":actual>=expected,"gt":actual>expected,"lte":actual<=expected,"lt":actual<expected,"eq":actual==expected,"ne":actual!=expected}.get(op,False)
-
-
-def build_evaluation(policy:Mapping[str,Any],provider_id:str,provider_version:str,result_semantic_sha256:str,evaluator_id:str,metrics:Mapping[str,Any])->dict[str,Any]:
-    p=seal_policy(policy)
-    if p["require_independent_evaluator"] and provider_id==evaluator_id: raise FloorError("evaluator must be independent")
-    values={str(k):_float(v,f"metric {k}") for k,v in metrics.items()}; gates=[]
-    for g in p["hard_gates"]:
-        actual=values.get(g["metric"]); gates.append({**g,"actual":actual,"passed":actual is not None and _compare(actual,g["operator"],g["value"])})
-    stages=[]; vector=[]
-    for stage in p["objective_stages"]:
-        complete=True; score=0.0; terms=[]
-        for m in stage["metrics"]:
-            value=values.get(m["metric"]); complete &= value is not None; contribution=None if value is None else (value if m["direction"]=="max" else -value)*m["weight"]
-            if contribution is not None: score+=contribution
-            terms.append({**m,"value":value,"contribution":contribution})
-        score=round(score,12) if complete else None; vector.append(score); stages.append({"stage_id":stage["stage_id"],"complete":complete,"score":score,"terms":terms})
-    out={"schema_version":VERSION,"kind":K_EVALUATION,"policy_sha256":p["policy_sha256"],"provider_id":_text(provider_id,"provider_id"),"provider_version":_text(provider_version,"provider_version"),"result_semantic_sha256":_sha(result_semantic_sha256,"result sha"),"evaluator_id":_text(evaluator_id,"evaluator_id"),"independent_evaluator":provider_id!=evaluator_id,"metrics":dict(sorted(values.items())),"hard_gates":gates,"hard_gates_passed":all(v["passed"] for v in gates),"objective_stages":stages,"rank_vector":vector,"canonical_authority":False}; out["evaluation_sha256"]=sha_json(out); return out
-
-
-def build_tournament(policy:Mapping[str,Any],evaluations:Sequence[Mapping[str,Any]])->dict[str,Any]:
-    p=seal_policy(policy); rows=[deepcopy(dict(v)) for v in evaluations]
-    if not rows: raise FloorError("tournament requires evaluations")
-    for row in rows:
-        if row.get("kind")!=K_EVALUATION or row.get("policy_sha256")!=p["policy_sha256"]: raise FloorError("incompatible evaluation")
-        if p["require_independent_evaluator"] and not row.get("independent_evaluator"): raise FloorError("self evaluation in tournament")
-    eligible=[v for v in rows if v.get("hard_gates_passed") and all(x is not None for x in v.get("rank_vector") or [])]
-    eligible.sort(key=lambda v:(tuple(-float(x) for x in v["rank_vector"]),str(v["provider_id"]),str(v["result_semantic_sha256"])))
-    ranked=[{"rank":i+1,"provider_id":v["provider_id"],"provider_version":v["provider_version"],"result_semantic_sha256":v["result_semantic_sha256"],"evaluation_sha256":v["evaluation_sha256"],"rank_vector":v["rank_vector"]} for i,v in enumerate(eligible)]
-    out={"schema_version":VERSION,"kind":K_TOURNAMENT,"policy_sha256":p["policy_sha256"],"evaluation_count":len(rows),"eligible_count":len(ranked),"ranked":ranked,"benchmark_winner":ranked[0] if ranked else None,"winner_scope":"benchmark_winner_only","canonical_authority":False,"selection_applied":False}; out["tournament_sha256"]=sha_json(out); return out
-
-
-def schema_bundle()->dict[str,dict[str,Any]]:
-    sha={"type":"string","pattern":"^[0-9a-f]{64}$"}
-    def schema(name,kind,required,props): return {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":f"https://earcrate.local/schema/{name}","title":name,"type":"object","required":["schema_version","kind",*required],"properties":{"schema_version":{"const":1},"kind":{"const":kind},**props},"additionalProperties":True}
+def floor_artifact_semantic_identity(raw: Mapping[str, Any]) -> dict[str, Any]:
+    artifact = _floor_semantic_artifact(raw)
     return {
-        "earcrate_floor_provider_manifest_v1.schema.json":schema("provider manifest",K_MANIFEST,["provider_id","provider_version","capabilities","manifest_sha256"],{"provider_id":{"type":"string"},"provider_version":{"type":"string"},"capabilities":{"type":"array","minItems":1},"manifest_sha256":sha}),
-        "earcrate_floor_provider_request_v1.schema.json":schema("provider request",K_REQUEST,["capability","evidence","inputs","request_sha256","request_semantic_sha256"],{"capability":{"type":"string"},"evidence":{"type":"object"},"inputs":{"type":"array","minItems":1},"request_sha256":sha,"request_semantic_sha256":sha}),
-        "earcrate_floor_provider_result_v1.schema.json":schema("provider result",K_RESULT,["provider_id","status","outputs","canonical_authority","result_sha256","result_semantic_sha256"],{"provider_id":{"type":"string"},"status":{"enum":["ok","refused","failed"]},"outputs":{"type":"array"},"canonical_authority":{"const":False},"result_sha256":sha,"result_semantic_sha256":sha}),
-        "earcrate_floor_time_map_v1.schema.json":schema("time map",K_TIME_MAP,["segments","time_map_sha256"],{"segments":{"type":"array","minItems":1},"time_map_sha256":sha}),
-        "earcrate_floor_phrase_contract_v1.schema.json":schema("phrase contract",K_PHRASE,["role","target_window","rights","contract_sha256","contract_id"],{"role":{"type":"string"},"target_window":{"type":"object"},"rights":{"type":"object"},"contract_sha256":sha,"contract_id":{"type":"string"}}),
-        "earcrate_floor_rights_envelope_v1.schema.json":schema("rights envelope",K_RIGHTS,["asset_id","legal_determination","rights_sha256"],{"asset_id":{"type":"string"},"legal_determination":{"const":False},"rights_sha256":sha}),
-        "earcrate_floor_review_patch_v1.schema.json":schema("review patch",K_REVIEW,["target_revision_sha256","operation","applied","patch_sha256","patch_id"],{"target_revision_sha256":sha,"operation":{"enum":["add","replace","remove","annotate","rerank"]},"applied":{"const":False},"patch_sha256":sha,"patch_id":{"type":"string"}}),
-        "earcrate_floor_invocation_receipt_v1.schema.json":schema("invocation receipt",K_RECEIPT,["manifest_sha256","request_sha256","result_sha256","checks","complete","canonical_authority","receipt_sha256"],{"manifest_sha256":sha,"request_sha256":sha,"result_sha256":sha,"checks":{"type":"object"},"complete":{"type":"boolean"},"canonical_authority":{"const":False},"receipt_sha256":sha}),
-        "earcrate_floor_evaluation_policy_v1.schema.json":schema("evaluation policy",K_POLICY,["policy_id","objective_stages","policy_sha256"],{"policy_id":{"type":"string"},"objective_stages":{"type":"array","minItems":1},"policy_sha256":sha}),
-        "earcrate_floor_evaluation_ledger_v1.schema.json":schema("evaluation ledger",K_EVALUATION,["provider_id","evaluator_id","independent_evaluator","evaluation_sha256"],{"provider_id":{"type":"string"},"evaluator_id":{"type":"string"},"independent_evaluator":{"type":"boolean"},"evaluation_sha256":sha}),
-        "earcrate_floor_tournament_report_v1.schema.json":schema("tournament report",K_TOURNAMENT,["winner_scope","canonical_authority","selection_applied","tournament_sha256"],{"winner_scope":{"const":"benchmark_winner_only"},"canonical_authority":{"const":False},"selection_applied":{"const":False},"tournament_sha256":sha}),
-        "earcrate_floor_crate_v1.schema.json":schema("floor crate",K_CRATE,["files","source_media_copied","mapping_status","crate_sha256"],{"files":{"type":"array"},"source_media_copied":{"const":False},"mapping_status":{"const":"informative_not_certified"},"crate_sha256":sha}),
+        key: value
+        for key, value in artifact.items()
+        if key not in {"path", "uri"}
     }
 
 
-def capability()->dict[str,Any]:
-    out={"schema_version":1,"kind":"earcrate_floor_capability","ready":True,"protocol":PROTOCOL,"provider_output_kinds":list(OUTPUT_KINDS),"evidence_branches":list(BRANCHES),"evidence_tiers":list(TIERS),"canonical_authority":False,"subprocess_boundary":{"stdin":"one sealed request JSON object","stdout":"one provider result JSON object","shell":False,"artifact_directory":"FLOOR_ARTIFACT_DIR","network_declaration_checked":True,"os_network_sandbox_enforced":False},"schemas":sorted(schema_bundle()),"requires_network":False,"requires_cloud":False}; out["capability_sha256"]=sha_json(out); return out
+def _floor_result_semantic_identity(raw: Mapping[str, Any]) -> dict[str, Any]:
+    value = deepcopy(dict(raw))
+    value.pop("result_sha256", None)
+    value.pop("semantic_result_sha256", None)
+    for artifact in value.get("artifacts") or []:
+        if isinstance(artifact, dict):
+            artifact.pop("path", None)
+            artifact.pop("uri", None)
+    return value
 
 
-# Compatibility names used by the public package and tests.
-floor_jsonable=jsonable; floor_canonical_json_bytes=canonical_bytes; floor_sha256_json=sha_json; floor_sha256_file=sha_file; floor_read_json=read_json; floor_write_json_atomic=write_json
-floor_seal_provider_manifest=seal_manifest; floor_load_provider_manifest=lambda p: seal_manifest(read_json(p)); floor_seal_provider_request=seal_request; floor_seal_provider_result=lambda v,manifest,request: seal_result(v,manifest,request)
-floor_seal_time_map=seal_time_map; floor_seal_rights_envelope=seal_rights; floor_seal_phrase_contract=seal_phrase; floor_seal_review_patch=seal_review; floor_seal_invocation_receipt=seal_receipt; floor_seal_evaluation_policy=seal_policy
-floor_build_evaluation_ledger=lambda *,policy,provider_id,provider_version,result_semantic_sha256,evaluator_id,metrics,evidence_refs=(): build_evaluation(policy,provider_id,provider_version,result_semantic_sha256,evaluator_id,metrics)
-floor_build_tournament_report=lambda *,policy,evaluations: build_tournament(policy,evaluations)
-floor_schema_bundle=schema_bundle; floor_capability=capability
+def floor_validate_authority_payload(value: Any, *, path: str = "$", forbidden: Sequence[str] = FLOOR_DEFAULT_FORBIDDEN_AUTHORITY) -> None:
+    """Refuse provider payloads that try to claim canonical or applied authority."""
+    forbidden_lower = {str(item).lower() for item in forbidden}
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text.lower() in forbidden_lower:
+                raise FloorError(f"provider payload claims forbidden authority at {path}.{key_text}")
+            if key_text.lower() in {"accepted", "canonical", "selected", "applied", "legally_cleared"} and bool(item):
+                raise FloorError(f"provider payload sets authority-bearing flag at {path}.{key_text}")
+            floor_validate_authority_payload(item, path=f"{path}.{key_text}", forbidden=forbidden)
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            floor_validate_authority_payload(item, path=f"{path}[{index}]", forbidden=forbidden)
+    elif isinstance(value, str) and value.lower() in forbidden_lower:
+        raise FloorError(f"provider payload names forbidden authority at {path}")
 
-__all__=[name for name in globals() if name.startswith("floor_") or name in {"FloorError","VERSION","PROTOCOL","K_MANIFEST","K_REQUEST","K_RESULT","K_TIME_MAP","K_PHRASE","K_RIGHTS","K_REVIEW","K_RECEIPT","K_POLICY","K_EVALUATION","K_TOURNAMENT","K_CRATE","BRANCHES","TIERS","OUTPUT_KINDS"}]
+
+def floor_seal_time_map(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if int(raw.get("schema_version") or FLOOR_SCHEMA_VERSION) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported TimeMap schema")
+    if str(raw.get("kind") or "earcrate_floor_time_map") != "earcrate_floor_time_map":
+        raise FloorError("unsupported TimeMap kind")
+    segments: list[dict[str, Any]] = []
+    previous_target_end: Fraction | None = None
+    for index, row_raw in enumerate(raw.get("segments") or []):
+        if not isinstance(row_raw, Mapping):
+            raise FloorError(f"TimeMap segment {index} must be an object")
+        row = dict(row_raw)
+        mode = str(row.get("mode") or "continuous")
+        if mode not in FLOOR_TIME_MODES:
+            raise FloorError(f"TimeMap segment {index} has unsupported mode {mode!r}")
+        target_start = floor_fraction_value(row.get("target_start"), f"segment {index} target_start")
+        target_end = floor_fraction_value(row.get("target_end"), f"segment {index} target_end")
+        source_start = floor_fraction_value(row.get("source_start"), f"segment {index} source_start")
+        source_end = floor_fraction_value(row.get("source_end"), f"segment {index} source_end")
+        if target_end <= target_start:
+            raise FloorError(f"TimeMap segment {index} target interval must be positive")
+        if mode == "reverse":
+            if source_end >= source_start:
+                raise FloorError(f"TimeMap reverse segment {index} must move source time backward")
+        elif mode == "hold":
+            if source_end != source_start:
+                raise FloorError(f"TimeMap hold segment {index} must keep source time fixed")
+        elif source_end <= source_start:
+            raise FloorError(f"TimeMap segment {index} source interval must be positive")
+        if previous_target_end is not None and target_start < previous_target_end:
+            raise FloorError("TimeMap target segments may not overlap")
+        previous_target_end = target_end
+        segments.append(
+            {
+                "segment_id": str(row.get("segment_id") or f"segment_{index:04d}"),
+                "target_start": floor_fraction(target_start),
+                "target_end": floor_fraction(target_end),
+                "source_artifact_id": _floor_text(row.get("source_artifact_id"), f"segment {index} source_artifact_id"),
+                "source_start": floor_fraction(source_start),
+                "source_end": floor_fraction(source_end),
+                "mode": mode,
+                "rate": floor_fraction(row.get("rate", 1), f"segment {index} rate"),
+                "metadata": deepcopy(dict(row.get("metadata") or {})),
+            }
+        )
+    if not segments:
+        raise FloorError("TimeMap requires at least one segment")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_time_map",
+        "time_unit": str(raw.get("time_unit") or "beat"),
+        "segments": segments,
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    out["time_map_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "time_map_sha256", "TimeMap")
+    return out
+
+
+def floor_seal_rights_envelope(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    status = str(raw.get("assertion_status") or "unknown")
+    if status not in FLOOR_RIGHTS_STATUSES:
+        raise FloorError(f"unsupported rights assertion status {status!r}")
+    source_sha = _floor_sha(raw.get("source_artifact_sha256"), "rights source_artifact_sha256", optional=True)
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_rights_envelope",
+        "source_artifact_sha256": source_sha,
+        "assertion_status": status,
+        "license_expression": str(raw.get("license_expression") or "NOASSERTION"),
+        "policy_uri": str(raw.get("policy_uri") or ""),
+        "allowed_uses": sorted({str(item) for item in raw.get("allowed_uses") or []}),
+        "prohibited_uses": sorted({str(item) for item in raw.get("prohibited_uses") or []}),
+        "attribution": deepcopy(list(raw.get("attribution") or [])),
+        "evidence_refs": sorted({str(item) for item in raw.get("evidence_refs") or []}),
+        "jurisdiction": str(raw.get("jurisdiction") or ""),
+        "expires_at": str(raw.get("expires_at") or ""),
+        "provider_may_not_decide_legality": True,
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    out["rights_envelope_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "rights_envelope_sha256", "rights envelope")
+    return out
+
+
+def floor_seal_phrase_contract(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    meter = dict(raw.get("meter") or {})
+    numerator = _floor_positive_int(meter.get("numerator"), "PhraseContract meter numerator")
+    denominator = _floor_positive_int(meter.get("denominator"), "PhraseContract meter denominator")
+    start_beat = floor_fraction(raw.get("start_beat", 0), "PhraseContract start_beat")
+    length_beats = floor_fraction(raw.get("length_beats"), "PhraseContract length_beats")
+    if floor_fraction_value(length_beats) <= 0:
+        raise FloorError("PhraseContract length_beats must be positive")
+    transforms = dict(raw.get("transforms") or {})
+    allowed_ops = sorted({str(item) for item in transforms.get("allowed_operations") or []})
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_phrase_contract",
+        "role": _floor_text(raw.get("role"), "PhraseContract role"),
+        "start_beat": start_beat,
+        "length_beats": length_beats,
+        "meter": {"numerator": numerator, "denominator": denominator},
+        "entry_grammar": deepcopy(dict(raw.get("entry_grammar") or {})),
+        "exit_grammar": deepcopy(dict(raw.get("exit_grammar") or {})),
+        "transforms": {
+            "allowed_operations": allowed_ops,
+            "tempo_ratio": deepcopy(dict(transforms.get("tempo_ratio") or {})),
+            "transpose_semitones": deepcopy(dict(transforms.get("transpose_semitones") or {})),
+            "gain_db": deepcopy(dict(transforms.get("gain_db") or {})),
+            "reverse_allowed": bool(transforms.get("reverse_allowed", False)),
+            "loop_allowed": bool(transforms.get("loop_allowed", True)),
+            "slice_allowed": bool(transforms.get("slice_allowed", True)),
+            "metadata": deepcopy(dict(transforms.get("metadata") or {})),
+        },
+        "hard_constraints": deepcopy(dict(raw.get("hard_constraints") or {})),
+        "soft_objectives": deepcopy(list(raw.get("soft_objectives") or [])),
+        "identity_obligations": deepcopy(list(raw.get("identity_obligations") or [])),
+        "future_obligations": deepcopy(list(raw.get("future_obligations") or [])),
+        "evidence_refs": sorted({str(item) for item in raw.get("evidence_refs") or []}),
+        "rights": floor_seal_rights_envelope(raw.get("rights") or {}),
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    if not out["identity_obligations"]:
+        raise FloorError("PhraseContract requires at least one identity obligation")
+    out["phrase_contract_sha256"] = floor_sha256_json(out)
+    out["contract_id"] = str(raw.get("contract_id") or "phrase_contract_" + out["phrase_contract_sha256"][:24])
+    # Include the stable public ID in the final identity.
+    payload = _floor_without_hash(out, "phrase_contract_sha256")
+    out["phrase_contract_sha256"] = floor_sha256_json(payload)
+    _floor_check_supplied_hash(raw, out, "phrase_contract_sha256", "PhraseContract")
+    return out
+
+
+def floor_seal_review_patch(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if raw.get("applied") not in {None, False}:
+        raise FloorError("provider ReviewPatch proposals must remain unapplied")
+    operations = []
+    for index, item in enumerate(raw.get("operations") or []):
+        if not isinstance(item, Mapping):
+            raise FloorError(f"ReviewPatch operation {index} must be an object")
+        op = str(item.get("op") or "")
+        if op not in {"add", "remove", "replace", "move", "copy", "test"}:
+            raise FloorError(f"ReviewPatch operation {index} has unsupported op {op!r}")
+        path = _floor_text(item.get("path"), f"ReviewPatch operation {index} path")
+        row = {"op": op, "path": path}
+        if "from" in item:
+            row["from"] = str(item.get("from") or "")
+        if "value" in item:
+            row["value"] = floor_jsonable(item.get("value"))
+        operations.append(row)
+    if not operations:
+        raise FloorError("ReviewPatch requires at least one operation")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_review_patch",
+        "target_revision_sha256": _floor_sha(raw.get("target_revision_sha256"), "ReviewPatch target_revision_sha256"),
+        "target_object": _floor_text(raw.get("target_object"), "ReviewPatch target_object"),
+        "operations": operations,
+        "reason": _floor_text(raw.get("reason"), "ReviewPatch reason"),
+        "evidence_refs": sorted({str(item) for item in raw.get("evidence_refs") or []}),
+        "invalidation_hints": sorted({str(item) for item in raw.get("invalidation_hints") or []}),
+        "proposed_by": deepcopy(dict(raw.get("proposed_by") or {})),
+        "applied": False,
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    out["review_patch_sha256"] = floor_sha256_json(out)
+    out["patch_id"] = str(raw.get("patch_id") or "review_patch_" + out["review_patch_sha256"][:24])
+    payload = _floor_without_hash(out, "review_patch_sha256")
+    out["review_patch_sha256"] = floor_sha256_json(payload)
+    _floor_check_supplied_hash(raw, out, "review_patch_sha256", "ReviewPatch")
+    return out
+
+
+def _floor_normalize_capability(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
+    name = _floor_text(raw.get("capability"), f"capability {index}")
+    if not _CAPABILITY_RE.fullmatch(name):
+        raise FloorError(f"capability {name!r} contains unsupported characters")
+    branches = sorted({str(item) for item in raw.get("evidence_branches") or []})
+    tiers = sorted({str(item) for item in raw.get("evidence_tiers") or []})
+    if not branches or any(item not in FLOOR_EVIDENCE_BRANCHES for item in branches):
+        raise FloorError(f"capability {name} requires recognized evidence branches")
+    if not tiers or any(item not in FLOOR_EVIDENCE_TIERS for item in tiers):
+        raise FloorError(f"capability {name} requires recognized evidence tiers")
+    result_kinds = sorted({str(item) for item in raw.get("result_kinds") or []})
+    if not result_kinds or any(item not in FLOOR_EMISSION_KINDS for item in result_kinds):
+        raise FloorError(f"capability {name} requires recognized result kinds")
+    network = str(raw.get("network_policy") or "forbidden")
+    if network not in FLOOR_NETWORK_POLICIES:
+        raise FloorError(f"capability {name} has unsupported network policy")
+    determinism = str(raw.get("determinism") or "unknown")
+    if determinism not in FLOOR_DETERMINISM_LEVELS:
+        raise FloorError(f"capability {name} has unsupported determinism level")
+    return {
+        "capability": name,
+        "input_media_kinds": sorted({str(item) for item in raw.get("input_media_kinds") or ["*/*"]}),
+        "result_kinds": result_kinds,
+        "evidence_branches": branches,
+        "evidence_tiers": tiers,
+        "network_policy": network,
+        "determinism": determinism,
+        "max_runtime_seconds": _floor_positive_int(raw.get("max_runtime_seconds", 300), f"capability {name} max_runtime_seconds"),
+        "max_output_bytes": _floor_positive_int(raw.get("max_output_bytes", 1 << 30), f"capability {name} max_output_bytes"),
+        "parameter_schema": deepcopy(dict(raw.get("parameter_schema") or {})),
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+
+
+def floor_seal_provider_manifest(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if int(raw.get("schema_version") or 0) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported provider manifest schema")
+    if str(raw.get("kind") or "") != "earcrate_floor_provider_manifest":
+        raise FloorError("unsupported provider manifest kind")
+    provider_id = _floor_text(raw.get("provider_id"), "provider_id").lower()
+    if not _PROVIDER_ID_RE.fullmatch(provider_id):
+        raise FloorError("provider_id must be a portable lowercase identifier")
+    provider_version = _floor_text(raw.get("provider_version"), "provider_version")
+    protocol = dict(raw.get("protocol") or {})
+    if str(protocol.get("name") or "") != "earcrate-floor-stdio-json":
+        raise FloorError("provider manifest must use the earcrate-floor-stdio-json protocol")
+    if int(protocol.get("version") or 0) != FLOOR_PROTOCOL_VERSION:
+        raise FloorError("provider protocol version is unsupported")
+    entrypoint = dict(raw.get("entrypoint") or {})
+    argv = entrypoint.get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
+        raise FloorError("provider entrypoint.argv must be a nonempty argv array")
+    if any("\x00" in item for item in argv):
+        raise FloorError("provider entrypoint.argv may not contain NUL")
+    capabilities = [_floor_normalize_capability(item, index) for index, item in enumerate(raw.get("capabilities") or [])]
+    if not capabilities:
+        raise FloorError("provider manifest requires capabilities")
+    names = [item["capability"] for item in capabilities]
+    if len(names) != len(set(names)):
+        raise FloorError("provider manifest has duplicate capabilities")
+    authority = dict(raw.get("authority") or {})
+    may_emit = sorted({str(item) for item in authority.get("may_emit") or FLOOR_EMISSION_KINDS})
+    if any(item not in FLOOR_EMISSION_KINDS for item in may_emit):
+        raise FloorError("provider authority may_emit contains unsupported result kinds")
+    may_not_emit = sorted({*FLOOR_DEFAULT_FORBIDDEN_AUTHORITY, *(str(item) for item in authority.get("may_not_emit") or [])})
+    supply_chain = dict(raw.get("supply_chain") or {})
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_provider_manifest",
+        "provider_id": provider_id,
+        "provider_version": provider_version,
+        "display_name": str(raw.get("display_name") or provider_id),
+        "description": str(raw.get("description") or ""),
+        "protocol": {"name": "earcrate-floor-stdio-json", "version": FLOOR_PROTOCOL_VERSION},
+        "entrypoint": {
+            "argv": list(argv),
+            "working_directory": str(entrypoint.get("working_directory") or "${FLOOR_MANIFEST_DIR}"),
+            "environment": deepcopy(dict(entrypoint.get("environment") or {})),
+        },
+        "capabilities": sorted(capabilities, key=lambda item: item["capability"]),
+        "authority": {
+            "may_emit": may_emit,
+            "may_not_emit": may_not_emit,
+            "canonical_write_access": False,
+            "review_patch_apply_access": False,
+            "legal_decision_access": False,
+        },
+        "supply_chain": {
+            "license_expression": str(supply_chain.get("license_expression") or "NOASSERTION"),
+            "source_uri": str(supply_chain.get("source_uri") or ""),
+            "artifact_sha256": _floor_sha(supply_chain.get("artifact_sha256"), "supply_chain artifact_sha256", optional=True),
+            "model_identities": deepcopy(list(supply_chain.get("model_identities") or [])),
+            "signatures": deepcopy(list(supply_chain.get("signatures") or [])),
+            "metadata": deepcopy(dict(supply_chain.get("metadata") or {})),
+        },
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    out["manifest_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "manifest_sha256", "provider manifest")
+    return out
+
+
+def floor_capability_for_manifest(manifest: Mapping[str, Any], capability: str) -> dict[str, Any]:
+    sealed = floor_seal_provider_manifest(manifest)
+    for row in sealed["capabilities"]:
+        if row["capability"] == str(capability):
+            return deepcopy(row)
+    raise FloorError(f"provider {sealed['provider_id']} has no capability {capability!r}")
+
+
+def _floor_request_semantic_payload(value: Mapping[str, Any]) -> dict[str, Any]:
+    payload = deepcopy(dict(value))
+    payload.pop("request_sha256", None)
+    payload.pop("request_id", None)
+    payload["inputs"] = [floor_artifact_semantic_identity(item) for item in payload.get("inputs") or []]
+    return payload
+
+
+def floor_seal_provider_request(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if int(raw.get("schema_version") or 0) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported provider request schema")
+    if str(raw.get("kind") or "") != "earcrate_floor_provider_request":
+        raise FloorError("unsupported provider request kind")
+    capability = _floor_text(raw.get("capability"), "request capability")
+    if not _CAPABILITY_RE.fullmatch(capability):
+        raise FloorError("request capability contains unsupported characters")
+    branch = str(raw.get("evidence_branch") or "")
+    tier = str(raw.get("evidence_tier") or "")
+    if branch not in FLOOR_EVIDENCE_BRANCHES:
+        raise FloorError("request evidence_branch is unsupported")
+    if tier not in FLOOR_EVIDENCE_TIERS:
+        raise FloorError("request evidence_tier is unsupported")
+    inputs = [_floor_semantic_artifact(item) for item in raw.get("inputs") or []]
+    if not inputs:
+        raise FloorError("provider request requires at least one input artifact")
+    ids = [item["artifact_id"] for item in inputs]
+    if len(ids) != len(set(ids)):
+        raise FloorError("provider request has duplicate artifact_id values")
+    for item in inputs:
+        ancestors = set(item["ancestor_branches"])
+        if item["branch"] and item["branch"] not in ancestors:
+            raise FloorError(f"input {item['artifact_id']} omits its direct branch from ancestry")
+        if branch == "audio" and any(ancestor != "audio" for ancestor in ancestors):
+            raise FloorError("audio provider request is tainted by non-audio ancestry")
+    allowed_result_kinds = sorted({str(item) for item in raw.get("allowed_result_kinds") or FLOOR_EMISSION_KINDS})
+    if any(item not in FLOOR_EMISSION_KINDS for item in allowed_result_kinds):
+        raise FloorError("request allowed_result_kinds contains an unsupported kind")
+    network_policy = str(raw.get("network_policy") or "forbidden")
+    if network_policy not in FLOOR_NETWORK_POLICIES:
+        raise FloorError("request network_policy is unsupported")
+    limits = dict(raw.get("limits") or {})
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_provider_request",
+        "capability": capability,
+        "evidence_branch": branch,
+        "evidence_tier": tier,
+        "inputs": inputs,
+        "parameters": deepcopy(dict(raw.get("parameters") or {})),
+        "allowed_result_kinds": allowed_result_kinds,
+        "forbidden_authority_claims": sorted({*FLOOR_DEFAULT_FORBIDDEN_AUTHORITY, *(str(item) for item in raw.get("forbidden_authority_claims") or [])}),
+        "network_policy": network_policy,
+        "limits": {
+            "runtime_seconds": _floor_positive_int(limits.get("runtime_seconds", 300), "request runtime_seconds"),
+            "stdout_bytes": _floor_positive_int(limits.get("stdout_bytes", 8 << 20), "request stdout_bytes"),
+            "stderr_bytes": _floor_positive_int(limits.get("stderr_bytes", 8 << 20), "request stderr_bytes"),
+            "artifact_bytes": _floor_positive_int(limits.get("artifact_bytes", 1 << 30), "request artifact_bytes"),
+            "artifact_count": _floor_positive_int(limits.get("artifact_count", 1024), "request artifact_count"),
+        },
+        "context": deepcopy(dict(raw.get("context") or {})),
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    semantic = _floor_request_semantic_payload(out)
+    out["request_sha256"] = floor_sha256_json(semantic)
+    out["request_id"] = str(raw.get("request_id") or "floor_request_" + out["request_sha256"][:24])
+    # Public ID is not part of the semantic request identity.
+    _floor_check_supplied_hash(raw, out, "request_sha256", "provider request")
+    return out
+
+
+def floor_request_semantic_identity(value: Mapping[str, Any]) -> str:
+    return floor_seal_provider_request(value)["request_sha256"]
+
+
+def _floor_seal_emission(
+    raw: Mapping[str, Any],
+    *,
+    index: int,
+    request: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    kind = str(raw.get("kind") or "")
+    if kind not in FLOOR_EMISSION_KINDS:
+        raise FloorError(f"provider emission {index} has unsupported kind {kind!r}")
+    if kind not in request["allowed_result_kinds"]:
+        raise FloorError(f"provider emission {index} kind {kind!r} is not allowed by the request")
+    if kind not in manifest["authority"]["may_emit"]:
+        raise FloorError(f"provider manifest does not authorize emission kind {kind!r}")
+    payload = floor_jsonable(raw.get("payload"))
+    floor_validate_authority_payload(payload, forbidden=request["forbidden_authority_claims"])
+    if kind == "review_patch":
+        if not isinstance(payload, Mapping):
+            raise FloorError("review_patch emission payload must be an object")
+        payload = floor_seal_review_patch(payload)
+    if isinstance(payload, Mapping) and str(payload.get("kind") or "") == "earcrate_floor_time_map":
+        payload = floor_seal_time_map(payload)
+    if isinstance(payload, Mapping) and str(payload.get("kind") or "") == "earcrate_floor_phrase_contract":
+        payload = floor_seal_phrase_contract(payload)
+    confidence = raw.get("confidence")
+    confidence_value = None if confidence is None else _floor_number(confidence, f"emission {index} confidence", minimum=0.0, maximum=1.0)
+    out = {
+        "kind": kind,
+        "subject": str(raw.get("subject") or ""),
+        "payload": payload,
+        "evidence_refs": sorted({str(item) for item in raw.get("evidence_refs") or []}),
+        "confidence": confidence_value,
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    if kind not in {"refusal", "measurement"} and not out["evidence_refs"]:
+        raise FloorError(f"provider emission {index} requires evidence_refs")
+    out["emission_id"] = str(raw.get("emission_id") or f"floor_emission_{floor_sha256_json(out)[:24]}")
+    return out
+
+
+def floor_seal_provider_result(
+    value: Mapping[str, Any],
+    *,
+    request: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    sealed_request = floor_seal_provider_request(request)
+    sealed_manifest = floor_seal_provider_manifest(manifest)
+    if int(raw.get("schema_version") or FLOOR_SCHEMA_VERSION) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported provider result schema")
+    if str(raw.get("kind") or "earcrate_floor_provider_result") != "earcrate_floor_provider_result":
+        raise FloorError("unsupported provider result kind")
+    if str(raw.get("request_sha256") or "") != sealed_request["request_sha256"]:
+        raise FloorError("provider result belongs to another request")
+    if str(raw.get("provider_manifest_sha256") or "") != sealed_manifest["manifest_sha256"]:
+        raise FloorError("provider result names another provider manifest")
+    if str(raw.get("provider_id") or "") != sealed_manifest["provider_id"]:
+        raise FloorError("provider result provider_id disagrees with manifest")
+    if str(raw.get("provider_version") or "") != sealed_manifest["provider_version"]:
+        raise FloorError("provider result provider_version disagrees with manifest")
+    status = str(raw.get("status") or "")
+    if status not in FLOOR_RESULT_STATUSES:
+        raise FloorError("provider result status is unsupported")
+    emissions = [
+        _floor_seal_emission(item, index=index, request=sealed_request, manifest=sealed_manifest)
+        for index, item in enumerate(raw.get("emissions") or [])
+    ]
+    artifacts = [_floor_semantic_artifact(item) for item in raw.get("artifacts") or []]
+    ids = [item["artifact_id"] for item in artifacts]
+    if len(ids) != len(set(ids)):
+        raise FloorError("provider result has duplicate artifact_id values")
+    refusals = []
+    for index, item in enumerate(raw.get("refusals") or []):
+        if not isinstance(item, Mapping):
+            raise FloorError(f"provider refusal {index} must be an object")
+        refusals.append(
+            {
+                "code": _floor_text(item.get("code"), f"provider refusal {index} code"),
+                "message": _floor_text(item.get("message"), f"provider refusal {index} message"),
+                "details": deepcopy(dict(item.get("details") or {})),
+            }
+        )
+    if status == "success" and not emissions and not artifacts:
+        raise FloorError("successful provider result must emit evidence or artifacts")
+    if status == "refused" and not refusals:
+        raise FloorError("refused provider result requires at least one refusal")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_provider_result",
+        "request_sha256": sealed_request["request_sha256"],
+        "provider_manifest_sha256": sealed_manifest["manifest_sha256"],
+        "provider_id": sealed_manifest["provider_id"],
+        "provider_version": sealed_manifest["provider_version"],
+        "status": status,
+        "emissions": emissions,
+        "artifacts": artifacts,
+        "refusals": refusals,
+        "metrics": deepcopy(dict(raw.get("metrics") or {})),
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    floor_validate_authority_payload(out["metrics"], forbidden=sealed_request["forbidden_authority_claims"])
+    out["semantic_result_sha256"] = floor_sha256_json(_floor_result_semantic_identity(out))
+    out["result_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "semantic_result_sha256", "provider semantic result")
+    _floor_check_supplied_hash(raw, out, "result_sha256", "provider result")
+    return out
+
+
+def floor_seal_invocation_receipt(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if int(raw.get("schema_version") or FLOOR_SCHEMA_VERSION) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported invocation receipt schema")
+    if str(raw.get("kind") or "earcrate_floor_invocation_receipt") != "earcrate_floor_invocation_receipt":
+        raise FloorError("unsupported invocation receipt kind")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_invocation_receipt",
+        "provider_id": _floor_text(raw.get("provider_id"), "receipt provider_id"),
+        "provider_version": _floor_text(raw.get("provider_version"), "receipt provider_version"),
+        "provider_manifest_sha256": _floor_sha(raw.get("provider_manifest_sha256"), "receipt provider_manifest_sha256"),
+        "request_sha256": _floor_sha(raw.get("request_sha256"), "receipt request_sha256"),
+        "result_sha256": _floor_sha(raw.get("result_sha256"), "receipt result_sha256", optional=True),
+        "semantic_result_sha256": _floor_sha(raw.get("semantic_result_sha256"), "receipt semantic_result_sha256", optional=True),
+        "argv": [str(item) for item in raw.get("argv") or []],
+        "working_directory": str(raw.get("working_directory") or ""),
+        "executable": deepcopy(dict(raw.get("executable") or {})),
+        "input_custody": deepcopy(list(raw.get("input_custody") or [])),
+        "output_custody": deepcopy(list(raw.get("output_custody") or [])),
+        "stdout": deepcopy(dict(raw.get("stdout") or {})),
+        "stderr": deepcopy(dict(raw.get("stderr") or {})),
+        "process": deepcopy(dict(raw.get("process") or {})),
+        "network": {
+            "declared_policy": str((raw.get("network") or {}).get("declared_policy") or "forbidden"),
+            "host_enforcement": str((raw.get("network") or {}).get("host_enforcement") or "declaration_only"),
+            "os_sandbox_proved": bool((raw.get("network") or {}).get("os_sandbox_proved", False)),
+        },
+        "resource_limits": deepcopy(dict(raw.get("resource_limits") or {})),
+        "complete": bool(raw.get("complete", False)),
+        "refusals": deepcopy(list(raw.get("refusals") or [])),
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    if out["network"]["os_sandbox_proved"]:
+        raise FloorError("reference Floor host cannot claim an OS network sandbox")
+    out["receipt_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "receipt_sha256", "invocation receipt")
+    return out
+
+
+def floor_seal_evaluation_policy(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    hard_gates = []
+    for index, row in enumerate(raw.get("hard_gates") or []):
+        if not isinstance(row, Mapping):
+            raise FloorError(f"evaluation hard gate {index} must be an object")
+        hard_gates.append(
+            {
+                "metric": _floor_text(row.get("metric"), f"evaluation hard gate {index} metric"),
+                "operator": str(row.get("operator") or "gte"),
+                "value": floor_jsonable(row.get("value")),
+            }
+        )
+    stages = []
+    for index, row in enumerate(raw.get("lexicographic_stages") or []):
+        if not isinstance(row, Mapping):
+            raise FloorError(f"evaluation stage {index} must be an object")
+        weights = {str(key): _floor_number(value, f"stage {index} weight {key}") for key, value in dict(row.get("weights") or {}).items()}
+        if not weights:
+            raise FloorError(f"evaluation stage {index} requires metric weights")
+        stages.append({"stage": _floor_text(row.get("stage"), f"evaluation stage {index} name"), "weights": weights})
+    if not stages:
+        raise FloorError("evaluation policy requires lexicographic stages")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_evaluation_policy",
+        "policy_id": str(raw.get("policy_id") or ""),
+        "hard_gates": hard_gates,
+        "lexicographic_stages": stages,
+        "higher_is_better": sorted({str(item) for item in raw.get("higher_is_better") or []}),
+        "lower_is_better": sorted({str(item) for item in raw.get("lower_is_better") or []}),
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    out["policy_sha256"] = floor_sha256_json(out)
+    if not out["policy_id"]:
+        out["policy_id"] = "floor_policy_" + out["policy_sha256"][:24]
+        out["policy_sha256"] = floor_sha256_json(_floor_without_hash(out, "policy_sha256"))
+    _floor_check_supplied_hash(raw, out, "policy_sha256", "evaluation policy")
+    return out
+
+
+def floor_seal_evaluation_ledger(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    evaluator = deepcopy(dict(raw.get("evaluator") or {}))
+    evaluator_id = _floor_text(evaluator.get("evaluator_id"), "evaluation evaluator_id")
+    provider_id = _floor_text(raw.get("provider_id"), "evaluation provider_id")
+    if evaluator_id == provider_id:
+        raise FloorError("provider quality must be evaluated by an independent evaluator identity")
+    metrics = {}
+    for key, item in dict(raw.get("metrics") or {}).items():
+        metrics[str(key)] = _floor_number(item, f"evaluation metric {key}")
+    if not metrics:
+        raise FloorError("evaluation ledger requires metrics")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_evaluation_ledger",
+        "provider_id": provider_id,
+        "provider_manifest_sha256": _floor_sha(raw.get("provider_manifest_sha256"), "evaluation provider_manifest_sha256"),
+        "request_sha256": _floor_sha(raw.get("request_sha256"), "evaluation request_sha256"),
+        "result_sha256": _floor_sha(raw.get("result_sha256"), "evaluation result_sha256"),
+        "evaluator": {
+            "evaluator_id": evaluator_id,
+            "version": str(evaluator.get("version") or ""),
+            "manifest_sha256": _floor_sha(evaluator.get("manifest_sha256"), "evaluation evaluator manifest_sha256", optional=True),
+        },
+        "fixture_sha256": _floor_sha(raw.get("fixture_sha256"), "evaluation fixture_sha256", optional=True),
+        "metrics": metrics,
+        "hard_gate_evidence": deepcopy(dict(raw.get("hard_gate_evidence") or {})),
+        "notes": deepcopy(list(raw.get("notes") or [])),
+        "metadata": deepcopy(dict(raw.get("metadata") or {})),
+    }
+    out["evaluation_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "evaluation_sha256", "evaluation ledger")
+    return out
+
+
+def floor_seal_conformance_report(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if int(raw.get("schema_version") or FLOOR_SCHEMA_VERSION) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported conformance report schema")
+    if str(raw.get("kind") or "earcrate_floor_conformance_report") != "earcrate_floor_conformance_report":
+        raise FloorError("unsupported conformance report kind")
+    requested = _floor_positive_int(raw.get("requested_runs"), "conformance requested_runs")
+    completed = _floor_positive_int(raw.get("completed_runs", 0), "conformance completed_runs", allow_zero=True)
+    if completed > requested:
+        raise FloorError("conformance completed_runs cannot exceed requested_runs")
+    runs = deepcopy(list(raw.get("runs") or []))
+    failures = deepcopy(list(raw.get("failures") or []))
+    if len(runs) != completed:
+        raise FloorError("conformance run count disagrees with completed_runs")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_conformance_report",
+        "requested_runs": requested,
+        "completed_runs": completed,
+        "runs": runs,
+        "failures": failures,
+        "checks": deepcopy(dict(raw.get("checks") or {})),
+        "complete": bool(raw.get("complete", False)),
+        "quality_claimed": bool(raw.get("quality_claimed", False)),
+        "selection_authority": bool(raw.get("selection_authority", False)),
+    }
+    if out["quality_claimed"] or out["selection_authority"]:
+        raise FloorError("protocol conformance may not claim quality or selection authority")
+    out["conformance_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "conformance_sha256", "conformance report")
+    return out
+
+
+def floor_seal_tournament_report(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if int(raw.get("schema_version") or FLOOR_SCHEMA_VERSION) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported tournament report schema")
+    if str(raw.get("kind") or "earcrate_floor_tournament_report") != "earcrate_floor_tournament_report":
+        raise FloorError("unsupported tournament report kind")
+    competitors = deepcopy(list(raw.get("competitors") or []))
+    if not competitors:
+        raise FloorError("tournament report requires competitors")
+    provider_ids = [str(row.get("provider_id") or "") for row in competitors]
+    if not all(provider_ids) or len(provider_ids) != len(set(provider_ids)):
+        raise FloorError("tournament competitors require unique provider IDs")
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_tournament_report",
+        "policy_sha256": _floor_sha(raw.get("policy_sha256"), "tournament policy_sha256"),
+        "request_sha256": _floor_sha(raw.get("request_sha256"), "tournament request_sha256"),
+        "competitors": competitors,
+        "winner": deepcopy(raw.get("winner")),
+        "winner_semantics": str(raw.get("winner_semantics") or ""),
+        "canonical_authority": bool(raw.get("canonical_authority", False)),
+        "selection_requires_earcrate_adjudication": bool(raw.get("selection_requires_earcrate_adjudication", True)),
+        "quality_is_distinct_from_protocol_conformance": bool(raw.get("quality_is_distinct_from_protocol_conformance", True)),
+    }
+    if out["canonical_authority"]:
+        raise FloorError("tournament winner may not claim canonical authority")
+    if not out["selection_requires_earcrate_adjudication"]:
+        raise FloorError("tournament report must retain EarCrate adjudication")
+    out["tournament_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "tournament_sha256", "tournament report")
+    return out
+
+
+def floor_seal_floor_crate(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw = deepcopy(dict(value))
+    if int(raw.get("schema_version") or FLOOR_SCHEMA_VERSION) != FLOOR_SCHEMA_VERSION:
+        raise FloorError("unsupported Floor crate schema")
+    if str(raw.get("kind") or "earcrate_floor_crate") != "earcrate_floor_crate":
+        raise FloorError("unsupported Floor crate kind")
+    files = deepcopy(list(raw.get("files") or []))
+    paths = [str(row.get("path") or "") for row in files]
+    if not files or not all(paths) or len(paths) != len(set(paths)):
+        raise FloorError("Floor crate requires unique nonempty file paths")
+    for index, row in enumerate(files):
+        _floor_sha(row.get("sha256"), f"Floor crate file {index} sha256")
+        _floor_positive_int(row.get("size_bytes", 0), f"Floor crate file {index} size_bytes", allow_zero=True)
+    out = {
+        "schema_version": FLOOR_SCHEMA_VERSION,
+        "kind": "earcrate_floor_crate",
+        "provider_manifest_sha256": _floor_sha(raw.get("provider_manifest_sha256"), "crate provider_manifest_sha256"),
+        "request_sha256": _floor_sha(raw.get("request_sha256"), "crate request_sha256"),
+        "result_sha256": _floor_sha(raw.get("result_sha256"), "crate result_sha256"),
+        "invocation_receipt_sha256": _floor_sha(raw.get("invocation_receipt_sha256"), "crate invocation_receipt_sha256"),
+        "files": files,
+        "source_media_copied": bool(raw.get("source_media_copied", False)),
+        "derived_artifacts_copied": deepcopy(list(raw.get("derived_artifacts_copied") or [])),
+        "standards_mappings": deepcopy(list(raw.get("standards_mappings") or [])),
+        "standards_certification_claimed": bool(raw.get("standards_certification_claimed", False)),
+    }
+    if out["source_media_copied"]:
+        raise FloorError("Floor crate v1 may not claim source media was copied")
+    if out["standards_certification_claimed"]:
+        raise FloorError("Floor crate mappings may not claim standards certification")
+    out["crate_sha256"] = floor_sha256_json(out)
+    _floor_check_supplied_hash(raw, out, "crate_sha256", "Floor crate")
+    return out
+
+
+def floor_object_kind(value: Mapping[str, Any]) -> str:
+    return str(value.get("kind") or "")
+
+
+def floor_verify_object(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate any normative Floor object and return its sealed form."""
+    kind = floor_object_kind(value)
+    if kind == "earcrate_floor_provider_manifest":
+        return floor_seal_provider_manifest(value)
+    if kind == "earcrate_floor_provider_request":
+        return floor_seal_provider_request(value)
+    if kind == "earcrate_floor_time_map":
+        return floor_seal_time_map(value)
+    if kind == "earcrate_floor_phrase_contract":
+        return floor_seal_phrase_contract(value)
+    if kind == "earcrate_floor_rights_envelope":
+        return floor_seal_rights_envelope(value)
+    if kind == "earcrate_floor_review_patch":
+        return floor_seal_review_patch(value)
+    if kind == "earcrate_floor_invocation_receipt":
+        return floor_seal_invocation_receipt(value)
+    if kind == "earcrate_floor_evaluation_policy":
+        return floor_seal_evaluation_policy(value)
+    if kind == "earcrate_floor_evaluation_ledger":
+        return floor_seal_evaluation_ledger(value)
+    if kind == "earcrate_floor_conformance_report":
+        return floor_seal_conformance_report(value)
+    if kind == "earcrate_floor_tournament_report":
+        return floor_seal_tournament_report(value)
+    if kind == "earcrate_floor_crate":
+        return floor_seal_floor_crate(value)
+    if kind == "earcrate_floor_provider_result":
+        raise FloorError("ProviderResult verification requires its ProviderRequest and ProviderManifest")
+    raise FloorError(f"unsupported Floor object kind: {kind!r}")
+
+
+__all__ = [name for name in globals() if name.startswith("floor_") or name.startswith("FLOOR_") or name in {"FloorError", "FloorProtocolError"}]

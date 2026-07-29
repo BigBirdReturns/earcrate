@@ -1,36 +1,176 @@
 from __future__ import annotations
+
+"""Provider catalog discovery and compatibility filtering."""
+
+import json
+from copy import deepcopy
 from pathlib import Path
-from typing import Any, Mapping, Sequence
-from .model import PROTOCOL, floor_load_provider_manifest, floor_seal_provider_request, floor_sha256_json
+from typing import Any, Iterable, Mapping
 
-SUFFIXES=('.floor-provider.json','.provider.floor.json','.provider.json')
+from .adapters import floor_earcrate_provider_manifests
+from .model import (
+    FloorError,
+    floor_capability_for_manifest,
+    floor_read_json,
+    floor_seal_provider_manifest,
+    floor_seal_provider_request,
+    floor_sha256_file,
+)
 
-def floor_manifest_compatibility(manifest:Mapping[str,Any],request:Mapping[str,Any])->dict[str,Any]:
-    q=floor_seal_provider_request(request); reasons=[]
-    if q['capability'] not in manifest.get('capabilities',[]): reasons.append('capability_not_declared')
-    if q['evidence']['branch'] not in manifest['evidence']['accepted_branches']: reasons.append('evidence_branch_not_accepted')
-    if q['evidence']['tier'] not in manifest['evidence']['accepted_tiers']: reasons.append('evidence_tier_not_accepted')
-    if manifest['runtime']['requires_network'] and not q['network_policy']['allowed']: reasons.append('network_policy_conflict')
-    if manifest['entrypoint']['protocol']!=PROTOCOL: reasons.append('not_subprocess_conformant')
-    return {'compatible':not reasons,'reasons':reasons,'provider_id':manifest['provider_id'],'provider_version':manifest['provider_version'],'request_semantic_sha256':q['request_semantic_sha256']}
+FLOOR_MANIFEST_SUFFIXES = (
+    ".floor-provider.json",
+    ".provider.floor.json",
+    ".provider.json",
+)
 
-def floor_discover_provider_catalog(roots:Sequence[str|Path],*,request:Mapping[str,Any]|None=None)->dict[str,Any]:
-    files=[]
-    for raw in roots:
-        root=Path(raw).expanduser().resolve()
-        if root.is_file(): files.append(root)
-        elif root.is_dir(): files.extend(p for p in root.rglob('*.json') if p.name.endswith(SUFFIXES))
-        else: files.append(root)
-    providers=[]; refusals=[]; seen={}
-    for path in sorted(set(files),key=str):
-        if not path.is_file(): refusals.append({'path':str(path),'reason':'manifest_path_missing'}); continue
-        try: manifest=floor_load_provider_manifest(path)
-        except Exception as exc: refusals.append({'path':str(path),'reason':'invalid_manifest','error':str(exc),'type':type(exc).__name__}); continue
-        key=(manifest['provider_id'],manifest['provider_version']); old=seen.get(key)
-        if old:
-            refusals.append({'path':str(path),'reason':'duplicate_manifest_identity' if old[0]==manifest['manifest_sha256'] else 'conflicting_provider_identity','first_path':old[1],'provider_id':key[0],'provider_version':key[1]}); continue
-        seen[key]=(manifest['manifest_sha256'],str(path)); row={'path':str(path),'manifest':manifest}
-        if request is not None: row['compatibility']=floor_manifest_compatibility(manifest,request)
-        providers.append(row)
-    out={'schema_version':1,'kind':'earcrate_floor_provider_catalog','roots':[str(Path(v).expanduser().resolve()) for v in roots],'provider_count':len(providers),'refusal_count':len(refusals),'providers':providers,'refusals':refusals,'discovery_is_trust':False,'discovery_is_selection':False}; out['catalog_sha256']=floor_sha256_json(out); return out
-__all__=['SUFFIXES','floor_manifest_compatibility','floor_discover_provider_catalog']
+
+def _floor_media_matches(pattern: str, actual: str) -> bool:
+    p = str(pattern).lower()
+    a = str(actual).lower()
+    if p in {"*", "*/*"}:
+        return True
+    if p.endswith("/*"):
+        return a.startswith(p[:-1])
+    return p == a
+
+
+def floor_manifest_compatibility(manifest: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
+    sealed_manifest = floor_seal_provider_manifest(manifest)
+    sealed_request = floor_seal_provider_request(request)
+    reasons: list[str] = []
+    try:
+        capability = floor_capability_for_manifest(sealed_manifest, sealed_request["capability"])
+    except FloorError as exc:
+        return {
+            "compatible": False,
+            "provider_id": sealed_manifest["provider_id"],
+            "manifest_sha256": sealed_manifest["manifest_sha256"],
+            "reasons": [str(exc)],
+        }
+    if sealed_request["evidence_branch"] not in capability["evidence_branches"]:
+        reasons.append("evidence branch is unsupported")
+    if sealed_request["evidence_tier"] not in capability["evidence_tiers"]:
+        reasons.append("evidence tier is unsupported")
+    if sealed_request["network_policy"] == "forbidden" and capability["network_policy"] == "required":
+        reasons.append("provider requires network but request forbids it")
+    if sealed_request["network_policy"] == "required" and capability["network_policy"] == "forbidden":
+        reasons.append("request requires network but provider forbids it")
+    unsupported_results = sorted(set(sealed_request["allowed_result_kinds"]) - set(capability["result_kinds"]))
+    if unsupported_results:
+        reasons.append("provider cannot emit requested result kinds: " + ", ".join(unsupported_results))
+    for artifact in sealed_request["inputs"]:
+        if not any(_floor_media_matches(pattern, artifact["media_kind"]) for pattern in capability["input_media_kinds"]):
+            reasons.append(f"input {artifact['artifact_id']} media kind {artifact['media_kind']} is unsupported")
+    return {
+        "compatible": not reasons,
+        "provider_id": sealed_manifest["provider_id"],
+        "provider_version": sealed_manifest["provider_version"],
+        "manifest_sha256": sealed_manifest["manifest_sha256"],
+        "capability": deepcopy(capability),
+        "reasons": reasons,
+    }
+
+
+def _floor_manifest_paths(paths: Iterable[str | Path]) -> list[Path]:
+    found: set[Path] = set()
+    for raw in paths:
+        path = Path(raw).expanduser().resolve()
+        if path.is_file():
+            if path.name.endswith(FLOOR_MANIFEST_SUFFIXES):
+                found.add(path)
+            continue
+        if not path.is_dir():
+            continue
+        for candidate in path.rglob("*.json"):
+            if candidate.name.endswith(FLOOR_MANIFEST_SUFFIXES):
+                found.add(candidate.resolve())
+    return sorted(found)
+
+
+def floor_discover_provider_catalog(
+    paths: Iterable[str | Path],
+    *,
+    request: Mapping[str, Any] | None = None,
+    include_earcrate_adapters: bool = True,
+) -> dict[str, Any]:
+    sealed_request = floor_seal_provider_request(request) if request is not None else None
+    entries: list[dict[str, Any]] = []
+    refusals: list[dict[str, Any]] = []
+    by_identity: dict[tuple[str, str], dict[str, Any]] = {}
+
+    def add_manifest(raw: Mapping[str, Any], *, source: str, source_sha256: str | None) -> None:
+        try:
+            sealed = floor_seal_provider_manifest(raw)
+        except Exception as exc:
+            refusals.append({"source": source, "code": "invalid_manifest", "message": str(exc)})
+            return
+        key = (sealed["provider_id"], sealed["provider_version"])
+        prior = by_identity.get(key)
+        if prior is not None and prior["manifest"]["manifest_sha256"] != sealed["manifest_sha256"]:
+            refusals.append(
+                {
+                    "source": source,
+                    "code": "conflicting_provider_identity",
+                    "message": f"{key[0]} {key[1]} resolves to more than one manifest identity",
+                    "prior_source": prior["source"],
+                }
+            )
+            prior["conflicted"] = True
+            return
+        compatibility = None if sealed_request is None else floor_manifest_compatibility(sealed, sealed_request)
+        entry = {
+            "source": source,
+            "source_sha256": source_sha256,
+            "manifest": sealed,
+            "compatibility": compatibility,
+            "conflicted": False,
+        }
+        by_identity[key] = entry
+        entries.append(entry)
+
+    for path in _floor_manifest_paths(paths):
+        try:
+            raw = floor_read_json(path)
+            add_manifest(raw, source=str(path), source_sha256=floor_sha256_file(path))
+        except Exception as exc:
+            refusals.append({"source": str(path), "code": "manifest_read_failed", "message": str(exc)})
+
+    if include_earcrate_adapters:
+        for manifest in floor_earcrate_provider_manifests():
+            add_manifest(manifest, source="earcrate:in-process-registry", source_sha256=None)
+
+    accepted = [
+        entry
+        for entry in entries
+        if not entry.get("conflicted") and (sealed_request is None or bool((entry.get("compatibility") or {}).get("compatible")))
+    ]
+    incompatible = [
+        entry
+        for entry in entries
+        if not entry.get("conflicted") and sealed_request is not None and not bool((entry.get("compatibility") or {}).get("compatible"))
+    ]
+    accepted.sort(key=lambda item: (item["manifest"]["provider_id"], item["manifest"]["provider_version"], item["manifest"]["manifest_sha256"]))
+    incompatible.sort(key=lambda item: (item["manifest"]["provider_id"], item["manifest"]["provider_version"], item["manifest"]["manifest_sha256"]))
+    refusals.sort(key=lambda item: (str(item.get("source") or ""), str(item.get("code") or "")))
+    return {
+        "schema_version": 1,
+        "kind": "earcrate_floor_provider_catalog",
+        "request_sha256": None if sealed_request is None else sealed_request["request_sha256"],
+        "accepted": accepted,
+        "incompatible": incompatible,
+        "refusals": refusals,
+        "counts": {
+            "accepted": len(accepted),
+            "incompatible": len(incompatible),
+            "refused": len(refusals),
+        },
+        "selection_authority": False,
+        "quality_claimed": False,
+    }
+
+
+__all__ = [
+    "FLOOR_MANIFEST_SUFFIXES",
+    "floor_manifest_compatibility",
+    "floor_discover_provider_catalog",
+]

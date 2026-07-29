@@ -1,0 +1,119 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_invocation_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "argv": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "executable": {
+      "type": "object"
+    },
+    "input_custody": {
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_invocation_receipt"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "network": {
+      "type": "object"
+    },
+    "output_custody": {
+      "type": "array"
+    },
+    "process": {
+      "type": "object"
+    },
+    "provider_id": {
+      "type": "string"
+    },
+    "provider_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "provider_version": {
+      "type": "string"
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "refusals": {
+      "type": "array"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "resource_limits": {
+      "type": "object"
+    },
+    "result_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "semantic_result_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stderr": {
+      "type": "object"
+    },
+    "stdout": {
+      "type": "object"
+    },
+    "working_directory": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "provider_id",
+    "provider_version",
+    "provider_manifest_sha256",
+    "request_sha256",
+    "argv",
+    "working_directory",
+    "executable",
+    "input_custody",
+    "output_custody",
+    "stdout",
+    "stderr",
+    "process",
+    "network",
+    "resource_limits",
+    "complete",
+    "refusals",
+    "metadata",
+    "receipt_sha256"
+  ],
+  "title": "EarCrate Floor invocation receipt v1",
+  "type": "object"
+}

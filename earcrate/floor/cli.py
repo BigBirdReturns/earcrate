@@ -1,207 +1,256 @@
 from __future__ import annotations
 
+"""CLI for the EarCrate Open Music Evidence Floor."""
+
 import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
-from .adapters import floor_builtin_provider_snapshot
+from .adapters import floor_earcrate_provider_manifests
 from .catalog import floor_discover_provider_catalog
+from .gaps import floor_gap_register
 from .interop import floor_export_crate
 from .model import (
-    K_MANIFEST,
-    K_PHRASE,
-    K_POLICY,
-    K_RECEIPT,
-    K_REQUEST,
-    K_REVIEW,
-    K_RIGHTS,
-    K_TIME_MAP,
     FloorError,
-    floor_capability,
+    FloorProtocolError,
     floor_read_json,
-    floor_schema_bundle,
-    floor_seal_evaluation_policy,
-    floor_seal_invocation_receipt,
-    floor_seal_phrase_contract,
-    floor_seal_provider_manifest,
-    floor_seal_provider_request,
-    floor_seal_review_patch,
-    floor_seal_rights_envelope,
-    floor_seal_time_map,
+    floor_sha256_json,
+    floor_verify_object,
     floor_write_json_atomic,
 )
-from .protocol import floor_invoke_provider
-from .reference import floor_run_reference_demo, floor_write_reference_provider
-from .tournament import floor_default_evaluation_policy, floor_run_tournament
+from .protocol import floor_conformance_run, floor_invoke_provider
+from .reference import floor_write_reference_provider
+from .schema import floor_schema_bundle, floor_write_schema_bundle
+from .tournament import floor_run_tournament
 
 
-def _emit(value: Any, *, stream: Any = sys.stdout) -> None:
-    # ASCII output remains safe on legacy Windows consoles while preserving a
-    # lossless JSON wire representation.
-    print(json.dumps(value, ensure_ascii=True, sort_keys=True, indent=2, allow_nan=False), file=stream)
+def floor_capability() -> dict[str, Any]:
+    gaps = floor_gap_register()
+    value = {
+        "schema_version": 1,
+        "kind": "earcrate_open_music_evidence_floor_capability",
+        "ready": True,
+        "protocol": {
+            "name": "earcrate-floor-stdio-json",
+            "version": 1,
+            "wire": {
+                "stdin": "one sealed ProviderRequest JSON object",
+                "stdout": "one ProviderResult JSON object and no log text",
+                "stderr": "diagnostics",
+                "artifacts": "files beneath FLOOR_ARTIFACT_DIR",
+            },
+        },
+        "commands": [
+            "capability",
+            "gaps",
+            "schemas",
+            "scaffold",
+            "catalog",
+            "invoke",
+            "conformance",
+            "tournament",
+            "crate",
+            "verify",
+        ],
+        "normative_objects": [
+            "ProviderManifest",
+            "ProviderRequest",
+            "ProviderResult",
+            "TimeMap",
+            "PhraseContract",
+            "RightsEnvelope",
+            "ReviewPatch",
+            "InvocationReceipt",
+            "EvaluationPolicy",
+            "EvaluationLedger",
+            "TournamentReport",
+            "FloorCrate",
+        ],
+        "provider_may_emit": [
+            "observation",
+            "candidate",
+            "measurement",
+            "refusal",
+            "derived_artifact",
+            "unapplied review patch",
+        ],
+        "provider_may_not_claim": [
+            "canonical musical state",
+            "applied review patch",
+            "legal determination",
+            "whole-organism passage",
+            "tournament winner as truth",
+        ],
+        "security_boundary": {
+            "input_hashes_verified": True,
+            "output_hashes_verified": True,
+            "artifact_paths_contained": True,
+            "symlinks_refused": True,
+            "shell_used": False,
+            "network_policy_declared": True,
+            "os_network_sandbox_proved": False,
+            "os_resource_sandbox_proved": False,
+        },
+        "conformance_is_quality": False,
+        "catalog_is_selection": False,
+        "tournament_winner_is_canonical": False,
+        "source_media_copied_by_crate_default": False,
+        "existing_earcrate_provider_adapter_count": len(floor_earcrate_provider_manifests()),
+        "gap_status_counts": gaps["counts"],
+        "requires_network": False,
+        "requires_cloud": False,
+    }
+    value["capability_sha256"] = floor_sha256_json(value)
+    return value
 
 
-def floor_export_schemas(output_dir: str | Path) -> dict[str, Any]:
-    root = Path(output_dir).expanduser().resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    rows = []
-    for name, schema in sorted(floor_schema_bundle().items()):
-        path = root / name
-        floor_write_json_atomic(path, schema)
-        rows.append({"name": name, "path": str(path)})
-    return {"ok": True, "complete": True, "output_dir": str(root), "schema_count": len(rows), "schemas": rows}
+def _floor_cli_json(value: Any, *, stream: Any = sys.stdout) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True), file=stream)
 
 
-def _validate(path: str | Path) -> dict[str, Any]:
-    source = Path(path).expanduser().resolve()
-    raw = floor_read_json(source)
-    kind = str(raw.get("kind") or "")
-    if kind == K_MANIFEST:
-        sealed = floor_seal_provider_manifest(raw)
-    elif kind == K_REQUEST:
-        sealed = floor_seal_provider_request(raw)
-    elif kind == K_TIME_MAP:
-        sealed = floor_seal_time_map(raw)
-    elif kind == K_PHRASE:
-        sealed = floor_seal_phrase_contract(raw)
-    elif kind == K_RIGHTS:
-        sealed = floor_seal_rights_envelope(raw)
-    elif kind == K_REVIEW:
-        sealed = floor_seal_review_patch(raw)
-    elif kind == K_RECEIPT:
-        sealed = floor_seal_invocation_receipt(raw)
-    elif kind == K_POLICY:
-        sealed = floor_seal_evaluation_policy(raw)
-    else:
-        raise FloorError(
-            "validate supports standalone manifests, requests, time maps, phrase contracts, "
-            "rights envelopes, review patches, receipts, and evaluation policies"
-        )
-    return {"ok": True, "complete": True, "path": str(source), "kind": kind, "sealed": sealed}
-
-
-def _request_for_catalog(path: str | None) -> Mapping[str, Any] | None:
-    return None if not path else floor_read_json(path)
+def _floor_cli_empty_dir(path: str | Path) -> Path:
+    target = Path(path).expanduser().resolve()
+    if target.exists() and any(target.iterdir()):
+        raise FloorError(f"refusing nonempty output directory: {target}")
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 def floor_cli_main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="earcrate floor",
-        description="EarCrate Open Music Evidence Floor provider and conformance protocol",
+        description="EarCrate Open Music Evidence Floor: portable provider custody, authority, evaluation, and crates",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("capability", help="describe the normative protocol boundary")
-    sub.add_parser("adapters", help="project existing EarCrate providers into Floor manifests")
+    subparsers.add_parser("capability", help="describe the protocol and authority boundary")
+    subparsers.add_parser("gaps", help="emit the executable interoperability gap register")
 
-    schemas = sub.add_parser("schemas", help="write the normative JSON Schema bundle")
-    schemas.add_argument("output")
+    schemas = subparsers.add_parser("schemas", help="write the committed Floor JSON Schema bundle")
+    schemas.add_argument("output_dir")
 
-    scaffold = sub.add_parser("scaffold", help="write a movable standard-library reference provider")
-    scaffold.add_argument("output")
-    scaffold.add_argument("--overwrite", action="store_true")
+    scaffold = subparsers.add_parser("scaffold", help="write a movable third-party reference provider")
+    scaffold.add_argument("output_dir")
 
-    demo = sub.add_parser("demo", help="run the reference provider twice and export a crate")
-    demo.add_argument("output")
-    demo.add_argument("--overwrite", action="store_true")
-
-    catalog = sub.add_parser("catalog", help="discover provider manifests without trusting or selecting them")
-    catalog.add_argument("roots", nargs="+")
+    catalog = subparsers.add_parser("catalog", help="discover provider manifests and optionally filter compatibility")
+    catalog.add_argument("paths", nargs="+")
     catalog.add_argument("--request")
+    catalog.add_argument("--no-earcrate-adapters", action="store_true")
 
-    invoke = sub.add_parser("invoke", help="run one stdio-json-v1 provider under exact custody")
+    invoke = subparsers.add_parser("invoke", help="run one stdio JSON provider with custody receipts")
     invoke.add_argument("manifest")
     invoke.add_argument("request")
-    invoke.add_argument("output")
-    invoke.add_argument("--repeat", type=int, default=1)
-    invoke.add_argument("--timeout", type=int, default=None)
-    invoke.add_argument("--require-repeatability", action="store_true")
-    invoke.add_argument("--overwrite", action="store_true")
+    invoke.add_argument("output_dir")
+    invoke.add_argument("--timeout", type=int, default=0)
 
-    crate = sub.add_parser("export-crate", help="export one verified invocation as a portable Floor crate")
+    conformance = subparsers.add_parser("conformance", help="run repeatable protocol conformance")
+    conformance.add_argument("manifest")
+    conformance.add_argument("request")
+    conformance.add_argument("output_dir")
+    conformance.add_argument("--repeat", type=int, default=2)
+
+    tournament = subparsers.add_parser("tournament", help="rank independent evaluation ledgers under a sealed policy")
+    tournament.add_argument("policy")
+    tournament.add_argument("evaluations", nargs="+")
+    tournament.add_argument("--output")
+
+    crate = subparsers.add_parser("crate", help="export a checksummed Floor/JAMS/PROV/ODRL/RO-Crate bundle")
     crate.add_argument("manifest")
     crate.add_argument("request")
     crate.add_argument("result")
     crate.add_argument("receipt")
-    crate.add_argument("output")
+    crate.add_argument("output_dir")
     crate.add_argument("--artifact-root")
-    crate.add_argument("--include-derived", action="store_true")
-    crate.add_argument("--overwrite", action="store_true")
+    crate.add_argument("--copy-derived", action="store_true")
 
-    tournament = sub.add_parser("tournament", help="rank independently evaluated candidates lexicographically")
-    tournament.add_argument("candidates", help="JSON object with candidates, or a JSON array")
-    tournament.add_argument("--policy")
-    tournament.add_argument("--output")
-
-    validate = sub.add_parser("validate", help="validate and reseal one standalone Floor object")
-    validate.add_argument("path")
+    verify = subparsers.add_parser("verify", help="validate and reseal one normative Floor object")
+    verify.add_argument("path")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
         if args.command == "capability":
-            _emit(floor_capability())
+            _floor_cli_json(floor_capability())
             return 0
-        if args.command == "adapters":
-            _emit(floor_builtin_provider_snapshot())
+        if args.command == "gaps":
+            _floor_cli_json(floor_gap_register())
             return 0
         if args.command == "schemas":
-            _emit(floor_export_schemas(args.output))
+            _floor_cli_json(floor_write_schema_bundle(args.output_dir))
             return 0
         if args.command == "scaffold":
-            _emit(floor_write_reference_provider(args.output, overwrite=bool(args.overwrite)))
-            return 0
-        if args.command == "demo":
-            _emit(floor_run_reference_demo(args.output, overwrite=bool(args.overwrite)))
+            _floor_cli_json(floor_write_reference_provider(args.output_dir))
             return 0
         if args.command == "catalog":
-            _emit(floor_discover_provider_catalog(args.roots, request=_request_for_catalog(args.request)))
+            request = None if not args.request else floor_read_json(args.request)
+            _floor_cli_json(
+                floor_discover_provider_catalog(
+                    args.paths,
+                    request=request,
+                    include_earcrate_adapters=not bool(args.no_earcrate_adapters),
+                )
+            )
             return 0
         if args.command == "invoke":
-            _emit(
-                floor_invoke_provider(
-                    args.manifest,
-                    args.request,
-                    args.output,
-                    repeat=int(args.repeat),
-                    require_repeatability=True if args.require_repeatability else None,
-                    timeout_seconds=args.timeout,
-                    overwrite=bool(args.overwrite),
-                )
+            output = _floor_cli_empty_dir(args.output_dir)
+            request = floor_read_json(args.request)
+            run = floor_invoke_provider(
+                args.manifest,
+                request,
+                artifact_dir=output / "artifacts",
+                timeout_seconds=None if int(args.timeout) <= 0 else int(args.timeout),
+            )
+            floor_write_json_atomic(output / "result.json", run["result"])
+            floor_write_json_atomic(output / "invocation.receipt.json", run["receipt"])
+            _floor_cli_json(
+                {
+                    "ok": True,
+                    "output_dir": str(output),
+                    "artifact_dir": run["artifact_dir"],
+                    "result_path": str(output / "result.json"),
+                    "receipt_path": str(output / "invocation.receipt.json"),
+                    "result_sha256": run["result"]["result_sha256"],
+                    "receipt_sha256": run["receipt"]["receipt_sha256"],
+                }
             )
             return 0
-        if args.command == "export-crate":
-            _emit(
-                floor_export_crate(
-                    manifest=args.manifest,
-                    request=args.request,
-                    result=args.result,
-                    receipt=args.receipt,
-                    output_dir=args.output,
-                    artifact_root=args.artifact_root,
-                    include_derived_artifacts=bool(args.include_derived),
-                    overwrite=bool(args.overwrite),
-                )
+        if args.command == "conformance":
+            report = floor_conformance_run(
+                args.manifest,
+                floor_read_json(args.request),
+                output_dir=args.output_dir,
+                repeat=int(args.repeat),
             )
-            return 0
+            _floor_cli_json(report)
+            return 0 if report["complete"] else 3
         if args.command == "tournament":
-            payload = json.loads(Path(args.candidates).expanduser().read_text(encoding="utf-8"))
-            candidates = payload.get("candidates") if isinstance(payload, dict) else payload
-            if not isinstance(candidates, list):
-                raise FloorError("tournament candidate file must be an array or contain a candidates array")
-            policy = floor_default_evaluation_policy() if not args.policy else floor_read_json(args.policy)
-            result = floor_run_tournament(policy=policy, candidates=candidates)
+            report = floor_run_tournament(
+                floor_read_json(args.policy),
+                [floor_read_json(path) for path in args.evaluations],
+            )
             if args.output:
-                floor_write_json_atomic(args.output, result)
-            _emit(result)
+                floor_write_json_atomic(args.output, report)
+            _floor_cli_json(report)
+            return 0 if report["winner"] is not None else 3
+        if args.command == "crate":
+            result = floor_export_crate(
+                manifest_value=floor_read_json(args.manifest),
+                request_value=floor_read_json(args.request),
+                result_value=floor_read_json(args.result),
+                receipt_value=floor_read_json(args.receipt),
+                output_dir=args.output_dir,
+                artifact_root=args.artifact_root,
+                copy_derived=bool(args.copy_derived),
+            )
+            _floor_cli_json(result)
             return 0
-        if args.command == "validate":
-            _emit(_validate(args.path))
+        if args.command == "verify":
+            _floor_cli_json(floor_verify_object(floor_read_json(args.path)))
             return 0
         raise FloorError(f"unsupported Floor command: {args.command}")
     except Exception as exc:
-        _emit({"ok": False, "error": str(exc), "type": type(exc).__name__}, stream=sys.stderr)
+        _floor_cli_json({"ok": False, "error": str(exc), "type": type(exc).__name__}, stream=sys.stderr)
         return 1
 
 
@@ -209,4 +258,4 @@ if __name__ == "__main__":
     raise SystemExit(floor_cli_main())
 
 
-__all__ = ["floor_cli_main", "floor_export_schemas"]
+__all__ = ["floor_capability", "floor_cli_main"]

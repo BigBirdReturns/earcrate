@@ -1,0 +1,69 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_tournament_report_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_authority": {
+      "const": false
+    },
+    "competitors": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_tournament_report"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "quality_is_distinct_from_protocol_conformance": {
+      "const": true
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "selection_requires_earcrate_adjudication": {
+      "const": true
+    },
+    "tournament_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "winner": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "winner_semantics": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "policy_sha256",
+    "request_sha256",
+    "competitors",
+    "winner",
+    "winner_semantics",
+    "canonical_authority",
+    "selection_requires_earcrate_adjudication",
+    "quality_is_distinct_from_protocol_conformance",
+    "tournament_sha256"
+  ],
+  "title": "EarCrate Floor provider tournament report v1",
+  "type": "object"
+}

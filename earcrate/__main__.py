@@ -25,6 +25,11 @@ if len(sys.argv) > 1 and sys.argv[1] == "buffalo":
 
     sys.exit(specimen_cli_main(sys.argv[2:]))
 
+if len(sys.argv) > 1 and sys.argv[1] == "floor":
+    from earcrate.floor.cli import floor_cli_main
+
+    sys.exit(floor_cli_main(sys.argv[2:]))
+
 if len(sys.argv) > 1 and sys.argv[1] == "live":
     from earcrate.live.cli import live_cli_main
 

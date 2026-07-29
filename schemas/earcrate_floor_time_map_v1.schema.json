@@ -1,0 +1,96 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_time_map_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "earcrate_floor_time_map"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "segments": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "metadata": {
+            "type": "object"
+          },
+          "mode": {
+            "enum": [
+              "continuous",
+              "jump",
+              "loop",
+              "retrigger",
+              "reverse",
+              "hold"
+            ]
+          },
+          "rate": {
+            "pattern": "^-?[0-9]+(?:/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "segment_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "source_artifact_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "source_end": {
+            "pattern": "^-?[0-9]+(?:/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "source_start": {
+            "pattern": "^-?[0-9]+(?:/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "target_end": {
+            "pattern": "^-?[0-9]+(?:/[1-9][0-9]*)?$",
+            "type": "string"
+          },
+          "target_start": {
+            "pattern": "^-?[0-9]+(?:/[1-9][0-9]*)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "segment_id",
+          "target_start",
+          "target_end",
+          "source_artifact_id",
+          "source_start",
+          "source_end",
+          "mode",
+          "rate",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "time_unit": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "time_unit",
+    "segments",
+    "metadata",
+    "time_map_sha256"
+  ],
+  "title": "EarCrate Floor source/performance TimeMap v1",
+  "type": "object"
+}

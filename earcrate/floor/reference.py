@@ -1,300 +1,207 @@
 from __future__ import annotations
 
-"""Movable, standard-library-only reference provider and end-to-end demo."""
+"""Language-independent reference-provider scaffold."""
 
-import hashlib
-import json
-import shutil
 from pathlib import Path
 from typing import Any
 
-from .interop import floor_export_crate
 from .model import (
-    FloorError,
-    K_MANIFEST,
-    K_REQUEST,
-    PROTOCOL,
     floor_seal_provider_manifest,
     floor_seal_provider_request,
     floor_sha256_file,
     floor_write_json_atomic,
 )
-from .protocol import floor_invoke_provider
 
-REFERENCE_PROVIDER_ID = "org.earcrate.reference.text"
-REFERENCE_PROVIDER_VERSION = "1.0.0"
-REFERENCE_CAPABILITY = "text_measurement"
-REFERENCE_MANIFEST_NAME = "reference.floor-provider.json"
-REFERENCE_SCRIPT_NAME = "reference_provider.py"
-
-_REFERENCE_SCRIPT = r'''#!/usr/bin/env python3
-from __future__ import annotations
-
+_FLOOR_REFERENCE_PROVIDER = r'''#!/usr/bin/env python3
+"""Third-party EarCrate Floor provider using only the Python standard library."""
 import hashlib
 import json
 import os
 import sys
 from pathlib import Path
 
-PROVIDER_ID = "org.earcrate.reference.text"
-PROVIDER_VERSION = "1.0.0"
-MANIFEST_NAME = "reference.floor-provider.json"
 
-
-def canonical(value):
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
-
-
-def sha256(data):
-    return hashlib.sha256(data).hexdigest()
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def main():
-    raw = sys.stdin.buffer.read()
-    request = json.loads(raw.decode("utf-8"))
-    manifest_dir = Path(os.environ["FLOOR_MANIFEST_DIR"]).resolve()
-    artifact_dir = Path(os.environ["FLOOR_ARTIFACT_DIR"]).resolve()
-    manifest = json.loads((manifest_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
-    source = Path(request["inputs"][0]["path"]).resolve()
-    data = source.read_bytes()
-    text = data.decode("utf-8")
-    summary = {
-        "artifact_id": request["inputs"][0]["artifact_id"],
-        "bytes": len(data),
-        "lines": len(text.splitlines()),
-        "words": len(text.split()),
-        "source_sha256": sha256(data),
-    }
-    payload = json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False).encode("utf-8") + b"\n"
+    request = json.loads(sys.stdin.read())
+    if request.get("kind") != "earcrate_floor_provider_request":
+        raise SystemExit(2)
+    source = request["inputs"][0]
+    path = Path(source["path"])
+    payload = path.read_bytes()
+    if hashlib.sha256(payload).hexdigest() != source["sha256"]:
+        raise SystemExit(3)
+    artifact_dir = Path(os.environ["FLOOR_ARTIFACT_DIR"])
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    output = artifact_dir / "summary.json"
+    output = artifact_dir / "echo.txt"
     output.write_bytes(payload)
     result = {
         "schema_version": 1,
         "kind": "earcrate_floor_provider_result",
-        "provider_id": PROVIDER_ID,
-        "provider_version": PROVIDER_VERSION,
-        "manifest_sha256": manifest["manifest_sha256"],
         "request_sha256": request["request_sha256"],
-        "request_semantic_sha256": request["request_semantic_sha256"],
-        "status": "ok",
-        "outputs": [
+        "provider_manifest_sha256": os.environ["FLOOR_PROVIDER_MANIFEST_SHA256"],
+        "provider_id": "org.earcrate.reference.echo",
+        "provider_version": "1.0.0",
+        "status": "success",
+        "emissions": [
             {
-                "output_id": "text_measurement",
-                "output_kind": "measurement",
-                "confidence": 1.0,
-                "evidence_refs": [request["inputs"][0]["artifact_id"]],
-                "payload": summary,
-                "metadata": {"implementation": "stdlib_reference"},
-            },
-            {
-                "output_id": "summary_artifact",
-                "output_kind": "derived_artifact",
-                "confidence": 1.0,
-                "evidence_refs": [request["inputs"][0]["artifact_id"]],
+                "kind": "measurement",
+                "subject": source["artifact_id"],
                 "payload": {
-                    "artifact_id": "summary_json",
-                    "media_type": "application/json",
-                    "source_media_copied": False,
+                    "byte_count": len(payload),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "protocol": "earcrate-floor-stdio-json-v1"
                 },
-            },
+                "evidence_refs": [source["artifact_id"]],
+                "confidence": 1.0,
+                "metadata": {"third_party_imports_earcrate": False}
+            }
         ],
         "artifacts": [
             {
-                "artifact_id": "summary_json",
-                "path": "summary.json",
-                "sha256": sha256(payload),
-                "size_bytes": len(payload),
-                "media_type": "application/json",
-                "role": "measurement_summary",
+                "artifact_id": "echo_copy",
+                "relative_path": "echo.txt",
+                "sha256": sha256_file(output),
+                "size_bytes": output.stat().st_size,
+                "media_kind": "text/plain",
+                "role": "derived_echo",
+                "branch": request["evidence_branch"],
+                "ancestor_branches": [request["evidence_branch"]],
+                "metadata": {}
             }
         ],
-        "diagnostics": {"network_used": False},
-        "metadata": {
-            "canonical_authority": False,
-            "source_media_copied": False,
-        },
+        "refusals": [],
+        "metrics": {"bytes_copied": len(payload)},
+        "metadata": {"network_used": False}
     }
-    sys.stdout.buffer.write(canonical(result))
-    sys.stdout.buffer.write(b"\n")
-    return 0
+    sys.stdout.write(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
 '''
 
 
-def _empty_or_replace(path: Path, overwrite: bool) -> Path:
-    root = path.expanduser().resolve()
-    if root.exists() and any(root.iterdir()):
-        if not overwrite:
-            raise FileExistsError(f"refusing to overwrite nonempty reference-provider directory: {root}")
-        shutil.rmtree(root)
-    root.mkdir(parents=True, exist_ok=True)
-    return root
-
-
-def floor_write_reference_provider(output_dir: str | Path, *, overwrite: bool = False) -> dict[str, Any]:
-    """Write a provider that can run without importing EarCrate."""
-
-    root = _empty_or_replace(Path(output_dir), overwrite)
-    script = root / REFERENCE_SCRIPT_NAME
-    script.write_text(_REFERENCE_SCRIPT, encoding="utf-8", newline="\n")
-    try:
-        script.chmod(0o755)
-    except OSError:
-        pass
-    script_sha = floor_sha256_file(script)
+def floor_write_reference_provider(output_dir: str | Path) -> dict[str, Any]:
+    destination = Path(output_dir).expanduser().resolve()
+    if destination.exists() and any(destination.iterdir()):
+        raise FileExistsError(f"refusing nonempty reference-provider directory: {destination}")
+    destination.mkdir(parents=True, exist_ok=True)
+    provider_path = destination / "reference_provider.py"
+    provider_path.write_text(_FLOOR_REFERENCE_PROVIDER, encoding="utf-8", newline="\n")
+    sample_path = destination / "sample.txt"
+    sample_path.write_text("EarCrate Floor reference provider\n", encoding="utf-8", newline="\n")
     manifest = floor_seal_provider_manifest(
         {
             "schema_version": 1,
-            "kind": K_MANIFEST,
-            "provider_id": REFERENCE_PROVIDER_ID,
-            "provider_version": REFERENCE_PROVIDER_VERSION,
-            "display_name": "EarCrate Floor standard-library reference provider",
-            "description": "Measures one UTF-8 text artifact and emits a derived JSON summary.",
-            "capabilities": [REFERENCE_CAPABILITY],
+            "kind": "earcrate_floor_provider_manifest",
+            "provider_id": "org.earcrate.reference.echo",
+            "provider_version": "1.0.0",
+            "display_name": "EarCrate Floor reference echo provider",
+            "description": "Movable standard-library provider proving the stdio JSON and artifact-custody floor.",
+            "protocol": {"name": "earcrate-floor-stdio-json", "version": 1},
             "entrypoint": {
-                "protocol": PROTOCOL,
-                "argv": ["${FLOOR_PYTHON}", "${FLOOR_MANIFEST_DIR}/reference_provider.py"],
-                "working_directory": "manifest_dir",
+                "argv": ["${PYTHON}", "${FLOOR_MANIFEST_DIR}/reference_provider.py"],
+                "working_directory": "${FLOOR_MANIFEST_DIR}",
+                "environment": {},
             },
-            "runtime": {
-                "language": "python-stdlib",
-                "requires_network": False,
-                "determinism": "deterministic",
-                "timeout_seconds": 30,
-                "max_stdout_bytes": 1 << 20,
-                "max_stderr_bytes": 1 << 20,
-                "max_artifact_bytes": 1 << 20,
-            },
-            "evidence": {
-                "accepted_branches": ["symbolic"],
-                "accepted_tiers": ["community_symbolic_witness"],
-            },
+            "capabilities": [
+                {
+                    "capability": "file.echo",
+                    "input_media_kinds": ["text/plain"],
+                    "result_kinds": ["measurement", "derived_artifact", "refusal"],
+                    "evidence_branches": ["symbolic"],
+                    "evidence_tiers": ["community_symbolic_witness"],
+                    "network_policy": "forbidden",
+                    "determinism": "bit_exact",
+                    "max_runtime_seconds": 30,
+                    "max_output_bytes": 1 << 20,
+                    "parameter_schema": {},
+                    "metadata": {"reference_provider": True},
+                }
+            ],
             "authority": {
-                "may_emit": ["measurement", "derived_artifact"],
+                "may_emit": ["measurement", "derived_artifact", "refusal"],
+                "may_not_emit": [],
             },
             "supply_chain": {
                 "license_expression": "CC0-1.0",
-                "source_uri": "https://github.com/BigBirdReturns/earcrate",
-                "source_revision": "reference-provider-v1",
-                "executable_sha256": script_sha,
-                "model_artifacts": [],
+                "source_uri": "",
+                "artifact_sha256": floor_sha256_file(provider_path),
+                "model_identities": [],
                 "signatures": [],
             },
             "metadata": {
-                "portable": True,
-                "imports_earcrate": False,
-                "reference_only": True,
+                "language": "python-standard-library",
+                "third_party_imports_earcrate": False,
+                "movable_directory": True,
             },
         }
     )
-    manifest_path = root / REFERENCE_MANIFEST_NAME
-    floor_write_json_atomic(manifest_path, manifest)
-    sample = root / "sample.txt"
-    sample.write_text("EarCrate Floor lets organs contribute evidence without becoming the organism.\n", encoding="utf-8", newline="\n")
+    manifest_path = floor_write_json_atomic(destination / "reference.floor-provider.json", manifest)
     request = floor_seal_provider_request(
         {
             "schema_version": 1,
-            "kind": K_REQUEST,
-            "capability": REFERENCE_CAPABILITY,
-            "evidence": {
-                "branch": "symbolic",
-                "tier": "community_symbolic_witness",
-                "ancestor_branches": ["symbolic"],
-                "prohibited_inputs": ["score answer keys", "commercial recording bytes"],
-            },
+            "kind": "earcrate_floor_provider_request",
+            "capability": "file.echo",
+            "evidence_branch": "symbolic",
+            "evidence_tier": "community_symbolic_witness",
             "inputs": [
                 {
                     "artifact_id": "sample_text",
-                    "path": str(sample.resolve()),
-                    "sha256": floor_sha256_file(sample),
-                    "size_bytes": sample.stat().st_size,
-                    "media_type": "text/plain; charset=utf-8",
-                    "role": "source_text",
+                    "sha256": floor_sha256_file(sample_path),
+                    "size_bytes": sample_path.stat().st_size,
+                    "media_kind": "text/plain",
+                    "role": "fixture",
                     "branch": "symbolic",
-                    "tier": "community_symbolic_witness",
                     "ancestor_branches": ["symbolic"],
-                    "metadata": {"fixture": True},
+                    "path": str(sample_path),
+                    "uri": "",
+                    "metadata": {},
                 }
             ],
-            "parameters": {"operation": "count"},
-            "seed": 0,
-            "network_policy": {"allowed": False, "declared_hosts": []},
-            "artifact_policy": {
-                "output_dir": "",
-                "max_total_bytes": 1 << 20,
-                "allow_source_media_copy": False,
+            "parameters": {},
+            "allowed_result_kinds": ["measurement", "derived_artifact", "refusal"],
+            "network_policy": "forbidden",
+            "limits": {
+                "runtime_seconds": 30,
+                "stdout_bytes": 1 << 20,
+                "stderr_bytes": 1 << 20,
+                "artifact_bytes": 1 << 20,
+                "artifact_count": 8,
             },
-            "metadata": {"reference_fixture": True},
+            "context": {},
+            "metadata": {"fixture": "reference_echo"},
         }
     )
-    request_path = root / "request.json"
-    floor_write_json_atomic(request_path, request)
-    readme = root / "README.md"
+    request_path = floor_write_json_atomic(destination / "request.json", request)
+    readme = destination / "README.md"
     readme.write_text(
         "# EarCrate Floor reference provider\n\n"
-        "This provider uses only the Python standard library and does not import EarCrate.\n"
-        "It reads one sealed request from stdin and writes one provider result to stdout.\n",
+        "This directory is movable. `reference_provider.py` imports no EarCrate code and communicates only through one JSON request on stdin, one JSON result on stdout, and derived files beneath `FLOOR_ARTIFACT_DIR`.\n\n"
+        "Run from an EarCrate checkout:\n\n"
+        "```bash\n"
+        "python -m earcrate floor conformance reference.floor-provider.json request.json conformance --repeat 2\n"
+        "```\n",
         encoding="utf-8",
         newline="\n",
     )
     return {
         "ok": True,
-        "complete": True,
-        "output_dir": str(root),
+        "output_dir": str(destination),
+        "provider_path": str(provider_path),
         "manifest_path": str(manifest_path),
         "request_path": str(request_path),
-        "script_path": str(script),
-        "sample_path": str(sample),
-        "manifest": manifest,
-        "request": request,
+        "manifest_sha256": manifest["manifest_sha256"],
+        "request_sha256": request["request_sha256"],
     }
 
 
-def floor_run_reference_demo(output_dir: str | Path, *, overwrite: bool = False) -> dict[str, Any]:
-    """Scaffold, invoke twice, and export a portable Floor crate."""
-
-    root = _empty_or_replace(Path(output_dir), overwrite)
-    provider = floor_write_reference_provider(root / "provider")
-    invocation = floor_invoke_provider(
-        provider["manifest_path"],
-        provider["request_path"],
-        root / "invocation",
-        repeat=2,
-        require_repeatability=True,
-    )
-    first_artifacts = Path(invocation["output_dir"]) / "run-0001" / "artifacts"
-    crate = floor_export_crate(
-        manifest=invocation["manifest"],
-        request=invocation["request"],
-        result=invocation["result"],
-        receipt=invocation["receipt"],
-        output_dir=root / "crate",
-        artifact_root=first_artifacts,
-        include_derived_artifacts=True,
-    )
-    if crate["crate"].get("source_media_copied") is not False:
-        raise FloorError("reference demo copied source media")
-    return {
-        "ok": True,
-        "complete": True,
-        "output_dir": str(root),
-        "provider": provider,
-        "invocation": invocation,
-        "crate": crate,
-        "repeatability_passed": bool(invocation["receipt"]["repeatability"].get("passed")),
-        "source_media_copied": False,
-        "mapping_status": crate["crate"]["mapping_status"],
-    }
-
-
-__all__ = [
-    "REFERENCE_PROVIDER_ID",
-    "REFERENCE_PROVIDER_VERSION",
-    "REFERENCE_CAPABILITY",
-    "floor_write_reference_provider",
-    "floor_run_reference_demo",
-]
+__all__ = ["floor_write_reference_provider"]

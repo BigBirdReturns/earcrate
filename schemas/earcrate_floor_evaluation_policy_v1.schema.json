@@ -1,0 +1,64 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_evaluation_policy_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "hard_gates": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "higher_is_better": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "kind": {
+      "const": "earcrate_floor_evaluation_policy"
+    },
+    "lexicographic_stages": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "lower_is_better": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "policy_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "policy_id",
+    "hard_gates",
+    "lexicographic_stages",
+    "higher_is_better",
+    "lower_is_better",
+    "metadata",
+    "policy_sha256"
+  ],
+  "title": "EarCrate Floor evaluation policy v1",
+  "type": "object"
+}

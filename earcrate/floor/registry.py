@@ -1,18 +1,49 @@
 from __future__ import annotations
-from copy import deepcopy
-from typing import Any, Mapping
-from .model import FloorError, floor_seal_provider_manifest, floor_sha256_json
 
-_REGISTRY: dict[tuple[str,str],dict[str,Any]]={}
+"""In-process registry for Floor manifest factories.
 
-def floor_register_manifest(manifest:Mapping[str,Any],*,replace:bool=False)->dict[str,Any]:
-    row=floor_seal_provider_manifest(manifest); key=(row['provider_id'],row['provider_version']); old=_REGISTRY.get(key)
-    if old and old['manifest_sha256']!=row['manifest_sha256'] and not replace: raise FloorError(f"conflicting provider manifest identity for {key[0]}@{key[1]}")
-    _REGISTRY[key]=deepcopy(row); return deepcopy(row)
+The registry is discovery only. Registration does not imply trust, conformance,
+quality, installation, or selection.
+"""
 
-def floor_get_registered_manifest(provider_id:str,provider_version:str)->dict[str,Any]: return deepcopy(_REGISTRY[(str(provider_id),str(provider_version))])
-def floor_registered_provider_keys()->list[str]: return [f"{a}@{b}" for a,b in sorted(_REGISTRY)]
-def floor_clear_registry()->None: _REGISTRY.clear()
-def floor_registry_snapshot()->dict[str,Any]:
-    out={'schema_version':1,'kind':'earcrate_floor_registry_snapshot','providers':[deepcopy(_REGISTRY[k]) for k in sorted(_REGISTRY)],'registration_is_trust':False,'registration_is_conformance':False,'registration_is_selection':False}; out['provider_count']=len(out['providers']); out['snapshot_sha256']=floor_sha256_json(out); return out
-__all__=[name for name in globals() if name.startswith('floor_')]
+from typing import Any, Callable
+
+from .model import FloorError, floor_seal_provider_manifest
+
+_FLOOR_MANIFEST_FACTORIES: dict[str, Callable[[], dict[str, Any]]] = {}
+
+
+def floor_register_manifest(provider_id: str, factory: Callable[[], dict[str, Any]]) -> None:
+    ident = str(provider_id).strip().lower()
+    if not ident:
+        raise FloorError("Floor provider registration requires provider_id")
+    if not callable(factory):
+        raise FloorError("Floor provider registration requires a callable factory")
+    _FLOOR_MANIFEST_FACTORIES[ident] = factory
+
+
+def floor_registered_manifest_ids() -> list[str]:
+    return sorted(_FLOOR_MANIFEST_FACTORIES)
+
+
+def floor_get_registered_manifest(provider_id: str) -> dict[str, Any]:
+    ident = str(provider_id).strip().lower()
+    factory = _FLOOR_MANIFEST_FACTORIES.get(ident)
+    if factory is None:
+        raise FloorError(f"no Floor manifest registered for {ident!r}")
+    manifest = floor_seal_provider_manifest(factory())
+    if manifest["provider_id"] != ident:
+        raise FloorError("registered Floor manifest factory returned another provider_id")
+    return manifest
+
+
+def floor_registered_manifests() -> list[dict[str, Any]]:
+    return [floor_get_registered_manifest(provider_id) for provider_id in floor_registered_manifest_ids()]
+
+
+__all__ = [
+    "floor_register_manifest",
+    "floor_registered_manifest_ids",
+    "floor_get_registered_manifest",
+    "floor_registered_manifests",
+]

@@ -1,0 +1,150 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_provider_result_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "ancestor_branches": {
+            "items": {
+              "enum": [
+                "score",
+                "symbolic",
+                "audio",
+                "convergence",
+                "performance",
+                "review",
+                "evolution"
+              ]
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "artifact_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "branch": {
+            "enum": [
+              "score",
+              "symbolic",
+              "audio",
+              "convergence",
+              "performance",
+              "review",
+              "evolution",
+              ""
+            ]
+          },
+          "media_kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "path": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "size_bytes": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "sha256",
+          "size_bytes",
+          "media_kind"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "emissions": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_provider_result"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "metrics": {
+      "type": "object"
+    },
+    "provider_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "provider_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "provider_version": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "refusals": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "result_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "semantic_result_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "success",
+        "refused",
+        "error"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "request_sha256",
+    "provider_manifest_sha256",
+    "provider_id",
+    "provider_version",
+    "status",
+    "emissions",
+    "artifacts",
+    "refusals",
+    "metrics",
+    "metadata",
+    "semantic_result_sha256",
+    "result_sha256"
+  ],
+  "title": "EarCrate Floor provider result v1",
+  "type": "object"
+}

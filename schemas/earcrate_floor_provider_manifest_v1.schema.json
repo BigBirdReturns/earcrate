@@ -1,0 +1,253 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_provider_manifest_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_write_access": {
+          "const": false
+        },
+        "legal_decision_access": {
+          "const": false
+        },
+        "may_emit": {
+          "items": {
+            "enum": [
+              "observation",
+              "candidate",
+              "measurement",
+              "refusal",
+              "derived_artifact",
+              "review_patch"
+            ]
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "may_not_emit": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "review_patch_apply_access": {
+          "const": false
+        }
+      },
+      "required": [
+        "may_emit",
+        "may_not_emit",
+        "canonical_write_access",
+        "review_patch_apply_access",
+        "legal_decision_access"
+      ],
+      "type": "object"
+    },
+    "capabilities": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "determinism": {
+            "enum": [
+              "unknown",
+              "best_effort",
+              "repeatable",
+              "bit_exact"
+            ]
+          },
+          "evidence_branches": {
+            "items": {
+              "enum": [
+                "score",
+                "symbolic",
+                "audio",
+                "convergence",
+                "performance",
+                "review",
+                "evolution"
+              ]
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "evidence_tiers": {
+            "items": {
+              "enum": [
+                "unspecified",
+                "authoritative_score",
+                "community_symbolic_witness",
+                "blind_audio_inference",
+                "cross_modal_accepted",
+                "performance_realization",
+                "human_review",
+                "campaign_evidence"
+              ]
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "input_media_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "max_output_bytes": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_runtime_seconds": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "network_policy": {
+            "enum": [
+              "forbidden",
+              "declared",
+              "required"
+            ]
+          },
+          "parameter_schema": {
+            "type": "object"
+          },
+          "result_kinds": {
+            "items": {
+              "enum": [
+                "observation",
+                "candidate",
+                "measurement",
+                "refusal",
+                "derived_artifact",
+                "review_patch"
+              ]
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "capability",
+          "input_media_kinds",
+          "result_kinds",
+          "evidence_branches",
+          "evidence_tiers",
+          "network_policy",
+          "determinism",
+          "max_runtime_seconds",
+          "max_output_bytes",
+          "parameter_schema",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "description": {
+      "type": "string"
+    },
+    "display_name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "entrypoint": {
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "environment": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "working_directory": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "argv",
+        "working_directory",
+        "environment"
+      ],
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_floor_provider_manifest"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "protocol": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "earcrate-floor-stdio-json"
+        },
+        "version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "provider_id": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+      "type": "string"
+    },
+    "provider_version": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "supply_chain": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "provider_id",
+    "provider_version",
+    "display_name",
+    "protocol",
+    "entrypoint",
+    "capabilities",
+    "authority",
+    "supply_chain",
+    "metadata",
+    "manifest_sha256"
+  ],
+  "title": "EarCrate Floor provider manifest v1",
+  "type": "object"
+}

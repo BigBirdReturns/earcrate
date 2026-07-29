@@ -16,6 +16,7 @@ ORDER = ["tastespec/profiles.py", "tastespec/remix_builder.py", "core/deps.py", 
          "reader/model.py", "reader/body.py", "reader/personas.py", "reader/arms/pulse.py", "reader/arms/layers.py", "reader/arms/recurrence.py", "reader/arms/residual.py", "reader/render.py", "reader/visualize.py", "reader/nervous_system.py", "reader/cli.py",
          "study/reference.py", "study/reference_grid.py", "study/reference_bundle.py", "study/reference_cli.py",
          "mix/model.py", "mix/audio.py", "mix/transport.py", "mix/automation.py", "mix/render.py", "mix/cli.py",
+         "floor/model.py", "floor/schema.py", "floor/registry.py", "floor/adapters.py", "floor/catalog.py", "floor/protocol.py", "floor/tournament.py", "floor/interop.py", "floor/reference.py", "floor/gaps.py", "floor/cli.py",
          "live/model.py", "live/operators.py", "live/capabilities.py", "live/instrumentation.py", "live/planner.py", "live/engine.py", "live/runtime.py", "live/crate.py", "live/stream.py", "live/playback.py", "live/performance.py", "live/audio_cli.py", "live/cli.py",
          "midi/cli.py", "plan/math.py", "plan/transitions.py", "materials/regions.py", "study/musicbrainz.py", "remix/external.py", "app.py", "ui/server.py", "selftest.py", "cli.py"]
 SPECIMEN_FILES = ["model.py", "convergence.py", "community.py", "children.py", "continuation.py", "continuation_dense.py", "flim.py", "gate.py", "cli.py", "__init__.py"]
@@ -95,7 +96,7 @@ for rel in ORDER:
     if bad:
         raise SystemExit("indented earcrate imports would break the single-file dist at call time:\n  " + "\n  ".join(bad))
     body = "\n".join(lines)
-    if rel in {"study/reference_cli.py", "mix/cli.py", "specimen/cli.py", "live/cli.py", "live/audio_cli.py"}:
+    if rel in {"study/reference_cli.py", "mix/cli.py", "floor/cli.py", "specimen/cli.py", "live/cli.py", "live/audio_cli.py"}:
         marker = '\nif __name__ == "__main__":'
         if marker in body:
             body = body.split(marker, 1)[0]
@@ -117,6 +118,7 @@ for rel in ORDER:
             + "\n    if argv and argv[0] == \"midi\":\n        return midi_main(argv[1:])"
             + "\n    if argv and argv[0] == \"mix\":\n        return mixscore_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"buffalo\":\n        return specimen_cli_main(argv[1:])"
+            + "\n    if argv and argv[0] == \"floor\":\n        return floor_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"live\":\n        return live_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"live-audio\":\n        return live_audio_cli_main(argv[1:])"
             + "\n    if argv and argv[0] == \"reference\":\n        return reference_cli_main(argv[1:])"

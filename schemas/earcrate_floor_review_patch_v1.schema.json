@@ -1,0 +1,78 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_review_patch_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied": {
+      "const": false
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "invalidation_hints": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_review_patch"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "operations": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "patch_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "proposed_by": {
+      "type": "object"
+    },
+    "reason": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "review_patch_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "target_object": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "target_revision_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "patch_id",
+    "target_revision_sha256",
+    "target_object",
+    "operations",
+    "reason",
+    "evidence_refs",
+    "invalidation_hints",
+    "proposed_by",
+    "applied",
+    "metadata",
+    "review_patch_sha256"
+  ],
+  "title": "EarCrate Floor unapplied review patch v1",
+  "type": "object"
+}

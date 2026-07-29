@@ -4,13 +4,18 @@ on:
   push:
     branches:
       - agent/release-review-floor-v1
+  pull_request:
+    branches:
+      - agent/open-music-evidence-floor
+    paths:
+      - ".release-review-export-trigger"
+      - ".github/workflows/export-release-review-base.yml"
 
 permissions:
   contents: read
 
 jobs:
   export:
-    if: contains(github.event.head_commit.message, '[release-review-export]')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

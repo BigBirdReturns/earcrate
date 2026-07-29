@@ -180,3 +180,14 @@ sandbox. Production hosts SHOULD add:
 - privacy and locality enforcement.
 
 Those controls should augment, not replace, the content-addressed Floor receipt.
+
+## 12. Release candidates
+
+A candidate builder MAY produce a `ReleaseCandidate`, but it MUST NOT supply the
+human musical verdict or rights eligibility. A release gate composes separate
+protocol conformance, independent signal evaluation, human musical review, and
+use-scoped rights review. `signal_sane_human_review_pending` is a valid terminal
+state for automation and MUST NOT be represented as approval.
+
+`TimeMap.segment.lane_id` permits target-time overlap across distinct lanes for
+crossfades and layering. Segments in one lane MUST remain non-overlapping.

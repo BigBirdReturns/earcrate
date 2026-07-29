@@ -33,6 +33,12 @@ FLOOR_GAP_REGISTER: tuple[dict[str, Any], ...] = (
         "status": "implemented",
     },
     {
+        "gap_id": "multilane_source_time",
+        "problem": "single-lane timelines cannot represent crossfades or simultaneous source transports without flattening causality",
+        "floor_contract": "TimeMap lane_id permits overlap across lanes while refusing overlap within one lane",
+        "status": "implemented",
+    },
+    {
         "gap_id": "rights_assertion_vs_legal_decision",
         "problem": "rights metadata is easily laundered into an unsupported clearance claim",
         "floor_contract": "RightsEnvelope assertions with provider_may_not_decide_legality",
@@ -84,6 +90,12 @@ FLOOR_GAP_REGISTER: tuple[dict[str, Any], ...] = (
         "gap_id": "review_causality",
         "problem": "edits overwrite outputs without retaining why or what must be recomputed",
         "floor_contract": "unapplied ReviewPatch with evidence and invalidation hints",
+        "status": "implemented",
+    },
+    {
+        "gap_id": "release_candidate_self_approval",
+        "problem": "builders convert signal sanity into musical acceptance or release approval",
+        "floor_contract": "ReleaseCandidate plus independent signal EvaluationLedger, human musical review, use-scoped rights review, and ReleaseGateReceipt",
         "status": "implemented",
     },
     {

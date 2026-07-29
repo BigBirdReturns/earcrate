@@ -328,7 +328,9 @@ def floor_seal_time_map(value: Mapping[str, Any]) -> dict[str, Any]:
     if str(raw.get("kind") or "earcrate_floor_time_map") != "earcrate_floor_time_map":
         raise FloorError("unsupported TimeMap kind")
     segments: list[dict[str, Any]] = []
-    previous_target_end: Fraction | None = None
+    # A TimeMap may describe several simultaneous transport lanes. Intervals may
+    # overlap across lanes (crossfades/layers), but never within one lane.
+    previous_target_end_by_lane: dict[str, Fraction] = {}
     for index, row_raw in enumerate(raw.get("segments") or []):
         if not isinstance(row_raw, Mapping):
             raise FloorError(f"TimeMap segment {index} must be an object")
@@ -336,6 +338,9 @@ def floor_seal_time_map(value: Mapping[str, Any]) -> dict[str, Any]:
         mode = str(row.get("mode") or "continuous")
         if mode not in FLOOR_TIME_MODES:
             raise FloorError(f"TimeMap segment {index} has unsupported mode {mode!r}")
+        lane_id = str(row.get("lane_id") or "main")
+        if not lane_id.strip():
+            raise FloorError(f"TimeMap segment {index} lane_id must be nonempty")
         target_start = floor_fraction_value(row.get("target_start"), f"segment {index} target_start")
         target_end = floor_fraction_value(row.get("target_end"), f"segment {index} target_end")
         source_start = floor_fraction_value(row.get("source_start"), f"segment {index} source_start")
@@ -350,12 +355,14 @@ def floor_seal_time_map(value: Mapping[str, Any]) -> dict[str, Any]:
                 raise FloorError(f"TimeMap hold segment {index} must keep source time fixed")
         elif source_end <= source_start:
             raise FloorError(f"TimeMap segment {index} source interval must be positive")
+        previous_target_end = previous_target_end_by_lane.get(lane_id)
         if previous_target_end is not None and target_start < previous_target_end:
-            raise FloorError("TimeMap target segments may not overlap")
-        previous_target_end = target_end
+            raise FloorError(f"TimeMap target segments may not overlap within lane {lane_id!r}")
+        previous_target_end_by_lane[lane_id] = target_end
         segments.append(
             {
                 "segment_id": str(row.get("segment_id") or f"segment_{index:04d}"),
+                "lane_id": lane_id,
                 "target_start": floor_fraction(target_start),
                 "target_end": floor_fraction(target_end),
                 "source_artifact_id": _floor_text(row.get("source_artifact_id"), f"segment {index} source_artifact_id"),

@@ -1,0 +1,73 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_human_musical_review_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blind_review": {
+      "type": "boolean"
+    },
+    "comparison_artifact_sha256s": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "human_review_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_floor_human_musical_review"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "ratings": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "type": "object"
+    },
+    "release_candidate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "reviewer": {
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "verdict": {
+      "enum": [
+        "pending",
+        "accepted",
+        "rejected",
+        "revise"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "release_candidate_sha256",
+    "reviewer",
+    "verdict",
+    "blind_review",
+    "ratings",
+    "notes",
+    "comparison_artifact_sha256s",
+    "metadata",
+    "human_review_sha256"
+  ],
+  "title": "EarCrate Floor human musical review v1",
+  "type": "object"
+}

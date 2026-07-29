@@ -1,0 +1,62 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_human_musical_review_request_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowed_verdicts": {
+      "items": {
+        "enum": [
+          "accepted",
+          "rejected",
+          "revise"
+        ]
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "builder_may_answer": {
+      "const": false
+    },
+    "candidate_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_floor_human_musical_review_request"
+    },
+    "questions": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "release_candidate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "const": "pending"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "candidate_id",
+    "release_candidate_sha256",
+    "questions",
+    "allowed_verdicts",
+    "status",
+    "builder_may_answer",
+    "review_request_sha256"
+  ],
+  "title": "EarCrate Floor human musical review request v1",
+  "type": "object"
+}

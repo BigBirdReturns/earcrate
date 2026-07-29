@@ -1,0 +1,70 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_rights_review_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "conditions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "declared_use": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "kind": {
+      "const": "earcrate_floor_rights_review"
+    },
+    "legal_determination": {
+      "const": false
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "release_candidate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "reviewer": {
+      "type": "object"
+    },
+    "rights_review_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "not_evaluated",
+        "eligible_for_declared_use",
+        "ineligible_for_declared_use",
+        "unknown"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "release_candidate_sha256",
+    "declared_use",
+    "status",
+    "reviewer",
+    "evidence_refs",
+    "conditions",
+    "legal_determination",
+    "metadata",
+    "rights_review_sha256"
+  ],
+  "title": "EarCrate Floor use-scoped rights review v1",
+  "type": "object"
+}

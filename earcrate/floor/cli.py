@@ -22,6 +22,15 @@ from .model import (
 )
 from .protocol import floor_conformance_run, floor_invoke_provider
 from .reference import floor_write_reference_provider
+from .release import (
+    floor_build_release_gate,
+    floor_human_review_request,
+    floor_seal_human_review_request,
+    floor_seal_human_musical_review,
+    floor_seal_release_candidate,
+    floor_seal_release_gate_receipt,
+    floor_seal_rights_review,
+)
 from .schema import floor_schema_bundle, floor_write_schema_bundle
 from .tournament import floor_run_tournament
 
@@ -52,6 +61,8 @@ def floor_capability() -> dict[str, Any]:
             "conformance",
             "tournament",
             "crate",
+            "review-request",
+            "release-gate",
             "verify",
         ],
         "normative_objects": [
@@ -67,6 +78,10 @@ def floor_capability() -> dict[str, Any]:
             "EvaluationLedger",
             "TournamentReport",
             "FloorCrate",
+            "ReleaseCandidate",
+            "HumanMusicalReview",
+            "RightsReview",
+            "ReleaseGateReceipt",
         ],
         "provider_may_emit": [
             "observation",
@@ -165,6 +180,18 @@ def floor_cli_main(argv: Sequence[str] | None = None) -> int:
     crate.add_argument("--artifact-root")
     crate.add_argument("--copy-derived", action="store_true")
 
+    review_request = subparsers.add_parser("review-request", help="write a human musical review request for a sealed release candidate")
+    review_request.add_argument("candidate")
+    review_request.add_argument("output")
+
+    release_gate = subparsers.add_parser("release-gate", help="compose conformance, signal, human, and rights evidence without self-approval")
+    release_gate.add_argument("candidate")
+    release_gate.add_argument("output")
+    release_gate.add_argument("--conformance")
+    release_gate.add_argument("--signal-evaluation")
+    release_gate.add_argument("--human-review")
+    release_gate.add_argument("--rights-review")
+
     verify = subparsers.add_parser("verify", help="validate and reseal one normative Floor object")
     verify.add_argument("path")
 
@@ -245,8 +272,39 @@ def floor_cli_main(argv: Sequence[str] | None = None) -> int:
             )
             _floor_cli_json(result)
             return 0
+        if args.command == "review-request":
+            candidate = floor_seal_release_candidate(floor_read_json(args.candidate))
+            result = floor_human_review_request(candidate)
+            floor_write_json_atomic(args.output, result)
+            _floor_cli_json(result)
+            return 0
+        if args.command == "release-gate":
+            result = floor_build_release_gate(
+                floor_read_json(args.candidate),
+                conformance=None if not args.conformance else floor_read_json(args.conformance),
+                signal_evaluation=None if not args.signal_evaluation else floor_read_json(args.signal_evaluation),
+                human_review=None if not args.human_review else floor_read_json(args.human_review),
+                rights_review=None if not args.rights_review else floor_read_json(args.rights_review),
+            )
+            floor_write_json_atomic(args.output, result)
+            _floor_cli_json(result)
+            return 0 if result["status_vector"]["release_state"] != "failed" else 3
         if args.command == "verify":
-            _floor_cli_json(floor_verify_object(floor_read_json(args.path)))
+            value = floor_read_json(args.path)
+            kind = str(value.get("kind") or "")
+            if kind == "earcrate_floor_release_candidate":
+                sealed = floor_seal_release_candidate(value)
+            elif kind == "earcrate_floor_human_musical_review_request":
+                sealed = floor_seal_human_review_request(value)
+            elif kind == "earcrate_floor_human_musical_review":
+                sealed = floor_seal_human_musical_review(value)
+            elif kind == "earcrate_floor_rights_review":
+                sealed = floor_seal_rights_review(value)
+            elif kind == "earcrate_floor_release_gate_receipt":
+                sealed = floor_seal_release_gate_receipt(value)
+            else:
+                sealed = floor_verify_object(value)
+            _floor_cli_json(sealed)
             return 0
         raise FloorError(f"unsupported Floor command: {args.command}")
     except Exception as exc:

@@ -1,0 +1,106 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_release_gate_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "builder_provider_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "checks": {
+      "type": "object"
+    },
+    "conformance_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "human_review_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "kind": {
+      "const": "earcrate_floor_release_gate_receipt"
+    },
+    "legal_determination_claimed": {
+      "const": false
+    },
+    "musical_acceptance_decided_by_builder": {
+      "const": false
+    },
+    "release_candidate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "release_eligible": {
+      "type": "boolean"
+    },
+    "release_gate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "rights_review_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "signal_evaluation_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status_vector": {
+      "type": "object"
+    },
+    "whole_organism_passed": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "release_candidate_sha256",
+    "builder_provider_id",
+    "conformance_sha256",
+    "signal_evaluation_sha256",
+    "human_review_sha256",
+    "rights_review_sha256",
+    "checks",
+    "status_vector",
+    "release_eligible",
+    "musical_acceptance_decided_by_builder",
+    "legal_determination_claimed",
+    "whole_organism_passed",
+    "release_gate_sha256"
+  ],
+  "title": "EarCrate Floor release gate receipt v1",
+  "type": "object"
+}

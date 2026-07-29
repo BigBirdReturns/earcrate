@@ -1,0 +1,148 @@
+{
+  "artifacts": [
+    {
+      "artifact_id": "candidate_pcm",
+      "media_kind": "application/vnd.earcrate.stereo-f32le",
+      "role": "authoritative_candidate_pcm",
+      "sha256": "d767f32a87d18aff5b8ec79c750c9a2116d5c8e42460df5de60d3187122c2be0",
+      "size_bytes": 12004224
+    },
+    {
+      "artifact_id": "candidate_wav",
+      "media_kind": "audio/wav",
+      "role": "lossless_delivery",
+      "sha256": "f94f6dd139a753e1a79709baa986d89564f28b78da57be292035d0686219f1df",
+      "size_bytes": 12004316
+    },
+    {
+      "artifact_id": "candidate_mp3",
+      "media_kind": "audio/mpeg",
+      "role": "listening_delivery",
+      "sha256": "347ceb1ee029af660f363d80ae9b4c061f94843153ee0dfb121c3e3e61410b00",
+      "size_bytes": 1001516
+    },
+    {
+      "artifact_id": "preview_pcm",
+      "media_kind": "application/vnd.earcrate.stereo-f32le",
+      "role": "authoritative_preview_pcm",
+      "sha256": "f462f94173bc0c4900178e0778cdebe32a89176e17d3d6c0f9ee17ca9576bff4",
+      "size_bytes": 11520000
+    },
+    {
+      "artifact_id": "preview_wav",
+      "media_kind": "audio/wav",
+      "role": "lossless_preview",
+      "sha256": "750c03129dab22e08461236c696b83710c224c5e65d63e13c818738f67e95612",
+      "size_bytes": 11520092
+    },
+    {
+      "artifact_id": "preview_mp3",
+      "media_kind": "audio/mpeg",
+      "role": "listening_preview",
+      "sha256": "020a04800fc0236be8472981e6e2153a77a65a3f7bf9973ef8b8fedddd04ee63",
+      "size_bytes": 960332
+    }
+  ],
+  "boundary": {
+    "builder_may_approve_music": false,
+    "human_musical_review_performed": false,
+    "release_eligible": false,
+    "rights_review_performed": false,
+    "signal_evaluator_may_decide_musical_acceptance": false,
+    "source_only": true,
+    "whole_organism_passed": false
+  },
+  "builder": {
+    "conformance_complete": true,
+    "conformance_sha256": "6e06be1d45329e645020042313e74dbfdd9669b3672723fe63221c409828f4ad",
+    "invocation_receipt_sha256": "609eb038d2a1b84685f37b3fb0cecbc072826e7f7be4666f6b38f1d66d427acf",
+    "manifest_sha256": "c1a8286d69025b95b8c229003120e4b1d2dea38e11a5d89fc461b7c33ecf9dc1",
+    "provider_id": "org.earcrate.reference.recurrence-release-candidate",
+    "request_sha256": "0d272f395b846eeaa039d9dc4cf36ac361e6ca28ec957e36164b4857e354d6df",
+    "result_sha256": "b1e73777e200d5ebd93e32e04543c9141d403ab9db9f4b0afdcc880e2e5fc326",
+    "semantic_result_repeatable": true,
+    "semantic_result_sha256": "74f05035aa8389533517a8d940eb7f47d9225322e23821b528517acf6612a4b9"
+  },
+  "edit_plan": {
+    "contiguous_prefix_seconds": [
+      64.725333,
+      85.589333
+    ],
+    "crossfade_ms": 35.0,
+    "donor_seconds": [
+      158.634667,
+      169.066667
+    ],
+    "preview_seconds": 30.0,
+    "replaced_target_seconds": [
+      75.157333,
+      85.589333
+    ],
+    "sample_rate": 48000,
+    "target_lufs": -9.1,
+    "tempo_bpm": 92.0022832232208
+  },
+  "fixture_id": "pretty_lights_empire_state_recurrence_release_v1",
+  "fixture_sha256": "d131f26295125cd9b75ea121449584ff2af780986b6691c9c3288fb525c2aeb5",
+  "kind": "earcrate_floor_release_candidate_fixture",
+  "measurements": {
+    "automatic_signal_passed": true,
+    "gates": {
+      "loudness_window": true,
+      "no_extended_silence": true,
+      "recurrence_chroma": true,
+      "recurrence_mel": true,
+      "recurrence_onset": true,
+      "seam_rms_continuity": true,
+      "seam_sample_continuity": true,
+      "starts_immediately": true,
+      "true_peak": true
+    },
+    "human_review_not_performed": true,
+    "recurrence": {
+      "chroma_frame_cosine_mean": 0.9985546469688416,
+      "mel_frame_cosine_mean": 0.9974127411842346,
+      "onset_envelope_correlation": 0.9761201815814643
+    },
+    "rights_review_not_performed": true,
+    "signal": {
+      "first_audible_seconds": 0.0,
+      "integrated_loudness_lufs": -9.100000192960179,
+      "longest_silence_seconds": 0.0,
+      "true_peak_dbtp_4x": -0.6744052171707153
+    },
+    "transition": {
+      "rms_discontinuity_db_100ms": 0.08988030354529547,
+      "sample_discontinuity_max_abs": 0.17908549308776855
+    }
+  },
+  "release_candidate_sha256": "7e126af458947ed26d9fb81917887b3178c8f90ac5e6249438658690a8f4aaf9",
+  "release_gate_sha256": "82a797608bb0a4fba90ac8fdd420a6c47af0bda2e72f037cdb2d31e83076700e",
+  "schema_version": 1,
+  "signal_evaluator": {
+    "evaluation_sha256": "253a5ba08fb278dfa9889dace24d7887782f569fc26a0e2922306712b324fa4a",
+    "independent_of_builder": true,
+    "invocation_receipt_sha256": "0eaf0a0040cb0f96f879e3f2e55aa95aad61f110c4757de3eb46e7ffefd57367",
+    "manifest_sha256": "6516a7b1ca85e747e3f03fb3d86353956330d4ba02a4e15fdafdd5a791f21f11",
+    "provider_id": "org.earcrate.reference.release-signal-evaluator",
+    "request_sha256": "020d32bbd9cfb81c7116dc2df5c922c768b8592eb7510fcd8406a650aaefd375",
+    "result_sha256": "36ffd3d51d4cdb9fec98307d046aec3a35085fab1e5cfdbd132fafa6e79f2ec1"
+  },
+  "source": {
+    "file_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+    "media_kind": "audio/mpeg",
+    "source_media_committed": false
+  },
+  "specimen_id": "pretty_lights_empire_state_blind_v1",
+  "status_vector": {
+    "build_reproducibility": "passed",
+    "custody": "passed",
+    "human_musical_review": "pending",
+    "recurrence_identity": "provisional_pass",
+    "release_state": "signal_sane_human_review_pending",
+    "rights_eligibility": "not_evaluated",
+    "signal_sanity": "passed",
+    "transition_integrity": "provisional_pass",
+    "whole_organism_status": "not_claimed"
+  }
+}

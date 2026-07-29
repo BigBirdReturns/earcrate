@@ -1,0 +1,101 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_release_candidate_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "boundary": {
+      "additionalProperties": true,
+      "properties": {
+        "builder_may_approve_music": {
+          "const": false
+        },
+        "human_review_required": {
+          "const": true
+        },
+        "legal_clearance_claimed": {
+          "const": false
+        },
+        "whole_organism_passed": {
+          "const": false
+        }
+      },
+      "required": [
+        "builder_may_approve_music",
+        "human_review_required",
+        "legal_clearance_claimed",
+        "whole_organism_passed"
+      ],
+      "type": "object"
+    },
+    "builder": {
+      "type": "object"
+    },
+    "candidate_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_floor_release_candidate"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "phrase_contract": {
+      "type": "object"
+    },
+    "release_candidate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_artifact_sha256s": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "status_vector": {
+      "required": [
+        "custody",
+        "build_reproducibility",
+        "signal_sanity",
+        "recurrence_identity",
+        "transition_integrity",
+        "human_musical_review",
+        "rights_eligibility",
+        "release_state"
+      ],
+      "type": "object"
+    },
+    "time_map": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "candidate_id",
+    "builder",
+    "source_artifact_sha256s",
+    "artifacts",
+    "time_map",
+    "phrase_contract",
+    "status_vector",
+    "boundary",
+    "metadata",
+    "release_candidate_sha256"
+  ],
+  "title": "EarCrate Floor release candidate v1",
+  "type": "object"
+}

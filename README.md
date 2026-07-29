@@ -23,12 +23,16 @@ EarCrate exposes a language-agnostic provider protocol for external MIR, ML, DSP
 
 ```text
 python -m earcrate floor capability
+# See docs/FLOOR_RELEASE_CANDIDATES.md for the human-acceptance boundary.
 python -m earcrate floor gaps
 python -m earcrate floor scaffold build/reference-floor-provider
 python -m earcrate floor conformance \
   build/reference-floor-provider/reference.floor-provider.json \
   build/reference-floor-provider/request.json \
   build/reference-floor-conformance --repeat 2
+python -m earcrate floor review-request release_candidate.json human_review_request.json
+python -m earcrate floor release-gate release_candidate.json release_gate.receipt.json \
+  --conformance builder.conformance.json --signal-evaluation signal.evaluation.json
 ```
 
 See `docs/OPEN_MUSIC_EVIDENCE_FLOOR.md` and `docs/FLOOR_PROVIDER_PROTOCOL_V1.md`.

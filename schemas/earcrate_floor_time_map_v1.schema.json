@@ -16,6 +16,10 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "lane_id": {
+            "minLength": 1,
+            "type": "string"
+          },
           "metadata": {
             "type": "object"
           },
@@ -60,6 +64,7 @@
         },
         "required": [
           "segment_id",
+          "lane_id",
           "target_start",
           "target_end",
           "source_artifact_id",

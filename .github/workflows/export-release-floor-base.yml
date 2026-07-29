@@ -1,47 +1,52 @@
-name: Export release-floor base
+name: Apply reviewed release-candidate gate
 
 on:
   push:
     branches:
       - agent/release-candidate-review-gate
-  pull_request:
-    branches:
-      - agent/open-music-evidence-floor
-    paths:
-      - ".release-floor-export-trigger"
-      - ".github/workflows/export-release-floor-base.yml"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: release-candidate-review-gate
+  cancel-in-progress: false
 
 jobs:
-  export:
+  apply:
+    if: contains(github.event.head_commit.message, '[release-candidate-bootstrap]')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 90
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-      - name: Build source archive
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import zipfile
-          root = Path('.')
-          out = Path('earcrate-release-floor-base.zip')
-          skip_roots = {'.git', '.pytest_cache', '__pycache__'}
-          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-              for path in sorted(root.rglob('*')):
-                  if not path.is_file() or path == out:
-                      continue
-                  if any(part in skip_roots for part in path.parts):
-                      continue
-                  zf.write(path, path.as_posix())
-          print(out, out.stat().st_size)
-          PY
-      - uses: actions/upload-artifact@v4
+          ref: agent/release-candidate-review-gate
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
         with:
-          name: earcrate-release-floor-base-${{ github.run_id }}
-          path: earcrate-release-floor-base.zip
-          if-no-files-found: error
-          retention-days: 2
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Apply and verify reviewed release-candidate gate
+        run: |
+          set -o pipefail
+          python .release-candidate-bootstrap/apply.py 2>&1 | tee release-candidate-bootstrap.log
+      - name: Retain integration ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-bootstrap-${{ github.run_id }}
+          path: release-candidate-bootstrap.log
+          if-no-files-found: warn
+          retention-days: 30

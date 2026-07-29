@@ -1,0 +1,345 @@
+{
+  "audio_edit_plan": {
+    "channels": 2,
+    "declared_operations": [
+      "equal_power_crossfade",
+      "gain",
+      "source_copy",
+      "source_seek"
+    ],
+    "edit_plan_id": "floor_edit_plan_10a84b67884160d30cd48e44",
+    "edit_plan_sha256": "b7c02ce7b5774024dd539d032d3522c7b0b08ec16b7d81e38171d3a4e01b6365",
+    "kind": "earcrate_floor_audio_edit_plan",
+    "metadata": {
+      "legacy_receipt_sha256": "4f18a93cb68f3654e221e29782e4b44a99e63b9044b0eb146c424b8f7eee9354"
+    },
+    "output_frames": 1500528,
+    "prohibited_operations": [
+      "beat_chopping",
+      "filtered_intro",
+      "midi_overlay",
+      "silent_preroll",
+      "stem_layering",
+      "synthesis"
+    ],
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "segments": [
+      {
+        "gain_db": -2.0349478921758295,
+        "metadata": {
+          "bars": 8
+        },
+        "operation": "source_copy",
+        "output_end_frame": 1001472,
+        "output_start_frame": 0,
+        "segment_id": "retained_prefix",
+        "source_artifact_id": "source_master",
+        "source_end_frame": 7739392,
+        "source_start_frame": 6737920
+      },
+      {
+        "gain_db": -2.0349478921758295,
+        "metadata": {
+          "bars": 4,
+          "replaces_source_end_frame": 8240128,
+          "replaces_source_start_frame": 7739392
+        },
+        "operation": "source_seek",
+        "output_end_frame": 1500528,
+        "output_start_frame": 999792,
+        "segment_id": "donor_recurrence",
+        "source_artifact_id": "source_master",
+        "source_end_frame": 12747776,
+        "source_start_frame": 12247040
+      }
+    ],
+    "source_artifacts": [
+      {
+        "artifact_id": "source_master",
+        "channels": 2,
+        "decoded_pcm_sha256": "bb7fede642c57eb155c4d784c36883abfeea0e20b2ab4d551e915cd8d74de832",
+        "frames": 13266582,
+        "media_kind": "audio/mpeg",
+        "metadata": {
+          "external_source_media": true
+        },
+        "path": "",
+        "role": "source_master",
+        "sample_rate": 48000,
+        "sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+        "size_bytes": 9745454,
+        "uri": ""
+      }
+    ],
+    "source_only": true,
+    "transitions": [
+      {
+        "curve": "equal_power",
+        "left_segment_id": "retained_prefix",
+        "metadata": {
+          "crossfade_ms": 35.0
+        },
+        "operation": "equal_power_crossfade",
+        "overlap_frames": 1680,
+        "right_segment_id": "donor_recurrence",
+        "transition_id": "prefix_to_donor"
+      }
+    ]
+  },
+  "authoritative_output": {
+    "artifact_id": "authoritative_candidate_pcm",
+    "channels": 2,
+    "decoded_pcm_sha256": "5da1bef8526576ca49628de636337e8fe9e100b4e0da7ada0605d164a4298e59",
+    "frames": 1500528,
+    "media_kind": "audio/vnd.earcrate.pcm-f32le-stereo",
+    "metadata": {
+      "authority": true
+    },
+    "path": "",
+    "role": "authoritative_candidate_pcm",
+    "sample_rate": 48000,
+    "sha256": "5da1bef8526576ca49628de636337e8fe9e100b4e0da7ada0605d164a4298e59",
+    "size_bytes": 12004224,
+    "uri": ""
+  },
+  "builder": {
+    "display_name": "EarCrate source-only recurrence builder",
+    "identity_id": "org.earcrate.release.recurrence-builder-v1",
+    "identity_type": "provider",
+    "manifest_sha256": null,
+    "metadata": {},
+    "version": "1.0.0"
+  },
+  "builder_may_not_approve_music": true,
+  "candidate_id": "release_candidate_d3d7c446257581c7ee69f63b",
+  "candidate_sha256": "1fe8f692c204d77d9cb7fc08c8b679d6d391ef41808c02b705170c586066a429",
+  "delivery_artifacts": [
+    {
+      "artifact_id": "candidate_wav",
+      "channels": 0,
+      "decoded_pcm_sha256": null,
+      "frames": 0,
+      "media_kind": "audio/wav",
+      "metadata": {
+        "non_authoritative_container": true
+      },
+      "path": "",
+      "role": "delivery",
+      "sample_rate": 0,
+      "sha256": "66bbec33b2c27c09dec8e3e4e167bddff268f8cf18a029deadb6b6ba70d3bd88",
+      "size_bytes": 12004282,
+      "uri": ""
+    },
+    {
+      "artifact_id": "candidate_mp3",
+      "channels": 0,
+      "decoded_pcm_sha256": null,
+      "frames": 0,
+      "media_kind": "audio/mpeg",
+      "metadata": {
+        "non_authoritative_container": true
+      },
+      "path": "",
+      "role": "delivery",
+      "sample_rate": 0,
+      "sha256": "697e67740622dbedb990c2c1fee0dcd29d38204466ad8e70fd29d00469ef4f67",
+      "size_bytes": 1251840,
+      "uri": ""
+    },
+    {
+      "artifact_id": "candidate_mp3_30s",
+      "channels": 0,
+      "decoded_pcm_sha256": null,
+      "frames": 0,
+      "media_kind": "audio/mpeg",
+      "metadata": {
+        "non_authoritative_container": true
+      },
+      "path": "",
+      "role": "delivery",
+      "sample_rate": 0,
+      "sha256": "e225a07431a18f2339f73b5463edc73920da85b1bfb97df7cd788feacf446ad6",
+      "size_bytes": 1200960,
+      "uri": ""
+    }
+  ],
+  "evidence_branch": "audio",
+  "evidence_tier": "blind_audio_inference",
+  "kind": "earcrate_floor_release_candidate",
+  "metadata": {
+    "legacy_receipt_sha256": "4f18a93cb68f3654e221e29782e4b44a99e63b9044b0eb146c424b8f7eee9354"
+  },
+  "phrase_contracts": [
+    {
+      "contract_id": "phrase_contract_e5b1bfa16239727f0bc2f837",
+      "entry_grammar": {
+        "phrase_downbeat_required": true
+      },
+      "evidence_refs": [
+        "4f18a93cb68f3654e221e29782e4b44a99e63b9044b0eb146c424b8f7eee9354"
+      ],
+      "exit_grammar": {
+        "complete_phrase_required": true
+      },
+      "future_obligations": [
+        {
+          "kind": "human_seam_and_phrase_judgment",
+          "status": "open"
+        }
+      ],
+      "hard_constraints": {
+        "no_silence_preroll": true,
+        "no_undeclared_source": true,
+        "nonoverlapping_source_occurrence": true,
+        "prohibited_operations": [
+          "beat_chopping",
+          "filtered_intro",
+          "midi_overlay",
+          "silent_preroll",
+          "stem_layering",
+          "synthesis"
+        ],
+        "source_only": true
+      },
+      "identity_obligations": [
+        {
+          "kind": "hook_harmonic_identity",
+          "measured": 0.9929830773548329,
+          "minimum": 0.95
+        },
+        {
+          "kind": "hook_timbre_identity",
+          "measured": 0.9940166316392326,
+          "minimum": 0.95
+        },
+        {
+          "kind": "hook_onset_identity",
+          "measured": 0.8899806161861202,
+          "minimum": 0.8
+        }
+      ],
+      "kind": "earcrate_floor_phrase_contract",
+      "length_beats": "16",
+      "metadata": {
+        "donor_seconds": [
+          255.146667,
+          265.578667
+        ],
+        "target_replaced_seconds": [
+          161.237333,
+          171.669333
+        ]
+      },
+      "meter": {
+        "denominator": 4,
+        "numerator": 4
+      },
+      "phrase_contract_sha256": "f2a8e65b76d5131ac47928f06f7736056d897408dd93ef36ba1d1ec6846060f9",
+      "rights": {
+        "allowed_uses": [],
+        "assertion_status": "unknown",
+        "attribution": [],
+        "evidence_refs": [
+          "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+        ],
+        "expires_at": "",
+        "jurisdiction": "",
+        "kind": "earcrate_floor_rights_envelope",
+        "license_expression": "NOASSERTION",
+        "metadata": {},
+        "policy_uri": "",
+        "prohibited_uses": [],
+        "provider_may_not_decide_legality": true,
+        "rights_envelope_sha256": "5d6a85e1ba1f350126efbee8031321931ea3e63fd1c6e3303ab550754c09792d",
+        "schema_version": 1,
+        "source_artifact_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+      },
+      "role": "hook_reprise",
+      "schema_version": 1,
+      "soft_objectives": [
+        {
+          "metric": "chroma_frame_cosine_mean",
+          "target": "maximize"
+        },
+        {
+          "metric": "mel_frame_cosine_mean",
+          "target": "maximize"
+        },
+        {
+          "metric": "onset_envelope_correlation",
+          "target": "maximize"
+        }
+      ],
+      "start_beat": "32",
+      "transforms": {
+        "allowed_operations": [
+          "equal_power_crossfade",
+          "gain",
+          "source_copy",
+          "source_seek"
+        ],
+        "gain_db": {},
+        "loop_allowed": false,
+        "metadata": {},
+        "reverse_allowed": false,
+        "slice_allowed": false,
+        "tempo_ratio": {},
+        "transpose_semitones": {}
+      }
+    }
+  ],
+  "schema_version": 1,
+  "source_evidence_refs": [
+    "4f18a93cb68f3654e221e29782e4b44a99e63b9044b0eb146c424b8f7eee9354",
+    "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+  ],
+  "status": {
+    "build_reproducibility": "passed",
+    "custody": "passed",
+    "musical_acceptance": "pending",
+    "recurrence_identity": "not_evaluated",
+    "release_status": "blocked",
+    "rights_eligibility": "not_evaluated",
+    "signal_sanity": "not_run",
+    "summary": "candidate_unqualified",
+    "transition_integrity": "not_evaluated",
+    "whole_organism_status": "not_claimed"
+  },
+  "time_map": {
+    "kind": "earcrate_floor_time_map",
+    "metadata": {
+      "crossfade_authority": "audio_edit_plan"
+    },
+    "schema_version": 1,
+    "segments": [
+      {
+        "metadata": {},
+        "mode": "continuous",
+        "rate": "1",
+        "segment_id": "retained_prefix",
+        "source_artifact_id": "source_master",
+        "source_end": "161202333/1000000",
+        "source_start": "140373333/1000000",
+        "target_end": "20829/1000",
+        "target_start": "0"
+      },
+      {
+        "metadata": {
+          "transition_overlap_seconds": 0.035
+        },
+        "mode": "jump",
+        "rate": "1",
+        "segment_id": "donor_recurrence",
+        "source_artifact_id": "source_master",
+        "source_end": "265578667/1000000",
+        "source_start": "255146667/1000000",
+        "target_end": "31261/1000",
+        "target_start": "20829/1000"
+      }
+    ],
+    "time_map_sha256": "8111a29aa0b00c7e00728bac9508270be713799273b8249a303dca0df52b9df8",
+    "time_unit": "second"
+  },
+  "title": "Empire State source-only recurrence release candidate"
+}

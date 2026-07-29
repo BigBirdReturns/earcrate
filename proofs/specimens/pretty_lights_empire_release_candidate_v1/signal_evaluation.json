@@ -1,0 +1,108 @@
+{
+  "builder_identity_id": "org.earcrate.release.recurrence-builder-v1",
+  "candidate_sha256": "1fe8f692c204d77d9cb7fc08c8b679d6d391ef41808c02b705170c586066a429",
+  "evaluator": {
+    "display_name": "EarCrate release signal evaluator",
+    "identity_id": "org.earcrate.release.signal-evaluator-v1",
+    "identity_type": "evaluator",
+    "manifest_sha256": null,
+    "metadata": {},
+    "version": "1.0.0"
+  },
+  "gates": [
+    {
+      "gate_id": "audible_from_start",
+      "measured": 0.0,
+      "metadata": {},
+      "metric": "first_audible_seconds",
+      "operator": "lte",
+      "passed": true,
+      "threshold": 0.001
+    },
+    {
+      "gate_id": "no_extended_silence",
+      "measured": 0.0,
+      "metadata": {},
+      "metric": "longest_silence_seconds",
+      "operator": "lte",
+      "passed": true,
+      "threshold": 0.05
+    },
+    {
+      "gate_id": "true_peak_bounded",
+      "measured": -0.5000000000000009,
+      "metadata": {},
+      "metric": "true_peak_dbfs",
+      "operator": "lte",
+      "passed": true,
+      "threshold": -0.1
+    },
+    {
+      "gate_id": "loudness_floor",
+      "measured": -9.019285809322382,
+      "metadata": {},
+      "metric": "integrated_loudness_lufs",
+      "operator": "gte",
+      "passed": true,
+      "threshold": -14.0
+    },
+    {
+      "gate_id": "loudness_ceiling",
+      "measured": -9.019285809322382,
+      "metadata": {},
+      "metric": "integrated_loudness_lufs",
+      "operator": "lte",
+      "passed": true,
+      "threshold": -6.0
+    },
+    {
+      "gate_id": "hook_chroma",
+      "measured": 0.9929830773548329,
+      "metadata": {},
+      "metric": "chroma_frame_cosine_mean",
+      "operator": "gte",
+      "passed": true,
+      "threshold": 0.95
+    },
+    {
+      "gate_id": "hook_timbre",
+      "measured": 0.9940166316392326,
+      "metadata": {},
+      "metric": "mel_frame_cosine_mean",
+      "operator": "gte",
+      "passed": true,
+      "threshold": 0.95
+    },
+    {
+      "gate_id": "hook_onset",
+      "measured": 0.8899806161861202,
+      "metadata": {},
+      "metric": "onset_envelope_correlation",
+      "operator": "gte",
+      "passed": true,
+      "threshold": 0.8
+    }
+  ],
+  "kind": "earcrate_floor_signal_evaluation",
+  "metadata": {
+    "legacy_receipt_sha256": "4f18a93cb68f3654e221e29782e4b44a99e63b9044b0eb146c424b8f7eee9354"
+  },
+  "metrics": {
+    "chroma_frame_cosine_mean": 0.9929830773548329,
+    "first_audible_seconds": 0.0,
+    "integrated_loudness_lufs": -9.019285809322382,
+    "longest_silence_seconds": 0.0,
+    "mel_frame_cosine_mean": 0.9940166316392326,
+    "onset_envelope_correlation": 0.8899806161861202,
+    "true_peak_dbfs": -0.5000000000000009
+  },
+  "notes": [
+    "transition integrity remains provisional until human seam and phrase review"
+  ],
+  "passed": true,
+  "recurrence_identity": "passed",
+  "schema_version": 1,
+  "signal_evaluation_sha256": "a683d3ac7391a030f34fea6750fb38539564b32da97ba63acacd8f7781fc5a5c",
+  "status": "passed",
+  "transition_integrity": "provisional_pass"
+}

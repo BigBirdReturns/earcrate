@@ -105,6 +105,30 @@ FLOOR_GAP_REGISTER: tuple[dict[str, Any], ...] = (
         "status": "implemented",
     },
     {
+        "gap_id": "signal_sanity_vs_musical_acceptance",
+        "problem": "clean loudness, silence, peak, and recurrence metrics are routinely laundered into artistic approval",
+        "floor_contract": "independent SignalEvaluation plus mandatory HumanMusicalReview",
+        "status": "implemented",
+    },
+    {
+        "gap_id": "release_candidate_promotion",
+        "problem": "rendered audio is published without an explicit multi-domain promotion gate",
+        "floor_contract": "ReleaseGateReceipt requires custody, reproducibility, signal, human review, and rights-policy acceptance",
+        "status": "implemented",
+    },
+    {
+        "gap_id": "builder_self_approval",
+        "problem": "candidate generators can grade or approve their own musical output",
+        "floor_contract": "builder identity may not equal signal evaluator or human reviewer, and candidate status begins blocked",
+        "status": "implemented",
+    },
+    {
+        "gap_id": "sample_accurate_edit_custody",
+        "problem": "source-derived edits omit exact source/output frame ownership and transition accounting",
+        "floor_contract": "AudioEditPlan plus TimeMap and PhraseContract bind every copied interval, overlap, operation, and obligation",
+        "status": "implemented",
+    },
+    {
         "gap_id": "network_declaration",
         "problem": "providers silently reach network services during supposedly local inference",
         "floor_contract": "request/manifest network policy and honest declaration-only host receipt",

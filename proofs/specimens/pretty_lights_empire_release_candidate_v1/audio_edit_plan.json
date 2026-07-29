@@ -1,0 +1,88 @@
+{
+  "channels": 2,
+  "declared_operations": [
+    "equal_power_crossfade",
+    "gain",
+    "source_copy",
+    "source_seek"
+  ],
+  "edit_plan_id": "floor_edit_plan_10a84b67884160d30cd48e44",
+  "edit_plan_sha256": "b7c02ce7b5774024dd539d032d3522c7b0b08ec16b7d81e38171d3a4e01b6365",
+  "kind": "earcrate_floor_audio_edit_plan",
+  "metadata": {
+    "legacy_receipt_sha256": "4f18a93cb68f3654e221e29782e4b44a99e63b9044b0eb146c424b8f7eee9354"
+  },
+  "output_frames": 1500528,
+  "prohibited_operations": [
+    "beat_chopping",
+    "filtered_intro",
+    "midi_overlay",
+    "silent_preroll",
+    "stem_layering",
+    "synthesis"
+  ],
+  "sample_rate": 48000,
+  "schema_version": 1,
+  "segments": [
+    {
+      "gain_db": -2.0349478921758295,
+      "metadata": {
+        "bars": 8
+      },
+      "operation": "source_copy",
+      "output_end_frame": 1001472,
+      "output_start_frame": 0,
+      "segment_id": "retained_prefix",
+      "source_artifact_id": "source_master",
+      "source_end_frame": 7739392,
+      "source_start_frame": 6737920
+    },
+    {
+      "gain_db": -2.0349478921758295,
+      "metadata": {
+        "bars": 4,
+        "replaces_source_end_frame": 8240128,
+        "replaces_source_start_frame": 7739392
+      },
+      "operation": "source_seek",
+      "output_end_frame": 1500528,
+      "output_start_frame": 999792,
+      "segment_id": "donor_recurrence",
+      "source_artifact_id": "source_master",
+      "source_end_frame": 12747776,
+      "source_start_frame": 12247040
+    }
+  ],
+  "source_artifacts": [
+    {
+      "artifact_id": "source_master",
+      "channels": 2,
+      "decoded_pcm_sha256": "bb7fede642c57eb155c4d784c36883abfeea0e20b2ab4d551e915cd8d74de832",
+      "frames": 13266582,
+      "media_kind": "audio/mpeg",
+      "metadata": {
+        "external_source_media": true
+      },
+      "path": "",
+      "role": "source_master",
+      "sample_rate": 48000,
+      "sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+      "size_bytes": 9745454,
+      "uri": ""
+    }
+  ],
+  "source_only": true,
+  "transitions": [
+    {
+      "curve": "equal_power",
+      "left_segment_id": "retained_prefix",
+      "metadata": {
+        "crossfade_ms": 35.0
+      },
+      "operation": "equal_power_crossfade",
+      "overlap_frames": 1680,
+      "right_segment_id": "donor_recurrence",
+      "transition_id": "prefix_to_donor"
+    }
+  ]
+}

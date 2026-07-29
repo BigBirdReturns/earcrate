@@ -1,0 +1,117 @@
+{
+  "contract_id": "phrase_contract_e5b1bfa16239727f0bc2f837",
+  "entry_grammar": {
+    "phrase_downbeat_required": true
+  },
+  "evidence_refs": [
+    "4f18a93cb68f3654e221e29782e4b44a99e63b9044b0eb146c424b8f7eee9354"
+  ],
+  "exit_grammar": {
+    "complete_phrase_required": true
+  },
+  "future_obligations": [
+    {
+      "kind": "human_seam_and_phrase_judgment",
+      "status": "open"
+    }
+  ],
+  "hard_constraints": {
+    "no_silence_preroll": true,
+    "no_undeclared_source": true,
+    "nonoverlapping_source_occurrence": true,
+    "prohibited_operations": [
+      "beat_chopping",
+      "filtered_intro",
+      "midi_overlay",
+      "silent_preroll",
+      "stem_layering",
+      "synthesis"
+    ],
+    "source_only": true
+  },
+  "identity_obligations": [
+    {
+      "kind": "hook_harmonic_identity",
+      "measured": 0.9929830773548329,
+      "minimum": 0.95
+    },
+    {
+      "kind": "hook_timbre_identity",
+      "measured": 0.9940166316392326,
+      "minimum": 0.95
+    },
+    {
+      "kind": "hook_onset_identity",
+      "measured": 0.8899806161861202,
+      "minimum": 0.8
+    }
+  ],
+  "kind": "earcrate_floor_phrase_contract",
+  "length_beats": "16",
+  "metadata": {
+    "donor_seconds": [
+      255.146667,
+      265.578667
+    ],
+    "target_replaced_seconds": [
+      161.237333,
+      171.669333
+    ]
+  },
+  "meter": {
+    "denominator": 4,
+    "numerator": 4
+  },
+  "phrase_contract_sha256": "f2a8e65b76d5131ac47928f06f7736056d897408dd93ef36ba1d1ec6846060f9",
+  "rights": {
+    "allowed_uses": [],
+    "assertion_status": "unknown",
+    "attribution": [],
+    "evidence_refs": [
+      "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+    ],
+    "expires_at": "",
+    "jurisdiction": "",
+    "kind": "earcrate_floor_rights_envelope",
+    "license_expression": "NOASSERTION",
+    "metadata": {},
+    "policy_uri": "",
+    "prohibited_uses": [],
+    "provider_may_not_decide_legality": true,
+    "rights_envelope_sha256": "5d6a85e1ba1f350126efbee8031321931ea3e63fd1c6e3303ab550754c09792d",
+    "schema_version": 1,
+    "source_artifact_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+  },
+  "role": "hook_reprise",
+  "schema_version": 1,
+  "soft_objectives": [
+    {
+      "metric": "chroma_frame_cosine_mean",
+      "target": "maximize"
+    },
+    {
+      "metric": "mel_frame_cosine_mean",
+      "target": "maximize"
+    },
+    {
+      "metric": "onset_envelope_correlation",
+      "target": "maximize"
+    }
+  ],
+  "start_beat": "32",
+  "transforms": {
+    "allowed_operations": [
+      "equal_power_crossfade",
+      "gain",
+      "source_copy",
+      "source_seek"
+    ],
+    "gain_db": {},
+    "loop_allowed": false,
+    "metadata": {},
+    "reverse_allowed": false,
+    "slice_allowed": false,
+    "tempo_ratio": {},
+    "transpose_semitones": {}
+  }
+}

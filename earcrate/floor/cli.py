@@ -22,6 +22,13 @@ from .model import (
 )
 from .protocol import floor_conformance_run, floor_invoke_provider
 from .reference import floor_write_reference_provider
+from .release import (
+    floor_adapt_source_only_recurrence_receipt,
+    floor_build_release_gate,
+    floor_release_profile_capability,
+    floor_release_review_template,
+    floor_verify_release_object,
+)
 from .schema import floor_schema_bundle, floor_write_schema_bundle
 from .tournament import floor_run_tournament
 
@@ -53,6 +60,10 @@ def floor_capability() -> dict[str, Any]:
             "tournament",
             "crate",
             "verify",
+            "release-capability",
+            "release-adapt-recurrence",
+            "release-review-template",
+            "release-gate",
         ],
         "normative_objects": [
             "ProviderManifest",
@@ -67,6 +78,11 @@ def floor_capability() -> dict[str, Any]:
             "EvaluationLedger",
             "TournamentReport",
             "FloorCrate",
+            "AudioEditPlan",
+            "ReleaseCandidate",
+            "SignalEvaluation",
+            "HumanMusicalReview",
+            "ReleaseGateReceipt",
         ],
         "provider_may_emit": [
             "observation",
@@ -97,6 +113,7 @@ def floor_capability() -> dict[str, Any]:
         "catalog_is_selection": False,
         "tournament_winner_is_canonical": False,
         "source_media_copied_by_crate_default": False,
+        "release_candidate_profile": floor_release_profile_capability(),
         "existing_earcrate_provider_adapter_count": len(floor_earcrate_provider_manifests()),
         "gap_status_counts": gaps["counts"],
         "requires_network": False,
@@ -167,6 +184,41 @@ def floor_cli_main(argv: Sequence[str] | None = None) -> int:
 
     verify = subparsers.add_parser("verify", help="validate and reseal one normative Floor object")
     verify.add_argument("path")
+
+    subparsers.add_parser("release-capability", help="describe the reviewed release-candidate profile")
+
+    release_adapt = subparsers.add_parser(
+        "release-adapt-recurrence",
+        help="adapt one source-only recurrence receipt into candidate, signal, review, and pending gate objects",
+    )
+    release_adapt.add_argument("receipt")
+    release_adapt.add_argument("output_dir")
+    release_adapt.add_argument("--builder-id", default="org.earcrate.release.recurrence-builder-v1")
+    release_adapt.add_argument("--builder-version", default="1.0.0")
+    release_adapt.add_argument("--signal-evaluator-id", default="org.earcrate.release.signal-evaluator-v1")
+    release_adapt.add_argument("--signal-evaluator-version", default="1.0.0")
+
+    release_review = subparsers.add_parser(
+        "release-review-template", help="write an unapplied human musical review template for a candidate"
+    )
+    release_review.add_argument("candidate")
+    release_review.add_argument("output")
+    release_review.add_argument("--reviewer-id", default="unassigned-human-reviewer")
+
+    release_gate = subparsers.add_parser(
+        "release-gate", help="assemble the current release gate from independent signal, human, custody, reproducibility, and rights evidence"
+    )
+    release_gate.add_argument("candidate")
+    release_gate.add_argument("output")
+    release_gate.add_argument("--signal-evaluation", action="append", default=[])
+    release_gate.add_argument("--human-review", action="append", default=[])
+    release_gate.add_argument("--custody", choices=["pending", "passed", "failed"], default="pending")
+    release_gate.add_argument("--reproducibility", choices=["not_run", "passed", "failed"], default="not_run")
+    release_gate.add_argument(
+        "--rights-status", choices=["not_evaluated", "accepted_by_policy", "blocked", "expired"], default="not_evaluated"
+    )
+    release_gate.add_argument("--rights-policy", default="")
+    release_gate.add_argument("--rights-decided-by", default="")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
@@ -245,8 +297,80 @@ def floor_cli_main(argv: Sequence[str] | None = None) -> int:
             )
             _floor_cli_json(result)
             return 0
+        if args.command == "release-capability":
+            _floor_cli_json(floor_release_profile_capability())
+            return 0
+        if args.command == "release-adapt-recurrence":
+            output = _floor_cli_empty_dir(args.output_dir)
+            adapted = floor_adapt_source_only_recurrence_receipt(
+                floor_read_json(args.receipt),
+                builder={
+                    "identity_id": args.builder_id,
+                    "identity_type": "provider",
+                    "version": args.builder_version,
+                    "display_name": "EarCrate source-only recurrence builder",
+                },
+                signal_evaluator={
+                    "identity_id": args.signal_evaluator_id,
+                    "identity_type": "evaluator",
+                    "version": args.signal_evaluator_version,
+                    "display_name": "EarCrate release signal evaluator",
+                },
+            )
+            names = {
+                "audio_edit_plan": "audio_edit_plan.json",
+                "time_map": "time_map.json",
+                "phrase_contract": "phrase_contract.json",
+                "release_candidate": "release_candidate.json",
+                "signal_evaluation": "signal_evaluation.json",
+                "human_review_template": "human_review.template.json",
+                "release_gate": "release_gate.pending.json",
+            }
+            for key, name in names.items():
+                floor_write_json_atomic(output / name, adapted[key])
+            _floor_cli_json(
+                {
+                    "ok": True,
+                    "output_dir": str(output),
+                    "candidate_sha256": adapted["release_candidate"]["candidate_sha256"],
+                    "signal_evaluation_sha256": adapted["signal_evaluation"]["signal_evaluation_sha256"],
+                    "release_gate_sha256": adapted["release_gate"]["release_gate_sha256"],
+                    "status": adapted["release_gate"]["status"],
+                    "files": [str(output / name) for name in names.values()],
+                }
+            )
+            return 0
+        if args.command == "release-review-template":
+            review = floor_release_review_template(floor_read_json(args.candidate), reviewer_id=args.reviewer_id)
+            floor_write_json_atomic(args.output, review)
+            _floor_cli_json({"ok": True, "output": str(Path(args.output).expanduser().resolve()), "review": review})
+            return 0
+        if args.command == "release-gate":
+            gate = floor_build_release_gate(
+                floor_read_json(args.candidate),
+                signal_evaluations=[floor_read_json(path) for path in args.signal_evaluation],
+                human_reviews=[floor_read_json(path) for path in args.human_review],
+                custody={"status": args.custody},
+                reproducibility={"status": args.reproducibility},
+                rights={
+                    "status": args.rights_status,
+                    "policy_id": args.rights_policy,
+                    "decided_by": args.rights_decided_by,
+                    "legal_determination": False,
+                },
+            )
+            floor_write_json_atomic(args.output, gate)
+            _floor_cli_json(gate)
+            return 0 if gate["release_allowed"] else 3
         if args.command == "verify":
-            _floor_cli_json(floor_verify_object(floor_read_json(args.path)))
+            value = floor_read_json(args.path)
+            try:
+                sealed = floor_verify_object(value)
+            except FloorError as exc:
+                if "unsupported Floor object kind" not in str(exc):
+                    raise
+                sealed = floor_verify_release_object(value)
+            _floor_cli_json(sealed)
             return 0
         raise FloorError(f"unsupported Floor command: {args.command}")
     except Exception as exc:

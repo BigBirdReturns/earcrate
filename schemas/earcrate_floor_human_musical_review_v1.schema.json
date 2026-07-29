@@ -1,0 +1,97 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_human_musical_review_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "dimensions": {
+      "additionalProperties": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "type": "object"
+    },
+    "human_review_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_floor_human_musical_review"
+    },
+    "listening_context": {
+      "type": "object"
+    },
+    "machine_generated": {
+      "const": false
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "notes": {
+      "type": "array"
+    },
+    "review_patch_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "reviewer": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "reviewer_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reviewer_type": {
+          "const": "human"
+        }
+      },
+      "required": [
+        "reviewer_id",
+        "reviewer_type",
+        "display_name",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "verdict": {
+      "enum": [
+        "pending",
+        "accept",
+        "revise",
+        "reject"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "candidate_sha256",
+    "reviewer",
+    "verdict",
+    "dimensions",
+    "notes",
+    "review_patch_refs",
+    "listening_context",
+    "machine_generated",
+    "metadata",
+    "human_review_sha256"
+  ],
+  "title": "EarCrate Floor human musical review v1",
+  "type": "object"
+}

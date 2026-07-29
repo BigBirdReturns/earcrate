@@ -33,6 +33,24 @@ python -m earcrate floor conformance \
 
 See `docs/OPEN_MUSIC_EVIDENCE_FLOOR.md` and `docs/FLOOR_PROVIDER_PROTOCOL_V1.md`.
 
+### Reviewed audio release candidates
+
+Signal sanity is not musical acceptance. A builder may create a source-derived or
+generated candidate, but a different evaluator must qualify its signal, a human must
+accept the music, and a rights policy must admit the intended use before release.
+
+```text
+python -m earcrate floor release-capability
+python -m earcrate floor release-adapt-recurrence receipt.json build/release-floor
+python -m earcrate floor release-review-template build/release-floor/release_candidate.json human_review.json
+python -m earcrate floor release-gate build/release-floor/release_candidate.json release_gate.json \
+  --signal-evaluation build/release-floor/signal_evaluation.json \
+  --human-review human_review.json \
+  --custody passed --reproducibility passed
+```
+
+See `docs/RELEASE_CANDIDATE_REVIEW_GATE.md`.
+
 ## Exact MIDI and the neutral player piano
 
 MIDI enters through a source-independent, content-hashed event ledger. Mido is

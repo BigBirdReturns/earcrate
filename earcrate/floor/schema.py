@@ -15,6 +15,17 @@ from .model import (
     FLOOR_SCHEMA_VERSION,
     floor_write_json_atomic,
 )
+from .release import (
+    FLOOR_RELEASE_CUSTODY_STATUSES,
+    FLOOR_RELEASE_HUMAN_VERDICTS,
+    FLOOR_RELEASE_RECURRENCE_STATUSES,
+    FLOOR_RELEASE_REPRO_STATUSES,
+    FLOOR_RELEASE_RIGHTS_STATUSES,
+    FLOOR_RELEASE_SIGNAL_STATUSES,
+    FLOOR_RELEASE_STATUSES,
+    FLOOR_RELEASE_SUMMARIES,
+    FLOOR_RELEASE_TRANSITION_STATUSES,
+)
 
 _FLOOR_SHA = {"type": "string", "pattern": "^[0-9a-f]{64}$"}
 _FLOOR_SHA_OR_NULL = {"anyOf": [_FLOOR_SHA, {"type": "null"}]}
@@ -478,6 +489,246 @@ def floor_schema_bundle() -> dict[str, dict[str, Any]]:
         }
     )
 
+
+    release_artifact = {
+        "type": "object",
+        "required": [
+            "artifact_id", "sha256", "decoded_pcm_sha256", "media_kind", "size_bytes",
+            "sample_rate", "channels", "frames", "role", "path", "uri", "metadata"
+        ],
+        "properties": {
+            "artifact_id": {"type": "string", "minLength": 1},
+            "sha256": _FLOOR_SHA,
+            "decoded_pcm_sha256": _FLOOR_SHA_OR_NULL,
+            "media_kind": {"type": "string", "minLength": 1},
+            "size_bytes": {"type": "integer", "minimum": 0},
+            "sample_rate": {"type": "integer", "minimum": 0},
+            "channels": {"type": "integer", "minimum": 0},
+            "frames": {"type": "integer", "minimum": 0},
+            "role": {"type": "string"},
+            "path": {"type": "string"},
+            "uri": {"type": "string"},
+            "metadata": {"type": "object"},
+        },
+        "additionalProperties": False,
+    }
+
+    audio_edit_plan = _floor_schema_base("earcrate_floor_audio_edit_plan", "EarCrate Floor sample-accurate audio edit plan v1")
+    audio_edit_plan.update(
+        {
+            "required": [
+                "schema_version", "kind", "edit_plan_id", "sample_rate", "channels", "output_frames",
+                "source_artifacts", "segments", "transitions", "declared_operations",
+                "prohibited_operations", "source_only", "metadata", "edit_plan_sha256"
+            ],
+            "properties": {
+                "schema_version": {"const": 1},
+                "kind": {"const": "earcrate_floor_audio_edit_plan"},
+                "edit_plan_id": {"type": "string", "minLength": 1},
+                "sample_rate": {"type": "integer", "minimum": 1},
+                "channels": {"type": "integer", "minimum": 1},
+                "output_frames": {"type": "integer", "minimum": 1},
+                "source_artifacts": {"type": "array", "minItems": 1, "items": release_artifact},
+                "segments": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "segment_id", "output_start_frame", "output_end_frame", "source_artifact_id",
+                            "source_start_frame", "source_end_frame", "operation", "gain_db", "metadata"
+                        ],
+                        "properties": {
+                            "segment_id": {"type": "string", "minLength": 1},
+                            "output_start_frame": {"type": "integer", "minimum": 0},
+                            "output_end_frame": {"type": "integer", "minimum": 1},
+                            "source_artifact_id": {"type": "string", "minLength": 1},
+                            "source_start_frame": {"type": "integer", "minimum": 0},
+                            "source_end_frame": {"type": "integer", "minimum": 1},
+                            "operation": {"type": "string", "minLength": 1},
+                            "gain_db": {"type": "number"},
+                            "metadata": {"type": "object"},
+                        },
+                        "additionalProperties": False,
+                    },
+                },
+                "transitions": {"type": "array", "items": {"type": "object"}},
+                "declared_operations": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+                "prohibited_operations": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+                "source_only": {"type": "boolean"},
+                "metadata": {"type": "object"},
+                "edit_plan_sha256": _FLOOR_SHA,
+            },
+            "additionalProperties": False,
+        }
+    )
+
+    identity = {
+        "type": "object",
+        "required": ["identity_id", "identity_type", "version", "manifest_sha256", "display_name", "metadata"],
+        "properties": {
+            "identity_id": {"type": "string", "minLength": 1},
+            "identity_type": {"type": "string", "minLength": 1},
+            "version": {"type": "string"},
+            "manifest_sha256": _FLOOR_SHA_OR_NULL,
+            "display_name": {"type": "string"},
+            "metadata": {"type": "object"},
+        },
+        "additionalProperties": False,
+    }
+    release_status_vector = {
+        "type": "object",
+        "required": [
+            "custody", "build_reproducibility", "signal_sanity", "recurrence_identity",
+            "transition_integrity", "musical_acceptance", "rights_eligibility",
+            "whole_organism_status", "release_status", "summary"
+        ],
+        "properties": {
+            "custody": {"enum": list(FLOOR_RELEASE_CUSTODY_STATUSES)},
+            "build_reproducibility": {"enum": list(FLOOR_RELEASE_REPRO_STATUSES)},
+            "signal_sanity": {"enum": list(FLOOR_RELEASE_SIGNAL_STATUSES)},
+            "recurrence_identity": {"enum": list(FLOOR_RELEASE_RECURRENCE_STATUSES)},
+            "transition_integrity": {"enum": list(FLOOR_RELEASE_TRANSITION_STATUSES)},
+            "musical_acceptance": {"enum": list(FLOOR_RELEASE_HUMAN_VERDICTS)},
+            "rights_eligibility": {"enum": list(FLOOR_RELEASE_RIGHTS_STATUSES)},
+            "whole_organism_status": {"const": "not_claimed"},
+            "release_status": {"enum": list(FLOOR_RELEASE_STATUSES)},
+            "summary": {"enum": list(FLOOR_RELEASE_SUMMARIES)},
+        },
+        "additionalProperties": False,
+    }
+
+    release_candidate = _floor_schema_base("earcrate_floor_release_candidate", "EarCrate Floor reviewed audio release candidate v1")
+    release_candidate.update(
+        {
+            "required": [
+                "schema_version", "kind", "candidate_id", "title", "builder", "evidence_branch",
+                "evidence_tier", "source_evidence_refs", "audio_edit_plan", "time_map",
+                "phrase_contracts", "authoritative_output", "delivery_artifacts", "status",
+                "builder_may_not_approve_music", "metadata", "candidate_sha256"
+            ],
+            "properties": {
+                "schema_version": {"const": 1},
+                "kind": {"const": "earcrate_floor_release_candidate"},
+                "candidate_id": {"type": "string", "minLength": 1},
+                "title": {"type": "string", "minLength": 1},
+                "builder": identity,
+                "evidence_branch": {"enum": ["audio", "performance", "review"]},
+                "evidence_tier": {"enum": ["blind_audio_inference", "performance_realization", "human_review"]},
+                "source_evidence_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+                "audio_edit_plan": {"type": "object"},
+                "time_map": {"type": "object"},
+                "phrase_contracts": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+                "authoritative_output": release_artifact,
+                "delivery_artifacts": {"type": "array", "items": release_artifact},
+                "status": release_status_vector,
+                "builder_may_not_approve_music": {"const": True},
+                "metadata": {"type": "object"},
+                "candidate_sha256": _FLOOR_SHA,
+            },
+            "additionalProperties": False,
+        }
+    )
+
+    signal_evaluation = _floor_schema_base("earcrate_floor_signal_evaluation", "EarCrate Floor independent signal evaluation v1")
+    signal_evaluation.update(
+        {
+            "required": [
+                "schema_version", "kind", "candidate_sha256", "builder_identity_id", "evaluator",
+                "metrics", "gates", "passed", "status", "recurrence_identity",
+                "transition_integrity", "notes", "metadata", "signal_evaluation_sha256"
+            ],
+            "properties": {
+                "schema_version": {"const": 1},
+                "kind": {"const": "earcrate_floor_signal_evaluation"},
+                "candidate_sha256": _FLOOR_SHA,
+                "builder_identity_id": {"type": "string", "minLength": 1},
+                "evaluator": identity,
+                "metrics": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "number"}},
+                "gates": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+                "passed": {"type": "boolean"},
+                "status": {"enum": ["passed", "failed"]},
+                "recurrence_identity": {"enum": list(FLOOR_RELEASE_RECURRENCE_STATUSES)},
+                "transition_integrity": {"enum": list(FLOOR_RELEASE_TRANSITION_STATUSES)},
+                "notes": {"type": "array"},
+                "metadata": {"type": "object"},
+                "signal_evaluation_sha256": _FLOOR_SHA,
+            },
+            "additionalProperties": False,
+        }
+    )
+
+    human_review = _floor_schema_base("earcrate_floor_human_musical_review", "EarCrate Floor human musical review v1")
+    human_review.update(
+        {
+            "required": [
+                "schema_version", "kind", "candidate_sha256", "reviewer", "verdict", "dimensions",
+                "notes", "review_patch_refs", "listening_context", "machine_generated", "metadata",
+                "human_review_sha256"
+            ],
+            "properties": {
+                "schema_version": {"const": 1},
+                "kind": {"const": "earcrate_floor_human_musical_review"},
+                "candidate_sha256": _FLOOR_SHA,
+                "reviewer": {
+                    "type": "object",
+                    "required": ["reviewer_id", "reviewer_type", "display_name", "metadata"],
+                    "properties": {
+                        "reviewer_id": {"type": "string", "minLength": 1},
+                        "reviewer_type": {"const": "human"},
+                        "display_name": {"type": "string"},
+                        "metadata": {"type": "object"},
+                    },
+                    "additionalProperties": False,
+                },
+                "verdict": {"enum": list(FLOOR_RELEASE_HUMAN_VERDICTS)},
+                "dimensions": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}},
+                "notes": {"type": "array"},
+                "review_patch_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+                "listening_context": {"type": "object"},
+                "machine_generated": {"const": False},
+                "metadata": {"type": "object"},
+                "human_review_sha256": _FLOOR_SHA,
+            },
+            "additionalProperties": False,
+        }
+    )
+
+    release_gate = _floor_schema_base("earcrate_floor_release_gate_receipt", "EarCrate Floor release promotion gate receipt v1")
+    release_gate.update(
+        {
+            "required": [
+                "schema_version", "kind", "candidate_sha256", "candidate_id",
+                "selected_signal_evaluation_sha256", "selected_human_review_sha256",
+                "custody", "reproducibility", "rights", "status", "release_allowed",
+                "blockers", "failures", "builder_self_approval_refused",
+                "signal_evaluation_is_musical_acceptance", "whole_organism_passed",
+                "metadata", "release_gate_sha256"
+            ],
+            "properties": {
+                "schema_version": {"const": 1},
+                "kind": {"const": "earcrate_floor_release_gate_receipt"},
+                "candidate_sha256": _FLOOR_SHA,
+                "candidate_id": {"type": "string", "minLength": 1},
+                "selected_signal_evaluation_sha256": _FLOOR_SHA_OR_NULL,
+                "selected_human_review_sha256": _FLOOR_SHA_OR_NULL,
+                "custody": {"type": "object"},
+                "reproducibility": {"type": "object"},
+                "rights": {"type": "object"},
+                "status": release_status_vector,
+                "release_allowed": {"type": "boolean"},
+                "blockers": {"type": "array", "items": {"type": "string"}},
+                "failures": {"type": "array", "items": {"type": "string"}},
+                "builder_self_approval_refused": {"const": True},
+                "signal_evaluation_is_musical_acceptance": {"const": False},
+                "whole_organism_passed": {"const": False},
+                "metadata": {"type": "object"},
+                "release_gate_sha256": _FLOOR_SHA,
+            },
+            "additionalProperties": False,
+        }
+    )
+
     return {
         "earcrate_floor_provider_manifest_v1.schema.json": manifest,
         "earcrate_floor_provider_request_v1.schema.json": request,
@@ -493,6 +744,11 @@ def floor_schema_bundle() -> dict[str, dict[str, Any]]:
         "earcrate_floor_conformance_report_v1.schema.json": conformance,
         "earcrate_floor_tournament_report_v1.schema.json": tournament,
         "earcrate_floor_gap_register_v1.schema.json": gap_register,
+        "earcrate_floor_audio_edit_plan_v1.schema.json": audio_edit_plan,
+        "earcrate_floor_release_candidate_v1.schema.json": release_candidate,
+        "earcrate_floor_signal_evaluation_v1.schema.json": signal_evaluation,
+        "earcrate_floor_human_musical_review_v1.schema.json": human_review,
+        "earcrate_floor_release_gate_receipt_v1.schema.json": release_gate,
     }
 
 

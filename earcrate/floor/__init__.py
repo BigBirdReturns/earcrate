@@ -1,4 +1,5 @@
 from .model import *
+from .release import *
 from .schema import floor_schema_bundle, floor_write_schema_bundle
 from .registry import *
 from .adapters import floor_earcrate_provider_manifests

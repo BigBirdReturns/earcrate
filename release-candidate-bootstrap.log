@@ -1,0 +1,134 @@
++ python -m compileall -q earcrate/floor tests/test_floor_release_gate.py
++ python -m pytest -q tests/test_floor_release_gate.py tests/test_floor_protocol.py
+.....................                                                    [100%]
+21 passed in 13.93s
++ python build/make_singlefile.py
+built dist/earcrate.py sha256 1a2dfa731ea3c902
++ python -m earcrate floor release-capability
+{
+  "candidate_builder_may_approve_music": false,
+  "capability_sha256": "4b26e26c9f9892ff2dcfcc1a5e5c214fda067738702ac0f3aec4b3c311f2c33d",
+  "human_musical_review_required": true,
+  "kind": "earcrate_floor_release_candidate_profile_capability",
+  "objects": [
+    "AudioEditPlan",
+    "ReleaseCandidate",
+    "SignalEvaluation",
+    "HumanMusicalReview",
+    "ReleaseGateReceipt"
+  ],
+  "pending_summary": "signal_sane_human_review_pending",
+  "ready": true,
+  "rights_policy_acceptance_required": true,
+  "schema_version": 1,
+  "signal_evaluation_is_musical_acceptance": false,
+  "whole_organism_passage_implied": false
+}
++ python dist/earcrate.py floor release-capability
+{
+  "candidate_builder_may_approve_music": false,
+  "capability_sha256": "4b26e26c9f9892ff2dcfcc1a5e5c214fda067738702ac0f3aec4b3c311f2c33d",
+  "human_musical_review_required": true,
+  "kind": "earcrate_floor_release_candidate_profile_capability",
+  "objects": [
+    "AudioEditPlan",
+    "ReleaseCandidate",
+    "SignalEvaluation",
+    "HumanMusicalReview",
+    "ReleaseGateReceipt"
+  ],
+  "pending_summary": "signal_sane_human_review_pending",
+  "ready": true,
+  "rights_policy_acceptance_required": true,
+  "schema_version": 1,
+  "signal_evaluation_is_musical_acceptance": false,
+  "whole_organism_passage_implied": false
+}
++ python dist/earcrate.py floor verify /home/runner/work/earcrate/earcrate/proofs/specimens/pretty_lights_empire_release_candidate_v1/release_gate.pending.json
+{
+  "blockers": [
+    "human musical acceptance is pending",
+    "rights eligibility has not been accepted by policy"
+  ],
+  "builder_self_approval_refused": true,
+  "candidate_id": "release_candidate_d3d7c446257581c7ee69f63b",
+  "candidate_sha256": "1fe8f692c204d77d9cb7fc08c8b679d6d391ef41808c02b705170c586066a429",
+  "custody": {
+    "checks": {},
+    "evidence_refs": [
+      "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+    ],
+    "metadata": {},
+    "status": "passed"
+  },
+  "failures": [],
+  "kind": "earcrate_floor_release_gate_receipt",
+  "metadata": {},
+  "release_allowed": false,
+  "release_gate_sha256": "a991bc071e9e8a9fe2e5e27e8835a390decb5b0ae084b7b4f98f10d2660df9bb",
+  "reproducibility": {
+    "checks": {},
+    "evidence_refs": [],
+    "metadata": {},
+    "status": "passed"
+  },
+  "rights": {
+    "checks": {},
+    "decided_by": "",
+    "evidence_refs": [],
+    "legal_determination": false,
+    "metadata": {},
+    "policy_id": "",
+    "status": "not_evaluated"
+  },
+  "schema_version": 1,
+  "selected_human_review_sha256": null,
+  "selected_signal_evaluation_sha256": "a683d3ac7391a030f34fea6750fb38539564b32da97ba63acacd8f7781fc5a5c",
+  "signal_evaluation_is_musical_acceptance": false,
+  "status": {
+    "build_reproducibility": "passed",
+    "custody": "passed",
+    "musical_acceptance": "pending",
+    "recurrence_identity": "passed",
+    "release_status": "blocked",
+    "rights_eligibility": "not_evaluated",
+    "signal_sanity": "passed",
+    "summary": "signal_sane_human_review_pending",
+    "transition_integrity": "provisional_pass",
+    "whole_organism_status": "not_claimed"
+  },
+  "whole_organism_passed": false
+}
++ python scripts/oss_audit.py
+{
+  "active_components": [
+    "basic-pitch",
+    "mido"
+  ],
+  "approved_models": [],
+  "component_count": 9,
+  "components_sha256": "dd96e539c95a9780ec5daec5fce1860ec6fc257dcefbd70f433657af42da8eed",
+  "model_count": 0,
+  "models_sha256": "f58020986be3b193755df14bff9bbc490685b11980712bbd7428e6aace7aff9f",
+  "ok": true
+}
++ python VERIFY_PACKAGE.py --skip-gates
+{
+  "checks": {
+    "one_changelog": true,
+    "package_compiles": true,
+    "singlefile_builds": true,
+    "singlefile_live_audio_smoke": true,
+    "singlefile_live_smoke": true,
+    "singlefile_midi_smoke": true,
+    "singlefile_rack_smoke": true,
+    "singlefile_selftest": true,
+    "static_ui": true
+  },
+  "details": {},
+  "ok": true,
+  "package": "earcrate",
+  "skipped": [
+    "gates (already passed in this CI job)"
+  ]
+}

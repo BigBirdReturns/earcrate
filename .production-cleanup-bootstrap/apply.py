@@ -32,11 +32,22 @@ def main() -> None:
     parts = sorted(BOOTSTRAP.glob("patchpart.*.b64"))
     if parts:
         encoded = "".join(path.read_text(encoding="ascii") for path in parts)
+        source_label = ",".join(path.name for path in parts)
     else:
         encoded = (BOOTSTRAP / "final.patch.xz.b64").read_text(encoding="ascii")
+        source_label = "final.patch.xz.b64"
+    normalized = "".join(encoded.split())
+    print(f"patch transport source: {source_label}", flush=True)
+    print(f"patch transport characters: {len(normalized)}", flush=True)
+    print(
+        f"patch transport text sha256: {hashlib.sha256(normalized.encode('ascii')).hexdigest()}",
+        flush=True,
+    )
+    print(f"patch transport tail: {normalized[-96:]}", flush=True)
 
-    compressed = base64.b64decode("".join(encoded.split()), validate=True)
+    compressed = base64.b64decode(normalized, validate=True)
     actual = hashlib.sha256(compressed).hexdigest()
+    print(f"decoded patch bytes: {len(compressed)}", flush=True)
     if actual != EXPECTED_PATCH_SHA256:
         raise SystemExit(
             f"production patch identity changed: expected {EXPECTED_PATCH_SHA256}, found {actual}"
@@ -59,15 +70,12 @@ def main() -> None:
     finally:
         patch_path.unlink(missing_ok=True)
 
-    # The only binary source-tree deletion is intentionally kept outside the
-    # text patch so the transport remains reviewable and content-addressed.
     image = ROOT / "PXL_20260709_201156075.MP.jpg"
     if image.is_symlink() or image.is_file():
         image.unlink()
     elif image.exists():
         raise SystemExit(f"refusing non-file cleanup target: {image}")
 
-    # Bootstrap machinery may never survive in the production tree.
     shutil.rmtree(BOOTSTRAP, ignore_errors=False)
     (ROOT / ".github" / "workflows" / "apply-production-cleanup.yml").unlink(
         missing_ok=True

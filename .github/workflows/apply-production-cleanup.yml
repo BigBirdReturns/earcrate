@@ -7,6 +7,12 @@ on:
     paths:
       - ".production-cleanup-bootstrap/**"
       - ".github/workflows/apply-production-cleanup.yml"
+  pull_request:
+    branches:
+      - agent/release-candidate-review-gate
+    paths:
+      - ".production-cleanup-bootstrap/**"
+      - ".github/workflows/apply-production-cleanup.yml"
   workflow_dispatch:
 
 permissions:

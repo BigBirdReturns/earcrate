@@ -80,16 +80,30 @@ then rebase/integrate:
 
 PR #43 is the first point at which the #40 sensory organ and #42 source-transport organ are treated as parts of one organism. PRs #44, #47, and #49 are downstream control, review, and publication layers; they must not fork into parallel release systems.
 
+### Repository state after alignment
+
+Active progression:
+
+```text
+#39, #40, #42, #43, #44, #47, #49
+```
+
+Closed after organ harvest:
+
+```text
+#30, #38, #41, #45, #46, #48
+```
+
 ## Organ-harvest ledger
 
 | Historical PR | Disposition | Harvest retained |
 | --- | --- | --- |
-| #30 | close as superseded | immutable project/score authority and full-app cutover intent are carried by #39 and descendants |
-| #38 | close as superseded | sealed integration and Windows durability lessons are carried by #39's ordinary review tree |
-| #41 | close as deferred scaffold | dual-GPU planning, mixed-master material factory, residual consistency, hereditary player-piano mutation, and quality-diversity archive remain a future Floor provider campaign |
-| #45 | close as superseded by #47/#49 | explicit human review request and use-scoped rights review remain required concepts |
-| #46 | close as superseded by #47 | no unique authority beyond the release-candidate direction |
-| #48 | close as superseded by #47 | no unique authority; export/bootstrap residue only |
+| #30 | closed as superseded | immutable project/score authority and full-app cutover intent are carried by #39 and descendants |
+| #38 | closed as superseded | sealed integration and Windows durability lessons are carried by #39's ordinary review tree |
+| #41 | closed as deferred scaffold | dual-GPU planning, mixed-master material factory, residual consistency, hereditary player-piano mutation, and quality-diversity archive remain a future Floor provider campaign |
+| #45 | closed as superseded by #47/#49 | explicit human review request and use-scoped rights review remain required concepts |
+| #46 | closed as superseded by #47 | no unique authority beyond the release-candidate direction |
+| #48 | closed as superseded by #47 | no unique authority; export/bootstrap residue only |
 
 Closing a PR does not erase its architectural contribution. The harvested concept must appear either in the active implementation, this ledger, or an explicit future-organ entry before closure.
 

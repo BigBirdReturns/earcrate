@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
-
-import pytest
+import re
 
 from earcrate.floor.model import FloorError
 from earcrate.floor.release_governance import (
@@ -20,6 +20,16 @@ from earcrate.floor.release_governance import (
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+@contextmanager
+def _raises(match: str):
+    try:
+        yield
+    except FloorError as exc:
+        assert re.search(match, str(exc)), f"{str(exc)!r} did not match {match!r}"
+    else:
+        raise AssertionError(f"expected FloorError matching {match!r}")
 
 
 def _campaign(tmp_path: Path) -> tuple[dict, bytes, bytes]:
@@ -110,11 +120,11 @@ def test_builder_and_signal_evaluator_cannot_be_reviewers(tmp_path: Path) -> Non
         "reviewer_ids": ["org.earcrate.builder", "human.listener.two"],
         "minimum_reviewers": 2,
     }
-    with pytest.raises(FloorError, match="builder|independent"):
+    with _raises("builder|independent"):
         floor_open_blind_review_campaign(raw)
 
     raw["reviewer_ids"] = ["org.earcrate.signal", "human.listener.two"]
-    with pytest.raises(FloorError, match="signal|independent"):
+    with _raises("signal|independent"):
         floor_open_blind_review_campaign(raw)
 
 
@@ -126,12 +136,12 @@ def test_quorum_duplicates_and_post_commit_review_mutation_are_refused(tmp_path:
     assert pending["status"] == "blocked"
     assert pending["summary"] == "review_quorum_pending"
 
-    with pytest.raises(FloorError, match="duplicate|one immutable"):
+    with _raises("duplicate|one immutable"):
         floor_decide_governed_release(campaign, [reviews[0], reviews[0]], rights_decision=None)
 
     mutated = deepcopy(reviews[0])
     mutated["preferred_option"] = "B" if mutated["preferred_option"] == "A" else "A"
-    with pytest.raises(FloorError, match="hash|immutable|tamper"):
+    with _raises("hash|immutable|tamper"):
         floor_decide_governed_release(campaign, [mutated, reviews[1]], rights_decision=None)
 
 
@@ -168,7 +178,7 @@ def test_rights_authority_is_separate_and_required(tmp_path: Path) -> None:
     assert pending["summary"] == "rights_review_pending"
 
     for forbidden in ("org.earcrate.builder", "org.earcrate.signal", "human.listener.one"):
-        with pytest.raises(FloorError, match="rights|separate|independent"):
+        with _raises("rights|separate|independent"):
             floor_seal_rights_decision(
                 campaign,
                 {
@@ -219,7 +229,7 @@ def test_publish_permit_binds_exact_reviewed_bytes_and_scope(tmp_path: Path) -> 
     assert (tmp_path / "release" / "accepted-master.mp3").read_bytes() == master
 
     master_path.write_bytes(master + b"post-review mutation")
-    with pytest.raises(FloorError, match="hash|mutat|reviewed"):
+    with _raises("hash|mutat|reviewed"):
         floor_publish_release(
             permit,
             audition_path=audition_path,

@@ -7,6 +7,12 @@ on:
     paths:
       - ".github/workflows/export-production-cleanup.yml"
       - ".production-cleanup-trigger"
+  pull_request:
+    branches:
+      - agent/release-candidate-review-gate
+    paths:
+      - ".github/workflows/export-production-cleanup.yml"
+      - ".production-cleanup-trigger"
 
 permissions:
   contents: read

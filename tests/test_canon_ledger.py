@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
@@ -8,7 +9,9 @@ import re
 
 ROOT = Path(__file__).resolve().parent.parent
 LEDGER_PATH = ROOT / "docs" / "canon" / "canon-ledger.v1.json"
+CORRECTIONS_PATH = ROOT / "docs" / "canon" / "canon-ledger.v1.corrections.json"
 SCHEMA_PATH = ROOT / "schemas" / "earcrate_canon_and_nonlanding_ledger_v1.schema.json"
+CORRECTIONS_SCHEMA_PATH = ROOT / "schemas" / "earcrate_canon_ledger_corrections_v1.schema.json"
 README_PATH = ROOT / "docs" / "CANON_AND_NONLANDING_LEDGER.md"
 
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -19,28 +22,77 @@ def _load(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _canonical_sha256(value: dict) -> str:
+    canonical = (
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _git_blob_sha1(payload: bytes) -> str:
+    header = b"blob " + str(len(payload)).encode("ascii") + b"\0"
+    return hashlib.sha1(header + payload).hexdigest()
+
+
+def _effective_ledger() -> tuple[dict, dict]:
+    raw = LEDGER_PATH.read_bytes()
+    base = json.loads(raw)
+    corrections = _load(CORRECTIONS_PATH)
+
+    claimed = base.pop("ledger_sha256")
+    assert claimed == corrections["base_claimed_sha256"]
+    assert _git_blob_sha1(raw) == corrections["base_git_blob_sha1"]
+
+    actual = _canonical_sha256(base)
+    assert actual == corrections["base_actual_sha256"]
+    assert actual != claimed, "the append-only correction unexpectedly became unnecessary"
+
+    effective = deepcopy(base)
+    for operation in corrections["operations"]:
+        assert operation["op"] == "replace"
+        parts = operation["path"].lstrip("/").split("/")
+        target = effective
+        for part in parts[:-1]:
+            target = target[int(part)] if isinstance(target, list) else target[part]
+        leaf = parts[-1]
+        current = target[int(leaf)] if isinstance(target, list) else target[leaf]
+        assert current == operation["old"], (
+            f"canon correction precondition changed at {operation['path']}: "
+            f"expected {operation['old']!r}, found {current!r}"
+        )
+        if isinstance(target, list):
+            target[int(leaf)] = operation["value"]
+        else:
+            target[leaf] = operation["value"]
+
+    effective_sha = _canonical_sha256(effective)
+    assert effective_sha == corrections["corrected_effective_sha256"]
+    effective["ledger_sha256"] = effective_sha
+    return effective, corrections
+
+
 def _unique(rows: list[dict], field: str) -> set[str]:
     values = [str(row[field]) for row in rows]
     assert len(values) == len(set(values)), f"duplicate {field}: {values}"
     return set(values)
 
 
-def test_canon_ledger_is_complete_hashed_and_schema_bound() -> None:
-    ledger = _load(LEDGER_PATH)
+def test_canon_ledger_is_complete_hashed_corrected_and_schema_bound() -> None:
+    ledger, corrections = _effective_ledger()
     schema = _load(SCHEMA_PATH)
+    correction_schema = _load(CORRECTIONS_SCHEMA_PATH)
 
     assert ledger["schema_version"] == 1
     assert ledger["kind"] == "earcrate_canon_and_nonlanding_ledger"
     assert schema["properties"]["kind"]["const"] == ledger["kind"]
     assert schema["properties"]["schema_version"]["const"] == 1
 
-    claimed = ledger.pop("ledger_sha256")
-    canonical = (
-        json.dumps(ledger, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
-    actual = hashlib.sha256(canonical).hexdigest()
-    assert actual == claimed, f"canon ledger hash mismatch: claimed={claimed} actual={actual}"
-    assert _SHA64.fullmatch(claimed)
+    assert corrections["schema_version"] == 1
+    assert corrections["kind"] == "earcrate_canon_ledger_corrections"
+    assert correction_schema["properties"]["kind"]["const"] == corrections["kind"]
+    assert correction_schema["properties"]["schema_version"]["const"] == 1
+    assert corrections["operations"]
+    assert _SHA64.fullmatch(ledger["ledger_sha256"])
 
     audit = ledger["audit"]
     assert audit["repository"] == "BigBirdReturns/earcrate"
@@ -61,6 +113,8 @@ def test_canon_ledger_is_complete_hashed_and_schema_bound() -> None:
         assert by_pr[number]["disposition"] == "landed_main_via_pr_37"
     for number in (40, 43, 44, 47):
         assert by_pr[number]["disposition"] == "landed_main_via_pr_49"
+    assert by_pr[30]["main_reachability"] == "not_reachable_unique_snapshot_scaffold"
+    assert by_pr[38]["main_reachability"] == "not_reachable_unique_overlay_commits"
     assert by_pr[41]["disposition"] == "deferred_concept_canon"
     assert by_pr[45]["disposition"] == "harvested_competing_implementation"
     assert by_pr[50]["disposition"] == "failed_delivery"
@@ -83,7 +137,7 @@ def test_canon_ledger_is_complete_hashed_and_schema_bound() -> None:
 
 
 def test_canon_ledger_preserves_evidence_tiers_and_unresolved_revisions() -> None:
-    ledger = _load(LEDGER_PATH)
+    ledger, _ = _effective_ledger()
     evidence = {row["evidence_id"]: row for row in ledger["external_evidence"]}
 
     children = evidence["children.authoritative_score_pdf"]
@@ -120,7 +174,7 @@ def test_canon_ledger_preserves_evidence_tiers_and_unresolved_revisions() -> Non
 
 
 def test_canon_ledger_keeps_claim_corrections_and_open_debt_visible() -> None:
-    ledger = _load(LEDGER_PATH)
+    ledger, _ = _effective_ledger()
     corrections = {row["claim_id"]: row for row in ledger["claim_corrections"]}
     obligations = {row["obligation_id"]: row for row in ledger["open_obligations"]}
 
@@ -155,7 +209,7 @@ def test_canon_ledger_keeps_claim_corrections_and_open_debt_visible() -> None:
 
 
 def test_canon_ledger_main_references_exist_and_human_index_is_aligned() -> None:
-    ledger = _load(LEDGER_PATH)
+    ledger, corrections = _effective_ledger()
     for thesis in ledger["theses"]:
         for ref in thesis["main_refs"]:
             assert (ROOT / ref).exists(), f"missing main reference: {ref}"
@@ -167,5 +221,7 @@ def test_canon_ledger_main_references_exist_and_human_index_is_aligned() -> None
     assert "Nothing disappears because it missed `main`" in text
     assert "merely because we once described it confidently" in text
     assert "entry for every pull request from **#1 through #52**" in text
+    assert corrections["base_actual_sha256"] in text
+    assert corrections["corrected_effective_sha256"] in text
     for number in (30, 38, 41, 45, 46, 48, 50, 52):
         assert f"#{number}" in text

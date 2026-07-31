@@ -22,6 +22,11 @@ from .model import (
 )
 from .protocol import floor_conformance_run, floor_invoke_provider
 from .reference import floor_write_reference_provider
+from .release_governance import (
+    floor_release_governance_capability,
+    floor_release_governance_schema_bundle,
+    floor_verify_published_release,
+)
 from .release import (
     floor_adapt_source_only_recurrence_receipt,
     floor_build_release_gate,
@@ -64,6 +69,9 @@ def floor_capability() -> dict[str, Any]:
             "release-adapt-recurrence",
             "release-review-template",
             "release-gate",
+            "release-governance-capability",
+            "release-governance-schemas",
+            "release-publication-verify",
         ],
         "normative_objects": [
             "ProviderManifest",
@@ -83,6 +91,13 @@ def floor_capability() -> dict[str, Any]:
             "SignalEvaluation",
             "HumanMusicalReview",
             "ReleaseGateReceipt",
+            "ReviewCampaignBundle",
+            "BlindHumanReview",
+            "ArbitrationReview",
+            "RightsDecision",
+            "GovernedReleaseDecision",
+            "PublishPermit",
+            "PublicationReceipt",
         ],
         "provider_may_emit": [
             "observation",
@@ -186,6 +201,13 @@ def floor_cli_main(argv: Sequence[str] | None = None) -> int:
     verify.add_argument("path")
 
     subparsers.add_parser("release-capability", help="describe the reviewed release-candidate profile")
+    subparsers.add_parser("release-governance-capability", help="describe blinded review, rights, permit, and atomic publication authority")
+
+    governance_schemas = subparsers.add_parser("release-governance-schemas", help="write the governance-v2 JSON Schema bundle")
+    governance_schemas.add_argument("output_dir")
+
+    publication_verify = subparsers.add_parser("release-publication-verify", help="verify a published release directory against its permit, manifest, checksums, and receipt")
+    publication_verify.add_argument("output_dir")
 
     release_adapt = subparsers.add_parser(
         "release-adapt-recurrence",
@@ -299,6 +321,19 @@ def floor_cli_main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "release-capability":
             _floor_cli_json(floor_release_profile_capability())
+            return 0
+        if args.command == "release-governance-capability":
+            _floor_cli_json(floor_release_governance_capability())
+            return 0
+        if args.command == "release-governance-schemas":
+            output = _floor_cli_empty_dir(args.output_dir)
+            files = []
+            for name, schema in sorted(floor_release_governance_schema_bundle().items()):
+                files.append(str(floor_write_json_atomic(output / name, schema)))
+            _floor_cli_json({"ok": True, "output_dir": str(output), "files": files})
+            return 0
+        if args.command == "release-publication-verify":
+            _floor_cli_json(floor_verify_published_release(args.output_dir))
             return 0
         if args.command == "release-adapt-recurrence":
             output = _floor_cli_empty_dir(args.output_dir)

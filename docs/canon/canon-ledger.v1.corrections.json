@@ -1,0 +1,25 @@
+{
+  "base_actual_sha256": "ca20260993b9a166440103da7516893cbbcaebed902c467369ac37d4e5cefe69",
+  "base_claimed_sha256": "d9faa1947f1ba82fb05d9d3b271cb3855d80a59e2b7d708360241753aca64913",
+  "base_git_blob_sha1": "d85de49279a1f8bdbfdf1756c5f8ba6e86b83334",
+  "base_path": "docs/canon/canon-ledger.v1.json",
+  "corrected_effective_sha256": "72639d36909af7c43e498ddf4e80343f11aabed5cb975c31185b8f5090cf938e",
+  "kind": "earcrate_canon_ledger_corrections",
+  "operations": [
+    {
+      "old": "not_reachable_unique_overlay_commits",
+      "op": "replace",
+      "path": "/pull_requests/29/main_reachability",
+      "reason": "PR #30's unique delta was snapshot/export scaffolding, not the Gate 8 overlay mechanism.",
+      "value": "not_reachable_unique_snapshot_scaffold"
+    },
+    {
+      "old": "The overlay and self-applying workflow were delivery scaffolding; PR #39 landed the same authority as ordinary reviewable source.",
+      "op": "replace",
+      "path": "/pull_requests/29/why_not_main",
+      "reason": "Keep PR #30 distinct from PR #38's overlay transplant.",
+      "value": "Its unique remote delta was a repository snapshot/export workflow; immutable project authority landed through the later Gate 8 lineage."
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,17 +1,27 @@
 # EarCrate canon and nonlanding ledger
 
 The complete machine-readable record is
-[`docs/canon/canon-ledger.v1.json`](canon/canon-ledger.v1.json). It contains one
-entry for every pull request from **#1 through #52**, the preserved non-main
-heads, external proof identities, corrected claims, retired decisions, and open
-obligations.
+[`docs/canon/canon-ledger.v1.json`](canon/canon-ledger.v1.json), with its
+append-only correction set in
+[`docs/canon/canon-ledger.v1.corrections.json`](canon/canon-ledger.v1.corrections.json).
+Together they contain one entry for every pull request from **#1 through #52**,
+the preserved non-main heads, external proof identities, corrected claims,
+retired decisions, and open obligations.
 
 ```text
-audit main:   2fd50b9c72f80d7f0f6eb928cb61035e51a78fd3
-audit date:   2026-07-31
-pending PR:   #52 @ a1babd796e6ea87aa9f6489c6d589540337248d6
-ledger SHA:   d9faa1947f1ba82fb05d9d3b271cb3855d80a59e2b7d708360241753aca64913
+audit main:             2fd50b9c72f80d7f0f6eb928cb61035e51a78fd3
+audit date:             2026-07-31
+pending PR:             #52 @ a1babd796e6ea87aa9f6489c6d589540337248d6
+base claimed SHA:       d9faa1947f1ba82fb05d9d3b271cb3855d80a59e2b7d708360241753aca64913
+base actual SHA:        ca20260993b9a166440103da7516893cbbcaebed902c467369ac37d4e5cefe69
+effective corrected SHA: 72639d36909af7c43e498ddf4e80343f11aabed5cb975c31185b8f5090cf938e
 ```
+
+The first published ledger carried a stale self-hash and incorrectly described
+PR #30 with PR #38's overlay terminology. Those bytes remain preserved. The
+correction set records the exact base Git blob, the claimed and measured hashes,
+the old and replacement values, and the effective corrected identity. Canon is
+amended; it is not silently rewritten.
 
 ## Status vocabulary
 
@@ -192,6 +202,6 @@ The JSON ledger carries the complete list. Highest-order items:
 ## Update rule
 
 A future change may not silently delete or rewrite canon. It must identify the
-prior entry, add a new disposition or revision, explain why, preserve evidence
-identity and tier, record corrections, update the ledger hash, and pass
-`tests/test_canon_ledger.py`.
+prior entry, append a correction or new revision, explain why, preserve evidence
+identity and tier, record open debt, recompute the effective ledger hash, and
+pass `tests/test_canon_ledger.py`.

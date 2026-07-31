@@ -34,7 +34,9 @@ jobs:
             gate.log
             docs/CANON_AND_NONLANDING_LEDGER.md
             docs/canon/canon-ledger.v1.json
+            docs/canon/canon-ledger.v1.corrections.json
             schemas/earcrate_canon_and_nonlanding_ledger_v1.schema.json
+            schemas/earcrate_canon_ledger_corrections_v1.schema.json
           if-no-files-found: error
           retention-days: 30
       - name: package verifier (gate suite already passed above)

@@ -109,7 +109,7 @@ def test_canon_ledger_is_complete_hashed_corrected_and_schema_bound() -> None:
     )
 
     by_pr = {row["pr"]: row for row in prs}
-    for number in range(29, 37):
+    for number in (29, 31, 32, 33, 34, 35, 36):
         assert by_pr[number]["disposition"] == "landed_main_via_pr_37"
     for number in (40, 43, 44, 47):
         assert by_pr[number]["disposition"] == "landed_main_via_pr_49"

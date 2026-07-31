@@ -1,0 +1,207 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_audio_edit_plan_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "channels": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "declared_operations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "edit_plan_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "edit_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_floor_audio_edit_plan"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "output_frames": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "prohibited_operations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "sample_rate": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "segments": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "gain_db": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "operation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "output_end_frame": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "output_start_frame": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "segment_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "source_artifact_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "source_end_frame": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "source_start_frame": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "segment_id",
+          "output_start_frame",
+          "output_end_frame",
+          "source_artifact_id",
+          "source_start_frame",
+          "source_end_frame",
+          "operation",
+          "gain_db",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "source_artifacts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "channels": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "decoded_pcm_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "frames": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "media_kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "path": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "sample_rate": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "size_bytes": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "sha256",
+          "decoded_pcm_sha256",
+          "media_kind",
+          "size_bytes",
+          "sample_rate",
+          "channels",
+          "frames",
+          "role",
+          "path",
+          "uri",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "source_only": {
+      "type": "boolean"
+    },
+    "transitions": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "edit_plan_id",
+    "sample_rate",
+    "channels",
+    "output_frames",
+    "source_artifacts",
+    "segments",
+    "transitions",
+    "declared_operations",
+    "prohibited_operations",
+    "source_only",
+    "metadata",
+    "edit_plan_sha256"
+  ],
+  "title": "EarCrate Floor sample-accurate audio edit plan v1",
+  "type": "object"
+}

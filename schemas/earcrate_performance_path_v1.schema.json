@@ -1,0 +1,95 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_performance_path_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "form_graph_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_performance_path"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "occurrences": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "beats": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "occurrence": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "order_index": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "printed_measure": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "start_beat": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "via_edge_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_index",
+          "printed_measure",
+          "occurrence",
+          "start_beat",
+          "beats",
+          "via_edge_id"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "performance_path_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "performed_measure_count": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "printed_measure_count": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "specimen_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "total_beats": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "form_graph_sha256",
+    "occurrences",
+    "printed_measure_count",
+    "performed_measure_count",
+    "total_beats",
+    "metadata",
+    "performance_path_sha256"
+  ],
+  "title": "EarCrate performed form traversal v1",
+  "type": "object"
+}

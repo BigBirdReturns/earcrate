@@ -1,0 +1,91 @@
+name: song-reader
+
+on:
+  push:
+    branches:
+      - agent/song-reader-cephalopod-foundation
+  pull_request:
+    paths:
+      - "earcrate/reader/**"
+      - "earcrate/specimen/**"
+      - "earcrate/project/compiler_*.py"
+      - "earcrate/project/custody.py"
+      - "earcrate/project/continuation.py"
+      - "tests/test_song_reader_cephalopod.py"
+      - "tests/test_project_gate8_integration.py"
+      - "tests/test_buffalo_specimen.py"
+      - "tests/test_children_continuation.py"
+      - "tests/test_flim_community_witness.py"
+      - "tests/run_gates.py"
+      - "schemas/earcrate_children_adjacent_move_receipt_v1.schema.json"
+      - "schemas/earcrate_community_symbolic_*.schema.json"
+      - "build/make_singlefile.py"
+      - "earcrate/__main__.py"
+      - ".github/workflows/song-reader.yml"
+
+jobs:
+  reader-proof:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install ffmpeg on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Install ffmpeg on Windows
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install ffmpeg -y --no-progress
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Run cephalopod, custody, Buffalo continuation, and Flim gates
+        run: >-
+          python -m pytest -vv --tb=long --junitxml=reader-tests.xml
+          tests/test_song_reader_cephalopod.py
+          tests/test_project_gate8_integration.py
+          tests/test_buffalo_specimen.py
+          tests/test_children_continuation.py
+          tests/test_flim_community_witness.py
+      - name: Retain reader test ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: song-reader-tests-${{ runner.os }}-${{ github.run_id }}
+          path: reader-tests.xml
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Verify package and standalone surfaces
+        run: |
+          python -m earcrate reader capabilities
+          python -m earcrate buffalo capability
+          python -m earcrate buffalo flim-report
+          python build/make_singlefile.py
+          python dist/earcrate.py reader capabilities
+          python dist/earcrate.py buffalo capability
+          python dist/earcrate.py buffalo flim-report
+      - name: Retain standalone Buffalo artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: earcrate-standalone-buffalo-${{ github.run_id }}
+          path: dist/earcrate.py
+          if-no-files-found: error
+          retention-days: 30
+      - name: Compile reader and specimen packages
+        run: python -m compileall -q earcrate/reader earcrate/specimen

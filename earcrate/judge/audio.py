@@ -319,7 +319,7 @@ def stable_presence_restore(y: np.ndarray, sr: int, return_receipt: bool = False
     a narrow gap -- using data every persona already carries, not a new
     subsystem. (2026-07-15: replaced a flat 3.0dB cap that was never checked
     against the 22 personas' own authored floor_fail/target pairs; see
-    .agent/journal for the derivation.)
+    docs/deprecated/planner-loop/journal for the historical derivation.)
 
     ``return_receipt`` lets the publication path record whether presence was
     naturally present, modestly corrected, or refused as an attempted rescue.

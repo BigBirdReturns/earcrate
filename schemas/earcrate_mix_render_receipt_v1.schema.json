@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_mix_render_receipt_v1.schema.json",
+  "title": "EarCrate MixScore render receipt v1",
+  "type": "object",
+  "required": [
+    "schema_version", "kind", "complete", "input_score_sha256", "bound_score_sha256",
+    "execution_ledger_sha256", "sample_rate", "channels", "frames", "duration_seconds",
+    "deck_count", "asset_count", "selected_event_count", "executed_event_count",
+    "refused_event_count", "assets", "decks", "stem_reconciliation_max_abs",
+    "master_pcm_f32le_sha256", "stem_pcm_f32le_sha256", "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "earcrate_mix_render_receipt"},
+    "complete": {"const": true},
+    "input_score_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bound_score_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_ledger_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sample_rate": {"type": "integer", "minimum": 8000},
+    "channels": {"const": 2},
+    "frames": {"type": "integer", "minimum": 1},
+    "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "deck_count": {"type": "integer", "minimum": 1},
+    "asset_count": {"type": "integer", "minimum": 1},
+    "selected_event_count": {"type": "integer", "minimum": 1},
+    "executed_event_count": {"type": "integer", "minimum": 1},
+    "refused_event_count": {"const": 0},
+    "assets": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "decks": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "peak_before_master_scale": {"type": "number", "minimum": 0},
+    "peak_after_master_scale": {"type": "number", "minimum": 0},
+    "master_scale": {"type": "number", "minimum": 0, "maximum": 1},
+    "stem_reconciliation_max_abs": {"type": "number", "minimum": 0},
+    "master_pcm_f32le_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stem_pcm_f32le_sha256": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "requires_network": {"const": false},
+    "requires_cloud": {"const": false},
+    "requires_gpu": {"const": false},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

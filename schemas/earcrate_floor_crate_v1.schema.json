@@ -1,0 +1,42 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_crate_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "crate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_crate"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_media_copied": {
+      "const": false
+    },
+    "standards_mappings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "files",
+    "source_media_copied",
+    "standards_mappings",
+    "crate_sha256"
+  ],
+  "title": "EarCrate Floor portable crate v1",
+  "type": "object"
+}

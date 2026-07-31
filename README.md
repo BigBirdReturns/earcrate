@@ -17,6 +17,40 @@ per-stage receipts. No fallback render is allowed.
 - Dev: `python -m earcrate`
 - Single file: `python build/make_singlefile.py` then `python dist/earcrate.py`
 
+## Open Music Evidence Floor
+
+EarCrate exposes a language-agnostic provider protocol for external MIR, ML, DSP, rights, transport, and review tools. Providers receive one content-addressed request on stdin, emit one evidence result on stdout, and write derived files only beneath a negotiated artifact directory. They may propose observations, candidates, measurements, refusals, derived artifacts, or unapplied review patches; they may not silently write canonical musical state.
+
+```text
+python -m earcrate floor capability
+python -m earcrate floor gaps
+python -m earcrate floor scaffold build/reference-floor-provider
+python -m earcrate floor conformance \
+  build/reference-floor-provider/reference.floor-provider.json \
+  build/reference-floor-provider/request.json \
+  build/reference-floor-conformance --repeat 2
+```
+
+See `docs/OPEN_MUSIC_EVIDENCE_FLOOR.md` and `docs/FLOOR_PROVIDER_PROTOCOL_V1.md`.
+
+### Reviewed audio release candidates
+
+Signal sanity is not musical acceptance. A builder may create a source-derived or
+generated candidate, but a different evaluator must qualify its signal, a human must
+accept the music, and a rights policy must admit the intended use before release.
+
+```text
+python -m earcrate floor release-capability
+python -m earcrate floor release-adapt-recurrence receipt.json build/release-floor
+python -m earcrate floor release-review-template build/release-floor/release_candidate.json human_review.json
+python -m earcrate floor release-gate build/release-floor/release_candidate.json release_gate.json \
+  --signal-evaluation build/release-floor/signal_evaluation.json \
+  --human-review human_review.json \
+  --custody passed --reproducibility passed
+```
+
+See `docs/RELEASE_CANDIDATE_REVIEW_GATE.md`.
+
 ## Exact MIDI and the neutral player piano
 
 MIDI enters through a source-independent, content-hashed event ledger. Mido is

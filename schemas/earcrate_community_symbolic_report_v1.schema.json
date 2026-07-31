@@ -1,0 +1,75 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_community_symbolic_report_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "adjacent_move": {
+      "additionalProperties": true,
+      "properties": {
+        "bars": {"minimum": 1, "type": "integer"},
+        "generated_events_claim_source_transcription": {"const": false},
+        "master_stem_max_abs": {"const": 0},
+        "progression": {"items": {"minLength": 1, "type": "string"}, "minItems": 1, "type": "array"},
+        "total_midi_note_ons": {"minimum": 1, "type": "integer"},
+        "transition_proof_count": {"minimum": 1, "type": "integer"}
+      },
+      "required": ["bars", "progression", "total_midi_note_ons", "transition_proof_count", "master_stem_max_abs", "generated_events_claim_source_transcription"],
+      "type": "object"
+    },
+    "boundary": {
+      "additionalProperties": true,
+      "properties": {
+        "blind_audio_inference_used": {"const": false},
+        "cephalopod_reader_used": {"const": false},
+        "community_sources_withheld": {"const": false},
+        "community_symbolic_sources_used": {"const": true},
+        "target_recording_bytes_used": {"const": false},
+        "whole_organism_passed": {"const": false}
+      },
+      "required": ["community_symbolic_sources_used", "community_sources_withheld", "target_recording_bytes_used", "blind_audio_inference_used", "cephalopod_reader_used", "whole_organism_passed"],
+      "type": "object"
+    },
+    "evidence_tier": {"const": "community_symbolic_witness"},
+    "kind": {"const": "earcrate_community_symbolic_report"},
+    "proof_pack": {
+      "additionalProperties": true,
+      "properties": {
+        "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "source_media_committed": {"const": false}
+      },
+      "required": ["sha256", "source_media_committed"],
+      "type": "object"
+    },
+    "report_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": 1},
+    "specimen_id": {"minLength": 1, "type": "string"},
+    "target": {"type": "object"},
+    "transport": {
+      "additionalProperties": true,
+      "properties": {
+        "executed_event_count": {"minimum": 1, "type": "integer"},
+        "master_stem_max_abs": {"const": 0},
+        "operations": {"items": {"minLength": 1, "type": "string"}, "minItems": 1, "type": "array"},
+        "refused_event_count": {"const": 0},
+        "selected_event_count": {"minimum": 1, "type": "integer"}
+      },
+      "required": ["operations", "selected_event_count", "executed_event_count", "refused_event_count", "master_stem_max_abs"],
+      "type": "object"
+    },
+    "witness": {
+      "additionalProperties": true,
+      "properties": {
+        "bars": {"minimum": 1, "type": "integer"},
+        "beats": {"minimum": 1, "type": "integer"},
+        "master_stem_max_abs": {"const": 0},
+        "midi_tracks": {"minimum": 1, "type": "integer"},
+        "total_midi_note_ons": {"minimum": 1, "type": "integer"}
+      },
+      "required": ["beats", "bars", "total_midi_note_ons", "midi_tracks", "master_stem_max_abs"],
+      "type": "object"
+    }
+  },
+  "required": ["schema_version", "kind", "specimen_id", "evidence_tier", "target", "proof_pack", "witness", "adjacent_move", "transport", "boundary", "report_sha256"],
+  "title": "EarCrate community-symbolic report v1",
+  "type": "object"
+}

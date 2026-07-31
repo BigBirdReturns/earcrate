@@ -1,0 +1,247 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_children_adjacent_move_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "answer_key_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_prefix_rewritten": {
+          "const": false
+        },
+        "commercial_recording_consulted": {
+          "const": false
+        },
+        "private_library_consulted": {
+          "const": false
+        },
+        "source_media_bundled": {
+          "const": false
+        }
+      },
+      "required": [
+        "commercial_recording_consulted",
+        "private_library_consulted",
+        "accepted_prefix_rewritten",
+        "source_media_bundled"
+      ],
+      "type": "object"
+    },
+    "committed_event_count": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "composition": {
+      "type": "object"
+    },
+    "composition_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "continuation_end_step": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "continuation_start_step": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "duration_bars": {
+      "maximum": 32,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "harmony_frames": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_children_adjacent_move_receipt"
+    },
+    "legal": {
+      "const": true
+    },
+    "midi": {
+      "additionalProperties": true,
+      "properties": {
+        "executed_event_count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "execution_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "neutral_pcm_f32le_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "program_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "refused_event_count": {
+          "const": 0
+        },
+        "selected_event_count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "semantic_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "stem_count": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "semantic_sha256",
+        "selected_event_count",
+        "executed_event_count",
+        "refused_event_count",
+        "program_sha256",
+        "execution_sha256",
+        "neutral_pcm_f32le_sha256"
+      ],
+      "type": "object"
+    },
+    "negative_control": {
+      "additionalProperties": true,
+      "properties": {
+        "commit_refused": {
+          "const": true
+        },
+        "event": {
+          "type": "object"
+        },
+        "proof": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "event",
+        "proof",
+        "commit_refused"
+      ],
+      "type": "object"
+    },
+    "negative_control_refused": {
+      "const": true
+    },
+    "novelty": {
+      "additionalProperties": true,
+      "properties": {
+        "continuation_signature_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "harmony_sequence_changed": {
+          "const": true
+        },
+        "literal_copy_detected": {
+          "const": false
+        },
+        "pitch_sequence_changed": {
+          "const": true
+        }
+      },
+      "required": [
+        "literal_copy_detected",
+        "continuation_signature_sha256",
+        "pitch_sequence_changed",
+        "harmony_sequence_changed"
+      ],
+      "type": "object"
+    },
+    "open_obligation_count": {
+      "const": 0
+    },
+    "program_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "program_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "rhythmic_identity_passed": {
+      "const": true
+    },
+    "rhythmic_obligation": {
+      "additionalProperties": true,
+      "properties": {
+        "continuation_event_count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "duration_multiset_preserved": {
+          "const": true
+        },
+        "rhythmic_identity_passed": {
+          "const": true
+        },
+        "source_event_count": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rhythmic_identity_passed",
+        "source_event_count",
+        "continuation_event_count",
+        "duration_multiset_preserved"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_evidence": {
+      "type": "object"
+    },
+    "source_midi_semantic_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "source_score_ledger_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "specimen_id": {
+      "const": "children_v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "answer_key_sha256",
+    "legal",
+    "negative_control_refused",
+    "program_sha256",
+    "composition_sha256",
+    "committed_event_count",
+    "open_obligation_count",
+    "rhythmic_identity_passed",
+    "rhythmic_obligation",
+    "novelty",
+    "midi",
+    "boundary",
+    "receipt_sha256"
+  ],
+  "title": "EarCrate Children proof-carrying adjacent-move receipt v1",
+  "type": "object"
+}

@@ -1,0 +1,112 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_convergence_report_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "audio_ledger_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "independence": {
+      "additionalProperties": false,
+      "properties": {
+        "audio_branch": {
+          "type": "boolean"
+        },
+        "audio_score_taint": {
+          "type": "boolean"
+        },
+        "distinct_ledgers": {
+          "type": "boolean"
+        },
+        "score_branch": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "score_branch",
+        "audio_branch",
+        "distinct_ledgers",
+        "audio_score_taint"
+      ],
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_convergence_report"
+    },
+    "metrics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "details": {
+            "type": "object"
+          },
+          "metric": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "threshold": {},
+          "value": {}
+        },
+        "required": [
+          "metric",
+          "value",
+          "threshold",
+          "passed",
+          "details"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "passed_metric_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "policy": {
+      "type": "object"
+    },
+    "report_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "required_metric_count": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "score_ledger_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "specimen_id": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "score_ledger_sha256",
+    "audio_ledger_sha256",
+    "policy",
+    "independence",
+    "metrics",
+    "required_metric_count",
+    "passed_metric_count",
+    "complete",
+    "report_sha256"
+  ],
+  "title": "EarCrate score/audio convergence report v1",
+  "type": "object"
+}

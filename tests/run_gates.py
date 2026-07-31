@@ -32,43 +32,23 @@ for _thread_var in (
 
 os.environ["EARCRATE_HOME"] = tempfile.mkdtemp(prefix="earcrate_gates_home_")
 
-MODULES = (
-    "test_gates",
-    "test_tastespec_vertical",
-    "test_first_minute_fixes",
-    "test_reference_study",
-    "test_reference_bundle_local",
-    "test_stem_warmer",
-    "test_transitions",
-    "test_beat_features",
-    "test_materials",
-    "test_analysis_wiring",
-    "test_album",
-    "test_remix_builder",
-    "test_reference_recall",
-    "test_musicbrainz",
-    "test_external_remix",
-    "test_workqueue",
-    "test_midi",
-    "test_midi_anatomy",
-    "test_midi_arranger",
-    "test_player_piano_kernel",
-    "test_live_dj_runtime",
-    "test_live_crate_runtime",
-    "test_live_long_set",
-    "test_live_engine_step",
-    "test_live_stream_runtime",
-    "test_live_audio_callback",
-    "test_live_audio_cli",
-    "test_live_technique_registry",
-    "test_live_performance_host",
-    "test_live_activity_receipts",
-    "test_note_provider",
-    "test_rack",
-    "test_rack_library",
-    "test_rack_multizone",
-    "test_oss_governance",
-)
+# Every executable test module is discovered from disk. Adding a new test_*.py
+# file therefore changes the gate count automatically; hardware/private-library
+# or destructive suites require an explicit exclusion ledger.
+EXCLUDED_MODULES: dict[str, str] = {}
+
+
+def _module_names() -> tuple[str, ...]:
+    discovered = tuple(path.stem for path in sorted(TESTS.glob("test_*.py")))
+    if not discovered:
+        raise RuntimeError("no executable gate modules discovered")
+    unknown_exclusions = sorted(set(EXCLUDED_MODULES) - set(discovered))
+    if unknown_exclusions:
+        raise RuntimeError("gate exclusion names missing modules: " + ", ".join(unknown_exclusions))
+    return tuple(name for name in discovered if name not in EXCLUDED_MODULES)
+
+
+MODULES = _module_names()
 
 
 def _cases():
@@ -83,18 +63,59 @@ def _cases():
             raise RuntimeError(f"gate module has no discovered tests: {module_name}")
 
 
-# Vars that app code mutates as a side effect of merely constructing
-# EarcrateCore: `_seed_from_machine_defaults` calls os.environ.setdefault on
-# EARCRATE_STEMS and EARCRATE_CACHE_ROOT. Without a restore between gates, one
-# gate that exercises auto-seed silently changes the stem provider for every
-# gate after it, and unrelated "provider is noop" gates fail by ordering alone.
-# pytest gets this from tests/conftest.py; this runner needs its own copy
-# because it imports the modules directly and never loads a conftest.
+# Vars app code may mutate while constructing EarcrateCore. Restore them between
+# gates so discovery order cannot change unrelated provider behavior.
 _LEAKY_VARS = ("EARCRATE_STEMS", "EARCRATE_CACHE_ROOT", "EARCRATE_DEFAULTS", "EARCRATE_HOME")
 
 
+def _is_earcrate_module(name: str) -> bool:
+    """Recognize package modules and named runpy copies of the single-file build."""
+    return name == "earcrate" or name.startswith("earcrate.") or name.startswith("earcrate_")
+
+
+def _snapshot_earcrate_modules() -> tuple[dict[str, object], dict[str, dict[str, object]]]:
+    """Snapshot module identities and dictionaries before one executable gate.
+
+    Several historical standalone gates deliberately execute ``dist/earcrate.py``
+    with ``runpy`` so they can inspect its flattened namespace. The standalone
+    bootstrap creates package-shaped import views. Without restoration, those
+    views can replace package globals such as exception classes or private helper
+    functions, making later package gates depend on discovery order. A shallow
+    module-dictionary snapshot is sufficient because the failure mode is namespace
+    replacement; existing mutable application state remains governed by its own
+    gate fixtures and environment reset.
+    """
+    modules = {
+        name: module
+        for name, module in list(sys.modules.items())
+        if _is_earcrate_module(name) and module is not None and hasattr(module, "__dict__")
+    }
+    dictionaries = {name: dict(module.__dict__) for name, module in modules.items()}
+    return modules, dictionaries
+
+
+def _restore_earcrate_modules(
+    modules: dict[str, object],
+    dictionaries: dict[str, dict[str, object]],
+) -> None:
+    # Remove package-shaped modules introduced only by the gate.
+    for name in list(sys.modules):
+        if _is_earcrate_module(name) and name not in modules:
+            sys.modules.pop(name, None)
+
+    # Restore both the original module object and its exact global bindings. Code
+    # objects retain a reference to the module dictionary, so clear/update repairs
+    # helpers and exception identities even when a standalone run mutated them.
+    for name, module in modules.items():
+        sys.modules[name] = module  # type: ignore[assignment]
+        namespace = module.__dict__  # type: ignore[attr-defined]
+        namespace.clear()
+        namespace.update(dictionaries[name])
+
+
 def _invoke(fn):
-    saved = {k: os.environ.get(k) for k in _LEAKY_VARS}
+    saved = {key: os.environ.get(key) for key in _LEAKY_VARS}
+    modules, dictionaries = _snapshot_earcrate_modules()
     try:
         params = list(inspect.signature(fn).parameters.values())
         if not params:
@@ -106,11 +127,12 @@ def _invoke(fn):
         names = ", ".join(p.name for p in params)
         raise TypeError(f"unsupported gate fixture(s): {names}")
     finally:
-        for k, v in saved.items():
-            if v is None:
-                os.environ.pop(k, None)
+        _restore_earcrate_modules(modules, dictionaries)
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
             else:
-                os.environ[k] = v
+                os.environ[key] = value
 
 
 def main(argv=None) -> int:

@@ -1,0 +1,64 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_conformance_report_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "checks": {
+      "type": "object"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "completed_runs": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "conformance_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "failures": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_conformance_report"
+    },
+    "quality_claimed": {
+      "const": false
+    },
+    "requested_runs": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "runs": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "selection_authority": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "requested_runs",
+    "completed_runs",
+    "runs",
+    "failures",
+    "checks",
+    "complete",
+    "quality_claimed",
+    "selection_authority",
+    "conformance_sha256"
+  ],
+  "title": "EarCrate Floor protocol conformance report v1",
+  "type": "object"
+}

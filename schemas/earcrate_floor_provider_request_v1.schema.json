@@ -1,0 +1,178 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_provider_request_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowed_result_kinds": {
+      "items": {
+        "enum": [
+          "observation",
+          "candidate",
+          "measurement",
+          "refusal",
+          "derived_artifact",
+          "review_patch"
+        ]
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "capability": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "context": {
+      "type": "object"
+    },
+    "evidence_branch": {
+      "enum": [
+        "score",
+        "symbolic",
+        "audio",
+        "convergence",
+        "performance",
+        "review",
+        "evolution"
+      ]
+    },
+    "evidence_tier": {
+      "enum": [
+        "unspecified",
+        "authoritative_score",
+        "community_symbolic_witness",
+        "blind_audio_inference",
+        "cross_modal_accepted",
+        "performance_realization",
+        "human_review",
+        "campaign_evidence"
+      ]
+    },
+    "forbidden_authority_claims": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "inputs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "ancestor_branches": {
+            "items": {
+              "enum": [
+                "score",
+                "symbolic",
+                "audio",
+                "convergence",
+                "performance",
+                "review",
+                "evolution"
+              ]
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "artifact_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "branch": {
+            "enum": [
+              "score",
+              "symbolic",
+              "audio",
+              "convergence",
+              "performance",
+              "review",
+              "evolution",
+              ""
+            ]
+          },
+          "media_kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "path": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "size_bytes": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "sha256",
+          "size_bytes",
+          "media_kind"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_provider_request"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "network_policy": {
+      "enum": [
+        "forbidden",
+        "declared",
+        "required"
+      ]
+    },
+    "parameters": {
+      "type": "object"
+    },
+    "request_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "capability",
+    "evidence_branch",
+    "evidence_tier",
+    "inputs",
+    "parameters",
+    "allowed_result_kinds",
+    "forbidden_authority_claims",
+    "network_policy",
+    "limits",
+    "context",
+    "metadata",
+    "request_sha256",
+    "request_id"
+  ],
+  "title": "EarCrate Floor provider request v1",
+  "type": "object"
+}

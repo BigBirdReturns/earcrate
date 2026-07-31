@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_mix_execution_ledger_v1.schema.json",
+  "title": "EarCrate MixScore execution ledger v1",
+  "type": "object",
+  "required": [
+    "schema_version", "kind", "score_sha256", "complete", "selected_event_count",
+    "executed_event_count", "refused_event_count", "events", "ledger_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "earcrate_mix_execution_ledger"},
+    "score_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "complete": {"const": true},
+    "selected_event_count": {"type": "integer", "minimum": 0},
+    "executed_event_count": {"type": "integer", "minimum": 0},
+    "refused_event_count": {"const": 0},
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "ordinal", "op", "status", "details"],
+        "properties": {
+          "event_id": {"type": "string", "minLength": 1},
+          "ordinal": {"type": "integer", "minimum": 0},
+          "op": {"type": "string", "minLength": 1},
+          "deck_id": {"type": ["string", "null"]},
+          "at_beat": {"type": ["number", "null"]},
+          "from_beat": {"type": ["number", "null"]},
+          "to_beat": {"type": ["number", "null"]},
+          "status": {"const": "executed"},
+          "details": {"type": "object", "additionalProperties": true}
+        },
+        "additionalProperties": false
+      }
+    },
+    "ledger_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

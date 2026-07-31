@@ -1,0 +1,107 @@
+{
+  "boundary": {
+    "copyrighted_score_or_recording_committed": false,
+    "independent_audio_inference_used": false,
+    "recording_consulted_by_score_branch": false,
+    "score_branch_passed": true,
+    "whole_organism_passed": false
+  },
+  "buffalo_gate": {
+    "blocked_organs": {
+      "campaign_evolution": [
+        "accumulated campaign evidence has not yet changed a later musical decision"
+      ],
+      "cephalopod_audio_inference": [
+        "audio ObservationLedger is not sealed",
+        "independent reference recording is not bound"
+      ],
+      "cross_modal_convergence": [
+        "independent score and audio branches have not both been sealed"
+      ],
+      "proof_carrying_adjacent_move": [
+        "no specimen-specific legal continuation and illegal negative control are sealed"
+      ],
+      "review_patch_circulation": [
+        "no listening correction has created a child revision with selective recomputation"
+      ],
+      "sealed_rack_realization": [
+        "the accepted specimen performance has not executed through sealed approved-library racks"
+      ]
+    },
+    "buffalo_gate_passed": false,
+    "overall_status": "blocked",
+    "passed_organs": [
+      "exact_midi_authority",
+      "form_graph",
+      "harmony_frames",
+      "mixscore_source_transports",
+      "notation_perception",
+      "score_custody"
+    ],
+    "passed_required_organ_count": 6,
+    "receipt_sha256": "99ec8093ada0e2c4fdd5e9753b58977bd1ed2d7c29428cfcc9e71a8f88271d7e",
+    "required_organ_count": 12
+  },
+  "proof_sha256": "0215c1f4d2051567aaf219dcbfe3ea66cbd8f2b6e80cd4ea45f9dfd48ee4f0ed",
+  "schema": "earcrate/children-buffalo-score-side-proof@1",
+  "score_branch": {
+    "answer_key_sha256": "b810188d6f91f749d645dfd76d25a8fc7eae33ff96a6db1b450b0a80b0737bf6",
+    "checks": {
+      "audio_branch_consulted": false,
+      "form_graph_path_complete": true,
+      "mixscore_execution_complete": true,
+      "mixscore_stems_reconcile": true,
+      "printed_harmony_canonicalized": true,
+      "score_artifact_custody": true,
+      "score_midi_note_identity": true
+    },
+    "counts": {
+      "form_markers": 8,
+      "harmony_frames": 53,
+      "notes": 1257,
+      "performed_measures": 105,
+      "printed_chord_symbols": 36,
+      "printed_measures": 69
+    },
+    "form_graph_sha256": "8da4c27af79896b9e3c3d02e77f0a5ada55359a349e326732f447af3e98c45f5",
+    "manifest_sha256": "f1f885bf40b3fbef898167f410a547b7a80b6d44484cd0bbbd1d6c0615e2ead5",
+    "midi_semantic_sha256": "d5f5bbde193f0828ebb1e69485b423e9b16ff191d7c12991d1a17683d57a7943",
+    "mixscore": {
+      "executed_event_count": 19,
+      "master_pcm_f32le_sha256": "d536dde80e20275a113cdba00867353923eb8230b0bcbb6f52b32e9e6bfa0d0d",
+      "operations": [
+        "crossfade",
+        "cut",
+        "exit_loop",
+        "fade",
+        "jump",
+        "load",
+        "loop",
+        "play",
+        "set_crossfader"
+      ],
+      "refused_event_count": 0,
+      "score_sha256": "428b10ce163013adf22ba70c9953d3cc7b0b4e09087452e7ac6feeccc9d2ebd7",
+      "selected_event_count": 19,
+      "stem_pcm_f32le_sha256": {
+        "A": "2210075b7afcd47b347e17577f9639df30effd241842c5d126017e9810bbf86a",
+        "B": "9fade940a309a248f19f842f62e0536da76e27401ed94f2c3f30cde6a196b27e"
+      },
+      "stem_reconciliation_max_abs": 0.0
+    },
+    "performance_path_sha256": "77b3d373bae4fb1bf891a3792889f57d4ae7ce21eff67643028f5024a5a88063",
+    "score_ledger_sha256": "1dd3e02fb4d83dd2eb3b78e0586a3b4bda5fb0183f8d753c4cc818eb76901d76",
+    "status": "passed"
+  },
+  "source_identities": {
+    "mix_execution_ledger": "21353740ee1e3543945cb7fbfd4ddd3d1d4f02a54506d202959408c02666a96a",
+    "mix_score": "701eaa57aa48041ea17c99b52ceda202b79a70b82ae13f68cada2e1a2659b1cd",
+    "score_annotations": "19a74cf70e23b44512b8e8481303a68148eb809f544548f3b39ae176bb6d4f7a",
+    "score_extraction": "dfa85df39198afd6ff56fc0403d9f0c26a1b0fcfaea62d4f1d3fbc5e8691f219",
+    "score_pdf": "e029e1a3030800d7fb04c9f5163acb9270579a571d57f63eb63787df692d5845",
+    "score_proof_receipt": "e62bdbd86a6c7e4582169d14a83f3809c06d6fda10d798bd94ab46eb453248e6",
+    "score_reconstruction_midi": "7d7342ef9d60228be4f94464764edf293b2052f6667676cdaf137a1dc94655c9"
+  },
+  "source_media_bundled": false,
+  "specimen_id": "children_v1"
+}

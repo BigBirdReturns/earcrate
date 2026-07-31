@@ -1,0 +1,36 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_community_symbolic_pack_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "blocked_organs": {"items": {"type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true},
+    "checks": {
+      "additionalProperties": true,
+      "properties": {
+        "blind_audio_inference_used": {"const": false},
+        "community_symbolic_sources_used": {"const": true},
+        "exact_pack_identity": {"const": true},
+        "report_contract_valid": {"const": true},
+        "required_members_present": {"const": true},
+        "target_recording_bytes_used": {"const": false}
+      },
+      "required": ["exact_pack_identity", "report_contract_valid", "required_members_present", "target_recording_bytes_used", "blind_audio_inference_used", "community_symbolic_sources_used"],
+      "type": "object"
+    },
+    "evidence_tier": {"const": "community_symbolic_witness"},
+    "kind": {"const": "earcrate_community_symbolic_pack_receipt"},
+    "manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "pack_member_count": {"minimum": 1, "type": "integer"},
+    "pack_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "passed_organs": {"items": {"type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true},
+    "receipt_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "report_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "required_members": {"items": {"type": "object"}, "minItems": 1, "type": "array"},
+    "schema_version": {"const": 1},
+    "specimen_id": {"minLength": 1, "type": "string"},
+    "whole_organism_passed": {"const": false}
+  },
+  "required": ["schema_version", "kind", "specimen_id", "evidence_tier", "manifest_sha256", "report_sha256", "pack_sha256", "pack_member_count", "required_members", "checks", "passed_organs", "blocked_organs", "whole_organism_passed", "receipt_sha256"],
+  "title": "EarCrate community-symbolic proof-pack receipt v1",
+  "type": "object"
+}

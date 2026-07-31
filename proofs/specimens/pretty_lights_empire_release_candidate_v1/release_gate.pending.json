@@ -1,0 +1,54 @@
+{
+  "blockers": [
+    "human musical acceptance is pending",
+    "rights eligibility has not been accepted by policy"
+  ],
+  "builder_self_approval_refused": true,
+  "candidate_id": "release_candidate_d3d7c446257581c7ee69f63b",
+  "candidate_sha256": "1fe8f692c204d77d9cb7fc08c8b679d6d391ef41808c02b705170c586066a429",
+  "custody": {
+    "checks": {},
+    "evidence_refs": [
+      "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+    ],
+    "metadata": {},
+    "status": "passed"
+  },
+  "failures": [],
+  "kind": "earcrate_floor_release_gate_receipt",
+  "metadata": {},
+  "release_allowed": false,
+  "release_gate_sha256": "a991bc071e9e8a9fe2e5e27e8835a390decb5b0ae084b7b4f98f10d2660df9bb",
+  "reproducibility": {
+    "checks": {},
+    "evidence_refs": [],
+    "metadata": {},
+    "status": "passed"
+  },
+  "rights": {
+    "checks": {},
+    "decided_by": "",
+    "evidence_refs": [],
+    "legal_determination": false,
+    "metadata": {},
+    "policy_id": "",
+    "status": "not_evaluated"
+  },
+  "schema_version": 1,
+  "selected_human_review_sha256": null,
+  "selected_signal_evaluation_sha256": "a683d3ac7391a030f34fea6750fb38539564b32da97ba63acacd8f7781fc5a5c",
+  "signal_evaluation_is_musical_acceptance": false,
+  "status": {
+    "build_reproducibility": "passed",
+    "custody": "passed",
+    "musical_acceptance": "pending",
+    "recurrence_identity": "passed",
+    "release_status": "blocked",
+    "rights_eligibility": "not_evaluated",
+    "signal_sanity": "passed",
+    "summary": "signal_sane_human_review_pending",
+    "transition_integrity": "provisional_pass",
+    "whole_organism_status": "not_claimed"
+  },
+  "whole_organism_passed": false
+}

@@ -1,0 +1,137 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_specimen_manifest_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "branch": {
+            "enum": [
+              "score",
+              "symbolic",
+              "audio",
+              "convergence",
+              "performance",
+              "review",
+              "evolution"
+            ]
+          },
+          "expected_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "media_kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "path_hint": {
+            "type": "string"
+          },
+          "repository_managed": {
+            "type": "boolean"
+          },
+          "required_for": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "status": {
+            "enum": [
+              "bound",
+              "unbound",
+              "optional"
+            ]
+          }
+        },
+        "required": [
+          "artifact_id",
+          "branch",
+          "media_kind",
+          "status",
+          "required_for",
+          "expected_sha256",
+          "path_hint",
+          "repository_managed",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "credited_artist": {
+      "type": "string"
+    },
+    "credited_composer": {
+      "type": "string"
+    },
+    "evidence_tier": {
+      "enum": [
+        "unspecified",
+        "authoritative_score",
+        "community_symbolic_witness",
+        "blind_audio_inference",
+        "cross_modal_accepted",
+        "performance_realization"
+      ]
+    },
+    "expected": {
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_specimen_manifest"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "rights": {
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "specimen_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "title",
+    "rights",
+    "artifacts",
+    "expected",
+    "metadata",
+    "manifest_sha256"
+  ],
+  "title": "EarCrate cross-organ specimen manifest v1",
+  "type": "object"
+}

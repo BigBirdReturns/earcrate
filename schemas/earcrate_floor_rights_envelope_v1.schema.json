@@ -1,0 +1,98 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_rights_envelope_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowed_uses": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "assertion_status": {
+      "enum": [
+        "unknown",
+        "asserted",
+        "user_verified",
+        "provider_verified",
+        "externally_certified"
+      ]
+    },
+    "attribution": {
+      "type": "array"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "jurisdiction": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_floor_rights_envelope"
+    },
+    "license_expression": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "policy_uri": {
+      "type": "string"
+    },
+    "prohibited_uses": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "provider_may_not_decide_legality": {
+      "const": true
+    },
+    "rights_envelope_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_artifact_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "source_artifact_sha256",
+    "assertion_status",
+    "license_expression",
+    "policy_uri",
+    "allowed_uses",
+    "prohibited_uses",
+    "attribution",
+    "evidence_refs",
+    "jurisdiction",
+    "expires_at",
+    "provider_may_not_decide_legality",
+    "metadata",
+    "rights_envelope_sha256"
+  ],
+  "title": "EarCrate Floor rights assertion envelope v1",
+  "type": "object"
+}

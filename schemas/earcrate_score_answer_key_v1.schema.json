@@ -1,0 +1,251 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_score_answer_key_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer_key_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "events": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "duration_steps": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "event_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "function": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "pitch": {
+            "anyOf": [
+              {
+                "maximum": 127,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "start_step": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "velocity": {
+            "maximum": 127,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "voice_id": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "voice_id",
+          "role",
+          "start_step",
+          "duration_steps",
+          "pitch",
+          "velocity",
+          "function",
+          "operator",
+          "source_ids",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "form_graph_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "harmony_frames": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "bass_pitch_classes": {
+            "items": {
+              "maximum": 11,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "end_step": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "function": {
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "performed_measure_indices": {
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "pitch_classes": {
+            "items": {
+              "maximum": 11,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "printed_measures": {
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "root_pc": {
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source_symbol_measure": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "stable_pitch_classes": {
+            "items": {
+              "maximum": 11,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "start_step": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start_step",
+          "end_step",
+          "root_pc",
+          "pitch_classes",
+          "stable_pitch_classes",
+          "bass_pitch_classes",
+          "label",
+          "function",
+          "performed_measure_indices",
+          "printed_measures",
+          "source_symbol_measure"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "interpretive_limits": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "key_signature": {
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_score_answer_key"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "meter": {
+      "type": "object"
+    },
+    "midi_semantic_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "performance_path_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "score_ledger_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "source_counts": {
+      "type": "object"
+    },
+    "specimen_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "steps_per_beat": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tempo_bpm": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "score_ledger_sha256",
+    "form_graph_sha256",
+    "performance_path_sha256",
+    "midi_semantic_sha256",
+    "steps_per_beat",
+    "tempo_bpm",
+    "meter",
+    "key_signature",
+    "harmony_frames",
+    "events",
+    "source_counts",
+    "interpretive_limits",
+    "metadata",
+    "answer_key_sha256"
+  ],
+  "title": "EarCrate score-derived cross-modal answer key v1",
+  "type": "object"
+}

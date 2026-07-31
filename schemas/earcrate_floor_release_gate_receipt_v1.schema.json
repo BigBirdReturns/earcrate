@@ -1,0 +1,197 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_release_gate_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blockers": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "builder_self_approval_refused": {
+      "const": true
+    },
+    "candidate_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "candidate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "custody": {
+      "type": "object"
+    },
+    "failures": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_floor_release_gate_receipt"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "release_allowed": {
+      "type": "boolean"
+    },
+    "release_gate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "reproducibility": {
+      "type": "object"
+    },
+    "rights": {
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "selected_human_review_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "selected_signal_evaluation_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "signal_evaluation_is_musical_acceptance": {
+      "const": false
+    },
+    "status": {
+      "additionalProperties": false,
+      "properties": {
+        "build_reproducibility": {
+          "enum": [
+            "not_run",
+            "passed",
+            "failed"
+          ]
+        },
+        "custody": {
+          "enum": [
+            "pending",
+            "passed",
+            "failed"
+          ]
+        },
+        "musical_acceptance": {
+          "enum": [
+            "pending",
+            "accept",
+            "revise",
+            "reject"
+          ]
+        },
+        "recurrence_identity": {
+          "enum": [
+            "not_evaluated",
+            "passed",
+            "failed"
+          ]
+        },
+        "release_status": {
+          "enum": [
+            "blocked",
+            "approved",
+            "rejected"
+          ]
+        },
+        "rights_eligibility": {
+          "enum": [
+            "not_evaluated",
+            "accepted_by_policy",
+            "blocked",
+            "expired"
+          ]
+        },
+        "signal_sanity": {
+          "enum": [
+            "not_run",
+            "passed",
+            "failed"
+          ]
+        },
+        "summary": {
+          "enum": [
+            "candidate_unqualified",
+            "signal_failed",
+            "signal_sane_human_review_pending",
+            "human_revision_requested",
+            "human_rejected",
+            "rights_review_pending",
+            "rights_blocked",
+            "release_approved"
+          ]
+        },
+        "transition_integrity": {
+          "enum": [
+            "not_evaluated",
+            "provisional_pass",
+            "passed",
+            "failed"
+          ]
+        },
+        "whole_organism_status": {
+          "const": "not_claimed"
+        }
+      },
+      "required": [
+        "custody",
+        "build_reproducibility",
+        "signal_sanity",
+        "recurrence_identity",
+        "transition_integrity",
+        "musical_acceptance",
+        "rights_eligibility",
+        "whole_organism_status",
+        "release_status",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "whole_organism_passed": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "candidate_sha256",
+    "candidate_id",
+    "selected_signal_evaluation_sha256",
+    "selected_human_review_sha256",
+    "custody",
+    "reproducibility",
+    "rights",
+    "status",
+    "release_allowed",
+    "blockers",
+    "failures",
+    "builder_self_approval_refused",
+    "signal_evaluation_is_musical_acceptance",
+    "whole_organism_passed",
+    "metadata",
+    "release_gate_sha256"
+  ],
+  "title": "EarCrate Floor release promotion gate receipt v1",
+  "type": "object"
+}

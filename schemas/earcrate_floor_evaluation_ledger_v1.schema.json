@@ -1,0 +1,77 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_floor_evaluation_ledger_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "evaluation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "evaluator": {
+      "type": "object"
+    },
+    "fixture_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hard_gate_evidence": {
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_floor_evaluation_ledger"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "metrics": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "type": "object"
+    },
+    "notes": {
+      "type": "array"
+    },
+    "provider_id": {
+      "type": "string"
+    },
+    "provider_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "result_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "provider_id",
+    "provider_manifest_sha256",
+    "request_sha256",
+    "result_sha256",
+    "evaluator",
+    "metrics",
+    "hard_gate_evidence",
+    "notes",
+    "metadata",
+    "evaluation_sha256"
+  ],
+  "title": "EarCrate Floor evaluation ledger v1",
+  "type": "object"
+}

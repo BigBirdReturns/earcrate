@@ -1,0 +1,92 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_children_score_branch_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer_key_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "branch_status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "checks": {
+      "type": "object"
+    },
+    "counts": {
+      "type": "object"
+    },
+    "cross_modal_blockers": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cross_modal_status": {
+      "enum": [
+        "blocked",
+        "passed",
+        "failed"
+      ]
+    },
+    "form_graph_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_children_score_branch_receipt"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "midi_semantic_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "mixscore": {
+      "type": "object"
+    },
+    "performance_path_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "score_ledger_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "specimen_id": {
+      "const": "children_v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "specimen_id",
+    "manifest_sha256",
+    "score_ledger_sha256",
+    "form_graph_sha256",
+    "performance_path_sha256",
+    "answer_key_sha256",
+    "midi_semantic_sha256",
+    "mixscore",
+    "counts",
+    "checks",
+    "branch_status",
+    "cross_modal_status",
+    "cross_modal_blockers",
+    "receipt_sha256"
+  ],
+  "title": "EarCrate Children score-branch receipt v1",
+  "type": "object"
+}

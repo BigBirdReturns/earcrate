@@ -1,0 +1,159 @@
+{
+  "adjacent_move": {
+    "bars": 16,
+    "duration_seconds": 29.8,
+    "event_counts": {
+      "bass": 64,
+      "drums": 304,
+      "piano": 170
+    },
+    "generated_events_claim_source_transcription": false,
+    "master_stem_max_abs": 0.0,
+    "progression": [
+      "B-flat major 9",
+      "E-flat major 9",
+      "G minor 11",
+      "C minor 9",
+      "F13sus",
+      "B-flat/D",
+      "E-flat major 7",
+      "G minor 9",
+      "Fsus4",
+      "F7",
+      "C minor 9",
+      "E-flat/G",
+      "B-flat major 7",
+      "D7alt",
+      "G minor 9",
+      "B-flat 6/9"
+    ],
+    "source_constraints": [
+      "meter",
+      "tonal vocabulary",
+      "instrumentation",
+      "rhythmic character",
+      "transition neighborhood"
+    ],
+    "total_midi_note_ons": 538,
+    "transition_proof_count": 15
+  },
+  "boundary": {
+    "blind_audio_inference_used": false,
+    "cephalopod_reader_used": false,
+    "community_report_independently_reexecuted": false,
+    "community_sources_withheld": false,
+    "community_symbolic_sources_used": true,
+    "remaining_control": "withhold every community transcription and run the cephalopod on exact recording bytes only",
+    "target_recording_bytes_used": false,
+    "whole_organism_passed": false
+  },
+  "community_sources": [
+    {
+      "role": "target identity, tempo, ensemble",
+      "source_id": "catalog_identity",
+      "url": "https://www.shazam.com/en-us/song/193536742/flim"
+    },
+    {
+      "role": "right/left-hand pitch, octave, simultaneity, accidental, and timing evidence",
+      "source_id": "aligned_letter_notes",
+      "url": "https://pianoletternotes.blogspot.com/2020/08/flim-by-aphex-twin.html"
+    },
+    {
+      "role": "piano, acoustic-bass, and drum part witnesses",
+      "source_id": "community_instrument_parts",
+      "url": "https://www.songsterr.com/a/wsa/bad-plus-flim-aphex-twin-tab-s1273902t1"
+    },
+    {
+      "role": "two-bar rhythmic source pattern and velocity grammar",
+      "source_id": "drum_recipe",
+      "url": "https://audiblegenius.com/midi-recipe/aphex-twin-flim-drum-pattern"
+    },
+    {
+      "role": "pattern, paradiddle, polymeter, pause, and solo-character evidence",
+      "source_id": "performance_commentary",
+      "url": "https://www.allaboutjazz.com/the-bad-plus-flim-play-this/"
+    }
+  ],
+  "evidence_tier": "community_symbolic_witness",
+  "harmony_map": {
+    "bars": 56,
+    "most_frequent_classifications": [
+      "B-flat major",
+      "G minor",
+      "E-flat major"
+    ],
+    "tonal_field": [
+      "B-flat major",
+      "G minor"
+    ]
+  },
+  "kind": "earcrate_community_symbolic_report",
+  "proof_pack": {
+    "sha256": "a7dabd71af884a4933b7e3c8077bc9d5e7b2e69de3fa9d370fd8b592d09cdf52",
+    "source_media_committed": false
+  },
+  "report_sha256": "1939c0e8d5717c46807f75260a6d589fc07de6d52b976532e4c4f8ebade899f9",
+  "reproducibility": {
+    "decoded_float_pcm_max_abs": 0.0,
+    "decoded_pcm_authoritative": true,
+    "independent_builder_runs": 2,
+    "midi_byte_identical": true,
+    "mp3_byte_identical": true,
+    "wav_container_hashes_authoritative": false
+  },
+  "schema_version": 1,
+  "source_document": {
+    "independently_reexecuted_by_this_import": false,
+    "kind": "user_supplied_markdown_report",
+    "sha256": "962620ae1fb44daab07f2927fcd978f429b57e019f64a544085a7a116cd0954a"
+  },
+  "specimen_id": "flim_bad_plus_v1",
+  "target": {
+    "album": "These Are the Vistas",
+    "composition_credit": "Aphex Twin",
+    "instrumentation": [
+      "piano",
+      "acoustic bass",
+      "drums"
+    ],
+    "meter": {
+      "denominator": 4,
+      "numerator": 4
+    },
+    "performer": "The Bad Plus",
+    "tempo_bpm": 138.0,
+    "title": "Flim",
+    "tonal_space": [
+      "B-flat major",
+      "G minor"
+    ]
+  },
+  "transport": {
+    "executed_event_count": 6,
+    "master_stem_max_abs": 0.0,
+    "operations": [
+      "load:A",
+      "play:A",
+      "load:B",
+      "play:B",
+      "crossfade:A_to_B:16_beats",
+      "cut:A"
+    ],
+    "refused_event_count": 0,
+    "selected_event_count": 6
+  },
+  "witness": {
+    "artifact_role": "target-conditioned editable acoustic-trio symbolic witness",
+    "bars": 56,
+    "beats": 224,
+    "duration_seconds": 99.339,
+    "event_counts": {
+      "acoustic_bass": 222,
+      "drums": 1152,
+      "piano": 638
+    },
+    "master_stem_max_abs": 0.0,
+    "midi_tracks": 4,
+    "total_midi_note_ons": 2012
+  }
+}

@@ -1,4 +1,11 @@
-# Planner loop protocol
+# DEPRECATED: manual planner loop protocol
+
+This browser-mediated control loop is historical evidence only. It is not an
+active EarCrate workflow and must not be used as an agent execution protocol.
+Repository instructions, executable gates, and ordinary reviewed changes are
+the current authority.
+
+# Historical planner loop protocol
 
 Purpose: stop the owner from being the manual glue between "Claude hit a decision
 that needs foresight/expert judgment" and "go ask another LLM." The repo holds the

@@ -1,0 +1,35 @@
+{
+  "kind": "earcrate_floor_time_map",
+  "metadata": {
+    "crossfade_authority": "audio_edit_plan"
+  },
+  "schema_version": 1,
+  "segments": [
+    {
+      "metadata": {},
+      "mode": "continuous",
+      "rate": "1",
+      "segment_id": "retained_prefix",
+      "source_artifact_id": "source_master",
+      "source_end": "161202333/1000000",
+      "source_start": "140373333/1000000",
+      "target_end": "20829/1000",
+      "target_start": "0"
+    },
+    {
+      "metadata": {
+        "transition_overlap_seconds": 0.035
+      },
+      "mode": "jump",
+      "rate": "1",
+      "segment_id": "donor_recurrence",
+      "source_artifact_id": "source_master",
+      "source_end": "265578667/1000000",
+      "source_start": "255146667/1000000",
+      "target_end": "31261/1000",
+      "target_start": "20829/1000"
+    }
+  ],
+  "time_map_sha256": "8111a29aa0b00c7e00728bac9508270be713799273b8249a303dca0df52b9df8",
+  "time_unit": "second"
+}

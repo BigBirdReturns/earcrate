@@ -1,0 +1,21 @@
+{
+  "candidate_sha256": "1fe8f692c204d77d9cb7fc08c8b679d6d391ef41808c02b705170c586066a429",
+  "dimensions": {},
+  "human_review_sha256": "5a2d7c308027e02081b432053f984c91608f6a72abf870d275cfb64a3b84f019",
+  "kind": "earcrate_floor_human_musical_review",
+  "listening_context": {},
+  "machine_generated": false,
+  "metadata": {
+    "template": true
+  },
+  "notes": [],
+  "review_patch_refs": [],
+  "reviewer": {
+    "display_name": "",
+    "metadata": {},
+    "reviewer_id": "unassigned-human-reviewer",
+    "reviewer_type": "human"
+  },
+  "schema_version": 1,
+  "verdict": "pending"
+}

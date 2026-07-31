@@ -30,7 +30,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gate-ledger-${{ github.run_id }}
-          path: gate.log
+          path: |
+            gate.log
+            docs/CANON_AND_NONLANDING_LEDGER.md
+            docs/canon/canon-ledger.v1.json
+            schemas/earcrate_canon_and_nonlanding_ledger_v1.schema.json
           if-no-files-found: error
           retention-days: 30
       - name: package verifier (gate suite already passed above)

@@ -17,5 +17,6 @@ config.json
 earcrate_debug.log
 
 # local agent state / transient workflow worktrees (never commit)
+.agent/
 .claude/
 .tmp/

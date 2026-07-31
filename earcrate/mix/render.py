@@ -284,7 +284,7 @@ def _mixscore_atomic_wav(path: Path, audio: np.ndarray, sample_rate: int) -> Non
             subtype="FLOAT",
             format="WAV",
         )
-        with open(temp_name, "rb") as handle:
+        with open(temp_name, "r+b") as handle:
             os.fsync(handle.fileno())
         os.replace(temp_name, path)
     except Exception:

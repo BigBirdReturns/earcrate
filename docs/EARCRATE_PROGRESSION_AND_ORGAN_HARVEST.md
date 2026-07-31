@@ -80,19 +80,15 @@ then rebase/integrate:
 
 PR #43 is the first point at which the #40 sensory organ and #42 source-transport organ are treated as parts of one organism. PRs #44, #47, and #49 are downstream control, review, and publication layers; they must not fork into parallel release systems.
 
-### Repository state after alignment
+### Repository state after production reconciliation
 
-Active progression:
+The cumulative progression through #49 merged to `main` at
+`f8a93f85ab7249f203ee56400928c3b6a3ebcedc`. PRs #39 and #42 are merged;
+stacked PRs #40, #43, #44, and #47 were closed only after their exact heads were
+verified as ancestors of `main`. PR #50 was closed as failed transport residue.
 
-```text
-#39, #40, #42, #43, #44, #47, #49
-```
-
-Closed after organ harvest:
-
-```text
-#30, #38, #41, #45, #46, #48
-```
+There is one active product line: `main`. Historical PRs remain evidence, not
+parallel integration lanes.
 
 ## Organ-harvest ledger
 
@@ -120,9 +116,9 @@ Closing a PR does not erase its architectural contribution. The harvested concep
 9. **Source media stays external by default.** Repository fixtures retain identities, manifests, ledgers, schemas, builders, and receipts rather than copyrighted or private media.
 10. **Human correction must change future behavior.** Review is not complete until a correction creates a child revision, invalidates only dependents, and can alter later ranking or policy.
 
-## Governance v2 hardening before merge
+## Governance v2 hardening completed before merge
 
-PR #49 is the canonical publication-governance child of PR #47, but it remains draft until these surfaces are complete:
+PR #49 was the canonical publication-governance child of PR #47. Before merge, it completed these proof-carrying surfaces:
 
 - public review campaign separated from private assignment authority;
 - per-reviewer randomized option mapping;
@@ -135,7 +131,7 @@ PR #49 is the canonical publication-governance child of PR #47, but it remains d
 - atomic staged publication with fsync, rehash, rename, cleanup, and PublicationReceipt;
 - rights use, jurisdiction, and expiry carried into the publish permit.
 
-Until those conditions are met, PR #49 is an organ under development, not the release authority.
+Those conditions are now enforced by the merged executable gates. They remain release obligations, not one-time merge ceremony.
 
 ## Next acceptance campaign
 

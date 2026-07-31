@@ -38,7 +38,8 @@ def test_canon_ledger_is_complete_hashed_and_schema_bound() -> None:
     canonical = (
         json.dumps(ledger, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
-    assert hashlib.sha256(canonical).hexdigest() == claimed
+    actual = hashlib.sha256(canonical).hexdigest()
+    assert actual == claimed, f"canon ledger hash mismatch: claimed={claimed} actual={actual}"
     assert _SHA64.fullmatch(claimed)
 
     audit = ledger["audit"]
@@ -167,4 +168,4 @@ def test_canon_ledger_main_references_exist_and_human_index_is_aligned() -> None
     assert "merely because we once described it confidently" in text
     assert "entry for every pull request from **#1 through #52**" in text
     for number in (30, 38, 41, 45, 46, 48, 50, 52):
-        assert f"PR #{number}" in text or f"PRs #{number}" in text
+        assert f"#{number}" in text

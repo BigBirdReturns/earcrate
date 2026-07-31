@@ -1,0 +1,63 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_rig_capability_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "audio_devices": {
+      "type": "object"
+    },
+    "boundary": {
+      "type": "object"
+    },
+    "captured_at": {
+      "type": "string"
+    },
+    "environment_declarations": {
+      "type": "object"
+    },
+    "executables": {
+      "type": "array"
+    },
+    "host": {
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_rig_capability_receipt"
+    },
+    "nvidia": {
+      "type": "object"
+    },
+    "python_packages": {
+      "type": "object"
+    },
+    "rig_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "roots": {
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "summary": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "captured_at",
+    "host",
+    "roots",
+    "nvidia",
+    "python_packages",
+    "executables",
+    "audio_devices",
+    "environment_declarations",
+    "summary",
+    "boundary",
+    "rig_sha256"
+  ],
+  "type": "object"
+}

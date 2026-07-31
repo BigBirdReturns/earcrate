@@ -1,0 +1,89 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_local_acceptance_campaign_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "audition_queue": {
+      "type": "array"
+    },
+    "boundary": {
+      "type": "object"
+    },
+    "campaign_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "canon": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "inventory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_local_acceptance_campaign"
+    },
+    "rig_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "summary": {
+      "type": "object"
+    },
+    "tasks": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "status": {
+            "enum": [
+              "ready",
+              "blocked",
+              "needs_install",
+              "needs_hardware",
+              "needs_audio_probe",
+              "needs_human",
+              "needs_input"
+            ]
+          },
+          "task_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "title",
+          "domain",
+          "status",
+          "reason",
+          "resource",
+          "dependencies",
+          "required_evidence_outputs"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "created_at",
+    "inventory_sha256",
+    "rig_sha256",
+    "tasks",
+    "audition_queue",
+    "summary",
+    "boundary",
+    "campaign_sha256"
+  ],
+  "type": "object"
+}

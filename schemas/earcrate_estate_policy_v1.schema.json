@@ -1,0 +1,108 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_estate_policy_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actions": {
+      "additionalProperties": {
+        "enum": [
+          "copy",
+          "reference",
+          "retain_in_place",
+          "archive_candidate",
+          "evict_candidate",
+          "quarantine_candidate",
+          "manual_review"
+        ]
+      },
+      "type": "object"
+    },
+    "kind": {
+      "const": "earcrate_estate_policy"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "privacy": {
+      "type": "object"
+    },
+    "retention": {
+      "type": "object"
+    },
+    "safety": {
+      "additionalProperties": true,
+      "properties": {
+        "allow_delete": {
+          "const": false
+        },
+        "allow_move": {
+          "const": false
+        },
+        "copy_source_media": {
+          "type": "boolean"
+        },
+        "require_hash_for_copy": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "allow_delete",
+        "allow_move",
+        "copy_source_media",
+        "require_hash_for_copy"
+      ],
+      "type": "object"
+    },
+    "scan": {
+      "additionalProperties": true,
+      "properties": {
+        "follow_symlinks": {
+          "type": "boolean"
+        },
+        "hash_mode": {
+          "enum": [
+            "none",
+            "evidence",
+            "duplicates",
+            "all"
+          ]
+        },
+        "max_depth": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_files": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_hash_bytes_per_file": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "follow_symlinks",
+        "max_depth",
+        "max_files",
+        "hash_mode",
+        "max_hash_bytes_per_file"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "scan",
+    "actions",
+    "safety",
+    "retention",
+    "privacy",
+    "policy_sha256"
+  ],
+  "type": "object"
+}

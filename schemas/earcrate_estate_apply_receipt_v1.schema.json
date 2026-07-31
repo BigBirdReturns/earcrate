@@ -1,0 +1,72 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_estate_apply_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied_at": {
+      "type": "string"
+    },
+    "created": {
+      "type": "array"
+    },
+    "databases_merged": {
+      "const": 0
+    },
+    "deferred_operations": {
+      "type": "array"
+    },
+    "durability": {
+      "type": "object"
+    },
+    "estate_root": {
+      "type": "string"
+    },
+    "inventory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_estate_apply_receipt"
+    },
+    "plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "references": {
+      "type": "array"
+    },
+    "reused": {
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_files_deleted": {
+      "const": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "applied_at",
+    "plan_sha256",
+    "estate_root",
+    "created",
+    "reused",
+    "references",
+    "deferred_operations",
+    "source_files_deleted",
+    "databases_merged",
+    "durability",
+    "receipt_sha256"
+  ],
+  "type": "object"
+}

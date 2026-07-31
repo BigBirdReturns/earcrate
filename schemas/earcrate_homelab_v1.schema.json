@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_homelab_v1.schema.json",
+  "title": "EarCrate Homelab Provider Arcade v1",
+  "oneOf": [
+    {"$ref": "#/$defs/catalog"},
+    {"$ref": "#/$defs/node"},
+    {"$ref": "#/$defs/audit"},
+    {"$ref": "#/$defs/campaign"},
+    {"$ref": "#/$defs/stageReceipt"},
+    {"$ref": "#/$defs/auditionLedger"},
+    {"$ref": "#/$defs/adoptionDecision"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "base": {
+      "type": "object",
+      "required": ["schema_version", "kind"],
+      "properties": {"schema_version": {"const": 1}, "kind": {"type": "string"}}
+    },
+    "requirements": {
+      "type": "object",
+      "required": ["python_any", "python_all", "executables_any", "executables_all", "asset_tokens", "fixture_ids", "credentials_all", "gpu", "audio_device", "network", "manual_probe"],
+      "properties": {
+        "python_any": {"type": "array", "items": {"type": "string"}},
+        "python_all": {"type": "array", "items": {"type": "string"}},
+        "executables_any": {"type": "array", "items": {"type": "string"}},
+        "executables_all": {"type": "array", "items": {"type": "string"}},
+        "asset_tokens": {"type": "array", "items": {"type": "string"}},
+        "fixture_ids": {"type": "array", "items": {"type": "string"}},
+        "credentials_all": {"type": "array", "items": {"type": "string"}},
+        "gpu": {"enum": ["none", "preferred", "required"]},
+        "audio_device": {"type": "boolean"},
+        "network": {"type": "string"},
+        "manual_probe": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["target_id", "display_name", "target_class", "adoption_intent", "capabilities", "required_stages", "current_state", "license_posture", "source_refs", "requirements", "audition_profile", "audition_required", "target_manifest_sha256"],
+      "properties": {
+        "target_id": {"type": "string", "minLength": 1},
+        "display_name": {"type": "string", "minLength": 1},
+        "target_class": {"enum": ["adopted_core", "oss_provider", "native_library", "external_service", "external_host", "research_system", "commercial_comparator", "interoperability_target"]},
+        "adoption_intent": {"type": "string"},
+        "capabilities": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "required_stages": {"type": "array", "minItems": 2, "items": {"type": "string"}},
+        "current_state": {"type": "string"},
+        "license_posture": {"type": "string"},
+        "source_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "requirements": {"$ref": "#/$defs/requirements"},
+        "audition_profile": {"type": "string"},
+        "audition_required": {"type": "boolean"},
+        "notes": {"type": "array", "items": {"type": "string"}},
+        "target_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "fixture": {
+      "type": "object",
+      "required": ["fixture_id", "evidence_tier", "availability_rule"],
+      "properties": {
+        "fixture_id": {"type": "string"},
+        "evidence_tier": {"type": "string"},
+        "expected_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "decoded_pcm_sha256": {"$ref": "#/$defs/sha256"},
+        "availability_rule": {"type": "string"},
+        "note": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "catalog": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "catalog_sha256", "name", "mame_mapping", "source_sweeps", "fixtures", "targets", "summary", "invariants"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_catalog"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "name": {"type": "string"},
+            "cataloged_at": {"type": "string"},
+            "mame_mapping": {"type": "object"},
+            "source_sweeps": {"type": "array", "minItems": 7},
+            "fixtures": {"type": "array", "minItems": 10, "items": {"$ref": "#/$defs/fixture"}},
+            "targets": {"type": "array", "minItems": 87, "items": {"$ref": "#/$defs/target"}},
+            "summary": {"type": "object"},
+            "invariants": {"type": "array", "minItems": 5, "items": {"type": "string"}}
+          }
+        }
+      ]
+    },
+    "node": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "node_sha256", "catalog_sha256", "rig_sha256", "node_id", "python_distributions", "executables", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_node_receipt"},
+            "node_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "rig_sha256": {"$ref": "#/$defs/sha256"},
+            "node_id": {"type": "string"},
+            "python_distributions": {"type": "object"},
+            "executables": {"type": "object"},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "auditTarget": {
+      "type": "object",
+      "required": ["target_id", "target_manifest_sha256", "assigned_node_id", "assigned_node_sha256", "feasibility", "blockers", "completed_stages", "missing_stages", "audition_required", "lifecycle"],
+      "properties": {
+        "target_id": {"type": "string"},
+        "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "assigned_node_id": {"type": "string"},
+        "assigned_node_sha256": {"$ref": "#/$defs/sha256"},
+        "feasibility": {"enum": ["ready", "blocked"]},
+        "blockers": {"type": "array", "items": {"type": "string"}},
+        "completed_stages": {"type": "array", "items": {"type": "string"}},
+        "missing_stages": {"type": "array", "items": {"type": "string"}},
+        "audition_required": {"type": "boolean"},
+        "audition_acceptance_present": {"type": "boolean"},
+        "terminal_decision": {"oneOf": [{"enum": ["accepted", "rejected", "deferred", "reference_only"]}, {"type": "null"}]},
+        "lifecycle": {"type": "string"}
+      }
+    },
+    "audit": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "audit_sha256", "catalog_sha256", "inventory_sha256", "node_sha256s", "fixture_status", "targets", "summary", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_audit"},
+            "audit_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "inventory_sha256": {"$ref": "#/$defs/sha256"},
+            "node_sha256s": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sha256"}},
+            "fixture_status": {"type": "object"},
+            "targets": {"type": "array", "minItems": 87, "items": {"$ref": "#/$defs/auditTarget"}},
+            "summary": {"type": "object"},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "campaign": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "campaign_sha256", "audit_sha256", "catalog_sha256", "tasks", "summary", "completion_gate"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_campaign"},
+            "campaign_sha256": {"$ref": "#/$defs/sha256"},
+            "audit_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "tasks": {"type": "array"},
+            "summary": {"type": "object"},
+            "completion_gate": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "stageReceipt": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "receipt_sha256", "catalog_sha256", "target_id", "target_manifest_sha256", "stage", "node_sha256", "status", "artifact_sha256s"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_stage_receipt"},
+            "receipt_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "target_id": {"type": "string"},
+            "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "stage": {"type": "string"},
+            "node_sha256": {"$ref": "#/$defs/sha256"},
+            "status": {"enum": ["passed", "failed", "refused"]},
+            "artifact_sha256s": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}
+          }
+        }
+      ]
+    },
+    "auditionLedger": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "ledger_sha256", "catalog_sha256", "target_id", "target_manifest_sha256", "stage", "node_sha256", "reviewer_id", "candidate_sha256", "control_sha256", "verdict", "blinded", "randomized", "playback_chain", "dimensions"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_audition_ledger"},
+            "ledger_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "target_id": {"type": "string"},
+            "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "stage": {"type": "string"},
+            "node_sha256": {"$ref": "#/$defs/sha256"},
+            "reviewer_id": {"type": "string"},
+            "candidate_sha256": {"$ref": "#/$defs/sha256"},
+            "control_sha256": {"$ref": "#/$defs/sha256"},
+            "verdict": {"enum": ["accept", "reject", "revise", "abstain"]},
+            "blinded": {"type": "boolean"},
+            "randomized": {"type": "boolean"},
+            "playback_chain": {"type": "object", "minProperties": 1},
+            "dimensions": {"type": "object", "minProperties": 1}
+          }
+        }
+      ]
+    },
+    "adoptionDecision": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "decision_sha256", "audit_sha256", "catalog_sha256", "target_id", "target_manifest_sha256", "decision", "decided_by", "reason"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_adoption_decision"},
+            "decision_sha256": {"$ref": "#/$defs/sha256"},
+            "audit_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "target_id": {"type": "string"},
+            "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "decision": {"enum": ["accepted", "rejected", "deferred", "reference_only"]},
+            "decided_by": {"type": "string"},
+            "reason": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    }
+  }
+}

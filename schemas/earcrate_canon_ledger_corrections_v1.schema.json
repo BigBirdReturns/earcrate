@@ -1,0 +1,78 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_canon_ledger_corrections_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_actual_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "base_claimed_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "base_git_blob_sha1": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "base_path": {
+      "const": "docs/canon/canon-ledger.v1.json"
+    },
+    "corrected_effective_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_canon_ledger_corrections"
+    },
+    "operations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "old": {
+            "type": "string"
+          },
+          "op": {
+            "const": "replace"
+          },
+          "path": {
+            "pattern": "^/pull_requests/[0-9]+/[a-z0-9_]+$",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "path",
+          "old",
+          "value",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "base_path",
+    "base_git_blob_sha1",
+    "base_claimed_sha256",
+    "base_actual_sha256",
+    "operations",
+    "corrected_effective_sha256"
+  ],
+  "title": "EarCrate canon ledger corrections v1",
+  "type": "object"
+}

@@ -7,7 +7,7 @@ on:
       - "earcrate/estate/**"
       - "tests/test_local_estate.py"
       - "tests/test_homelab_*.py"
-      - "schemas/earcrate_homelab_v1.schema.json"
+      - "schemas/earcrate_homelab*.schema.json"
       - "build/make_homelab_zipapp.py"
       - "VERIFY_HOMELAB.py"
       - "docs/HOMELAB_*.md"
@@ -18,7 +18,7 @@ on:
       - "earcrate/estate/**"
       - "tests/test_local_estate.py"
       - "tests/test_homelab_*.py"
-      - "schemas/earcrate_homelab_v1.schema.json"
+      - "schemas/earcrate_homelab*.schema.json"
       - "build/make_homelab_zipapp.py"
       - "VERIFY_HOMELAB.py"
       - "docs/HOMELAB_*.md"
@@ -67,6 +67,7 @@ jobs:
           tests/test_local_estate.py
           tests/test_homelab_provider_arcade.py
           tests/test_homelab_operations.py
+          tests/test_homelab_public_projection.py
       - name: Verify launch distribution
         run: python VERIFY_HOMELAB.py > homelab-verifier.json
       - name: Build retained Homelab zipapp

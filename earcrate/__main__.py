@@ -35,6 +35,11 @@ if len(sys.argv) > 1 and sys.argv[1] == "estate":
 
     sys.exit(estate_cli_main(sys.argv[2:]))
 
+if len(sys.argv) > 1 and sys.argv[1] == "homelab":
+    from earcrate.estate.homelab_cli import homelab_cli_main
+
+    sys.exit(homelab_cli_main(sys.argv[2:]))
+
 if len(sys.argv) > 1 and sys.argv[1] == "live":
     from earcrate.live.cli import live_cli_main
 

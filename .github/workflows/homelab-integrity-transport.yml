@@ -85,3 +85,5 @@ jobs:
           git commit -m "Bind fixture bytes and harden blind audition evidence"
           test "$(git diff --name-only HEAD^ HEAD | sort)" = "$(printf '%s\n' "$expected" | sed 's/^ *//' | sort)"
           git push origin HEAD:agent/local-estate-control-plane
+
+# Exact overlay application trigger; remove with the temporary branch.

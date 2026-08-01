@@ -38,6 +38,13 @@ _JSON_KINDS = {
     "earcrate_homelab_stage_receipt": ("run_receipt", "durable_evidence"),
     "earcrate_homelab_audition_ledger": ("human_review", "durable_evidence"),
     "earcrate_homelab_adoption_decision": ("proof_receipt", "durable_evidence"),
+    "earcrate_homelab_review_assignment": ("human_review", "durable_evidence"),
+    "earcrate_homelab_private_assignment_authority": ("human_review", "durable_evidence"),
+    "earcrate_homelab_review_submission": ("human_review", "durable_evidence"),
+    "earcrate_homelab_store_snapshot": ("run_receipt", "durable_evidence"),
+    "earcrate_homelab_backup_manifest": ("proof_manifest", "durable_evidence"),
+    "earcrate_homelab_restore_receipt": ("proof_receipt", "durable_evidence"),
+    "earcrate_homelab_public_export_manifest": ("proof_manifest", "durable_evidence"),
 }
 _VERSION_PATTERNS = (
     re.compile(r"ENGINE_DISPLAY_VERSION\s*=\s*['\"]([^'\"]+)['\"]"),

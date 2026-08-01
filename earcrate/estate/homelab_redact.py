@@ -12,7 +12,12 @@ import hashlib
 import re
 from typing import Any, Mapping
 
-from earcrate.estate.homelab_common import HOMELAB_SCHEMA_VERSION, homelab_seal, homelab_validate_seal
+from earcrate.estate.homelab_common import (
+    HOMELAB_HASH_FIELDS,
+    HOMELAB_SCHEMA_VERSION,
+    homelab_seal,
+    homelab_validate_seal,
+)
 
 _ABSOLUTE_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/|file://)")
 _SENSITIVE_KEYS = {
@@ -25,24 +30,14 @@ _SENSITIVE_KEYS = {
 
 
 def _source_identity(value: Mapping[str, Any]) -> str:
-    for field in (
-        "catalog_sha256",
-        "node_sha256",
-        "audit_sha256",
-        "campaign_sha256",
-        "receipt_sha256",
-        "ledger_sha256",
-        "decision_sha256",
-        "assignment_sha256",
-        "authority_sha256",
-        "submission_sha256",
-        "snapshot_sha256",
-        "manifest_sha256",
-    ):
-        digest = str(value.get(field) or "")
-        if len(digest) == 64 and all(character in "0123456789abcdef" for character in digest.lower()):
-            return digest.lower()
-    raise ValueError(f"Homelab object has no supported identity field: {value.get('kind')!r}")
+    kind = str(value.get("kind") or "")
+    field = HOMELAB_HASH_FIELDS.get(kind)
+    if not field:
+        raise ValueError(f"Homelab object has no registered identity field: {kind!r}")
+    digest = str(value.get(field) or "").lower()
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise ValueError(f"Homelab object has an invalid {field}: {kind!r}")
+    return digest
 
 
 def _redacted_string(value: str) -> str:

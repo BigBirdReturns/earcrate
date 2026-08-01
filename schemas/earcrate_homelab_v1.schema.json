@@ -9,14 +9,24 @@
     {"$ref": "#/$defs/campaign"},
     {"$ref": "#/$defs/stageReceipt"},
     {"$ref": "#/$defs/auditionLedger"},
-    {"$ref": "#/$defs/adoptionDecision"}
+    {"$ref": "#/$defs/adoptionDecision"},
+    {"$ref": "#/$defs/reviewAssignment"},
+    {"$ref": "#/$defs/privateAssignmentAuthority"},
+    {"$ref": "#/$defs/reviewSubmission"},
+    {"$ref": "#/$defs/storeSnapshot"},
+    {"$ref": "#/$defs/backupManifest"},
+    {"$ref": "#/$defs/restoreReceipt"},
+    {"$ref": "#/$defs/publicExportManifest"}
   ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "base": {
       "type": "object",
       "required": ["schema_version", "kind"],
-      "properties": {"schema_version": {"const": 1}, "kind": {"type": "string"}}
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"type": "string"}
+      }
     },
     "requirements": {
       "type": "object",
@@ -61,10 +71,10 @@
       "type": "object",
       "required": ["fixture_id", "evidence_tier", "availability_rule"],
       "properties": {
-        "fixture_id": {"type": "string"},
+        "fixture_id": {"type": "string", "minLength": 1},
         "evidence_tier": {"type": "string"},
         "expected_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
-        "decoded_pcm_sha256": {"$ref": "#/$defs/sha256"},
+        "decoded_pcm_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
         "availability_rule": {"type": "string"},
         "note": {"type": "string"}
       },
@@ -103,8 +113,14 @@
             "catalog_sha256": {"$ref": "#/$defs/sha256"},
             "rig_sha256": {"$ref": "#/$defs/sha256"},
             "node_id": {"type": "string"},
+            "captured_at": {"type": "string"},
+            "host": {"type": "object"},
+            "roots": {"type": "array"},
+            "nvidia": {"type": "object"},
+            "audio_devices": {"type": "object"},
             "python_distributions": {"type": "object"},
             "executables": {"type": "object"},
+            "credential_environment_names": {"type": "array", "items": {"type": "string"}},
             "boundary": {"type": "object"}
           }
         }
@@ -120,7 +136,10 @@
         "assigned_node_sha256": {"$ref": "#/$defs/sha256"},
         "feasibility": {"enum": ["ready", "blocked"]},
         "blockers": {"type": "array", "items": {"type": "string"}},
+        "warnings": {"type": "array", "items": {"type": "string"}},
         "completed_stages": {"type": "array", "items": {"type": "string"}},
+        "failed_stages": {"type": "array", "items": {"type": "string"}},
+        "refused_stages": {"type": "array", "items": {"type": "string"}},
         "missing_stages": {"type": "array", "items": {"type": "string"}},
         "audition_required": {"type": "boolean"},
         "audition_acceptance_present": {"type": "boolean"},
@@ -141,7 +160,9 @@
             "inventory_sha256": {"$ref": "#/$defs/sha256"},
             "node_sha256s": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sha256"}},
             "fixture_status": {"type": "object"},
-            "targets": {"type": "array", "minItems": 87, "items": {"$ref": "#/$defs/auditTarget"}},
+            "targets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/auditTarget"}},
+            "evidence_index": {"type": "object"},
+            "object_warnings": {"type": "array"},
             "summary": {"type": "object"},
             "boundary": {"type": "object"}
           }
@@ -159,6 +180,7 @@
             "campaign_sha256": {"$ref": "#/$defs/sha256"},
             "audit_sha256": {"$ref": "#/$defs/sha256"},
             "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "created_at": {"type": "string"},
             "tasks": {"type": "array"},
             "summary": {"type": "object"},
             "completion_gate": {"type": "object"}
@@ -175,13 +197,18 @@
           "properties": {
             "kind": {"const": "earcrate_homelab_stage_receipt"},
             "receipt_sha256": {"$ref": "#/$defs/sha256"},
+            "recorded_at": {"type": "string"},
             "catalog_sha256": {"$ref": "#/$defs/sha256"},
             "target_id": {"type": "string"},
             "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
             "stage": {"type": "string"},
             "node_sha256": {"$ref": "#/$defs/sha256"},
             "status": {"enum": ["passed", "failed", "refused"]},
-            "artifact_sha256s": {"type": "array", "items": {"$ref": "#/$defs/sha256"}}
+            "fixture_ids": {"type": "array", "items": {"type": "string"}},
+            "artifact_sha256s": {"type": "array", "items": {"$ref": "#/$defs/sha256"}},
+            "measurements": {"type": "object"},
+            "notes": {"type": "array", "items": {"type": "string"}},
+            "boundary": {"type": "object"}
           }
         }
       ]
@@ -195,6 +222,7 @@
           "properties": {
             "kind": {"const": "earcrate_homelab_audition_ledger"},
             "ledger_sha256": {"$ref": "#/$defs/sha256"},
+            "reviewed_at": {"type": "string"},
             "catalog_sha256": {"$ref": "#/$defs/sha256"},
             "target_id": {"type": "string"},
             "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
@@ -203,11 +231,18 @@
             "reviewer_id": {"type": "string"},
             "candidate_sha256": {"$ref": "#/$defs/sha256"},
             "control_sha256": {"$ref": "#/$defs/sha256"},
+            "fixture_ids": {"type": "array", "items": {"type": "string"}},
             "verdict": {"enum": ["accept", "reject", "revise", "abstain"]},
             "blinded": {"type": "boolean"},
             "randomized": {"type": "boolean"},
             "playback_chain": {"type": "object", "minProperties": 1},
-            "dimensions": {"type": "object", "minProperties": 1}
+            "dimensions": {"type": "object", "minProperties": 1},
+            "assignment_sha256": {"$ref": "#/$defs/sha256"},
+            "private_authority_sha256": {"$ref": "#/$defs/sha256"},
+            "submission_sha256": {"$ref": "#/$defs/sha256"},
+            "authentication_receipt_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+            "notes": {"type": "array", "items": {"type": "string"}},
+            "boundary": {"type": "object"}
           }
         }
       ]
@@ -221,13 +256,167 @@
           "properties": {
             "kind": {"const": "earcrate_homelab_adoption_decision"},
             "decision_sha256": {"$ref": "#/$defs/sha256"},
+            "decided_at": {"type": "string"},
             "audit_sha256": {"$ref": "#/$defs/sha256"},
             "catalog_sha256": {"$ref": "#/$defs/sha256"},
             "target_id": {"type": "string"},
             "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "assigned_node_sha256": {"$ref": "#/$defs/sha256"},
             "decision": {"enum": ["accepted", "rejected", "deferred", "reference_only"]},
-            "decided_by": {"type": "string"},
-            "reason": {"type": "string", "minLength": 1}
+            "decided_by": {"type": "string", "minLength": 1},
+            "reason": {"type": "string", "minLength": 1},
+            "supporting_receipt_sha256s": {"type": "array", "items": {"$ref": "#/$defs/sha256"}},
+            "scope": {"type": "object"},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "reviewAssignment": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "assignment_sha256", "catalog_sha256", "target_id", "target_manifest_sha256", "node_sha256", "reviewer_id", "stage", "fixture_ids", "options", "playback_chain", "private_authority_sha256", "review_token_sha256", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_review_assignment"},
+            "assignment_sha256": {"$ref": "#/$defs/sha256"},
+            "created_at": {"type": "string"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "target_id": {"type": "string"},
+            "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "node_sha256": {"$ref": "#/$defs/sha256"},
+            "reviewer_id": {"type": "string"},
+            "stage": {"type": "string"},
+            "fixture_ids": {"type": "array", "items": {"type": "string"}},
+            "options": {"type": "object", "required": ["A", "B"]},
+            "playback_chain": {"type": "object", "minProperties": 1},
+            "private_authority_sha256": {"$ref": "#/$defs/sha256"},
+            "review_token_sha256": {"$ref": "#/$defs/sha256"},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "privateAssignmentAuthority": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "authority_sha256", "catalog_sha256", "target_id", "target_manifest_sha256", "node_sha256", "reviewer_id", "fixture_ids", "nonce", "option_map", "source_artifacts", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_private_assignment_authority"},
+            "authority_sha256": {"$ref": "#/$defs/sha256"},
+            "created_at": {"type": "string"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "target_id": {"type": "string"},
+            "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "node_sha256": {"$ref": "#/$defs/sha256"},
+            "reviewer_id": {"type": "string"},
+            "fixture_ids": {"type": "array", "items": {"type": "string"}},
+            "nonce": {"type": "string"},
+            "option_map": {"type": "object", "required": ["A", "B"]},
+            "source_artifacts": {"type": "object", "required": ["candidate", "control"]},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "reviewSubmission": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "submission_sha256", "assignment_sha256", "catalog_sha256", "target_id", "target_manifest_sha256", "node_sha256", "reviewer_id", "choice", "dimensions", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_review_submission"},
+            "submission_sha256": {"$ref": "#/$defs/sha256"},
+            "submitted_at": {"type": "string"},
+            "assignment_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "target_id": {"type": "string"},
+            "target_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "node_sha256": {"$ref": "#/$defs/sha256"},
+            "reviewer_id": {"type": "string"},
+            "choice": {"enum": ["A", "B", "tie", "abstain"]},
+            "dimensions": {"type": "object", "minProperties": 1},
+            "authentication_receipt_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+            "notes": {"type": "array", "items": {"type": "string"}},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "storeSnapshot": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "snapshot_sha256", "captured_at", "schema_version_store", "objects", "tasks", "campaigns", "event_chain_head"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_store_snapshot"},
+            "snapshot_sha256": {"$ref": "#/$defs/sha256"},
+            "captured_at": {"type": "string"},
+            "schema_version_store": {"type": "integer", "minimum": 1},
+            "objects": {"type": "array"},
+            "tasks": {"type": "object"},
+            "campaigns": {"type": "object"},
+            "event_chain_head": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "backupManifest": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "manifest_sha256", "created_at", "store_schema_version", "entries", "store_snapshot", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_backup_manifest"},
+            "manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "created_at": {"type": "string"},
+            "store_schema_version": {"type": "integer", "minimum": 1},
+            "entries": {"type": "array"},
+            "store_snapshot": {"$ref": "#/$defs/storeSnapshot"},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "restoreReceipt": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "receipt_sha256", "restored_at", "backup_sha256", "backup_manifest_sha256", "destination_name", "store_schema_version", "entries", "doctor", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_restore_receipt"},
+            "receipt_sha256": {"$ref": "#/$defs/sha256"},
+            "restored_at": {"type": "string"},
+            "backup_sha256": {"$ref": "#/$defs/sha256"},
+            "backup_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "destination_name": {"type": "string"},
+            "store_schema_version": {"type": "integer", "minimum": 1},
+            "entries": {"type": "integer", "minimum": 0},
+            "doctor": {"type": "object"},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "publicExportManifest": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "manifest_sha256", "created_at", "entries", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_public_export_manifest"},
+            "manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "created_at": {"type": "string"},
+            "entries": {"type": "array"},
+            "boundary": {"type": "object"}
           }
         }
       ]

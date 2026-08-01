@@ -12,7 +12,7 @@ _AUDIO_EXTS = {".wav", ".flac", ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".aiff"
 _SCORE_EXTS = {".pdf", ".musicxml", ".mxl", ".mscz"}
 _MIDI_EXTS = {".mid", ".midi"}
 _MODEL_EXTS = {".pt", ".pth", ".ckpt", ".onnx", ".safetensors", ".pb", ".tflite"}
-_DISTRIBUTION_EXTS = {".whl", ".exe", ".msi", ".dmg", ".appimage", ".tar", ".gz", ".xz", ".7z"}
+_DISTRIBUTION_EXTS = {".whl", ".pyz", ".exe", ".msi", ".dmg", ".appimage", ".tar", ".gz", ".xz", ".7z"}
 _TEMP_EXTS = {".tmp", ".temp", ".part", ".partial", ".lock", ".pyc", ".pyo"}
 _JSON_KINDS = {
     "earcrate_project_revision": ("project_revision", "authority"),

@@ -2,8 +2,24 @@ name: song-reader
 
 on:
   push:
-    branches:
-      - agent/song-reader-cephalopod-foundation
+    branches: [main]
+    paths:
+      - "earcrate/reader/**"
+      - "earcrate/specimen/**"
+      - "earcrate/project/compiler_*.py"
+      - "earcrate/project/custody.py"
+      - "earcrate/project/continuation.py"
+      - "tests/test_song_reader_cephalopod.py"
+      - "tests/test_project_gate8_integration.py"
+      - "tests/test_buffalo_specimen.py"
+      - "tests/test_children_continuation.py"
+      - "tests/test_flim_community_witness.py"
+      - "tests/run_gates.py"
+      - "schemas/earcrate_children_adjacent_move_receipt_v1.schema.json"
+      - "schemas/earcrate_community_symbolic_*.schema.json"
+      - "build/make_singlefile.py"
+      - "earcrate/__main__.py"
+      - ".github/workflows/song-reader.yml"
   pull_request:
     paths:
       - "earcrate/reader/**"
@@ -22,6 +38,13 @@ on:
       - "build/make_singlefile.py"
       - "earcrate/__main__.py"
       - ".github/workflows/song-reader.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: song-reader-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   reader-proof:
@@ -42,6 +65,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements.txt
       - name: Install ffmpeg on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
@@ -51,9 +75,8 @@ jobs:
         run: choco install ffmpeg -y --no-progress
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m pip install --disable-pip-version-check pytest
       - name: Run cephalopod, custody, Buffalo continuation, and Flim gates
         run: >-
           python -m pytest -vv --tb=long --junitxml=reader-tests.xml

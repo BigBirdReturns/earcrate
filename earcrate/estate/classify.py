@@ -10,6 +10,7 @@ from earcrate.estate.markers import (
     _SCORE_EXTS, _TEMP_EXTS,
 )
 
+
 def _estate_classify_path(path: Path, relative: str, root_role: str) -> tuple[str, str, list[str]]:
     lower = relative.lower().replace("\\", "/")
     parts = tuple(part for part in lower.split("/") if part)
@@ -49,12 +50,12 @@ def _estate_classify_path(path: Path, relative: str, root_role: str) -> tuple[st
         return "analysis_cache", "derived_rebuildable", ["rebuildable analysis cache"]
     if "cache" in parts or "__pycache__" in parts:
         return "temporary", "temporary", ["cache or interpreter residue"]
-    if name.startswith("gate-ledger-") or name.startswith("package-verifier-") or "song-reader-tests-" in name:
+    if name.startswith("gate-ledger-") or name.startswith("package-verifier-") or "song-reader-tests-" in name or "homelab-tests-" in name:
         return "ci_ledger", "durable_evidence", ["retained gate/package workflow artifact"]
-    if suffix == ".zip" and any(token in name for token in ("proof", "evidence", "receipt", "buffalo", "floor", "release")):
+    if suffix == ".zip" and any(token in name for token in ("proof", "evidence", "receipt", "buffalo", "floor", "release", "homelab", "backup")):
         return "proof_pack", "durable_evidence", ["proof/evidence archive by name"]
-    if suffix == ".json" and any(token in name for token in ("manifest", "proof", "receipt", "ledger", "report")):
-        klass = "proof_receipt" if any(token in name for token in ("receipt", "proof", "ledger", "report")) else "proof_manifest"
+    if suffix == ".json" and any(token in name for token in ("manifest", "proof", "receipt", "ledger", "report", "audit", "campaign", "assignment", "submission", "snapshot")):
+        klass = "proof_receipt" if any(token in name for token in ("receipt", "proof", "ledger", "report", "audit", "submission")) else "proof_manifest"
         return klass, "durable_evidence", ["evidence JSON by name"]
     if suffix in _MIDI_EXTS:
         return "midi", "durable_evidence", ["symbolic performance file"]
@@ -63,7 +64,7 @@ def _estate_classify_path(path: Path, relative: str, root_role: str) -> tuple[st
     if suffix in _AUDIO_EXTS:
         if "stem" in parts or "stems" in parts or any(token in name for token in (".piano.", ".bass.", ".drums.", ".deck_a", ".deck_b")):
             return "stem_audio", "derived_rebuildable", ["stem or deck audio"]
-        if any(token in lower for token in ("audition", "listen", "reference_then", "candidate", "human_review")):
+        if any(token in lower for token in ("audition", "listen", "reference_then", "candidate", "human_review", "option-a", "option-b")):
             return "audition_audio", "review_queue", ["listening or release candidate audio"]
         if any(token in lower for token in ("render", "master", "continuation", "proof", "output", "target_to_adjacent")) and root_role != "source_library":
             return "render_audio", "derived_rebuildable", ["rendered or proof audio"]
@@ -101,6 +102,8 @@ def _estate_should_hash(item: Mapping[str, Any], policy: Mapping[str, Any], hash
         "project_index",
         "project_revision",
         "command_ledger",
+        "model_weight",
+        "model_manifest",
         "schema",
         "proof_manifest",
         "proof_receipt",

@@ -41,7 +41,22 @@ def _json_arg(text: str | None, *, label: str) -> dict[str, Any]:
 def _output(payload: Mapping[str, Any], path: str | None) -> None:
     if path:
         write_estate_json(path, payload)
-        identity = next((payload.get(name) for name in ("catalog_sha256", "node_sha256", "audit_sha256", "campaign_sha256", "receipt_sha256", "ledger_sha256", "decision_sha256") if payload.get(name)), None)
+        identity = next(
+            (
+                payload.get(name)
+                for name in (
+                    "catalog_sha256",
+                    "node_sha256",
+                    "audit_sha256",
+                    "campaign_sha256",
+                    "receipt_sha256",
+                    "ledger_sha256",
+                    "decision_sha256",
+                )
+                if payload.get(name)
+            ),
+            None,
+        )
         _print({"ok": True, "kind": payload.get("kind"), "identity": identity, "output": path})
     else:
         _print(payload)
@@ -95,6 +110,7 @@ def homelab_cli_main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("candidate_sha256")
     p.add_argument("control_sha256")
     p.add_argument("verdict", choices=["accept", "reject", "revise", "abstain"])
+    p.add_argument("--fixture", action="append", default=[])
     p.add_argument("--blinded", action="store_true")
     p.add_argument("--randomized", action="store_true")
     p.add_argument("--playback-json", required=True)
@@ -143,28 +159,43 @@ def homelab_cli_main(argv: Sequence[str] | None = None) -> int:
             return 1 if args.fail_on_unresolved and payload["summary"]["unresolved_targets"] else 0
         if args.command == "record-stage":
             payload = record_homelab_stage(
-                _load(args.catalog), target_id=args.target_id, stage=args.stage,
-                node_sha256=args.node_sha256, status=args.status,
-                fixture_ids=args.fixture, artifact_sha256s=args.artifact,
-                measurements=_json_arg(args.measurements_json, label="measurements-json"), notes=args.note,
+                _load(args.catalog),
+                target_id=args.target_id,
+                stage=args.stage,
+                node_sha256=args.node_sha256,
+                status=args.status,
+                fixture_ids=args.fixture,
+                artifact_sha256s=args.artifact,
+                measurements=_json_arg(args.measurements_json, label="measurements-json"),
+                notes=args.note,
             )
             _output(payload, args.output)
             return 0
         if args.command == "record-audition":
             payload = record_homelab_audition(
-                _load(args.catalog), target_id=args.target_id, node_sha256=args.node_sha256,
-                reviewer_id=args.reviewer_id, candidate_sha256=args.candidate_sha256,
-                control_sha256=args.control_sha256, verdict=args.verdict,
-                blinded=args.blinded, randomized=args.randomized,
+                _load(args.catalog),
+                target_id=args.target_id,
+                node_sha256=args.node_sha256,
+                reviewer_id=args.reviewer_id,
+                candidate_sha256=args.candidate_sha256,
+                control_sha256=args.control_sha256,
+                verdict=args.verdict,
+                blinded=args.blinded,
+                randomized=args.randomized,
                 playback_chain=_json_arg(args.playback_json, label="playback-json"),
-                dimensions=_json_arg(args.dimensions_json, label="dimensions-json"), notes=args.note,
+                dimensions=_json_arg(args.dimensions_json, label="dimensions-json"),
+                fixture_ids=args.fixture,
+                notes=args.note,
             )
             _output(payload, args.output)
             return 0
         if args.command == "decide":
             payload = decide_homelab_target(
-                _load(args.audit), target_id=args.target_id, decision=args.decision,
-                decided_by=args.decided_by, reason=args.reason,
+                _load(args.audit),
+                target_id=args.target_id,
+                decision=args.decision,
+                decided_by=args.decided_by,
+                reason=args.reason,
                 supporting_receipt_sha256s=args.receipt,
             )
             _output(payload, args.output)
@@ -175,11 +206,16 @@ def homelab_cli_main(argv: Sequence[str] | None = None) -> int:
             _print({"ok": True, "kind": payload["kind"], "seal_valid": True})
             return 0
         if args.command == "sweep":
-            _print(homelab_sweep(
-                args.root, estate_root=args.estate_root, output_dir=args.output_dir,
-                canon_ledger_path=args.canon, hash_mode=args.hash_mode,
-                include_audio_devices=args.audio_devices,
-            ))
+            _print(
+                homelab_sweep(
+                    args.root,
+                    estate_root=args.estate_root,
+                    output_dir=args.output_dir,
+                    canon_ledger_path=args.canon,
+                    hash_mode=args.hash_mode,
+                    include_audio_devices=args.audio_devices,
+                )
+            )
             return 0
         raise ValueError(f"unhandled homelab command: {args.command}")
     except Exception as exc:

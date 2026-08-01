@@ -17,6 +17,13 @@ HOMELAB_HASH_FIELDS = {
     "earcrate_homelab_stage_receipt": "receipt_sha256",
     "earcrate_homelab_audition_ledger": "ledger_sha256",
     "earcrate_homelab_adoption_decision": "decision_sha256",
+    "earcrate_homelab_review_assignment": "assignment_sha256",
+    "earcrate_homelab_private_assignment_authority": "authority_sha256",
+    "earcrate_homelab_review_submission": "submission_sha256",
+    "earcrate_homelab_store_snapshot": "snapshot_sha256",
+    "earcrate_homelab_backup_manifest": "manifest_sha256",
+    "earcrate_homelab_restore_receipt": "receipt_sha256",
+    "earcrate_homelab_public_export_manifest": "manifest_sha256",
 }
 HOMELAB_STAGE_STATUSES = {"passed", "failed", "refused"}
 HOMELAB_AUDITION_VERDICTS = {"accept", "reject", "revise", "abstain"}

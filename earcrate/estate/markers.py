@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """Root, repository, and version markers for estate discovery."""
 
-import os
 from pathlib import Path
 import re
 from typing import Any
@@ -32,6 +31,13 @@ _JSON_KINDS = {
     "earcrate_floor_tournament_report": ("run_receipt", "durable_evidence"),
     "earcrate_mix_render_receipt": ("run_receipt", "durable_evidence"),
     "earcrate_mix_execution_ledger": ("command_ledger", "durable_evidence"),
+    "earcrate_homelab_catalog": ("proof_manifest", "durable_evidence"),
+    "earcrate_homelab_node_receipt": ("run_receipt", "durable_evidence"),
+    "earcrate_homelab_audit": ("run_receipt", "durable_evidence"),
+    "earcrate_homelab_campaign": ("run_receipt", "durable_evidence"),
+    "earcrate_homelab_stage_receipt": ("run_receipt", "durable_evidence"),
+    "earcrate_homelab_audition_ledger": ("human_review", "durable_evidence"),
+    "earcrate_homelab_adoption_decision": ("proof_receipt", "durable_evidence"),
 }
 _VERSION_PATTERNS = (
     re.compile(r"ENGINE_DISPLAY_VERSION\s*=\s*['\"]([^'\"]+)['\"]"),

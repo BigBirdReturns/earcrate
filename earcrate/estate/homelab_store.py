@@ -1,21 +1,17 @@
 from __future__ import annotations
 
-"""Portable facade for the durable Homelab store.
+"""Portable filesystem facade for the durable Homelab store.
 
-The core store contains the SQLite schema, event chain, scheduler, leases, and
-recovery logic. This facade owns filesystem behavior that differs across Windows
-and POSIX: case-insensitive/canonical path containment and monotonic lease
-heartbeats. Keeping that boundary explicit prevents platform workarounds from
-leaking through the scheduler and evidence model.
+The core module owns the SQLite schema, event chain, scheduler, leases, and
+recovery logic. This facade owns the one host-specific seam: stable path
+containment while multiple workers concurrently materialize object directories.
 """
 
 from contextlib import suppress
 from copy import deepcopy
-import json
 import os
 from pathlib import Path
 import secrets
-import time
 from typing import Any, Mapping
 
 from earcrate.estate._homelab_store_core import (
@@ -137,37 +133,6 @@ class HomelabStore(_CoreHomelabStore):
                     with suppress(Exception):
                         _fsync_directory(target.parent)
             raise
-
-    def heartbeat(
-        self,
-        campaign_sha256: str,
-        task_id: str,
-        lease_token: str,
-        *,
-        extend_seconds: int = 900,
-        now: float | None = None,
-    ) -> dict[str, Any]:
-        """Extend a live lease without ever shortening its current expiry."""
-
-        if extend_seconds < 30 or extend_seconds > 24 * 3600:
-            raise ValueError("extend_seconds must be between 30 and 86400")
-        current = float(time.time() if now is None else now)
-        with self._transaction() as connection:
-            row = self._leased_task(connection, campaign_sha256, task_id, lease_token)
-            existing_expiry = float(row["lease_expires_at"] or current)
-            if existing_expiry <= current:
-                raise ValueError("Homelab task lease has expired")
-            expires = max(current, existing_expiry) + float(extend_seconds)
-            connection.execute(
-                "UPDATE tasks SET lease_expires_at=?,updated_at=? WHERE campaign_sha256=? AND task_id=?",
-                (expires, _now_utc(), campaign_sha256, task_id),
-            )
-            self._append_event(
-                connection,
-                "task_heartbeat",
-                payload={"campaign_sha256": campaign_sha256, "task_id": task_id, "lease_expires_at": expires},
-            )
-        return {"ok": True, "campaign_sha256": campaign_sha256, "task_id": task_id, "lease_expires_at": expires}
 
 
 __all__ = ["STORE_SCHEMA_VERSION", "HomelabStore"]

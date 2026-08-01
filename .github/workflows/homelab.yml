@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: homelab-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}-${{ matrix.python }}
+  group: homelab-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

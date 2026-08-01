@@ -29,6 +29,7 @@ REQUIRED_MODULES = {
     "homelab_common.py",
     "homelab_catalog.py",
     "homelab.py",
+    "_homelab_store_core.py",
     "homelab_store.py",
     "homelab_review.py",
     "homelab_ops.py",

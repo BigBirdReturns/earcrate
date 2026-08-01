@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Durable Homelab object store and recoverable campaign scheduler.
 
-Sealed JSON remains evidence authority. SQLite is an index, lease manager, and
-append-only event journal. A corrupt or inconsistent index never upgrades a
-provider result; doctor fails closed and the JSON objects remain independently
+Sealed JSON remains evidence authority. SQLite is an index, dependency scheduler,
+lease manager, and append-only event journal. A corrupt index never upgrades a
+provider result: doctor fails closed and every JSON object remains independently
 verifiable.
 """
 
@@ -25,7 +25,7 @@ from earcrate.estate.homelab_common import HOMELAB_HASH_FIELDS, _is_sha256, _now
 STORE_SCHEMA_VERSION = 1
 _VISIBILITIES = {"public", "private", "sensitive"}
 _TASK_STATES = {"blocked", "queued", "leased", "completed", "failed", "refused", "cancelled"}
-_EXCLUSIVE_RESOURCES = {"gpu-exclusive", "physical-audio-device"}
+_TERMINAL_TASK_STATES = {"completed", "failed", "refused", "cancelled"}
 
 
 def _canonical_bytes(value: Mapping[str, Any]) -> bytes:
@@ -47,22 +47,31 @@ def _object_identity(value: Mapping[str, Any]) -> str:
 
 
 def _refuse_symlink_components(path: Path) -> None:
-    current = Path(path.anchor) if path.is_absolute() else Path()
-    for part in path.parts[1:] if path.is_absolute() else path.parts:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
         current = current / part
         if current.exists() and current.is_symlink():
             raise ValueError(f"symlinked Homelab store path refused: {current}")
 
 
-def _fsync_directory(path: Path) -> bool:
+def _fsync_directory(path: Path) -> None:
     if os.name == "nt":
-        return False
+        return
     descriptor = os.open(str(path), os.O_RDONLY)
     try:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
-    return True
+
+
+def _resource_group(resource: str) -> str | None:
+    value = str(resource).casefold()
+    if "gpu" in value:
+        return "gpu"
+    if "audio-device" in value or "physical-audio" in value:
+        return "audio-device"
+    return None
 
 
 class HomelabStore:
@@ -72,8 +81,6 @@ class HomelabStore:
         raw = Path(root).expanduser()
         _refuse_symlink_components(raw.absolute())
         self.root = raw.resolve()
-        if self.root.exists() and self.root.is_symlink():
-            raise ValueError("Homelab store root may not be a symlink")
         self.objects_root = self.root / "objects"
         self.database_dir = self.root / "db"
         self.database_path = self.database_dir / "homelab.sqlite3"
@@ -110,15 +117,24 @@ class HomelabStore:
             self._connection.execute("BEGIN IMMEDIATE")
             try:
                 yield self._connection
-                self._connection.execute("COMMIT")
+                if self._connection.in_transaction:
+                    self._connection.execute("COMMIT")
             except Exception:
-                with suppress(Exception):
-                    self._connection.execute("ROLLBACK")
+                if self._connection.in_transaction:
+                    with suppress(Exception):
+                        self._connection.execute("ROLLBACK")
                 raise
 
     def _migrate(self) -> None:
-        with self._transaction() as connection:
-            connection.executescript(
+        """Create schema outside the normal transaction wrapper.
+
+        sqlite3.executescript() owns its transaction boundary, so wrapping it in
+        BEGIN/COMMIT produces a false ``no transaction is active`` failure.
+        Metadata initialization is then performed in an ordinary explicit
+        transaction.
+        """
+        with self._write_lock:
+            self._connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS meta (
                     key TEXT PRIMARY KEY,
@@ -178,12 +194,15 @@ class HomelabStore:
                     ON tasks(status, lease_expires_at, resource);
                 """
             )
+        with self._transaction() as connection:
             row = connection.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
             if row is None:
                 connection.execute("INSERT INTO meta(key,value) VALUES('schema_version',?)", (str(STORE_SCHEMA_VERSION),))
                 connection.execute("INSERT INTO meta(key,value) VALUES('event_chain_head','')")
             elif int(row["value"]) != STORE_SCHEMA_VERSION:
                 raise ValueError(f"unsupported Homelab store schema {row['value']}; expected {STORE_SCHEMA_VERSION}")
+            if connection.execute("SELECT 1 FROM meta WHERE key='event_chain_head'").fetchone() is None:
+                connection.execute("INSERT INTO meta(key,value) VALUES('event_chain_head','')")
 
     def _append_event(
         self,
@@ -196,11 +215,12 @@ class HomelabStore:
         head_row = connection.execute("SELECT value FROM meta WHERE key='event_chain_head'").fetchone()
         previous = str(head_row["value"] or "") if head_row else ""
         occurred_at = _now_utc()
+        event_payload = deepcopy(dict(payload or {}))
         event_body = {
             "event_type": str(event_type),
             "object_sha256": object_sha256,
             "occurred_at": occurred_at,
-            "payload": deepcopy(dict(payload or {})),
+            "payload": event_payload,
             "previous_event_sha256": previous or None,
         }
         digest = _sha_json(event_body)
@@ -212,7 +232,7 @@ class HomelabStore:
                 str(event_type),
                 object_sha256,
                 occurred_at,
-                json.dumps(event_body["payload"], ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                json.dumps(event_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
             ),
         )
         connection.execute(
@@ -238,8 +258,8 @@ class HomelabStore:
         target = (self.root / relative).resolve()
         if self.root not in target.parents:
             raise ValueError("Homelab object path escaped the store")
-        _refuse_symlink_components(target.parent)
         target.parent.mkdir(parents=True, exist_ok=True)
+        _refuse_symlink_components(target.parent)
         created_file = False
         temporary: Path | None = None
         try:
@@ -417,8 +437,7 @@ class HomelabStore:
         return len(rows)
 
     def _dependencies_complete(self, connection: sqlite3.Connection, row: sqlite3.Row) -> bool:
-        dependencies = json.loads(str(row["dependencies_json"] or "[]"))
-        for task_id in dependencies:
+        for task_id in json.loads(str(row["dependencies_json"] or "[]")):
             dependency = connection.execute(
                 "SELECT status FROM tasks WHERE campaign_sha256=? AND task_id=?",
                 (row["campaign_sha256"], str(task_id)),
@@ -428,13 +447,13 @@ class HomelabStore:
         return True
 
     def _resource_available(self, connection: sqlite3.Connection, resource: str) -> bool:
-        if resource not in _EXCLUSIVE_RESOURCES:
+        group = _resource_group(resource)
+        if group is None:
             return True
-        row = connection.execute(
-            "SELECT 1 FROM tasks WHERE status='leased' AND resource=? LIMIT 1",
-            (resource,),
-        ).fetchone()
-        return row is None
+        for row in connection.execute("SELECT resource FROM tasks WHERE status='leased'").fetchall():
+            if _resource_group(str(row["resource"])) == group:
+                return False
+        return True
 
     def lease_next(
         self,
@@ -462,9 +481,8 @@ class HomelabStore:
                 query += " AND t.campaign_sha256=?"
                 params.append(campaign_sha256)
             query += " ORDER BY t.priority DESC,t.campaign_sha256,t.task_id"
-            rows = connection.execute(query, params).fetchall()
             chosen: sqlite3.Row | None = None
-            for row in rows:
+            for row in connection.execute(query, params).fetchall():
                 resource = str(row["resource"])
                 if selected_resources and resource not in selected_resources:
                     continue
@@ -572,8 +590,7 @@ class HomelabStore:
             if outcome == "completed":
                 if not evidence_sha256 or not _is_sha256(str(evidence_sha256)):
                     raise ValueError("completed Homelab task requires an evidence object identity")
-                evidence = connection.execute("SELECT 1 FROM objects WHERE identity=?", (evidence_sha256,)).fetchone()
-                if evidence is None:
+                if connection.execute("SELECT 1 FROM objects WHERE identity=?", (evidence_sha256,)).fetchone() is None:
                     raise ValueError("completed task evidence has not been ingested into this store")
                 status = "completed"
                 available_at = current
@@ -620,7 +637,11 @@ class HomelabStore:
                 raise KeyError(campaign_sha256)
             connection.execute("UPDATE campaigns SET state='cancelled' WHERE campaign_sha256=?", (campaign_sha256,))
             connection.execute(
-                "UPDATE tasks SET status='cancelled',lease_token_sha256=NULL,leased_by=NULL,lease_expires_at=NULL,last_error=?,updated_at=? WHERE campaign_sha256=? AND status NOT IN ('completed','failed','refused','cancelled')",
+                """
+                UPDATE tasks SET status='cancelled',lease_token_sha256=NULL,leased_by=NULL,
+                    lease_expires_at=NULL,last_error=?,updated_at=?
+                WHERE campaign_sha256=? AND status NOT IN ('completed','failed','refused','cancelled')
+                """,
                 (reason[:4000], _now_utc(), campaign_sha256),
             )
             self._append_event(connection, "campaign_cancelled", object_sha256=campaign_sha256, payload={"reason": reason})
@@ -638,14 +659,21 @@ class HomelabStore:
         return [dict(row) for row in self._connection.execute(query, params).fetchall()]
 
     def snapshot(self, *, include_private_counts: bool = False) -> dict[str, Any]:
-        objects = self._connection.execute("SELECT visibility,kind,COUNT(*) AS count,SUM(bytes) AS bytes FROM objects GROUP BY visibility,kind ORDER BY visibility,kind").fetchall()
-        tasks = self._connection.execute("SELECT status,COUNT(*) AS count FROM tasks GROUP BY status ORDER BY status").fetchall()
-        campaigns = self._connection.execute("SELECT state,COUNT(*) AS count FROM campaigns GROUP BY state ORDER BY state").fetchall()
         object_rows = []
-        for row in objects:
+        for row in self._connection.execute(
+            "SELECT visibility,kind,COUNT(*) AS count,SUM(bytes) AS bytes FROM objects GROUP BY visibility,kind ORDER BY visibility,kind"
+        ).fetchall():
             if not include_private_counts and str(row["visibility"]) != "public":
                 continue
-            object_rows.append({"visibility": row["visibility"], "kind": row["kind"], "count": int(row["count"]), "bytes": int(row["bytes"] or 0)})
+            object_rows.append({
+                "visibility": row["visibility"],
+                "kind": row["kind"],
+                "count": int(row["count"]),
+                "bytes": int(row["bytes"] or 0),
+            })
+        tasks = self._connection.execute("SELECT status,COUNT(*) AS count FROM tasks GROUP BY status ORDER BY status").fetchall()
+        campaigns = self._connection.execute("SELECT state,COUNT(*) AS count FROM campaigns GROUP BY state ORDER BY state").fetchall()
+        head = self._connection.execute("SELECT value FROM meta WHERE key='event_chain_head'").fetchone()
         return homelab_seal({
             "schema_version": STORE_SCHEMA_VERSION,
             "kind": "earcrate_homelab_store_snapshot",
@@ -654,7 +682,7 @@ class HomelabStore:
             "objects": object_rows,
             "tasks": {str(row["status"]): int(row["count"]) for row in tasks},
             "campaigns": {str(row["state"]): int(row["count"]) for row in campaigns},
-            "event_chain_head": str(self._connection.execute("SELECT value FROM meta WHERE key='event_chain_head'").fetchone()["value"] or ""),
+            "event_chain_head": str(head["value"] or "") if head else "",
         })
 
     def doctor(self, *, verify_objects: bool = True) -> dict[str, Any]:
@@ -683,8 +711,10 @@ class HomelabStore:
                 problems.append({"check": "event_chain_hash", "sequence": int(row["sequence"])})
             previous = str(row["event_sha256"])
         head = self._connection.execute("SELECT value FROM meta WHERE key='event_chain_head'").fetchone()
-        if str((head or {"value": ""})["value"] or "") != previous:
-            problems.append({"check": "event_chain_head", "expected": previous})
+        if str(head["value"] or "") if head else "" != previous:
+            current_head = str(head["value"] or "") if head else ""
+            if current_head != previous:
+                problems.append({"check": "event_chain_head", "expected": previous, "actual": current_head})
 
         indexed_paths: set[str] = set()
         if verify_objects:
@@ -725,10 +755,8 @@ class HomelabStore:
                 problems.append({"check": "task_lease_consistency", "task_id": row["task_id"]})
             if leased and float(row["lease_expires_at"]) <= now:
                 expired += 1
-            if row["evidence_sha256"]:
-                exists = self._connection.execute("SELECT 1 FROM objects WHERE identity=?", (row["evidence_sha256"],)).fetchone()
-                if exists is None:
-                    problems.append({"check": "task_evidence", "task_id": row["task_id"], "missing": row["evidence_sha256"]})
+            if row["evidence_sha256"] and self._connection.execute("SELECT 1 FROM objects WHERE identity=?", (row["evidence_sha256"],)).fetchone() is None:
+                problems.append({"check": "task_evidence", "task_id": row["task_id"], "missing": row["evidence_sha256"]})
         return {
             "ok": not problems,
             "root": str(self.root),

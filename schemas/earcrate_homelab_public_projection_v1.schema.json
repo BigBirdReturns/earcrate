@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_homelab_public_projection_v1.schema.json",
+  "title": "EarCrate Homelab Public Projection v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "projection_sha256",
+    "source_kind",
+    "source_identity",
+    "payload",
+    "redaction"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "earcrate_homelab_public_projection"},
+    "projection_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_kind": {"type": "string", "minLength": 1},
+    "source_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "payload": {"type": "object"},
+    "redaction": {
+      "type": "object",
+      "required": [
+        "absolute_paths",
+        "sensitive_fields",
+        "payload_is_original_authority",
+        "source_object_required_for_authoritative_verification"
+      ],
+      "properties": {
+        "absolute_paths": {"type": "integer", "minimum": 0},
+        "sensitive_fields": {"type": "integer", "minimum": 0},
+        "payload_is_original_authority": {"const": false},
+        "source_object_required_for_authoritative_verification": {"const": true}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

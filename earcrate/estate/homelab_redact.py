@@ -9,11 +9,10 @@ and receives a new content identity of its own.
 
 from copy import deepcopy
 import hashlib
-import json
 import re
 from typing import Any, Mapping
 
-from earcrate.estate.homelab_common import HOMELAB_SCHEMA_VERSION, _object_identity if False else _sha_json, homelab_seal, homelab_validate_seal
+from earcrate.estate.homelab_common import HOMELAB_SCHEMA_VERSION, homelab_seal, homelab_validate_seal
 
 _ABSOLUTE_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/|file://)")
 _SENSITIVE_KEYS = {
@@ -93,7 +92,7 @@ def project_public_object(value: Mapping[str, Any]) -> dict[str, Any]:
     remaining = _absolute_strings(payload)
     if remaining:
         raise ValueError("public projection still contains absolute paths: " + ", ".join(remaining[:20]))
-    projection = homelab_seal(
+    return homelab_seal(
         {
             "schema_version": HOMELAB_SCHEMA_VERSION,
             "kind": "earcrate_homelab_public_projection",
@@ -108,7 +107,6 @@ def project_public_object(value: Mapping[str, Any]) -> dict[str, Any]:
             },
         }
     )
-    return projection
 
 
 __all__ = ["project_public_object"]

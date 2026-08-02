@@ -59,6 +59,12 @@ def _decode_payload(encoded: str) -> dict:
         except zlib.error as raw_error:
             raise RuntimeError("transport deflate body is not recoverable") from raw_error
         print(f"RECOVERED deflate body after wrapper checksum failure: {wrapper_error}")
+    raw_path = Path("canon-v2-recovered-raw.bin")
+    raw_path.write_bytes(raw)
+    print(
+        "RECOVERED_RAW "
+        f"bytes={len(raw)} sha256={hashlib.sha256(raw).hexdigest()} path={raw_path}"
+    )
     try:
         value = json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as error:

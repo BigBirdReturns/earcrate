@@ -1,0 +1,154 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_estate_inventory_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canon": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "duplicates": {
+      "type": "array"
+    },
+    "hash_mode": {
+      "enum": [
+        "none",
+        "evidence",
+        "duplicates",
+        "all"
+      ]
+    },
+    "inventory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "issues": {
+      "type": "array"
+    },
+    "items": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "absolute_path": {
+            "type": "string"
+          },
+          "bytes": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "classification": {
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string"
+          },
+          "file_type": {
+            "enum": [
+              "file",
+              "symlink"
+            ]
+          },
+          "hash_status": {
+            "type": "string"
+          },
+          "item_id": {
+            "pattern": "^item_[0-9a-f]{24}$",
+            "type": "string"
+          },
+          "raw_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relative_path": {
+            "type": "string"
+          },
+          "root_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "root_id",
+          "relative_path",
+          "file_type",
+          "bytes",
+          "classification",
+          "disposition",
+          "hash_status"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_estate_inventory"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "roots": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "exists": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "path_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "root_id": {
+            "pattern": "^root_[0-9a-f]{20}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "root_id",
+          "role",
+          "exists"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "summary": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "created_at",
+    "policy_sha256",
+    "hash_mode",
+    "roots",
+    "items",
+    "duplicates",
+    "issues",
+    "summary",
+    "inventory_sha256"
+  ],
+  "type": "object"
+}

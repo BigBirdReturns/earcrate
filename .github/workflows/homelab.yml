@@ -1,0 +1,89 @@
+name: homelab
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "earcrate/estate/**"
+      - "tests/test_local_estate.py"
+      - "tests/test_homelab_*.py"
+      - "schemas/earcrate_homelab*.schema.json"
+      - "build/make_homelab_zipapp.py"
+      - "VERIFY_HOMELAB.py"
+      - "docs/HOMELAB_*.md"
+      - ".github/workflows/homelab.yml"
+      - "earcrate/__main__.py"
+  pull_request:
+    paths:
+      - "earcrate/estate/**"
+      - "tests/test_local_estate.py"
+      - "tests/test_homelab_*.py"
+      - "schemas/earcrate_homelab*.schema.json"
+      - "build/make_homelab_zipapp.py"
+      - "VERIFY_HOMELAB.py"
+      - "docs/HOMELAB_*.md"
+      - ".github/workflows/homelab.yml"
+      - "earcrate/__main__.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homelab-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: homelab (${{ matrix.os }}, py${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m pip install --disable-pip-version-check pytest
+      - name: Compile Homelab package
+        run: python -m compileall -q earcrate/estate
+      - name: Run estate and Homelab gates
+        run: >-
+          python -m pytest -vv --tb=long --junitxml=homelab-tests.xml
+          tests/test_local_estate.py
+          tests/test_homelab_provider_arcade.py
+          tests/test_homelab_operations.py
+          tests/test_homelab_public_projection.py
+          tests/test_homelab_integrity.py
+      - name: Verify launch distribution
+        run: python VERIFY_HOMELAB.py > homelab-verifier.json
+      - name: Build retained Homelab zipapp
+        run: python build/make_homelab_zipapp.py --output dist/earcrate-homelab.pyz > homelab-build.json
+      - name: Retain Homelab verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: homelab-${{ runner.os }}-py${{ matrix.python }}-${{ github.run_id }}
+          path: |
+            homelab-tests.xml
+            homelab-verifier.json
+            homelab-build.json
+            dist/earcrate-homelab.pyz
+          if-no-files-found: warn
+          retention-days: 30

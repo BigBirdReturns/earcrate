@@ -1,0 +1,48 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_estate_rollback_receipt_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apply_receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "estate_root": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_estate_rollback_receipt"
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "refused": {
+      "type": "array"
+    },
+    "removed": {
+      "type": "array"
+    },
+    "rolled_back_at": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_files_affected": {
+      "const": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "rolled_back_at",
+    "apply_receipt_sha256",
+    "estate_root",
+    "removed",
+    "refused",
+    "source_files_affected",
+    "receipt_sha256"
+  ],
+  "type": "object"
+}

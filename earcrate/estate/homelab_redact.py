@@ -1,0 +1,151 @@
+from __future__ import annotations
+
+"""Source-free public projections of sealed Homelab objects.
+
+A projection never pretends that redacted bytes are the original authority. It
+retains the source object identity, carries a redacted payload for inspection,
+and receives a new content identity of its own.
+"""
+
+from copy import deepcopy
+import hashlib
+import re
+from typing import Any, Mapping
+
+from earcrate.estate.homelab_common import (
+    HOMELAB_HASH_FIELDS,
+    HOMELAB_SCHEMA_VERSION,
+    homelab_seal,
+    homelab_validate_seal,
+)
+
+_ABSOLUTE_PATH_AT_START = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/|file://)", re.IGNORECASE)
+_NETWORK_URL = re.compile(r"\b(?:https?|ssh|git)://[^\s\"'<>]+", re.IGNORECASE)
+_EMBEDDED_ABSOLUTE_PATH = re.compile(
+    r"(?:"
+    r"file://[^\s\"'<>]+"
+    r"|(?<![A-Za-z0-9])[A-Za-z]:[\\/]"
+    r"|(?<![\\])\\\\[^\\/\s]+[\\/]"
+    r"|(?<![A-Za-z0-9:])/(?:[^/\s\"'<>]+/)+[^/\s\"'<>]+"
+    r")",
+    re.IGNORECASE,
+)
+_EXACT_SENSITIVE_KEYS = {
+    "nonce",
+    "option_map",
+    "source_artifacts",
+    "review_token",
+    "lease_token",
+}
+_SENSITIVE_KEY_FRAGMENTS = {
+    "password",
+    "secret",
+    "api_key",
+    "access_token",
+    "refresh_token",
+    "authorization",
+    "cookie",
+    "private_key",
+    "client_secret",
+    "credential_value",
+}
+_SAFE_CREDENTIAL_KEYS = {
+    "credential_environment_names",
+    "credentials_all",
+}
+
+
+def _source_identity(value: Mapping[str, Any]) -> str:
+    kind = str(value.get("kind") or "")
+    field = HOMELAB_HASH_FIELDS.get(kind)
+    if not field:
+        raise ValueError(f"Homelab object has no registered identity field: {kind!r}")
+    digest = str(value.get(field) or "").lower()
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise ValueError(f"Homelab object has an invalid {field}: {kind!r}")
+    return digest
+
+
+def _redacted_string(value: str) -> str:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return f"redacted:sha256:{digest}"
+
+
+def _contains_absolute_path(value: str) -> bool:
+    text = str(value)
+    stripped = text.strip()
+    if _ABSOLUTE_PATH_AT_START.match(stripped):
+        return True
+    without_network_urls = _NETWORK_URL.sub("", text)
+    return bool(_EMBEDDED_ABSOLUTE_PATH.search(without_network_urls))
+
+
+def _sensitive_key(value: str) -> bool:
+    key = str(value or "").casefold()
+    if not key or key.endswith("_sha256") or key in _SAFE_CREDENTIAL_KEYS:
+        return False
+    if key in _EXACT_SENSITIVE_KEYS:
+        return True
+    return any(fragment in key for fragment in _SENSITIVE_KEY_FRAGMENTS)
+
+
+def _project(value: Any, *, key: str | None = None, counters: dict[str, int]) -> Any:
+    normalized_key = str(key or "").casefold()
+    if _sensitive_key(normalized_key):
+        counters["sensitive_fields"] += 1
+        return "redacted"
+    if isinstance(value, Mapping):
+        return {
+            str(child_key): _project(child_value, key=str(child_key), counters=counters)
+            for child_key, child_value in value.items()
+        }
+    if isinstance(value, list):
+        return [_project(child, key=key, counters=counters) for child in value]
+    if isinstance(value, tuple):
+        return [_project(child, key=key, counters=counters) for child in value]
+    if isinstance(value, str) and _contains_absolute_path(value):
+        counters["absolute_paths"] += 1
+        return _redacted_string(value)
+    return value
+
+
+def _absolute_strings(value: Any, *, path: str = "$") -> list[str]:
+    found: list[str] = []
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            found.extend(_absolute_strings(child, path=f"{path}.{key}"))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(_absolute_strings(child, path=f"{path}[{index}]"))
+    elif isinstance(value, str) and _contains_absolute_path(value):
+        found.append(path)
+    return found
+
+
+def project_public_object(value: Mapping[str, Any]) -> dict[str, Any]:
+    source = deepcopy(dict(value))
+    homelab_validate_seal(source)
+    source_identity = _source_identity(source)
+    counters = {"absolute_paths": 0, "sensitive_fields": 0}
+    payload = _project(source, counters=counters)
+    remaining = _absolute_strings(payload)
+    if remaining:
+        raise ValueError("public projection still contains absolute paths: " + ", ".join(remaining[:20]))
+    return homelab_seal(
+        {
+            "schema_version": HOMELAB_SCHEMA_VERSION,
+            "kind": "earcrate_homelab_public_projection",
+            "source_kind": source["kind"],
+            "source_identity": source_identity,
+            "payload": payload,
+            "redaction": {
+                "absolute_paths": counters["absolute_paths"],
+                "sensitive_fields": counters["sensitive_fields"],
+                "payload_is_original_authority": False,
+                "source_object_required_for_authoritative_verification": True,
+            },
+        }
+    )
+
+
+__all__ = ["project_public_object"]

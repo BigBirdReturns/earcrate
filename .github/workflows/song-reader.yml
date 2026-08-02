@@ -2,8 +2,24 @@ name: song-reader
 
 on:
   push:
-    branches:
-      - agent/song-reader-cephalopod-foundation
+    branches: [main]
+    paths:
+      - "earcrate/reader/**"
+      - "earcrate/specimen/**"
+      - "earcrate/project/compiler_*.py"
+      - "earcrate/project/custody.py"
+      - "earcrate/project/continuation.py"
+      - "tests/test_song_reader_cephalopod.py"
+      - "tests/test_project_gate8_integration.py"
+      - "tests/test_buffalo_specimen.py"
+      - "tests/test_children_continuation.py"
+      - "tests/test_flim_community_witness.py"
+      - "tests/run_gates.py"
+      - "schemas/earcrate_children_adjacent_move_receipt_v1.schema.json"
+      - "schemas/earcrate_community_symbolic_*.schema.json"
+      - "build/make_singlefile.py"
+      - "earcrate/__main__.py"
+      - ".github/workflows/song-reader.yml"
   pull_request:
     paths:
       - "earcrate/reader/**"
@@ -23,6 +39,13 @@ on:
       - "earcrate/__main__.py"
       - ".github/workflows/song-reader.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: song-reader-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   reader-proof:
     strategy:
@@ -37,11 +60,14 @@ jobs:
       MKL_NUM_THREADS: "1"
       NUMEXPR_NUM_THREADS: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements.txt
       - name: Install ffmpeg on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
@@ -51,9 +77,8 @@ jobs:
         run: choco install ffmpeg -y --no-progress
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m pip install --disable-pip-version-check pytest
       - name: Run cephalopod, custody, Buffalo continuation, and Flim gates
         run: >-
           python -m pytest -vv --tb=long --junitxml=reader-tests.xml
@@ -64,7 +89,7 @@ jobs:
           tests/test_flim_community_witness.py
       - name: Retain reader test ledger
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: song-reader-tests-${{ runner.os }}-${{ github.run_id }}
           path: reader-tests.xml
@@ -81,7 +106,7 @@ jobs:
           python dist/earcrate.py buffalo flim-report
       - name: Retain standalone Buffalo artifact
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: earcrate-standalone-buffalo-${{ github.run_id }}
           path: dist/earcrate.py

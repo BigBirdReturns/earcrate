@@ -1,0 +1,124 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_estate_plan_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "architecture_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "estate_root": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "inventory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "kind": {
+      "const": "earcrate_estate_plan"
+    },
+    "operations": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "enum": [
+              "copy",
+              "reference",
+              "retain_in_place",
+              "archive_candidate",
+              "evict_candidate",
+              "quarantine_candidate",
+              "manual_review"
+            ]
+          },
+          "automatic_apply_supported": {
+            "type": "boolean"
+          },
+          "expected_bytes": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "expected_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "pattern": "^op_[0-9a-f]{24}$",
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "target_relative_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "operation_id",
+          "item_id",
+          "action",
+          "source_path",
+          "expected_bytes",
+          "automatic_apply_supported"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "safety": {
+      "required": [
+        "copy_only_v1",
+        "source_deletion_permitted",
+        "database_merge_permitted",
+        "approval_required"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "summary": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "created_at",
+    "inventory_sha256",
+    "policy_sha256",
+    "architecture_sha256",
+    "estate_root",
+    "operations",
+    "summary",
+    "safety",
+    "plan_sha256"
+  ],
+  "type": "object"
+}

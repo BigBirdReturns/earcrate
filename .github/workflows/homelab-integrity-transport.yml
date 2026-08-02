@@ -5,6 +5,11 @@ on:
     branches: [agent/homelab-integrity-transport]
     paths:
       - ".github/workflows/homelab-integrity-transport.yml"
+  pull_request:
+    branches: [agent/local-estate-control-plane]
+    paths:
+      - ".github/workflows/homelab-integrity-transport.yml"
+      - ".homelab-integrity-transport/**"
 
 permissions:
   contents: write
@@ -85,5 +90,3 @@ jobs:
           git commit -m "Bind fixture bytes and harden blind audition evidence"
           test "$(git diff --name-only HEAD^ HEAD | sort)" = "$(printf '%s\n' "$expected" | sed 's/^ *//' | sort)"
           git push origin HEAD:agent/local-estate-control-plane
-
-# Exact overlay application trigger; remove with the temporary branch.

@@ -1,0 +1,486 @@
+{
+  "$id": "https://earcrate.local/schema/earcrate_canon_and_nonlanding_ledger_v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "audit": {
+      "additionalProperties": false,
+      "properties": {
+        "audit_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "audited_main_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "method": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "pending_pull_requests": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "repository": {
+          "const": "BigBirdReturns/earcrate"
+        }
+      },
+      "required": [
+        "repository",
+        "audited_main_sha",
+        "audit_date",
+        "pending_pull_requests",
+        "method",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "branch_retention": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "pointer_check": {
+            "additionalProperties": false,
+            "properties": {
+              "ahead_by": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "as_of": {
+                "format": "date",
+                "type": "string"
+              },
+              "behind_by": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "note": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "result": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "as_of",
+              "result",
+              "ahead_by",
+              "behind_by"
+            ],
+            "type": "object"
+          },
+          "ref": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "terminal_head_sha": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "terminal_head_sha",
+          "status",
+          "authority",
+          "pointer_check"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "campaign_fanout": {
+      "additionalProperties": false,
+      "properties": {
+        "audited_main_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "epic_issue": {
+          "const": 57
+        },
+        "issues": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "issue": {
+                "maximum": 68,
+                "minimum": 58,
+                "type": "integer"
+              },
+              "priority": {
+                "enum": [
+                  "P0",
+                  "P1",
+                  "P2"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "open",
+                  "closed"
+                ]
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "url": {
+                "pattern": "^https://github\\.com/BigBirdReturns/earcrate/issues/[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "issue",
+              "priority",
+              "state",
+              "title",
+              "url"
+            ],
+            "type": "object"
+          },
+          "maxItems": 11,
+          "minItems": 11,
+          "type": "array"
+        }
+      },
+      "required": [
+        "audited_main_sha",
+        "epic_issue",
+        "issues"
+      ],
+      "type": "object"
+    },
+    "claim_corrections": {
+      "items": {
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "previous_claim": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "previous_claim",
+          "status",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "external_evidence": {
+      "items": {
+        "properties": {
+          "evidence_id": {
+            "type": "string"
+          },
+          "evidence_tier": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "title",
+          "status",
+          "evidence_tier"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "earcrate_canon_and_nonlanding_ledger"
+    },
+    "ledger_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "non_pr_lineage": {
+      "items": {
+        "properties": {
+          "lineage_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "why_not_main": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lineage_id",
+          "status",
+          "why_not_main"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "open_obligations": {
+      "items": {
+        "properties": {
+          "obligation_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "obligation_id",
+          "source",
+          "status",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "pull_requests": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "canon_summary": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "disposition": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "head_sha": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "main_reachability": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "narrative_status": {
+            "type": "string"
+          },
+          "pr": {
+            "maximum": 56,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "retained_obligations": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "url": {
+            "pattern": "^https://github\\.com/BigBirdReturns/earcrate/pull/[0-9]+$",
+            "type": "string"
+          },
+          "why_not_main": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "pr",
+          "title",
+          "url",
+          "disposition",
+          "main_reachability",
+          "canon_summary"
+        ],
+        "type": "object"
+      },
+      "maxItems": 56,
+      "minItems": 56,
+      "type": "array"
+    },
+    "retired_decisions": {
+      "items": {
+        "properties": {
+          "decision_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 2
+    },
+    "status_vocabulary": {
+      "additionalProperties": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minProperties": 1,
+      "type": "object"
+    },
+    "supersedes": {
+      "additionalProperties": false,
+      "properties": {
+        "corrections_git_blob_sha1": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "corrections_path": {
+          "const": "docs/canon/canon-ledger.v1.corrections.json"
+        },
+        "corrections_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "effective_ledger_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "ledger_git_blob_sha1": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "ledger_path": {
+          "const": "docs/canon/canon-ledger.v1.json"
+        },
+        "ledger_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "ledger_path",
+        "corrections_path",
+        "ledger_sha256",
+        "corrections_sha256",
+        "ledger_git_blob_sha1",
+        "corrections_git_blob_sha1",
+        "effective_ledger_sha256",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "theses": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "canon_id": {
+            "pattern": "^thesis\\.[a-z0-9_.-]+$",
+            "type": "string"
+          },
+          "main_refs": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "open_condition": {
+            "type": "string"
+          },
+          "statement": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "canon_id",
+          "statement",
+          "status",
+          "main_refs"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "audit",
+    "status_vocabulary",
+    "theses",
+    "pull_requests",
+    "non_pr_lineage",
+    "external_evidence",
+    "claim_corrections",
+    "open_obligations",
+    "retired_decisions",
+    "ledger_sha256",
+    "branch_retention",
+    "campaign_fanout",
+    "supersedes"
+  ],
+  "title": "EarCrate canon and campaign ledger v2",
+  "type": "object"
+}

@@ -1,0 +1,1411 @@
+{
+  "audit": {
+    "audit_date": "2026-08-02",
+    "audited_main_sha": "d511414daa0c7127c1e9cfdc64726979e6682e1f",
+    "limitations": [
+      "A conversation report is not independent artifact custody.",
+      "External media-rich packs are not in the repository unless a manifest says otherwise.",
+      "This ledger records the audited state; a later merge requires a new ledger revision rather than mutating history silently.",
+      "Issue creation records obligations and sequencing, not execution passage.",
+      "The PR #56 transport branch pointer drifted after terminal closure; only the closure head and harvested payload retain authority."
+    ],
+    "method": [
+      "reviewed pull requests 1 through 52 and their stated scope",
+      "verified ancestry for stacked and cumulative heads against audited main where exact heads were available",
+      "compared preserved non-main branch heads to audited main",
+      "reconciled source-free specimen manifests and proof receipts",
+      "retained conversation-only claims as explicitly unbound reports rather than silently dropping or promoting them",
+      "recorded PR #52 as squash-merged main authority only after its five review findings were resolved and its exact merge-ref gates passed",
+      "reviewed pull requests 53 through 56 and their terminal dispositions",
+      "verified current retained branch pointers against recorded terminal heads",
+      "recorded the post-governance campaign fan-out in issues 57 through 68"
+    ],
+    "pending_pull_requests": [],
+    "repository": "BigBirdReturns/earcrate"
+  },
+  "branch_retention": [
+    {
+      "authority": "PR #53 landed as 6da4a6111ed529cd470c5cec3f4a0a1988fc3a08.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/canon-nonlanding-ledger",
+      "status": "landed_frozen",
+      "terminal_head_sha": "886040ceb7ca5e6782e5c19d69f696d6f97a9ccc"
+    },
+    {
+      "authority": "Direction retained; branch scaffolding is not the material forge implementation.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/forge-material-breeder-v0",
+      "status": "deferred_concept_canon",
+      "terminal_head_sha": "d27c0b1ac1ebf464ddec726105c5fdd546f02563"
+    },
+    {
+      "authority": "Unique overlay workflow retired after ordinary source landed through PR #39.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/gate8-canonical-integration",
+      "status": "retired_delivery_mechanism",
+      "terminal_head_sha": "3b70d343997470d7af93daa84558306db3abdf0f"
+    },
+    {
+      "authority": "PR #52 landed as 36618a23f755b876e6d887be64a61389b5093e10.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/harden-release-governance-v2",
+      "status": "landed_frozen",
+      "terminal_head_sha": "43245748702848053af970d88011479e0044e4c7"
+    },
+    {
+      "authority": "PR #56 terminal transport head; exact payload was harvested into PR #55.",
+      "pointer_check": {
+        "ahead_by": 2,
+        "as_of": "2026-08-02",
+        "behind_by": 23,
+        "note": "Current pointer is two commits ahead and twenty-three behind the terminal-head comparison base; no later pointer content is product authority.",
+        "result": "diverged_after_terminal_close"
+      },
+      "ref": "agent/homelab-integrity-transport",
+      "status": "completed_transport_no_authority",
+      "terminal_head_sha": "ab9e89a4966f5656c3e86c0ce4d080e5e85e1100"
+    },
+    {
+      "authority": "Snapshot/export mechanism retired after immutable project authority landed.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/integrated-score-cutover",
+      "status": "retired_snapshot_scaffold",
+      "terminal_head_sha": "b307dd613ffc61c7efa2faea2e8d6fdb15ab8fdb"
+    },
+    {
+      "authority": "PR #55 landed as d511414daa0c7127c1e9cfdc64726979e6682e1f.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/local-estate-control-plane",
+      "status": "landed_frozen",
+      "terminal_head_sha": "d2444b507153acff90b0f3d3b80892ebf46afab0"
+    },
+    {
+      "authority": "Single-file repository transport probe; not product work.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/production-cleanup-inline-probe",
+      "status": "failed_delivery_diagnostic",
+      "terminal_head_sha": "45ef903f15dd3b813f51193371f688ab46cfad94"
+    },
+    {
+      "authority": "Second repository transport probe; not product work.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/production-cleanup-inline-probe-2",
+      "status": "failed_delivery_diagnostic",
+      "terminal_head_sha": "a0e19f4b9320ce551c6c6e1d61bfe3d3b00bcc9b"
+    },
+    {
+      "authority": "Concepts were harvested; parallel authority was not.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/release-candidate-discipline",
+      "status": "harvested_competing_implementation",
+      "terminal_head_sha": "18e3af22d03c32f280198ea4416c43abbb827357"
+    },
+    {
+      "authority": "Export workflow and placeholders only.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/release-candidate-review-floor",
+      "status": "retired_scaffold",
+      "terminal_head_sha": "0816d0cee08f77b1873fec9c03ee065db3154eda"
+    },
+    {
+      "authority": "Export workflow and placeholders only.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "agent/release-review-floor-v1",
+      "status": "retired_scaffold",
+      "terminal_head_sha": "1249ab673e4250d4c5f8361a5712e1f031fe9f9b"
+    },
+    {
+      "authority": "Candidate organs remain harvestable only through current contracts and real-rig receipts.",
+      "pointer_check": {
+        "ahead_by": 0,
+        "as_of": "2026-08-02",
+        "behind_by": 0,
+        "result": "identical_to_terminal_head"
+      },
+      "ref": "claude/earcrate-v0.9.0-complete-wrz7lw",
+      "status": "deferred_unvalidated_branch",
+      "terminal_head_sha": "95cb411da8e99cafbd64b9f0769da77f7e0e2a99"
+    }
+  ],
+  "campaign_fanout": {
+    "audited_main_sha": "d511414daa0c7127c1e9cfdc64726979e6682e1f",
+    "epic_issue": 57,
+    "issues": [
+      {
+        "issue": 58,
+        "priority": "P0",
+        "state": "open",
+        "title": "Run the first explicit-root, read-only estate sweep",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/58"
+      },
+      {
+        "issue": 59,
+        "priority": "P0",
+        "state": "open",
+        "title": "Run the Flim exact-recording blind control",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/59"
+      },
+      {
+        "issue": 60,
+        "priority": "P0",
+        "state": "open",
+        "title": "Seal Children audio inference and score/audio convergence",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/60"
+      },
+      {
+        "issue": 61,
+        "priority": "P1",
+        "state": "open",
+        "title": "Regenerate Children receipts and execute a sealed rack realization",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/61"
+      },
+      {
+        "issue": 62,
+        "priority": "P0",
+        "state": "open",
+        "title": "Run the Pretty Lights provider tournament and reconcile candidate revisions",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/62"
+      },
+      {
+        "issue": 63,
+        "priority": "P0",
+        "state": "open",
+        "title": "Complete Pretty Lights human, rights, and publication governance",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/63"
+      },
+      {
+        "issue": 64,
+        "priority": "P1",
+        "state": "open",
+        "title": "Circulate ReviewPatch evidence and prove campaign learning",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/64"
+      },
+      {
+        "issue": 65,
+        "priority": "P1",
+        "state": "open",
+        "title": "Enforce Floor host boundaries and settle normative policy",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/65"
+      },
+      {
+        "issue": 66,
+        "priority": "P1",
+        "state": "open",
+        "title": "Ship reproducible installable distribution and verifiable archive custody",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/66"
+      },
+      {
+        "issue": 67,
+        "priority": "P2",
+        "state": "open",
+        "title": "Lower real-time MixScore, key lock, controllers, and external sync",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/67"
+      },
+      {
+        "issue": 68,
+        "priority": "P0",
+        "state": "open",
+        "title": "Publish canon v2 and freeze the historical branch retention map",
+        "url": "https://github.com/BigBirdReturns/earcrate/issues/68"
+      }
+    ]
+  },
+  "claim_corrections": [
+    {
+      "claim_id": "correction.production_cleanup_complete",
+      "previous_claim": "The repository had completed PEP 517/621 wheel productionization and a clean production cutover.",
+      "reason": "The production-cleanup bootstrap never produced its declared tree; audited main does not establish the claimed wheel/distribution work.",
+      "retained_obligation": "Create a conventional packaging PR from current main if installable wheel distribution remains desired.",
+      "status": "retracted"
+    },
+    {
+      "claim_id": "correction.governance_v2_already_complete",
+      "landed_ref": {
+        "head_sha": "43245748702848053af970d88011479e0044e4c7",
+        "main_sha": "36618a23f755b876e6d887be64a61389b5093e10",
+        "pr": 52
+      },
+      "previous_claim": "PR #49/main fully enforced committed per-reviewer blinding, arbitration, scoped rights, format-neutral atomic publication, and PublicationReceipt.",
+      "reason": "Audited main documentation was ahead of implementation. PR #52 closed the contract, resolved all five review findings, passed its exact merge-ref gates, and landed on main as the recorded squash commit.",
+      "status": "resolved_by_landed_pr"
+    },
+    {
+      "claim_id": "correction.download_links_are_custody",
+      "previous_claim": "A previously emitted sandbox download link implied durable evidence.",
+      "reason": "Session storage is ephemeral and several past links disappeared.",
+      "retained_rule": "Only exact identities in durable manifests/receipts or a verified evidence store establish custody.",
+      "status": "retracted_as_general_rule"
+    },
+    {
+      "claim_id": "correction.organ_success_equals_whole_buffalo",
+      "previous_claim": "A strong score, recurrence, MIDI, rack, or transport demonstration could be described as the complete organism.",
+      "reason": "Buffalo Gate separates organ passage from whole-organism passage and records blocked organs explicitly.",
+      "status": "retired_interpretation"
+    }
+  ],
+  "external_evidence": [
+    {
+      "evidence_id": "children.authoritative_score_pdf",
+      "evidence_tier": "authoritative_score",
+      "expected_sha256": "e029e1a3030800d7fb04c9f5163acb9270579a571d57f63eb63787df692d5845",
+      "main_refs": [
+        "specimens/children_v1.json",
+        "proofs/specimens/children_v1.score-side.proof.json"
+      ],
+      "retained_claims": [
+        "130 BPM",
+        "4/4",
+        "four-flat key signature",
+        "printed repeats and alternate endings",
+        "Segno",
+        "To Coda",
+        "D.S. al Coda",
+        "printed chord vocabulary"
+      ],
+      "status": "external_evidence_bound_by_identity",
+      "title": "Children authored score evidence",
+      "why_not_main": "Score media remains external by rights and repository policy."
+    },
+    {
+      "evidence_id": "children.cross_organ_score_pack",
+      "evidence_tier": "authoritative_score_and_performance_realization",
+      "identities": {
+        "mix_execution_ledger": "21353740ee1e3543945cb7fbfd4ddd3d1d4f02a54506d202959408c02666a96a",
+        "mixscore": "701eaa57aa48041ea17c99b52ceda202b79a70b82ae13f68cada2e1a2659b1cd",
+        "score_extraction": "dfa85df39198afd6ff56fc0403d9f0c26a1b0fcfaea62d4f1d3fbc5e8691f219",
+        "score_midi": "7d7342ef9d60228be4f94464764edf293b2052f6667676cdaf137a1dc94655c9",
+        "score_proof_receipt": "e62bdbd86a6c7e4582169d14a83f3809c06d6fda10d798bd94ab46eb453248e6"
+      },
+      "main_refs": [
+        "proofs/specimens/children_v1.score-side.proof.json"
+      ],
+      "retained_claims": [
+        "69 printed measures",
+        "105 performed measures",
+        "1257 notes",
+        "36 printed chord symbols",
+        "53 performed HarmonyFrames",
+        "19 of 19 MixScore operations executed",
+        "0 refused",
+        "0.0 stem reconciliation"
+      ],
+      "status": "main_contract_external_artifacts",
+      "title": "Children score reconstruction and two-deck proof pack",
+      "why_not_main": "The exact PDF, MIDI, WAVs, and compact pack are external; main retains their identities, adapters, schemas, and score-side proof."
+    },
+    {
+      "boundary": "Target recording bytes and the cephalopod were not used; the repository importer does not claim to have independently reexecuted the report.",
+      "evidence_id": "flim.community_symbolic_pack",
+      "evidence_tier": "community_symbolic_witness",
+      "main_refs": [
+        "specimens/flim_bad_plus_v1.json",
+        "specimens/flim_bad_plus_v1.community-symbolic.json"
+      ],
+      "proof_pack_sha256": "a7dabd71af884a4933b7e3c8077bc9d5e7b2e69de3fa9d370fd8b592d09cdf52",
+      "retained_claims": [
+        "56 bars and 224 beats",
+        "2012 witness note-ons",
+        "538 continuation note-ons",
+        "six transport operations",
+        "0.0 reported stem reconciliation"
+      ],
+      "status": "external_evidence_bound_by_identity",
+      "title": "The Bad Plus — Flim community-symbolic witness and continuation",
+      "why_not_main": "The media-rich compact pack stays external; main keeps the exact pack identity and evidence-tier report."
+    },
+    {
+      "boundary": "The proof records reference-derived unique audio, publication_eligible=false, and publication_ok=false. Its local thesis flag is not whole-Buffalo passage.",
+      "evidence_id": "pretty_lights.first30_reader_proof",
+      "evidence_tier": "blind_audio_inference_with_reference_derived_execution",
+      "main_refs": [
+        "proofs/song_reader/pretty_lights_first30.proof.json"
+      ],
+      "source_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+      "status": "source_free_proof_landed_main",
+      "title": "Pretty Lights first-30-second cephalopod proof"
+    },
+    {
+      "evidence_id": "pretty_lights.full_recording_blind_report",
+      "evidence_tier": "blind_audio_inference",
+      "reopen_condition": "Bind the exact external pack or rerun from the exact source SHA and issue a current specimen receipt.",
+      "retained_claims": [
+        "full recording analyzed in five contiguous windows",
+        "non-overlapping recurrence families",
+        "complementary source-derived deck roles",
+        "independent jump, loop, fade, cut, and relaunch execution",
+        "exact master/stem reconciliation"
+      ],
+      "source_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+      "status": "conversation_report_unbound_to_main",
+      "title": "Full-recording blind recurrence/deck proof reported in project sessions",
+      "why_not_main": "The full proof pack and ledgers were session artifacts and were not imported as a repository specimen. Main contains only the source-free first-30-second reader proof and release-candidate fixture."
+    },
+    {
+      "evidence_id": "pretty_lights.release_candidate_reported_v3",
+      "evidence_tier": "performance_realization",
+      "reopen_condition": "Import the exact b82e… pack and compare its PCM, edit plan, and receipt against the main v1 fixture.",
+      "reported_claims": [
+        "31.27 seconds",
+        "35 ms equal-power transition",
+        "-9.1 LUFS",
+        "-0.5 dBFS true peak",
+        "0.966 hook-reprise chroma",
+        "human musical acceptance pending"
+      ],
+      "reported_pack_sha256": "b82e8895ab938c651d82da03233a6a8efc6aec8c2eb1b5004ba813071432f4a7",
+      "status": "unresolved_external_revision",
+      "title": "Reported Empire State recurrence release candidate v3",
+      "why_not_main": "The reported pack was not available during repository reconciliation, and its identity differs from the committed v1 fixture. No supersession relationship is proven."
+    },
+    {
+      "boundary": "Release remains blocked: human musical acceptance pending, rights not evaluated, transition integrity provisional.",
+      "candidate_pcm_sha256": "5da1bef8526576ca49628de636337e8fe9e100b4e0da7ada0605d164a4298e59",
+      "evidence_id": "pretty_lights.release_candidate_main_v1",
+      "evidence_tier": "performance_realization",
+      "external_proof_pack_sha256": "97bd2d4c3e7a38097956e2000db475e714c7fad67b51782b2905aeecfd8d0f9e",
+      "main_refs": [
+        "proofs/specimens/pretty_lights_empire_release_candidate_v1/proof.json",
+        "proofs/specimens/pretty_lights_empire_release_candidate_v1/receipt.json"
+      ],
+      "retained_claims": [
+        "31.261 seconds",
+        "35 ms transition",
+        "-9.0193 LUFS",
+        "-0.5 dBFS true peak",
+        "0.992983 chroma similarity",
+        "two bit-exact builds"
+      ],
+      "status": "main_contract_external_pack",
+      "title": "Committed source-free Empire State release-candidate fixture"
+    },
+    {
+      "evidence_id": "session.listening_and_proof_artifacts",
+      "evidence_tier": "various",
+      "retained_rule": "Do not infer persistence from a past sandbox link.",
+      "status": "ephemeral_unless_content_addressed_elsewhere",
+      "title": "Session-generated listening files, ZIPs, audits, and ledgers",
+      "why_not_main": "Sandbox links are not durable repository custody. A file counts as canon only when an exact identity is recorded in a manifest/receipt or the artifact is imported into an external evidence store."
+    }
+  ],
+  "kind": "earcrate_canon_and_nonlanding_ledger",
+  "ledger_sha256": "10d59af6b7bfea4f719b3a95d8d8bfb2c60110926e033c445ff8a9be2fb30396",
+  "non_pr_lineage": [
+    {
+      "candidate_organs": [
+        "allin1 beat/downbeat/section provider",
+        "Rubber Band transform provider and ears-gated default flip",
+        "techno persona and audible external-vocal proof",
+        "owner-judgment taste ranker",
+        "unattended project-piano night shift and warm-lane scheduling",
+        "project Workbench and DOM lifecycle",
+        "consolidated real-rig receipt",
+        "single-file completeness guard"
+      ],
+      "head_sha": "95cb411da8e99cafbd64b9f0769da77f7e0e2a99",
+      "lineage_id": "branch.claude_earcrate_v0_9_0_complete",
+      "ref": "claude/earcrate-v0.9.0-complete-wrz7lw",
+      "reopen_condition": "Re-admit each organ separately against current main through Floor providers, current project authority, current gates, and a real-path acceptance receipt.",
+      "status": "deferred_unvalidated_branch",
+      "why_not_main": "The branch explicitly classified itself as engineered but not validated; its M0–M6 real Windows-rig and real-library receipt never became merge authority. It diverges from the new organism main and must not be merged wholesale."
+    },
+    {
+      "claim_status": "retracted_as_main_fact_retained_as_open_obligation",
+      "current_resolution": {
+        "governance": "reimplemented by PR #52 and landed on main at 36618a23f755b876e6d887be64a61389b5093e10",
+        "packaging_and_wheel": "not established on audited main",
+        "repository_cleanup": "partially landed through PRs #49 and #51"
+      },
+      "lineage_id": "local.production_cleanup_overlay",
+      "reported_claims": [
+        "PEP 517/621 packaging",
+        "clean-room wheel verification",
+        "repository hygiene tooling",
+        "manual-script relocation",
+        "atomic publication hardening"
+      ],
+      "status": "reported_local_work_not_landed",
+      "why_not_main": "The proposed production-cleanup transport failed, and no clean commit containing its full packaging/wheel overlay was created. PR #49 reconciled product code without that unverified local overlay."
+    },
+    {
+      "head_sha": "3b70d343997470d7af93daa84558306db3abdf0f",
+      "lineage_id": "branch.gate8_overlay",
+      "ref": "agent/gate8-canonical-integration",
+      "status": "retired_delivery_mechanism",
+      "why_not_main": "Only a binary overlay and self-applying workflow were unique; PR #39 carried the organ into ordinary source."
+    },
+    {
+      "head_sha": "b307dd613ffc61c7efa2faea2e8d6fdb15ab8fdb",
+      "lineage_id": "branch.integrated_score_cutover",
+      "ref": "agent/integrated-score-cutover",
+      "status": "retired_snapshot_scaffold",
+      "why_not_main": "Its unique remote delta was a source-snapshot workflow; immutable project authority landed through later Gate 8 lineage."
+    },
+    {
+      "head_sha": "d27c0b1ac1ebf464ddec726105c5fdd546f02563",
+      "lineage_id": "branch.material_forge_breeder",
+      "ref": "agent/forge-material-breeder-v0",
+      "reopen_condition": "Implement as bounded Floor providers and campaign authorities against sealed fixtures.",
+      "status": "deferred_concept_canon",
+      "why_not_main": "The branch contained export scaffolding, not the proposed material factory or evolutionary campaign."
+    },
+    {
+      "head_sha": "18e3af22d03c32f280198ea4416c43abbb827357",
+      "lineage_id": "branch.release_candidate_discipline",
+      "ref": "agent/release-candidate-discipline",
+      "status": "harvested_competing_implementation",
+      "why_not_main": "The object model competed with PR #47; review-request, use-scoped rights, and multidimensional status concepts were retained instead."
+    },
+    {
+      "lineage_id": "branch.release_export_scaffolds",
+      "refs": [
+        {
+          "head_sha": "0816d0cee08f77b1873fec9c03ee065db3154eda",
+          "ref": "agent/release-candidate-review-floor"
+        },
+        {
+          "head_sha": "1249ab673e4250d4c5f8361a5712e1f031fe9f9b",
+          "ref": "agent/release-review-floor-v1"
+        }
+      ],
+      "status": "retired_scaffolds",
+      "why_not_main": "They contained export workflows, triggers, and placeholders but no unique release authority."
+    },
+    {
+      "lineage_id": "branch.production_cleanup_probes",
+      "refs": [
+        {
+          "head_sha": "45ef903f15dd3b813f51193371f688ab46cfad94",
+          "unique_file": ".inline-tree-probe"
+        },
+        {
+          "head_sha": "a0e19f4b9320ce551c6c6e1d61bfe3d3b00bcc9b",
+          "unique_file": ".inline-probe-2"
+        }
+      ],
+      "status": "failed_delivery_diagnostics",
+      "why_not_main": "The branches were diagnostics for repository transport, not product or architectural organs."
+    }
+  ],
+  "open_obligations": [
+    {
+      "obligation_id": "buffalo.children.audio_inference",
+      "reason": "No sealed independent audio ObservationLedger or bound exact recording.",
+      "source": "children_v1 score-side proof",
+      "status": "blocked",
+      "tracking_issue": 60
+    },
+    {
+      "obligation_id": "buffalo.children.cross_modal_convergence",
+      "reason": "Score and audio branches have not both been independently sealed and compared.",
+      "source": "children_v1 score-side proof",
+      "status": "blocked",
+      "tracking_issue": 60
+    },
+    {
+      "obligation_id": "buffalo.children.adjacent_move_receipt_alignment",
+      "reason": "The committed score-side receipt predates the current continuation authority and must be regenerated rather than hand-edited.",
+      "source": "Children score-side proof",
+      "status": "ledger_drift_to_reconcile",
+      "tracking_issue": 61
+    },
+    {
+      "obligation_id": "buffalo.children.sealed_rack_realization",
+      "reason": "The accepted score/performance program has not executed through an approved private-library rack body.",
+      "source": "Children score-side proof",
+      "status": "blocked",
+      "tracking_issue": 61
+    },
+    {
+      "obligation_id": "buffalo.review_patch_circulation",
+      "reason": "No listening correction has created a child revision with selective recomputation.",
+      "source": "Children/Buffalo thesis",
+      "status": "blocked",
+      "tracking_issue": 64
+    },
+    {
+      "obligation_id": "buffalo.campaign_evolution",
+      "reason": "No accumulated campaign evidence has changed a later musical decision.",
+      "source": "Children/Buffalo thesis",
+      "status": "blocked",
+      "tracking_issue": 64
+    },
+    {
+      "obligation_id": "flim.blind_recording_control",
+      "reason": "Withhold community transcriptions and run the cephalopod on exact recording bytes.",
+      "source": "Flim report",
+      "status": "blocked",
+      "tracking_issue": 59
+    },
+    {
+      "obligation_id": "pretty_lights.provider_tournament",
+      "reason": "Competing beat, recurrence, stem, embedding, transcription, stretch, and transport providers have not been evaluated over the same sealed PCM with independent ledgers and human preference.",
+      "source": "Floor and OSS sweep",
+      "status": "not_run",
+      "tracking_issue": 62
+    },
+    {
+      "obligation_id": "pretty_lights.release_human_and_rights",
+      "reason": "Human musical acceptance is pending; rights eligibility is not evaluated; transition passage is provisional.",
+      "source": "main release-candidate fixture",
+      "status": "blocked",
+      "tracking_issue": 63
+    },
+    {
+      "obligation_id": "mixscore.realtime_and_keylock",
+      "reason": "Callback-time transport control, pitch-preserving key lock, scratch/backspin, DJ EQ/filter automation, controllers, and external sync remain outside v1.",
+      "source": "MixScore boundary",
+      "status": "deferred",
+      "tracking_issue": 67
+    },
+    {
+      "obligation_id": "floor.network_sandbox",
+      "reason": "Network policy is declared but not OS-enforced.",
+      "source": "Floor gap register",
+      "status": "partial",
+      "tracking_issue": 65
+    },
+    {
+      "obligation_id": "floor.resource_isolation",
+      "reason": "Memory, GPU, process, and disk isolation remain host responsibilities.",
+      "source": "Floor gap register",
+      "status": "partial",
+      "tracking_issue": 65
+    },
+    {
+      "obligation_id": "floor.remote_attestation",
+      "reason": "Remote providers do not yet prove the exact executed artifact.",
+      "source": "Floor gap register",
+      "status": "open",
+      "tracking_issue": 65
+    },
+    {
+      "obligation_id": "floor.privacy_locality",
+      "reason": "A normative jurisdiction and data-locality policy is absent.",
+      "source": "Floor gap register",
+      "status": "open",
+      "tracking_issue": 65
+    },
+    {
+      "obligation_id": "floor.normative_license",
+      "reason": "A universal commercial floor needs an owner-approved permissive license for normative schemas, examples, and conformance fixtures.",
+      "source": "Floor gap register",
+      "status": "owner_decision_required",
+      "tracking_issue": 65
+    },
+    {
+      "obligation_id": "repo.installable_distribution",
+      "reason": "Audited main does not establish the earlier claimed PEP 517/621 wheel distribution.",
+      "source": "corrected production-cleanup claim",
+      "status": "open",
+      "tracking_issue": 66
+    },
+    {
+      "obligation_id": "repo.reproducible_dependencies",
+      "reason": "Broad dependency ranges are not a locked or constrained reproducible environment.",
+      "source": "current requirements",
+      "status": "open",
+      "tracking_issue": 66
+    },
+    {
+      "obligation_id": "repo.historical_branch_archive_custody",
+      "reason": "Terminal heads are recorded, but independently restorable archive custody and restoration verification remain incomplete.",
+      "source": "Historical branch retention map",
+      "status": "partial",
+      "tracking_issue": 66
+    },
+    {
+      "obligation_id": "estate.first_real_read_only_sweep",
+      "reason": "The control plane has not inventoried the operator's actual roots, nodes, databases, models, caches, or evidence estate.",
+      "source": "PR #55 Local Estate control plane",
+      "status": "not_run",
+      "tracking_issue": 58
+    },
+    {
+      "obligation_id": "homelab.real_fixture_bindings",
+      "reason": "Exact target recordings, private-library material, project revisions, and physical playback fixtures have not been bound and reverified on the real estate.",
+      "source": "PR #55 HomelabFixtureBinding boundary",
+      "status": "blocked",
+      "tracking_issue": 58
+    },
+    {
+      "obligation_id": "homelab.provider_terminal_dispositions",
+      "reason": "The 87-target catalog has not yet produced real accepted, rejected, deferred, or reference-only decisions.",
+      "source": "PR #55 Homelab Provider Arcade",
+      "status": "not_run",
+      "tracking_issue": 57
+    }
+  ],
+  "pull_requests": [
+    {
+      "canon_summary": "The modular package, deterministic single-file builder, consolidated specification, and first executable gates.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 1,
+      "title": "Restructure monolith into modular earcrate package",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/1"
+    },
+    {
+      "canon_summary": "Merged session batch; exact commit history is canon, but the PR body supplied no stable narrative.",
+      "disposition": "landed_main_history",
+      "head_sha": "e112e16d4b9b38b3508cb5ef1d43308d52c7e28d",
+      "main_reachability": "reachable_from_audited_main",
+      "narrative_status": "pr_body_absent_no_additional_story_inferred",
+      "pr": 2,
+      "title": "Claude/coding session 8poena",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/2"
+    },
+    {
+      "canon_summary": "Merged session batch; exact commit history is canon, but the PR body supplied no stable narrative.",
+      "disposition": "landed_main_history",
+      "head_sha": "239399042e7a1ca322cdfc601b90842c42daa7c4",
+      "main_reachability": "reachable_from_audited_main",
+      "narrative_status": "pr_body_absent_no_additional_story_inferred",
+      "pr": 3,
+      "title": "Claude/coding session 8poena",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/3"
+    },
+    {
+      "canon_summary": "Idempotent organization and collision handling without suffix accretion.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 4,
+      "title": "Organize: idempotent re-runs, no suffix accretion, canonical naming kept",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/4"
+    },
+    {
+      "canon_summary": "Startup janitor and visible build-stamp chain.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 5,
+      "title": "Startup janitor + build-stamp chain",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/5"
+    },
+    {
+      "canon_summary": "Merged session batch; exact commit history is canon, but the PR body supplied no stable narrative.",
+      "disposition": "landed_main_history",
+      "head_sha": "e01e15a2c5850ded7a3431e839d35b9f28aed0fb",
+      "main_reachability": "reachable_from_audited_main",
+      "narrative_status": "pr_body_absent_no_additional_story_inferred",
+      "pr": 6,
+      "title": "Claude/coding session 8poena",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/6"
+    },
+    {
+      "canon_summary": "Visible version/build identity discipline.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 7,
+      "title": "Bump version to v0.7.5 so updates are visibly distinguishable",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/7"
+    },
+    {
+      "canon_summary": "TasteSpec as versioned policy, append-only curation, and persisted deterministic plans.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 8,
+      "title": "Establish TasteSpec vertical slice: governance, versioned profile, curation & plan persistence",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/8"
+    },
+    {
+      "canon_summary": "Merged session batch; exact commit history is canon, but the PR body supplied no stable narrative.",
+      "disposition": "landed_main_history",
+      "head_sha": "cd39cd95e952ff7616d8a50d55b29f34f4ff3335",
+      "main_reachability": "reachable_from_audited_main",
+      "narrative_status": "pr_body_absent_no_additional_story_inferred",
+      "pr": 9,
+      "title": "Claude/coding session 8poena",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/9"
+    },
+    {
+      "canon_summary": "House visual identity and layout repair.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 10,
+      "title": "v0.7.8 House flavor: fix crushed layout, restyle to AXM identity law",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/10"
+    },
+    {
+      "canon_summary": "Merged session batch; exact commit history is canon, but the PR body supplied no stable narrative.",
+      "disposition": "landed_main_history",
+      "head_sha": "12f8802a5bf768af977baab2890a8735a0fb9cbc",
+      "main_reachability": "reachable_from_audited_main",
+      "narrative_status": "pr_body_absent_no_additional_story_inferred",
+      "pr": 11,
+      "title": "Claude/coding session 8poena",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/11"
+    },
+    {
+      "canon_summary": "Retirement of the legacy two-world arranger, visible workspace migration, honest playback, Cast, endless transport, and first-run demo.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 12,
+      "title": "v0.8.x — v2 cut, visible workspace + migration, honest player + Cast + first-run demo",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/12"
+    },
+    {
+      "canon_summary": "Completion of the EarCrate rename while preserving migration compatibility.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 13,
+      "title": "v0.8.5 — finish the rename: app no longer calls itself Jukebreaker",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/13"
+    },
+    {
+      "canon_summary": "Dry-run-first, journaled, reversible in-place source reorganization and desktop launch path.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 14,
+      "title": "v0.8.6 — in-place source reorganize + real desktop icon",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/14"
+    },
+    {
+      "canon_summary": "Workbench UI for preview/apply/rollback source organization.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 15,
+      "title": "v0.8.7 — reorganize UI card (preview → apply → rollback)",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/15"
+    },
+    {
+      "canon_summary": "Fresh-download hygiene and removal of tracked runtime pointers.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 16,
+      "title": "v0.8.8 — fresh-download hygiene + verified first-run",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/16"
+    },
+    {
+      "canon_summary": "Real Windows dependency installer matching product instructions.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 17,
+      "title": "v0.8.9 — add the Install-Dependencies.cmd the error banner references",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/17"
+    },
+    {
+      "canon_summary": "Removal of dead two-world UI and legacy preset overlap.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 18,
+      "title": "v0.8.10 — trim the buffalo: remove dead two-world UI, add nav divider",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/18"
+    },
+    {
+      "canon_summary": "Genre-blind audio-graph deep-clean assessment without destructive action.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 19,
+      "title": "v0.8.11 — deep clean: hear real songs vs static junk by the audio graph",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/19"
+    },
+    {
+      "canon_summary": "Headless cleanup CLI and single-file import-boundary correction.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 20,
+      "title": "v0.8.12 — headless CLI for cleanup + fix single-file deep-clean crash",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/20"
+    },
+    {
+      "canon_summary": "Rollback made dry-run-first and explicit-apply.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 21,
+      "title": "v0.8.13 — reorganize-rollback dry-run by default (safety fix)",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/21"
+    },
+    {
+      "canon_summary": "Opt-in AcoustID/MusicBrainz identity proposals from audio fingerprints.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 22,
+      "title": "v0.8.14 — online music identity (AcoustID/MusicBrainz), opt-in",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/22"
+    },
+    {
+      "canon_summary": "Reversible, confidence-gated application of audio-derived identities.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 23,
+      "title": "v0.8.15 — apply identities: close the identify → fix loop (reversible)",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/23"
+    },
+    {
+      "canon_summary": "The failures-to-invariants constitution and receipt-before-completion rule.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 24,
+      "title": "v3 Constitution — bank every lesson as an invariant with a gate",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/24"
+    },
+    {
+      "canon_summary": "Provider seams, stable segment identity, judgment-safe rebuilds, and human loop review.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 25,
+      "title": "v0.8.24: Wire stems, retrieval, and per-loop review seams",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/25"
+    },
+    {
+      "canon_summary": "Consolidated v0.8.27 release with fail-hard rendering and complete gate discovery.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 26,
+      "title": "Release v0.8.27: consolidated verified package",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/26"
+    },
+    {
+      "canon_summary": "First-minute reliability, typed transitions, personas, external-target remix, and real GPU stem warming.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 27,
+      "title": "v0.8.28/0.8.29 — first-minute UX, transition engine, remix personas, external-target remix, GPU stem-warmer",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/27"
+    },
+    {
+      "canon_summary": "Measured performance work, target-directed presence correction, and the GPU work-queue seam.",
+      "disposition": "landed_main_history",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 28,
+      "title": "v0.8.30 — perf campaign rebuilt, treble-dead render fixed, GPU work queue seam",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/28"
+    },
+    {
+      "canon_summary": "Immutable project/score revisions as compilation, edit, render, export, and receipt authority.",
+      "disposition": "landed_main_via_pr_37",
+      "head_sha": "a97ecdfef97a6ddafa119572c03204204ad87c8f",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 29,
+      "title": "Build the immutable project-score CLI engine",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/29"
+    },
+    {
+      "canon_summary": "An early full-app cutover lane whose only surviving remote delta was a snapshot workflow.",
+      "disposition": "harvested_and_retired",
+      "head_sha": "b307dd613ffc61c7efa2faea2e8d6fdb15ab8fdb",
+      "main_reachability": "not_reachable_unique_snapshot_scaffold",
+      "pr": 30,
+      "title": "[Superseded] Integrate immutable score projects into the full EarCrate app",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/30",
+      "why_not_main": "Its unique remote delta was a repository snapshot/export workflow; immutable project authority landed through the later Gate 8 lineage."
+    },
+    {
+      "canon_summary": "Exact MIDI ledgers, neutral execution, performance demands, sealed racks, event binding, and crate substitution.",
+      "disposition": "landed_main_via_pr_37",
+      "head_sha": "d9d77246390b53fba03df3635f597e1c72581dfa",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 31,
+      "title": "Land exact MIDI, sample racks, and plug-and-play crate substitution",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/31"
+    },
+    {
+      "canon_summary": "Deterministic multi-zone racks under per-zone transpose limits.",
+      "disposition": "landed_main_via_pr_37",
+      "head_sha": "78e0e7d7f9e92506f20518162d4494f4483dfcb2",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 32,
+      "title": "Assemble multi-zone sample racks under fixed transpose budgets",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/32"
+    },
+    {
+      "canon_summary": "Arrangement anatomy as derived, event-complete evidence.",
+      "disposition": "landed_main_via_pr_37",
+      "head_sha": "eef1e5ee98495087033c748e09741cd534eeb321",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 33,
+      "title": "Measure arrangement anatomy from exact MIDI performances",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/33"
+    },
+    {
+      "canon_summary": "Deterministic receipt-backed MIDI arrangement from source patterns.",
+      "disposition": "landed_main_via_pr_37",
+      "head_sha": "cc6c6960932b1b43b32fb26ba0d8e3638eef1da8",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 34,
+      "title": "Generate deterministic receipt-backed MIDI arrangements",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/34"
+    },
+    {
+      "canon_summary": "Accepted-grid and note/drum observations compiled into exact reference MIDI bundles.",
+      "disposition": "landed_main_via_pr_37",
+      "head_sha": "bfc31a578a26f332c1fa1742290ea254c844cf0b",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 35,
+      "title": "Compile local reference evidence into exact MIDI bundles",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/35"
+    },
+    {
+      "canon_summary": "Receding-horizon live DJ planning, prepared phrase execution, and callback-purity authority.",
+      "disposition": "landed_main_via_pr_37",
+      "head_sha": "7fa2777e7aa37d2c7c13614f6e13ffb7e26fa0e7",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 36,
+      "title": "Run a deterministic local live-DJ engine from compiled musical knowledge",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/36"
+    },
+    {
+      "canon_summary": "Proof-carrying musical constitution, hard laws, obligations, equations, and player-piano programs.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "6f319d7e87aa778321ee7827f267c9a09098d26d",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 37,
+      "title": "Introduce the composable player-piano musical authority",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/37"
+    },
+    {
+      "canon_summary": "Gate 8 transplant experiment using a sealed overlay.",
+      "disposition": "harvested_and_retired",
+      "head_sha": "3b70d343997470d7af93daa84558306db3abdf0f",
+      "main_reachability": "not_reachable_unique_overlay_commits",
+      "pr": 38,
+      "title": "[Superseded] Integrate Gate 8 custody, continuation, and source execution",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/38",
+      "why_not_main": "The overlay and self-applying workflow were delivery scaffolding; PR #39 landed the same authority as ordinary reviewable source."
+    },
+    {
+      "canon_summary": "Ordinary-tree Gate 8 custody, causal continuation, SourcePhrase execution, portable racks, and project authority.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "f807a8b07fde4c93d54687c4cae5ed21cadd5903",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 39,
+      "title": "Integrate Gate 8 custody, continuation, and real-library execution",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/39"
+    },
+    {
+      "canon_summary": "Cephalopod waveform reader producing ObservationLedger and SongGenome evidence without publication authority.",
+      "disposition": "landed_main_via_pr_49",
+      "head_sha": "657e77981fffc55440b80af74ebcdd376891fff9",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 40,
+      "title": "Add cephalopod song reader and blind-audio recurrence proof",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/40"
+    },
+    {
+      "canon_summary": "Proposed mixed-master material factory, hereditary player-piano mutation, and quality-diversity campaign.",
+      "disposition": "deferred_concept_canon",
+      "head_sha": "d27c0b1ac1ebf464ddec726105c5fdd546f02563",
+      "main_reachability": "unique_export_scaffold_not_reachable",
+      "pr": 41,
+      "retained_obligations": [
+        "mixed-master stem and residual observations with mixture consistency",
+        "eventized drum, vocal, bass, and harmonic material",
+        "typed hereditary PlayerPianoProgram wrappers",
+        "bounded mutation across child and grandchild generations",
+        "quality-diversity archives and provider tournaments",
+        "dual-GPU planning with deterministic single-GPU and CPU fallback"
+      ],
+      "title": "[Deferred organ harvest] Mixed-master material factory and recursive Player-Piano forge",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/41",
+      "why_not_main": "The branch never implemented the proposed organ beyond source export; the material-factory and breeder design remains a future Floor campaign."
+    },
+    {
+      "canon_summary": "Deterministic N-deck MixScore source transports with independent playheads and exact stems/receipts.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "9a861b71fe39c305c3eb786d308b3b195d44748a",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 42,
+      "title": "Add deterministic MixScore source transports and DJ OSS sweep",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/42"
+    },
+    {
+      "canon_summary": "Children, Flim, and blind-audio cross-organ specimens plus the Buffalo Gate.",
+      "disposition": "landed_main_via_pr_49",
+      "head_sha": "dbc1961929b3fd4f98a3997b6e6160b8eeb136d0",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 43,
+      "title": "Add cross-organ Buffalo Gate specimens",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/43"
+    },
+    {
+      "canon_summary": "Language-neutral Open Music Evidence Floor and provider authority ceiling.",
+      "disposition": "landed_main_via_pr_49",
+      "head_sha": "8f01405203348f5085b3b6d306353a1f48e5d60c",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 44,
+      "title": "Establish the Open Music Evidence Floor",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/44"
+    },
+    {
+      "canon_summary": "Earlier competing release object model that introduced explicit review-request and use-scoped rights concepts.",
+      "disposition": "harvested_competing_implementation",
+      "head_sha": "18e3af22d03c32f280198ea4416c43abbb827357",
+      "main_reachability": "unique_competing_release_commits_not_reachable",
+      "pr": 45,
+      "retained_obligations": [
+        "first-class HumanMusicalReviewRequest",
+        "use-scoped RightsReview rather than universal clearance",
+        "multidimensional release status",
+        "builder custody and reproducibility separate from approval"
+      ],
+      "title": "[Superseded and harvested] Release-candidate review discipline",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/45",
+      "why_not_main": "Its useful authority split was retained in PRs #47/#49 and pending #52; the parallel object model was not carried."
+    },
+    {
+      "canon_summary": "Source-export scaffold only.",
+      "disposition": "retired_scaffold",
+      "head_sha": "0816d0cee08f77b1873fec9c03ee065db3154eda",
+      "main_reachability": "unique_scaffold_commits_not_reachable",
+      "pr": 46,
+      "title": "[Superseded scaffold] Reviewed release-candidate authority",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/46",
+      "why_not_main": "Only export/bootstrap workflow residue existed; no unique product authority was lost."
+    },
+    {
+      "canon_summary": "Canonical v1 release candidate, signal evaluation, human review, rights policy, and blocked-by-default gate.",
+      "disposition": "landed_main_via_pr_49",
+      "head_sha": "46411c3fc32e8af17e8b9b9cf32cb3de41fe3837",
+      "main_reachability": "head_is_ancestor_of_audited_main",
+      "pr": 47,
+      "title": "Add reviewed release-candidate gate",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/47"
+    },
+    {
+      "canon_summary": "Release-review export/bootstrap scaffold only.",
+      "disposition": "retired_scaffold",
+      "head_sha": "1249ab673e4250d4c5f8361a5712e1f031fe9f9b",
+      "main_reachability": "unique_scaffold_commits_not_reachable",
+      "pr": 48,
+      "title": "[Superseded scaffold] Proof-carrying release-candidate review",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/48",
+      "why_not_main": "Only export/bootstrap workflow residue existed; no unique product authority was lost."
+    },
+    {
+      "canon_summary": "Cumulative production integration of Gate 8, reader, MixScore, specimens, Floor, release gate, and publication governance.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "847800d1254d617c07b90836dc67004537e0be50",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 49,
+      "title": "Integrate EarCrate organ stack and reconcile production",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/49"
+    },
+    {
+      "canon_summary": "Failed content-transport attempt to materialize a clean production tree.",
+      "disposition": "failed_delivery",
+      "head_sha": "41badec95c9b5230f4fd44a6605ec857e00c5750",
+      "main_reachability": "failed_bootstrap_commits_not_reachable",
+      "pr": 50,
+      "title": "Materialize clean production tree",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/50",
+      "why_not_main": "The committed patch payload failed its declared identity check and never produced the intended tree; verified production arrived through PR #49 instead."
+    },
+    {
+      "canon_summary": "Single-main lineage, duplicate-CI reduction, and historical branch classification.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "28c0dff70d52994a0ef3b6d0faa3895a59ad9ce0",
+      "main_reachability": "audited_main_commit",
+      "pr": 51,
+      "title": "Finalize production lineage and gate hygiene",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/51"
+    },
+    {
+      "canon_summary": "Committed per-reviewer blinding, independently revalidated arbitration, use-scoped time-bounded rights, format-neutral permits, atomic publication, complete publication verification, and runtime-aligned governance schemas.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "43245748702848053af970d88011479e0044e4c7",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 52,
+      "title": "Harden release governance and atomic publication",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/52"
+    },
+    {
+      "canon_summary": "Append-only canon and nonlanding authority, landed as 6da4a6111ed529cd470c5cec3f4a0a1988fc3a08.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "886040ceb7ca5e6782e5c19d69f696d6f97a9ccc",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 53,
+      "title": "Record complete canon and nonlanding ledger",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/53"
+    },
+    {
+      "canon_summary": "Duplicate direct-to-main review view of the #55 implementation.",
+      "disposition": "superseded_duplicate",
+      "head_sha": "91db11e68bff42ad35de9767cf2bf36fadeb0f13",
+      "main_reachability": "not_reachable_no_unique_authority",
+      "pr": 54,
+      "title": "[Superseded duplicate] Local estate and Homelab control plane",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/54",
+      "why_not_main": "No unique code, evidence, review thread, or architectural authority existed only in this lane."
+    },
+    {
+      "canon_summary": "Explicit-root estate reconciliation and MAME-style 87-target Homelab acceptance authority, landed as d511414daa0c7127c1e9cfdc64726979e6682e1f.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "d2444b507153acff90b0f3d3b80892ebf46afab0",
+      "main_reachability": "reachable_from_audited_main",
+      "pr": 55,
+      "title": "Add the local estate and Homelab provider-acceptance control plane",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/55"
+    },
+    {
+      "canon_summary": "Content-addressed temporary transport whose intended integrity payload was incorporated into #55.",
+      "disposition": "completed_transport_harvested",
+      "head_sha": "ab9e89a4966f5656c3e86c0ce4d080e5e85e1100",
+      "main_reachability": "not_reachable_transport_payload_harvested",
+      "pr": 56,
+      "title": "[Completed temporary transport] Homelab integrity overlay",
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/56",
+      "why_not_main": "The transport lane carried no independent product authority and was closed after payload verification and harvest."
+    }
+  ],
+  "retired_decisions": [
+    {
+      "decision_id": "retire.midi_as_primary_mashup_body",
+      "reason": "MIDI can carry symbolic observations and realizations but not live source-time transport semantics."
+    },
+    {
+      "decision_id": "retire.single_pcm_concatenation_as_mashup_model",
+      "reason": "Layered mashups require independent persistent source transports."
+    },
+    {
+      "decision_id": "retire.score_or_symbolic_evidence_as_blind_audio",
+      "reason": "Evidence-tier laundering invalidates convergence."
+    },
+    {
+      "decision_id": "retire.machine_signal_as_musical_approval",
+      "reason": "Signal qualification and human musical acceptance are separate authorities."
+    },
+    {
+      "decision_id": "retire.one_bar_arranger_as_composition_authority",
+      "reason": "It may remain a mechanism, but proof-carrying musical law owns admissibility."
+    },
+    {
+      "decision_id": "retire.coarse_waveform_correlation_as_success_gate",
+      "reason": "Musical recurrence and correspondence require multidimensional evidence."
+    },
+    {
+      "decision_id": "retire.rescue_degraded_hidden_fallbacks",
+      "reason": "Selected material and obligations must execute or refuse explicitly."
+    },
+    {
+      "decision_id": "retire.workflow_bootstrap_as_normal_integration",
+      "reason": "Temporary overlays and self-modifying workflows are not product history."
+    },
+    {
+      "decision_id": "retire.parallel_canonical_release_stacks",
+      "reason": "Release experiments must enter one Floor/review/publication lineage."
+    }
+  ],
+  "schema_version": 2,
+  "status_vocabulary": {
+    "completed_transport_harvested": "Temporary transport completed its bounded job; its payload was harvested and the lane retains no product authority.",
+    "conversation_report_unbound_to_main": "A project-session claim is preserved but requires import or rerun before promotion.",
+    "deferred_concept_canon": "Direction is retained but no current implementation is claimed.",
+    "external_evidence_bound_by_identity": "Media stays external but exact identity and claim boundary are retained.",
+    "failed_delivery": "The attempted transport did not produce its declared product tree.",
+    "harvested_and_retired": "Useful invariants survived; the original delivery mechanism did not.",
+    "harvested_competing_implementation": "Concepts survived in another authority; the parallel model did not.",
+    "landed_main_direct_merge": "The PR merged directly into the main lineage.",
+    "landed_main_history": "The historical PR is part of the audited main lineage; no additional merge-path claim is inferred.",
+    "landed_main_via_pr_37": "The exact head is an ancestor of main through the merged player-piano stack.",
+    "landed_main_via_pr_49": "The exact head is an ancestor of main through the cumulative production integration.",
+    "pending_verified_pr": "Implemented and verified outside main; review/merge still required.",
+    "retired_scaffold": "Only transport or export scaffolding existed.",
+    "superseded_duplicate": "Duplicate review lane with no unique authority; canonical work is retained elsewhere."
+  },
+  "supersedes": {
+    "corrections_git_blob_sha1": "360bc36064d820283a9bbdc74e9f3b699828839a",
+    "corrections_path": "docs/canon/canon-ledger.v1.corrections.json",
+    "corrections_sha256": "4e7b1fe942eef9805a7145f3e8baa8a8b01f4e6e740f0ed96ae52d71833ba2cb",
+    "effective_ledger_sha256": "26eda6df9bb6e2196da6bb65b3e7d7f3e7f2c23f69347e2ac1d0f9ccefc089fe",
+    "ledger_git_blob_sha1": "c4bbb61e0ccefc96d82a4cebb01e117b220a53b7",
+    "ledger_path": "docs/canon/canon-ledger.v1.json",
+    "ledger_sha256": "78654e55263f16c4c236ab59e743218bafb17f534fa2d48e77ad66d4d8d0b955",
+    "reason": "Canon v2 advances the audit through PR #56 and the post-governance campaign fan-out without rewriting immutable v1 bytes or correction history.",
+    "schema_version": 1
+  },
+  "theses": [
+    {
+      "canon_id": "thesis.one_musical_organism",
+      "main_refs": [
+        "docs/EARCRATE_PROGRESSION_AND_ORGAN_HARVEST.md"
+      ],
+      "open_condition": "Whole-organism passage remains false until all required Buffalo organs circulate on one specimen.",
+      "statement": "EarCrate is one provenance-preserving musical organism: evidence becomes observations, accepted musical understanding, lawful choices, several executable bodies, performance, review, selective recomputation, and changed future behavior.",
+      "status": "landed_directional_canon"
+    },
+    {
+      "canon_id": "thesis.evidence_tiers_do_not_collapse",
+      "main_refs": [
+        "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md",
+        "earcrate/floor/model.py",
+        "earcrate/specimen/model.py"
+      ],
+      "statement": "Authoritative score, community-symbolic witness, blind PCM inference, convergence, performance, human review, and campaign evidence retain separate ancestry.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.read_before_compose",
+      "main_refs": [
+        "earcrate/reader/",
+        "docs/SONG_READER_CEPHALOPOD.md"
+      ],
+      "statement": "The cephalopod reader produces waveform-grounded observations and candidates; it does not silently become composition or publication authority.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.sample_library_is_not_the_performance",
+      "main_refs": [
+        "earcrate/mix/",
+        "docs/MIXSCORE_RUNTIME.md"
+      ],
+      "statement": "A crate describes available material; a mashup requires persistent independent source transports, playheads, cues, loops, jumps, fades, cuts, and mixer state.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.two_deck_metaphor_n_deck_engine",
+      "main_refs": [
+        "earcrate/mix/model.py",
+        "docs/DJ_ENGINE_OSS_SWEEP.md"
+      ],
+      "statement": "Two turntables remain the control metaphor, but the renderer must support N channels for beds, fills, one-shots, textures, and transitions.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.similarity_is_not_fungibility",
+      "main_refs": [
+        "earcrate/floor/model.py",
+        "schemas/earcrate_floor_phrase_contract_v1.schema.json"
+      ],
+      "statement": "A sample is fungible only for a declared musical slot under role, time, transform, identity, future-obligation, and rights constraints.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.providers_propose_earcrate_adjudicates",
+      "main_refs": [
+        "earcrate/floor/",
+        "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+      ],
+      "statement": "Commodity MIR, ML, DSP, rights, transport, and review providers may emit observations, candidates, measurements, refusals, derived artifacts, or unapplied patches; they may not write canonical musical state.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.no_organ_level_success_as_thesis_success",
+      "main_refs": [
+        "earcrate/specimen/gate.py",
+        "proofs/specimens/children_v1.score-side.proof.json"
+      ],
+      "statement": "A successful reader, score parser, rack, renderer, or deck demo may pass its organ gate without implying whole-Buffalo passage.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.signal_sanity_is_not_musical_acceptance",
+      "main_refs": [
+        "earcrate/floor/release.py",
+        "docs/RELEASE_CANDIDATE_REVIEW_GATE.md"
+      ],
+      "statement": "Loudness, peak, silence, recurrence, seam, and reproducibility checks can qualify a candidate for listening but cannot approve the music.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.review_must_change_future_behavior",
+      "main_refs": [
+        "docs/EARCRATE_PROGRESSION_AND_ORGAN_HARVEST.md"
+      ],
+      "open_condition": "No committed specimen yet proves campaign evidence changing a later musical decision.",
+      "statement": "Review is not complete learning until a correction creates a child revision, invalidates only dependents, and changes a later ranking, policy, or choice.",
+      "status": "landed_directional_canon_open_execution"
+    },
+    {
+      "canon_id": "thesis.exact_identity_and_receipts",
+      "main_refs": [
+        "earcrate/project/",
+        "earcrate/midi/",
+        "earcrate/rack/",
+        "earcrate/mix/",
+        "earcrate/floor/"
+      ],
+      "statement": "Source bytes, decoded PCM, models, programs, decisions, events, stems, masters, and revisions are content-addressed and must execute or refuse explicitly.",
+      "status": "landed_main_contract"
+    },
+    {
+      "canon_id": "thesis.source_media_external_by_default",
+      "main_refs": [
+        "specimens/children_v1.json",
+        "specimens/flim_bad_plus_v1.json"
+      ],
+      "statement": "The repository stores identities, manifests, schemas, annotations, policies, builders, and receipts; copyrighted recordings, scores, and private-library media stay external unless explicitly permitted.",
+      "status": "landed_main_policy"
+    },
+    {
+      "canon_id": "thesis.buy_the_commodity_own_the_score",
+      "main_refs": [
+        "docs/DJ_ENGINE_OSS_SWEEP.md",
+        "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+      ],
+      "statement": "Deck playback, separation, beat tracking, embeddings, transcription, stretching, and catalogs are replaceable organs; EarCrate owns custody, adjudication, obligations, performance score, and causal review.",
+      "status": "landed_research_canon"
+    },
+    {
+      "canon_id": "thesis.no_rescue_or_hidden_fallback",
+      "main_refs": [
+        "AGENTS.md",
+        "tests/run_gates.py"
+      ],
+      "statement": "A selected layer, event, source, or obligation may not disappear behind a rescue, degraded, floor-safe, or silent fallback path.",
+      "status": "landed_main_invariant"
+    },
+    {
+      "canon_id": "thesis.buffalo_gate_target",
+      "main_refs": [
+        "docs/EARCRATE_PROGRESSION_AND_ORGAN_HARVEST.md",
+        "earcrate/specimen/gate.py"
+      ],
+      "statement": "The end-state must hear, understand, choose lawfully, compose, realize through several media, perform, accept correction, and behave differently afterward.",
+      "status": "directional_canon_not_yet_passed"
+    }
+  ]
+}

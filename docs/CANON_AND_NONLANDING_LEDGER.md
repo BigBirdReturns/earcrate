@@ -1,5 +1,9 @@
 # EarCrate canon and nonlanding ledger
 
+> **Historical revision.** This document describes canon v1 through PR #52.
+> Current authority is [`CANON_AND_CAMPAIGN_V2.md`](CANON_AND_CAMPAIGN_V2.md)
+> and `docs/canon/canon-ledger.v2.json`. V1 bytes and corrections remain preserved.
+
 The complete machine-readable record is
 [`docs/canon/canon-ledger.v1.json`](canon/canon-ledger.v1.json), with its
 append-only correction set in

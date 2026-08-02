@@ -103,9 +103,9 @@ jobs:
                   "state": "open",
               })
           milestone_number = int(match["number"])
-          for number in range(57, 70):
+          for number in range(57, 69):
               request("PATCH", f"{base}/issues/{number}", {"milestone": milestone_number})
-          print(f"MILESTONE number={milestone_number} title={title!r} issues=57-69")
+          print(f"MILESTONE number={milestone_number} title={title!r} issues=57-68; PR #69 assigned separately")
           PY
 
           rm .github/canon_v2_finalize.py

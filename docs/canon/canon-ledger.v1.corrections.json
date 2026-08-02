@@ -1,9 +1,9 @@
 {
-  "base_actual_sha256": "ca20260993b9a166440103da7516893cbbcaebed902c467369ac37d4e5cefe69",
+  "base_actual_sha256": "0c96696734316dc1ce2795012ffed5d92476f3758f04d549d35876b75885d86b",
   "base_claimed_sha256": "d9faa1947f1ba82fb05d9d3b271cb3855d80a59e2b7d708360241753aca64913",
-  "base_git_blob_sha1": "d85de49279a1f8bdbfdf1756c5f8ba6e86b83334",
+  "base_git_blob_sha1": "c4bbb61e0ccefc96d82a4cebb01e117b220a53b7",
   "base_path": "docs/canon/canon-ledger.v1.json",
-  "corrected_effective_sha256": "72639d36909af7c43e498ddf4e80343f11aabed5cb975c31185b8f5090cf938e",
+  "corrected_effective_sha256": "26eda6df9bb6e2196da6bb65b3e7d7f3e7f2c23f69347e2ac1d0f9ccefc089fe",
   "kind": "earcrate_canon_ledger_corrections",
   "operations": [
     {

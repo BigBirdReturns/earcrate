@@ -9,12 +9,13 @@ the preserved non-main heads, external proof identities, corrected claims,
 retired decisions, and open obligations.
 
 ```text
-audit main:             2fd50b9c72f80d7f0f6eb928cb61035e51a78fd3
-audit date:             2026-07-31
-pending PR:             #52 @ a1babd796e6ea87aa9f6489c6d589540337248d6
+audit main:             36618a23f755b876e6d887be64a61389b5093e10
+audit date:             2026-08-02
+landed PR #52 head:     43245748702848053af970d88011479e0044e4c7
+landed PR #52 main:     36618a23f755b876e6d887be64a61389b5093e10
 base claimed SHA:       d9faa1947f1ba82fb05d9d3b271cb3855d80a59e2b7d708360241753aca64913
-base actual SHA:        ca20260993b9a166440103da7516893cbbcaebed902c467369ac37d4e5cefe69
-effective corrected SHA: 72639d36909af7c43e498ddf4e80343f11aabed5cb975c31185b8f5090cf938e
+base actual SHA:        0c96696734316dc1ce2795012ffed5d92476f3758f04d549d35876b75885d86b
+effective corrected SHA: 26eda6df9bb6e2196da6bb65b3e7d7f3e7f2c23f69347e2ac1d0f9ccefc089fe
 ```
 
 The first published ledger carried a stale self-hash and incorrectly described
@@ -74,6 +75,9 @@ amended; it is not silently rewritten.
   PR #49: cephalopod reader, Buffalo specimens, Open Music Evidence Floor, and
   release-candidate gate.
 - **PRs #49 and #51:** cumulative product reconciliation and single-main lineage.
+- **PR #52:** committed review assignments, independently revalidated arbitration,
+  use-scoped rights, temporally bounded permits, atomic publication, and complete
+  publication verification.
 
 PRs **#2, #3, #6, #9, and #11** were merged session batches with no PR body.
 Their commits are canon; the ledger does not invent a narrative.
@@ -88,7 +92,6 @@ Their commits are canon; the ledger does not invent a narrative.
 | PR #45 | harvested | Review-request, use-scoped rights, and status-vector concepts survived; the parallel model did not. |
 | PRs #46 and #48 | retired scaffolds | Export workflows, triggers, and placeholders only. |
 | PR #50 | failed delivery | Its payload failed the declared identity and never produced the intended tree. |
-| PR #52 | pending canon | Green and mergeable, intentionally not main authority before review and merge. |
 | production cleanup probes | failed diagnostics | Single-file probes for repository transport, not product work. |
 
 ### `claude/earcrate-v0.9.0-complete-wrz7lw`
@@ -174,9 +177,10 @@ No supersession relationship between 3 and 4 is proven.
 
 - **Production cleanup and wheel distribution complete:** retracted as a main
   fact. The failed transport did not land the claimed PEP 517/621 work.
-- **Governance v2 fully enforced in PR #49:** corrected. PR #52 implements the
-  missing committed assignments, arbitration, scoped rights, format-neutral
-  permits, atomic publication, and `PublicationReceipt`; it remains pending.
+- **Governance v2 fully enforced in PR #49:** corrected and resolved. PR #52
+  supplied the missing committed assignments, independently revalidated
+  arbitration, scoped rights, time-bounded permits, atomic publication, complete
+  verification, and `PublicationReceipt`, then landed after exact-head review.
 - **A sandbox link establishes custody:** retracted. Durable evidence needs a
   manifest/receipt identity or managed evidence store.
 - **A strong organ proof is the complete Buffalo:** retired. Buffalo Gate exists
@@ -197,7 +201,6 @@ The JSON ledger carries the complete list. Highest-order items:
 - an owner decision on a permissive normative Floor license;
 - conventional installable distribution and reproducible dependencies;
 - verifiable historical-branch archive custody;
-- PR #52 review and merge.
 
 ## Update rule
 

@@ -1,7 +1,7 @@
 {
   "audit": {
-    "audit_date": "2026-07-31",
-    "audited_main_sha": "2fd50b9c72f80d7f0f6eb928cb61035e51a78fd3",
+    "audit_date": "2026-08-02",
+    "audited_main_sha": "36618a23f755b876e6d887be64a61389b5093e10",
     "limitations": [
       "A conversation report is not independent artifact custody.",
       "External media-rich packs are not in the repository unless a manifest says otherwise.",
@@ -12,15 +12,10 @@
       "verified ancestry for stacked and cumulative heads against audited main where exact heads were available",
       "compared preserved non-main branch heads to audited main",
       "reconciled source-free specimen manifests and proof receipts",
-      "retained conversation-only claims as explicitly unbound reports rather than silently dropping or promoting them"
+      "retained conversation-only claims as explicitly unbound reports rather than silently dropping or promoting them",
+      "recorded PR #52 as squash-merged main authority only after its five review findings were resolved and its exact merge-ref gates passed"
     ],
-    "pending_pull_requests": [
-      {
-        "head_sha": "a1babd796e6ea87aa9f6489c6d589540337248d6",
-        "pr": 52,
-        "status": "green_mergeable_not_merged"
-      }
-    ],
+    "pending_pull_requests": [],
     "repository": "BigBirdReturns/earcrate"
   },
   "claim_corrections": [
@@ -33,13 +28,14 @@
     },
     {
       "claim_id": "correction.governance_v2_already_complete",
-      "pending_ref": {
-        "head_sha": "a1babd796e6ea87aa9f6489c6d589540337248d6",
+      "landed_ref": {
+        "head_sha": "43245748702848053af970d88011479e0044e4c7",
+        "main_sha": "36618a23f755b876e6d887be64a61389b5093e10",
         "pr": 52
       },
       "previous_claim": "PR #49/main fully enforced committed per-reviewer blinding, arbitration, scoped rights, format-neutral atomic publication, and PublicationReceipt.",
-      "reason": "Audited main documentation was ahead of implementation. PR #52 implements the missing contract and is green but not yet merged.",
-      "status": "corrected_by_pending_pr"
+      "reason": "Audited main documentation was ahead of implementation. PR #52 closed the contract, resolved all five review findings, passed its exact merge-ref gates, and landed on main as the recorded squash commit.",
+      "status": "resolved_by_landed_pr"
     },
     {
       "claim_id": "correction.download_links_are_custody",
@@ -223,7 +219,7 @@
     {
       "claim_status": "retracted_as_main_fact_retained_as_open_obligation",
       "current_resolution": {
-        "governance": "reimplemented and pending in PR #52",
+        "governance": "reimplemented by PR #52 and landed on main at 36618a23f755b876e6d887be64a61389b5093e10",
         "packaging_and_wheel": "not established on audited main",
         "repository_cleanup": "partially landed through PRs #49 and #51"
       },
@@ -412,12 +408,6 @@
       "reason": "Heads are recorded, but the referenced local archive bundle is not itself repository-verifiable.",
       "source": "deprecated remote branch register",
       "status": "partial"
-    },
-    {
-      "obligation_id": "pending.governance_v2",
-      "reason": "Implementation is green and mergeable but not main canon until reviewed and merged.",
-      "source": "PR #52",
-      "status": "pending_verified_pr"
     }
   ],
   "pull_requests": [
@@ -884,14 +874,13 @@
       "url": "https://github.com/BigBirdReturns/earcrate/pull/51"
     },
     {
-      "canon_summary": "Pending hardening for committed reviewer assignments, arbitration, scoped rights, format-neutral permits, atomic publication, and PublicationReceipt.",
-      "disposition": "pending_verified_pr",
-      "head_sha": "a1babd796e6ea87aa9f6489c6d589540337248d6",
-      "main_reachability": "not_in_audited_main",
+      "canon_summary": "Committed per-reviewer blinding, independently revalidated arbitration, use-scoped time-bounded rights, format-neutral permits, atomic publication, complete publication verification, and runtime-aligned governance schemas.",
+      "disposition": "landed_main_direct_merge",
+      "head_sha": "43245748702848053af970d88011479e0044e4c7",
+      "main_reachability": "reachable_from_audited_main",
       "pr": 52,
       "title": "Harden release governance and atomic publication",
-      "url": "https://github.com/BigBirdReturns/earcrate/pull/52",
-      "why_not_main": "Green and mergeable, but intentionally left open for review; its guarantees are not main canon until merged."
+      "url": "https://github.com/BigBirdReturns/earcrate/pull/52"
     }
   ],
   "retired_decisions": [

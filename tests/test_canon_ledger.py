@@ -98,6 +98,8 @@ def test_canon_ledger_is_complete_hashed_corrected_and_schema_bound() -> None:
     assert audit["repository"] == "BigBirdReturns/earcrate"
     assert _SHA40.fullmatch(audit["audited_main_sha"])
     assert audit["method"] and audit["limitations"]
+    assert audit["audited_main_sha"] == "36618a23f755b876e6d887be64a61389b5093e10"
+    assert audit["pending_pull_requests"] == []
 
     prs = ledger["pull_requests"]
     assert [row["pr"] for row in prs] == list(range(1, 53))
@@ -118,8 +120,8 @@ def test_canon_ledger_is_complete_hashed_corrected_and_schema_bound() -> None:
     assert by_pr[41]["disposition"] == "deferred_concept_canon"
     assert by_pr[45]["disposition"] == "harvested_competing_implementation"
     assert by_pr[50]["disposition"] == "failed_delivery"
-    assert by_pr[52]["disposition"] == "pending_verified_pr"
-    assert by_pr[52]["main_reachability"] == "not_in_audited_main"
+    assert by_pr[52]["disposition"] == "landed_main_direct_merge"
+    assert by_pr[52]["main_reachability"] == "reachable_from_audited_main"
 
     nonmain = [
         row
@@ -181,7 +183,7 @@ def test_canon_ledger_keeps_claim_corrections_and_open_debt_visible() -> None:
     assert corrections["correction.production_cleanup_complete"]["status"] == "retracted"
     assert (
         corrections["correction.governance_v2_already_complete"]["status"]
-        == "corrected_by_pending_pr"
+        == "resolved_by_landed_pr"
     )
     assert corrections["correction.download_links_are_custody"]["status"] == (
         "retracted_as_general_rule"
@@ -202,9 +204,9 @@ def test_canon_ledger_keeps_claim_corrections_and_open_debt_visible() -> None:
         "floor.normative_license",
         "repo.installable_distribution",
         "repo.reproducible_dependencies",
-        "pending.governance_v2",
     }
     assert required_open.issubset(obligations)
+    assert "pending.governance_v2" not in obligations
     assert all(obligations[key]["reason"] for key in required_open)
 
 

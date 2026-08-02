@@ -3,12 +3,15 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
+import sys
 
 from earcrate.estate.homelab import (
     audit_homelab,
     bind_homelab_fixture,
     capture_homelab_node,
+    decide_homelab_target,
     record_homelab_audition,
+    record_homelab_stage,
 )
 from earcrate.estate.homelab_catalog import homelab_catalog
 from earcrate.estate.homelab_common import homelab_seal, homelab_validate_seal
@@ -311,3 +314,128 @@ def test_homelab_schema_requires_fixture_and_review_integrity_fields() -> None:
     assert {"fixture_ids", "review_token_sha256", "submission_proof_hmac_sha256"}.issubset(submission_required)
     blind_then = schema["$defs"]["auditionLedger"]["allOf"][1]["allOf"][0]["then"]["required"]
     assert {"assignment_sha256", "private_authority_sha256", "submission_sha256"}.issubset(blind_then)
+
+
+def test_adoption_decision_is_current_node_and_stage_evidence_scoped(tmp_path: Path) -> None:
+    catalog = homelab_catalog()
+
+    def ready_rig(marker: str) -> dict:
+        value = deepcopy(_rig(tmp_path))
+        value.pop("rig_sha256")
+        value["host"]["hostname_sha256"] = marker * 64
+        executable = str(Path(sys.executable).resolve())
+        value["host"]["python_executable"] = executable
+        value["executables"] = [
+            {"name": "ffmpeg", "available": True, "path": executable, "version": "test"},
+            {"name": "ffprobe", "available": True, "path": executable, "version": "test"},
+        ]
+        return estate_seal(value)
+
+    node_a = capture_homelab_node(ready_rig("a"), catalog=catalog)
+    fixtures = ["fixture.synthetic.regression", "fixture.private_library.real"]
+    identity = record_homelab_stage(
+        catalog,
+        target_id="ffmpeg",
+        stage="local_identity_audit",
+        node_sha256=node_a["node_sha256"],
+        status="passed",
+        artifact_sha256s=["1" * 64],
+    )
+    fixture = record_homelab_stage(
+        catalog,
+        target_id="ffmpeg",
+        stage="real_fixture",
+        node_sha256=node_a["node_sha256"],
+        status="passed",
+        fixture_ids=fixtures,
+        artifact_sha256s=["2" * 64],
+    )
+    audition = record_homelab_audition(
+        catalog,
+        target_id="ffmpeg",
+        node_sha256=node_a["node_sha256"],
+        reviewer_id="reviewer:test",
+        candidate_sha256="3" * 64,
+        control_sha256="4" * 64,
+        verdict="accept",
+        blinded=False,
+        randomized=True,
+        playback_chain={"device": "test", "level": "matched"},
+        dimensions={"decode_fidelity": 5, "workflow": 5},
+        fixture_ids=fixtures,
+    )
+
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"RIFF-private-library")
+    workspace = tmp_path / "config.json"
+    workspace.write_text("{}\n", encoding="utf-8")
+    rows = [
+        _item(source, item_id="source", classification="source_audio", metadata={}),
+        _item(workspace, item_id="workspace", classification="workspace_config", metadata={}),
+    ]
+    for index, value in enumerate((identity, fixture, audition)):
+        path = write_estate_json(tmp_path / f"evidence-{index}.json", value)
+        rows.append(
+            _item(
+                path,
+                item_id=f"evidence-{index}",
+                classification="run_receipt" if value["kind"] != "earcrate_homelab_audition_ledger" else "human_review",
+                metadata={"kind": value["kind"]},
+            )
+        )
+
+    first_audit = audit_homelab(_inventory(tmp_path, rows), [node_a], catalog=catalog)
+    ffmpeg = next(row for row in first_audit["targets"] if row["target_id"] == "ffmpeg")
+    assert ffmpeg["feasibility"] == "ready"
+    assert set(ffmpeg["completed_stages"]) == {
+        "local_identity_audit",
+        "real_fixture",
+        "regression_audition",
+    }
+    current_receipts = sorted(ffmpeg["stage_evidence"].values())
+
+    try:
+        decide_homelab_target(
+            first_audit,
+            target_id="ffmpeg",
+            decision="accepted",
+            decided_by="authority:test",
+            reason="intentionally incomplete evidence set",
+            supporting_receipt_sha256s=current_receipts[:1],
+        )
+    except ValueError as exc:
+        assert "every current stage receipt" in str(exc)
+    else:
+        raise AssertionError("accepted decision unexpectedly omitted current stage evidence")
+
+    decision = decide_homelab_target(
+        first_audit,
+        target_id="ffmpeg",
+        decision="accepted",
+        decided_by="authority:test",
+        reason="all current node-scoped stage evidence passed",
+        supporting_receipt_sha256s=current_receipts,
+    )
+    decision_path = write_estate_json(tmp_path / "decision.json", decision)
+    rows_with_decision = [
+        *rows,
+        _item(
+            decision_path,
+            item_id="decision",
+            classification="proof_receipt",
+            metadata={"kind": decision["kind"]},
+        ),
+    ]
+    accepted_audit = audit_homelab(_inventory(tmp_path, rows_with_decision), [node_a], catalog=catalog)
+    accepted = next(row for row in accepted_audit["targets"] if row["target_id"] == "ffmpeg")
+    assert accepted["terminal_decision"] == "accepted"
+
+    node_b = capture_homelab_node(ready_rig("b"), catalog=catalog)
+    other_node_audit = audit_homelab(
+        _inventory(tmp_path, rows_with_decision),
+        [node_b],
+        catalog=catalog,
+    )
+    other_node = next(row for row in other_node_audit["targets"] if row["target_id"] == "ffmpeg")
+    assert other_node["terminal_decision"] is None
+    assert "retain_or_replace_decision" in other_node["missing_stages"]

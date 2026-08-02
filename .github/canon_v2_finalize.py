@@ -8,7 +8,6 @@ import hashlib
 import json
 from pathlib import Path
 
-# This ordinary contents-API commit intentionally triggers the one-shot finalizer.
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = [
     ROOT / ".github" / "canon-v2-ledger.part0.b64",
@@ -26,9 +25,13 @@ def canonical_sha256(value: dict) -> str:
 
 
 def main() -> int:
-    encoded = "".join("".join(path.read_text(encoding="ascii").split()) for path in PARTS)
-    raw = base64.b64decode(encoded, validate=True)
+    fragments = ["".join(path.read_text(encoding="ascii").split()) for path in PARTS]
+    encoded = "".join(fragments)
+    padding = "=" * ((4 - len(encoded) % 4) % 4)
+    print(f"LEDGER_TRANSPORT part_lengths={[len(item) for item in fragments]} total={len(encoded)} padding={len(padding)}")
+    raw = base64.b64decode(encoded + padding, validate=True)
     measured = hashlib.sha256(raw).hexdigest()
+    print(f"LEDGER_DECODE bytes={len(raw)} sha256={measured}")
     if measured != EXPECTED_FILE_SHA256:
         raise RuntimeError(f"canon v2 file hash mismatch: {measured}")
 

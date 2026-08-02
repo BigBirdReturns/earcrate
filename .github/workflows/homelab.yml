@@ -70,6 +70,7 @@ jobs:
           tests/test_homelab_provider_arcade.py
           tests/test_homelab_operations.py
           tests/test_homelab_public_projection.py
+          tests/test_homelab_integrity.py
       - name: Verify launch distribution
         run: python VERIFY_HOMELAB.py > homelab-verifier.json
       - name: Build retained Homelab zipapp

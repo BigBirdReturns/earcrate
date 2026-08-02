@@ -52,9 +52,6 @@ def _decode_payload(encoded: str) -> dict:
     try:
         raw = zlib.decompress(packed)
     except zlib.error as wrapper_error:
-        # The transported stream's wrapper checksum was damaged while its deflate
-        # body remained decodable. We never trust that recovery on its own: the
-        # exact file set and SHA-256 of every materialized file are verified below.
         if len(packed) < 7:
             raise RuntimeError("transport is too short for zlib recovery") from wrapper_error
         try:
@@ -62,7 +59,17 @@ def _decode_payload(encoded: str) -> dict:
         except zlib.error as raw_error:
             raise RuntimeError("transport deflate body is not recoverable") from raw_error
         print(f"RECOVERED deflate body after wrapper checksum failure: {wrapper_error}")
-    value = json.loads(raw.decode("utf-8"))
+    try:
+        value = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as error:
+        start = max(0, error.pos - 300)
+        end = min(len(raw), error.pos + 300)
+        context = raw[start:end].decode("utf-8", errors="backslashreplace")
+        print(f"JSON_ERROR position={error.pos} line={error.lineno} column={error.colno}: {error.msg}")
+        print(f"JSON_CONTEXT_START={start}")
+        print(repr(context))
+        print(f"JSON_CONTEXT_END={end}")
+        raise
     if not isinstance(value, dict):
         raise RuntimeError("decoded transport is not a file mapping")
     return value

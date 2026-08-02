@@ -47,6 +47,27 @@ def _comments() -> list[dict]:
     return value
 
 
+def _decode_payload(encoded: str) -> dict:
+    packed = base64.b64decode(encoded, validate=True)
+    try:
+        raw = zlib.decompress(packed)
+    except zlib.error as wrapper_error:
+        # The transported stream's wrapper checksum was damaged while its deflate
+        # body remained decodable. We never trust that recovery on its own: the
+        # exact file set and SHA-256 of every materialized file are verified below.
+        if len(packed) < 7:
+            raise RuntimeError("transport is too short for zlib recovery") from wrapper_error
+        try:
+            raw = zlib.decompress(packed[2:-4], -zlib.MAX_WBITS)
+        except zlib.error as raw_error:
+            raise RuntimeError("transport deflate body is not recoverable") from raw_error
+        print(f"RECOVERED deflate body after wrapper checksum failure: {wrapper_error}")
+    value = json.loads(raw.decode("utf-8"))
+    if not isinstance(value, dict):
+        raise RuntimeError("decoded transport is not a file mapping")
+    return value
+
+
 def main() -> int:
     marker = re.compile(r"<!-- CANON_V2_PAYLOAD ([1-5])/5 -->")
     block = re.compile(r"```text\s*([A-Za-z0-9+/=\s]+?)\s*```", re.DOTALL)
@@ -74,8 +95,7 @@ def main() -> int:
     if measured != PAYLOAD_SHA256:
         raise RuntimeError(f"payload hash mismatch: {measured}")
 
-    packed = base64.b64decode(encoded, validate=True)
-    data = json.loads(zlib.decompress(packed).decode("utf-8"))
+    data = _decode_payload(encoded)
     if set(data) != set(EXPECTED_FILES):
         raise RuntimeError(f"file set mismatch: {sorted(data)}")
 

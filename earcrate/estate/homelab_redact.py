@@ -19,13 +19,38 @@ from earcrate.estate.homelab_common import (
     homelab_validate_seal,
 )
 
-_ABSOLUTE_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/|file://)")
-_SENSITIVE_KEYS = {
+_ABSOLUTE_PATH_AT_START = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/|file://)", re.IGNORECASE)
+_EMBEDDED_ABSOLUTE_PATH = re.compile(
+    r"(?:"
+    r"file://[^\s\"'<>]+"
+    r"|(?<![A-Za-z0-9])[A-Za-z]:[\\/]"
+    r"|(?<![\\])\\\\[^\\/\s]+[\\/]"
+    r"|(?<![A-Za-z0-9:])/(?:[^/\s\"'<>]+/)+[^/\s\"'<>]+"
+    r")",
+    re.IGNORECASE,
+)
+_EXACT_SENSITIVE_KEYS = {
     "nonce",
     "option_map",
     "source_artifacts",
     "review_token",
     "lease_token",
+}
+_SENSITIVE_KEY_FRAGMENTS = {
+    "password",
+    "secret",
+    "api_key",
+    "access_token",
+    "refresh_token",
+    "authorization",
+    "cookie",
+    "private_key",
+    "client_secret",
+    "credential_value",
+}
+_SAFE_CREDENTIAL_KEYS = {
+    "credential_environment_names",
+    "credentials_all",
 }
 
 
@@ -45,9 +70,26 @@ def _redacted_string(value: str) -> str:
     return f"redacted:sha256:{digest}"
 
 
+def _contains_absolute_path(value: str) -> bool:
+    text = str(value)
+    return bool(
+        _ABSOLUTE_PATH_AT_START.match(text.strip())
+        or _EMBEDDED_ABSOLUTE_PATH.search(text)
+    )
+
+
+def _sensitive_key(value: str) -> bool:
+    key = str(value or "").casefold()
+    if not key or key.endswith("_sha256") or key in _SAFE_CREDENTIAL_KEYS:
+        return False
+    if key in _EXACT_SENSITIVE_KEYS:
+        return True
+    return any(fragment in key for fragment in _SENSITIVE_KEY_FRAGMENTS)
+
+
 def _project(value: Any, *, key: str | None = None, counters: dict[str, int]) -> Any:
     normalized_key = str(key or "").casefold()
-    if normalized_key in _SENSITIVE_KEYS:
+    if _sensitive_key(normalized_key):
         counters["sensitive_fields"] += 1
         return "redacted"
     if isinstance(value, Mapping):
@@ -59,7 +101,7 @@ def _project(value: Any, *, key: str | None = None, counters: dict[str, int]) ->
         return [_project(child, key=key, counters=counters) for child in value]
     if isinstance(value, tuple):
         return [_project(child, key=key, counters=counters) for child in value]
-    if isinstance(value, str) and _ABSOLUTE_PATH.match(value.strip()):
+    if isinstance(value, str) and _contains_absolute_path(value):
         counters["absolute_paths"] += 1
         return _redacted_string(value)
     return value
@@ -73,7 +115,7 @@ def _absolute_strings(value: Any, *, path: str = "$") -> list[str]:
     elif isinstance(value, list):
         for index, child in enumerate(value):
             found.extend(_absolute_strings(child, path=f"{path}[{index}]"))
-    elif isinstance(value, str) and _ABSOLUTE_PATH.match(value.strip()):
+    elif isinstance(value, str) and _contains_absolute_path(value):
         found.append(path)
     return found
 

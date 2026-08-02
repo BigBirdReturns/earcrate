@@ -3,6 +3,7 @@
 from earcrate.estate.discover import redact_estate_inventory, scan_estate
 from earcrate.estate.homelab import (
     audit_homelab,
+    bind_homelab_fixture,
     capture_homelab_node,
     decide_homelab_target,
     homelab_catalog,
@@ -36,6 +37,7 @@ __all__ = [
     "propose_local_acceptance_campaign",
     "homelab_catalog",
     "capture_homelab_node",
+    "bind_homelab_fixture",
     "audit_homelab",
     "propose_homelab_campaign",
     "record_homelab_stage",

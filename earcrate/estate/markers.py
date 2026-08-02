@@ -38,6 +38,7 @@ _JSON_KINDS = {
     "earcrate_homelab_stage_receipt": ("run_receipt", "durable_evidence"),
     "earcrate_homelab_audition_ledger": ("human_review", "durable_evidence"),
     "earcrate_homelab_adoption_decision": ("proof_receipt", "durable_evidence"),
+    "earcrate_homelab_fixture_binding": ("proof_manifest", "durable_evidence"),
     "earcrate_homelab_review_assignment": ("human_review", "durable_evidence"),
     "earcrate_homelab_private_assignment_authority": ("human_review", "durable_evidence"),
     "earcrate_homelab_review_submission": ("human_review", "durable_evidence"),

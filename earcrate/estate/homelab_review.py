@@ -5,6 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 import contextlib
 import hashlib
+import hmac
+import json
 import os
 from pathlib import Path
 import secrets
@@ -13,10 +15,24 @@ from typing import Any, Mapping, Sequence
 
 from earcrate.estate.homelab import record_homelab_audition
 from earcrate.estate.homelab_catalog import _catalog_target
-from earcrate.estate.homelab_common import HOMELAB_SCHEMA_VERSION, _is_sha256, _now_utc, homelab_seal, homelab_validate_seal
+from earcrate.estate.homelab_common import (
+    HOMELAB_SCHEMA_VERSION,
+    _is_sha256,
+    _now_utc,
+    homelab_seal,
+    homelab_validate_seal,
+)
 from earcrate.estate.model import estate_sha256_file, write_estate_json
 
 _CHOICES = {"A", "B", "tie", "abstain"}
+
+
+def _canonical_bytes(value: Mapping[str, Any]) -> bytes:
+    return (json.dumps(dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def _submission_hmac(review_token: str, payload: Mapping[str, Any]) -> str:
+    return hmac.new(review_token.encode("utf-8"), _canonical_bytes(payload), hashlib.sha256).hexdigest()
 
 
 def _refuse_symlink_components(path: Path) -> None:
@@ -36,6 +52,15 @@ def _fsync_directory(path: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _write_private_text(path: Path, value: str) -> None:
+    with path.open("x", encoding="utf-8", newline="\n") as handle:
+        handle.write(value + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    with contextlib.suppress(Exception):
+        path.chmod(0o600)
 
 
 def _copy_verified(source: Path, target: Path, expected_sha: str, expected_bytes: int) -> None:
@@ -119,11 +144,14 @@ def prepare_blind_review(
     private_resolved = private.resolve()
     if public_resolved == private_resolved or public_resolved in private_resolved.parents or private_resolved in public_resolved.parents:
         raise ValueError("public and private review directories must be disjoint")
-    for directory in (public, private):
-        if directory.exists() and any(directory.iterdir()):
-            raise ValueError(f"review directory must be new or empty: {directory}")
-        directory.mkdir(parents=True, exist_ok=True)
+    if public.exists() or private.exists():
+        raise ValueError("public and private review directories must not already exist")
+    for parent in (public.parent, private.parent):
+        parent.mkdir(parents=True, exist_ok=True)
+        _refuse_symlink_components(parent)
 
+    review_token = secrets.token_urlsafe(32)
+    review_token_sha = hashlib.sha256(review_token.encode("utf-8")).hexdigest()
     candidate_option = "A" if secrets.randbelow(2) == 0 else "B"
     control_option = "B" if candidate_option == "A" else "A"
     nonce = secrets.token_hex(32)
@@ -139,24 +167,33 @@ def prepare_blind_review(
             "reviewer_id": reviewer_id.strip(),
             "fixture_ids": fixtures,
             "nonce": nonce,
+            "review_token": review_token,
+            "review_token_sha256": review_token_sha,
             "option_map": {candidate_option: "candidate", control_option: "control"},
             "source_artifacts": {
                 "candidate": {"sha256": candidate_sha, "bytes": candidate_bytes},
                 "control": {"sha256": control_sha, "bytes": control_bytes},
             },
-            "boundary": {"private_object": True, "must_not_enter_public_export": True},
+            "boundary": {
+                "private_object": True,
+                "must_not_enter_public_export": True,
+                "review_token_is_private_authentication_material": True,
+            },
         }
     )
     extension = candidate.suffix or ".bin"
-    option_sources = {candidate_option: (candidate, candidate_sha, candidate_bytes), control_option: (control, control_sha, control_bytes)}
-    public_options: dict[str, Any] = {}
-    for option in ("A", "B"):
-        source, digest, size = option_sources[option]
-        filename = f"option-{option}{extension.lower()}"
-        _copy_verified(source, public / filename, digest, size)
-        public_options[option] = {"filename": filename, "sha256": digest, "bytes": size}
-
-    review_token = secrets.token_urlsafe(32)
+    option_sources = {
+        candidate_option: (candidate, candidate_sha, candidate_bytes),
+        control_option: (control, control_sha, control_bytes),
+    }
+    public_options = {
+        option: {
+            "filename": f"option-{option}{extension.lower()}",
+            "sha256": option_sources[option][1],
+            "bytes": option_sources[option][2],
+        }
+        for option in ("A", "B")
+    }
     assignment = homelab_seal(
         {
             "schema_version": HOMELAB_SCHEMA_VERSION,
@@ -172,7 +209,7 @@ def prepare_blind_review(
             "options": public_options,
             "playback_chain": deepcopy(dict(playback_chain)),
             "private_authority_sha256": private_authority["authority_sha256"],
-            "review_token_sha256": hashlib.sha256(review_token.encode("utf-8")).hexdigest(),
+            "review_token_sha256": review_token_sha,
             "boundary": {
                 "candidate_control_roles_withheld": True,
                 "option_order_randomized": True,
@@ -180,21 +217,51 @@ def prepare_blind_review(
             },
         }
     )
-    write_estate_json(public / "assignment.json", assignment)
-    write_estate_json(private / "assignment-authority.json", private_authority)
-    checksums = [
-        f"{public_options['A']['sha256']}  {public_options['A']['filename']}",
-        f"{public_options['B']['sha256']}  {public_options['B']['filename']}",
-        f"{estate_sha256_file(public / 'assignment.json')}  assignment.json",
-    ]
-    (public / "SHA256SUMS.txt").write_text("\n".join(checksums) + "\n", encoding="utf-8")
-    (public / "README.txt").write_text(
-        "EarCrate blind review\n\nListen to option A and option B under the declared playback chain. "
-        "Record A, B, tie, or abstain. Candidate/control ownership is intentionally withheld.\n",
-        encoding="utf-8",
-    )
-    _fsync_directory(public)
-    _fsync_directory(private)
+
+    stage_token = secrets.token_hex(10)
+    staged_public = public.with_name(f".{public.name}.tmp-{os.getpid()}-{stage_token}")
+    staged_private = private.with_name(f".{private.name}.tmp-{os.getpid()}-{stage_token}")
+    promoted_private = False
+    promoted_public = False
+    try:
+        staged_public.mkdir()
+        staged_private.mkdir()
+        for option in ("A", "B"):
+            source, digest, size = option_sources[option]
+            _copy_verified(source, staged_public / public_options[option]["filename"], digest, size)
+        write_estate_json(staged_public / "assignment.json", assignment)
+        write_estate_json(staged_private / "assignment-authority.json", private_authority)
+        _write_private_text(staged_private / "review-token.txt", review_token)
+        checksums = [
+            f"{public_options['A']['sha256']}  {public_options['A']['filename']}",
+            f"{public_options['B']['sha256']}  {public_options['B']['filename']}",
+            f"{estate_sha256_file(staged_public / 'assignment.json')}  assignment.json",
+        ]
+        (staged_public / "SHA256SUMS.txt").write_text("\n".join(checksums) + "\n", encoding="utf-8")
+        (staged_public / "README.txt").write_text(
+            "EarCrate blind review\n\nListen to option A and option B under the declared playback chain. "
+            "Record A, B, tie, or abstain. Candidate/control ownership is intentionally withheld.\n",
+            encoding="utf-8",
+        )
+        _fsync_directory(staged_public)
+        _fsync_directory(staged_private)
+        os.replace(staged_private, private)
+        promoted_private = True
+        _fsync_directory(private.parent)
+        os.replace(staged_public, public)
+        promoted_public = True
+        _fsync_directory(public.parent)
+    except Exception:
+        if promoted_public and public.exists():
+            shutil.rmtree(public)
+        if promoted_private and private.exists():
+            shutil.rmtree(private)
+        raise
+    finally:
+        for staged in (staged_public, staged_private):
+            if staged.exists():
+                shutil.rmtree(staged)
+
     return {
         "ok": True,
         "assignment": assignment,
@@ -202,6 +269,7 @@ def prepare_blind_review(
         "public_directory": str(public),
         "private_directory": str(private),
         "review_token": review_token,
+        "review_token_file": str(private / "review-token.txt"),
         "boundary": "give only the public directory and review token to the reviewer",
     }
 
@@ -232,24 +300,29 @@ def record_review_submission(
         raise ValueError("review dimensions are required")
     if authentication_receipt_sha256 is not None and not _is_sha256(authentication_receipt_sha256):
         raise ValueError("authentication receipt identity must be SHA-256")
-    return homelab_seal(
-        {
-            "schema_version": HOMELAB_SCHEMA_VERSION,
-            "kind": "earcrate_homelab_review_submission",
-            "submitted_at": _now_utc(),
-            "assignment_sha256": assignment["assignment_sha256"],
-            "catalog_sha256": assignment["catalog_sha256"],
-            "target_id": assignment["target_id"],
-            "target_manifest_sha256": assignment["target_manifest_sha256"],
-            "node_sha256": assignment["node_sha256"],
-            "reviewer_id": reviewer_id.strip(),
-            "choice": normalized_choice,
-            "dimensions": deepcopy(dict(dimensions)),
-            "notes": [str(note) for note in notes],
-            "authentication_receipt_sha256": authentication_receipt_sha256,
-            "boundary": {"submission_does_not_contain_private_option_map": True},
-        }
-    )
+    body: dict[str, Any] = {
+        "schema_version": HOMELAB_SCHEMA_VERSION,
+        "kind": "earcrate_homelab_review_submission",
+        "submitted_at": _now_utc(),
+        "assignment_sha256": assignment["assignment_sha256"],
+        "catalog_sha256": assignment["catalog_sha256"],
+        "target_id": assignment["target_id"],
+        "target_manifest_sha256": assignment["target_manifest_sha256"],
+        "node_sha256": assignment["node_sha256"],
+        "reviewer_id": reviewer_id.strip(),
+        "fixture_ids": list(assignment.get("fixture_ids") or []),
+        "review_token_sha256": expected,
+        "choice": normalized_choice,
+        "dimensions": deepcopy(dict(dimensions)),
+        "notes": [str(note) for note in notes],
+        "authentication_receipt_sha256": authentication_receipt_sha256,
+        "boundary": {
+            "submission_does_not_contain_private_option_map": True,
+            "token_possession_is_hmac_proved": True,
+        },
+    }
+    body["submission_proof_hmac_sha256"] = _submission_hmac(str(review_token), body)
+    return homelab_seal(body)
 
 
 def adjudicate_review(
@@ -274,17 +347,50 @@ def adjudicate_review(
     for field in fields:
         if assignment.get(field) != private_authority.get(field) or assignment.get(field) != submission.get(field):
             raise ValueError(f"review authority mismatch on {field}")
+    if list(assignment.get("fixture_ids") or []) != list(private_authority.get("fixture_ids") or []):
+        raise ValueError("private authority fixture set differs from the public assignment")
+    if list(assignment.get("fixture_ids") or []) != list(submission.get("fixture_ids") or []):
+        raise ValueError("submission fixture set differs from the assignment")
     if catalog["catalog_sha256"] != assignment["catalog_sha256"]:
         raise ValueError("review belongs to another catalog revision")
     target = _catalog_target(catalog, str(assignment["target_id"]))
     if target["target_manifest_sha256"] != assignment["target_manifest_sha256"]:
         raise ValueError("review target manifest is stale")
+    audition_stages = [stage for stage in target["required_stages"] if "audition" in stage]
+    if len(audition_stages) != 1 or assignment.get("stage") != audition_stages[0]:
+        raise ValueError("review assignment stage does not match the target manifest")
+
+    token = str(private_authority.get("review_token") or "")
+    token_sha = hashlib.sha256(token.encode("utf-8")).hexdigest() if token else ""
+    if not token or token_sha != private_authority.get("review_token_sha256"):
+        raise ValueError("private authority does not contain valid review authentication material")
+    if token_sha != assignment.get("review_token_sha256") or token_sha != submission.get("review_token_sha256"):
+        raise ValueError("review authentication commitment mismatch")
+    proof = str(submission.get("submission_proof_hmac_sha256") or "")
+    proof_body = deepcopy(dict(submission))
+    proof_body.pop("submission_sha256", None)
+    proof_body.pop("submission_proof_hmac_sha256", None)
+    expected_proof = _submission_hmac(token, proof_body)
+    if not _is_sha256(proof) or not hmac.compare_digest(proof, expected_proof):
+        raise PermissionError("review submission does not prove possession of the assigned token")
+
     option_map = dict(private_authority.get("option_map") or {})
     if set(option_map) != {"A", "B"} or set(option_map.values()) != {"candidate", "control"}:
         raise ValueError("invalid private A/B option map")
     artifacts = dict(private_authority.get("source_artifacts") or {})
+    public_options = dict(assignment.get("options") or {})
+    if set(public_options) != {"A", "B"}:
+        raise ValueError("public assignment must contain exactly options A and B")
+    for option, role in option_map.items():
+        public_row = dict(public_options.get(option) or {})
+        private_row = dict(artifacts.get(role) or {})
+        if public_row.get("sha256") != private_row.get("sha256") or int(public_row.get("bytes") or -1) != int(private_row.get("bytes") or -2):
+            raise ValueError(f"public option {option} does not match the committed private artifact")
     candidate_sha = str((artifacts.get("candidate") or {}).get("sha256") or "")
     control_sha = str((artifacts.get("control") or {}).get("sha256") or "")
+    if not _is_sha256(candidate_sha) or not _is_sha256(control_sha) or candidate_sha == control_sha:
+        raise ValueError("private authority contains invalid candidate/control identities")
+
     choice = str(submission.get("choice") or "")
     if choice == "abstain":
         verdict = "abstain"
@@ -310,11 +416,19 @@ def adjudicate_review(
         dimensions=dict(submission.get("dimensions") or {}),
         fixture_ids=list(assignment.get("fixture_ids") or []),
         notes=list(submission.get("notes") or []),
+        adjudication_refs={
+            "assignment_sha256": assignment["assignment_sha256"],
+            "private_authority_sha256": private_authority["authority_sha256"],
+            "submission_sha256": submission["submission_sha256"],
+        },
     )
     ledger.pop("ledger_sha256", None)
+    ledger["reviewed_at"] = submission.get("submitted_at") or assignment.get("created_at")
     ledger["assignment_sha256"] = assignment["assignment_sha256"]
     ledger["private_authority_sha256"] = private_authority["authority_sha256"]
     ledger["submission_sha256"] = submission["submission_sha256"]
+    ledger["review_token_sha256"] = token_sha
+    ledger["submission_proof_hmac_sha256"] = proof
     ledger["authentication_receipt_sha256"] = submission.get("authentication_receipt_sha256")
     return homelab_seal(ledger)
 

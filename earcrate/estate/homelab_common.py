@@ -25,6 +25,7 @@ HOMELAB_HASH_FIELDS = {
     "earcrate_homelab_restore_receipt": "receipt_sha256",
     "earcrate_homelab_public_export_manifest": "manifest_sha256",
     "earcrate_homelab_public_projection": "projection_sha256",
+    "earcrate_homelab_fixture_binding": "binding_sha256",
 }
 HOMELAB_STAGE_STATUSES = {"passed", "failed", "refused"}
 HOMELAB_AUDITION_VERDICTS = {"accept", "reject", "revise", "abstain"}

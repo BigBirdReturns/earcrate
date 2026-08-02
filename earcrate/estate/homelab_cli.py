@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 
 from earcrate.estate.homelab import (
     audit_homelab,
+    bind_homelab_fixture,
     capture_homelab_node,
     decide_homelab_target,
     homelab_catalog,
@@ -20,6 +21,7 @@ from earcrate.estate.homelab import (
     record_homelab_audition,
     record_homelab_stage,
 )
+from earcrate.estate.homelab_common import HOMELAB_HASH_FIELDS
 from earcrate.estate.homelab_ops import (
     backup_homelab_store,
     export_public_store,
@@ -51,28 +53,10 @@ def _json_arg(text: str | None, *, label: str) -> dict[str, Any]:
 def _output(payload: Mapping[str, Any], path: str | None) -> None:
     if path:
         write_estate_json(path, payload)
-        identity = next(
-            (
-                payload.get(name)
-                for name in (
-                    "catalog_sha256",
-                    "node_sha256",
-                    "audit_sha256",
-                    "campaign_sha256",
-                    "receipt_sha256",
-                    "ledger_sha256",
-                    "decision_sha256",
-                    "assignment_sha256",
-                    "authority_sha256",
-                    "submission_sha256",
-                    "snapshot_sha256",
-                    "manifest_sha256",
-                )
-                if payload.get(name)
-            ),
-            None,
-        )
-        _print({"ok": True, "kind": payload.get("kind"), "identity": identity, "output": path})
+        kind = str(payload.get("kind") or "")
+        identity_field = HOMELAB_HASH_FIELDS.get(kind)
+        identity = payload.get(identity_field) if identity_field else None
+        _print({"ok": True, "kind": kind, "identity": identity, "output": path})
     else:
         _print(payload)
 
@@ -103,6 +87,16 @@ def homelab_cli_main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("rig")
     p.add_argument("--catalog")
     p.add_argument("--output")
+
+    p = sub.add_parser("fixture-bind", help="bind one exact local file to a catalog fixture without copying it")
+    p.add_argument("fixture_id")
+    p.add_argument("artifact")
+    p.add_argument("bound_by")
+    p.add_argument("reason")
+    p.add_argument("--catalog")
+    p.add_argument("--decoded-pcm-sha256")
+    p.add_argument("--media-kind")
+    p.add_argument("--output", required=True)
 
     p = sub.add_parser("audit", help="check feasibility and existing receipts without running any target")
     p.add_argument("inventory")
@@ -276,6 +270,21 @@ def homelab_cli_main(argv: Sequence[str] | None = None) -> int:
             catalog = _load(args.catalog) if args.catalog else homelab_catalog()
             _output(capture_homelab_node(_load(args.rig), catalog=catalog), args.output)
             return 0
+        if args.command == "fixture-bind":
+            catalog = _load(args.catalog) if args.catalog else homelab_catalog()
+            _output(
+                bind_homelab_fixture(
+                    catalog,
+                    fixture_id=args.fixture_id,
+                    artifact_path=args.artifact,
+                    bound_by=args.bound_by,
+                    reason=args.reason,
+                    decoded_pcm_sha256=args.decoded_pcm_sha256,
+                    media_kind=args.media_kind,
+                ),
+                args.output,
+            )
+            return 0
         if args.command == "audit":
             catalog = _load(args.catalog) if args.catalog else homelab_catalog()
             payload = audit_homelab(_load(args.inventory), [_load(path) for path in args.nodes], catalog=catalog)
@@ -335,8 +344,12 @@ def homelab_cli_main(argv: Sequence[str] | None = None) -> int:
                 public_directory=args.public_dir,
                 private_directory=args.private_dir,
             )
-            token_output = Path(args.token_output).expanduser() if args.token_output else Path(result["private_directory"]) / "review-token.txt"
-            _write_secret(token_output, result["review_token"])
+            token_output = Path(result["review_token_file"])
+            if args.token_output:
+                requested = Path(args.token_output).expanduser().absolute()
+                if requested != token_output.absolute():
+                    _write_secret(requested, result["review_token"])
+                    token_output = requested
             _print(
                 {
                     "ok": True,

@@ -12,6 +12,8 @@ playback remain separate operators that must return evidence artifacts.
 from collections import Counter, defaultdict
 from copy import deepcopy
 import json
+import mimetypes
+import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -19,6 +21,7 @@ from earcrate.estate.discover import redact_estate_inventory, scan_estate
 from earcrate.estate.homelab_catalog import _catalog_target, homelab_catalog
 from earcrate.estate.homelab_common import (
     HOMELAB_AUDITION_VERDICTS,
+    HOMELAB_HASH_FIELDS,
     HOMELAB_DECISIONS,
     HOMELAB_SCHEMA_VERSION,
     HOMELAB_STAGE_STATUSES,
@@ -47,6 +50,10 @@ _HOMELAB_KINDS = {
     "earcrate_homelab_stage_receipt",
     "earcrate_homelab_audition_ledger",
     "earcrate_homelab_adoption_decision",
+    "earcrate_homelab_fixture_binding",
+    "earcrate_homelab_review_assignment",
+    "earcrate_homelab_private_assignment_authority",
+    "earcrate_homelab_review_submission",
 }
 _AUDITION_STAGES = {"blind_audition", "downstream_audition", "workflow_audition", "regression_audition"}
 _TERMINAL_STAGES = {
@@ -192,46 +199,244 @@ def capture_homelab_node(
     return homelab_seal(payload)
 
 
+def _refuse_fixture_symlink_components(path: Path) -> None:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current = current / part
+        if current.exists() and current.is_symlink():
+            raise ValueError(f"symlinked fixture path refused: {current}")
+
+
+def bind_homelab_fixture(
+    catalog: Mapping[str, Any],
+    *,
+    fixture_id: str,
+    artifact_path: str | Path,
+    bound_by: str,
+    reason: str,
+    decoded_pcm_sha256: str | None = None,
+    media_kind: str | None = None,
+) -> dict[str, Any]:
+    """Bind one exact local file to a catalog fixture without copying its bytes."""
+    homelab_validate_seal(catalog)
+    if catalog.get("kind") != "earcrate_homelab_catalog":
+        raise ValueError("fixture binding requires a HomelabCatalog")
+    fixture = next((dict(row) for row in catalog.get("fixtures") or [] if row.get("fixture_id") == fixture_id), None)
+    if fixture is None:
+        raise ValueError(f"unknown homelab fixture: {fixture_id}")
+    if not str(bound_by).strip() or not str(reason).strip():
+        raise ValueError("bound_by and reason are required")
+    decoded = str(decoded_pcm_sha256 or "").lower()
+    if decoded and not _is_sha256(decoded):
+        raise ValueError("decoded_pcm_sha256 must be a SHA-256 identity")
+
+    source = Path(artifact_path).expanduser().absolute()
+    _refuse_fixture_symlink_components(source)
+    if source.is_symlink() or not source.is_file():
+        raise ValueError("fixture artifact must be a regular non-symlink file")
+    before = source.stat()
+    artifact_sha = estate_sha256_file(source)
+    after = source.stat()
+    if int(before.st_size) != int(after.st_size) or int(before.st_mtime_ns) != int(after.st_mtime_ns):
+        raise ValueError("fixture artifact changed while it was being hashed")
+
+    expected = str(fixture.get("expected_sha256") or "").lower()
+    expected_pcm = str(fixture.get("decoded_pcm_sha256") or "").lower()
+    rule = str(fixture.get("availability_rule") or "")
+    exact_container = _is_sha256(expected) and artifact_sha == expected
+    exact_pcm = _is_sha256(expected_pcm) and decoded == expected_pcm
+    if rule == "exact_hash_required" and not exact_container:
+        raise ValueError("fixture artifact does not match the catalog's exact expected SHA-256")
+    if rule == "external_pack_or_pcm_identity_required" and not (exact_container or exact_pcm):
+        raise ValueError("fixture binding must match the catalog pack or decoded PCM identity")
+    if _is_sha256(expected) and rule not in {"external_pack_or_pcm_identity_required"} and not exact_container:
+        raise ValueError("fixture artifact does not match the catalog's expected SHA-256")
+
+    guessed_kind = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+    return homelab_seal(
+        {
+            "schema_version": HOMELAB_SCHEMA_VERSION,
+            "kind": "earcrate_homelab_fixture_binding",
+            "bound_at": _now_utc(),
+            "catalog_sha256": catalog["catalog_sha256"],
+            "fixture_id": fixture_id,
+            "evidence_tier": fixture.get("evidence_tier"),
+            "artifact_path": str(source),
+            "artifact_sha256": artifact_sha,
+            "artifact_bytes": int(after.st_size),
+            "artifact_mtime_ns": int(after.st_mtime_ns),
+            "decoded_pcm_sha256": decoded or None,
+            "media_kind": str(media_kind or guessed_kind),
+            "bound_by": str(bound_by).strip(),
+            "reason": str(reason).strip(),
+            "boundary": {
+                "source_bytes_copied": False,
+                "binding_is_not_provider_acceptance": True,
+                "local_path_is_sensitive_and_must_be_redacted_for_public_export": True,
+            },
+        }
+    )
+
+
 def _inventory_items(inventory: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [dict(item) for item in inventory.get("items") or []]
 
 
-def _inventory_sha_index(inventory: Mapping[str, Any]) -> dict[str, list[str]]:
+def _inventory_strong_sha_index(inventory: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Index only hashes computed from bytes that were actually present."""
+    out: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in _inventory_items(inventory):
+        raw = str(item.get("raw_sha256") or "").lower()
+        status = str(item.get("hash_status") or "")
+        if _is_sha256(raw) and status.startswith("strong") and item.get("file_type") == "file":
+            out[raw].append(
+                {
+                    "item_id": str(item.get("item_id") or ""),
+                    "absolute_path": str(item.get("absolute_path") or ""),
+                    "bytes": int(item.get("bytes") or 0),
+                }
+            )
+    return {key: sorted(values, key=lambda row: row["item_id"]) for key, values in out.items()}
+
+
+def _inventory_declared_sha_index(inventory: Mapping[str, Any]) -> dict[str, list[str]]:
+    """Retain declared identities for diagnostics; they never establish custody."""
     out: dict[str, list[str]] = defaultdict(list)
     for item in _inventory_items(inventory):
         item_id = str(item.get("item_id") or "")
-        raw = str(item.get("raw_sha256") or "").lower()
-        if _is_sha256(raw):
-            out[raw].append(item_id)
-        metadata = dict(item.get("metadata") or {})
-        for row in metadata.get("declared_sha256") or []:
+        for row in (item.get("metadata") or {}).get("declared_sha256") or []:
             digest = str((row or {}).get("sha256") or "").lower()
             if _is_sha256(digest):
                 out[digest].append(item_id)
     return {key: sorted(set(values)) for key, values in out.items()}
 
 
-def _declared_fixture_ids(inventory: Mapping[str, Any]) -> dict[str, list[str]]:
-    out: dict[str, list[str]] = defaultdict(list)
-    for item in _inventory_items(inventory):
-        metadata = dict(item.get("metadata") or {})
-        fixture_id = str(metadata.get("fixture_id") or "")
-        if fixture_id:
-            out[fixture_id].append(str(item.get("item_id") or ""))
-    return {key: sorted(set(values)) for key, values in out.items()}
+def _verified_inventory_rows(
+    digest: str,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    expected_bytes: int | None = None,
+) -> tuple[list[str], list[str]]:
+    verified: list[str] = []
+    problems: list[str] = []
+    for row in rows:
+        item_id = str(row.get("item_id") or "")
+        path_text = str(row.get("absolute_path") or "")
+        if not path_text:
+            problems.append(f"{item_id or 'inventory item'} has no local path")
+            continue
+        try:
+            path = Path(path_text).expanduser().absolute()
+            _refuse_fixture_symlink_components(path)
+            if path.is_symlink() or not path.is_file():
+                problems.append(f"{item_id or path_text} is missing or unsafe")
+                continue
+            before = path.stat()
+            if expected_bytes is not None and int(before.st_size) != int(expected_bytes):
+                problems.append(f"{item_id or path_text} size changed")
+                continue
+            if estate_sha256_file(path) != digest:
+                problems.append(f"{item_id or path_text} bytes changed")
+                continue
+            after = path.stat()
+            if int(after.st_size) != int(before.st_size) or int(after.st_mtime_ns) != int(before.st_mtime_ns):
+                problems.append(f"{item_id or path_text} changed during verification")
+                continue
+            verified.append(item_id)
+        except Exception as exc:
+            problems.append(f"{item_id or path_text}: {type(exc).__name__}: {exc}"[:500])
+    return sorted(set(verified)), sorted(set(problems))
+
+
+def _verify_fixture_binding(
+    binding: Mapping[str, Any],
+    *,
+    catalog: Mapping[str, Any],
+    fixture: Mapping[str, Any],
+    strong_index: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> tuple[bool, str, list[str]]:
+    if binding.get("kind") != "earcrate_homelab_fixture_binding":
+        return False, "object is not a fixture binding", []
+    if binding.get("catalog_sha256") != catalog.get("catalog_sha256"):
+        return False, "binding belongs to another catalog revision", []
+    if binding.get("fixture_id") != fixture.get("fixture_id"):
+        return False, "binding names another fixture", []
+    artifact_sha = str(binding.get("artifact_sha256") or "").lower()
+    if not _is_sha256(artifact_sha):
+        return False, "binding has no valid artifact SHA-256", []
+    expected_bytes = int(binding.get("artifact_bytes") or -1)
+    evidence: list[str] = []
+
+    path_text = str(binding.get("artifact_path") or "")
+    path_verified = False
+    path_problem: str | None = None
+    if path_text:
+        try:
+            path = Path(path_text).expanduser().absolute()
+            _refuse_fixture_symlink_components(path)
+            if path.is_symlink() or not path.is_file():
+                path_problem = "bound fixture path is missing or unsafe"
+            else:
+                before = path.stat()
+                if int(before.st_size) != expected_bytes:
+                    path_problem = "bound fixture size changed"
+                elif estate_sha256_file(path) != artifact_sha:
+                    path_problem = "bound fixture bytes changed"
+                else:
+                    after = path.stat()
+                    if int(after.st_size) != int(before.st_size) or int(after.st_mtime_ns) != int(before.st_mtime_ns):
+                        path_problem = "bound fixture changed during verification"
+                    else:
+                        path_verified = True
+        except Exception as exc:
+            path_problem = f"fixture path verification failed: {type(exc).__name__}: {exc}"[:500]
+
+    candidate_rows = [row for row in strong_index.get(artifact_sha) or [] if int(row.get("bytes") or -1) == expected_bytes]
+    verified_rows, row_problems = _verified_inventory_rows(
+        artifact_sha, candidate_rows, expected_bytes=expected_bytes
+    )
+    evidence.extend(verified_rows)
+    if not path_verified and not verified_rows:
+        details = [value for value in [path_problem, *row_problems] if value]
+        return False, "; ".join(details) or "binding artifact is not present as strongly verified bytes", []
+
+    expected = str(fixture.get("expected_sha256") or "").lower()
+    expected_pcm = str(fixture.get("decoded_pcm_sha256") or "").lower()
+    decoded = str(binding.get("decoded_pcm_sha256") or "").lower()
+    rule = str(fixture.get("availability_rule") or "")
+    container_match = _is_sha256(expected) and artifact_sha == expected
+    pcm_match = _is_sha256(expected_pcm) and decoded == expected_pcm
+    if rule == "exact_hash_required" and not container_match:
+        return False, "binding does not match the catalog's exact artifact identity", evidence
+    if rule == "external_pack_or_pcm_identity_required" and not (container_match or pcm_match):
+        return False, "binding matches neither the catalog pack nor decoded PCM identity", evidence
+    if _is_sha256(expected) and rule != "external_pack_or_pcm_identity_required" and not container_match:
+        return False, "binding does not match the catalog's expected artifact identity", evidence
+    if path_verified:
+        reason = "exact fixture binding verified against the bound local bytes"
+    else:
+        reason = "exact fixture binding verified through another current inventory location"
+        if path_problem:
+            reason += f"; original binding path is stale: {path_problem}"
+    return True, reason, sorted(set(evidence))
 
 
 def _fixture_status(
     catalog: Mapping[str, Any],
     inventory: Mapping[str, Any],
     nodes: Sequence[Mapping[str, Any]],
+    bindings: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, dict[str, Any]]:
     items = _inventory_items(inventory)
     classes = Counter(str(item.get("classification") or "") for item in items)
     root_roles = Counter(str(root.get("role") or "") for root in inventory.get("roots") or [])
-    sha_index = _inventory_sha_index(inventory)
-    declared = _declared_fixture_ids(inventory)
+    strong_index = _inventory_strong_sha_index(inventory)
+    declared_index = _inventory_declared_sha_index(inventory)
     any_audio_device = any(bool((node.get("audio_devices") or {}).get("available")) for node in nodes)
+    bindings_by_fixture: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for binding in bindings:
+        bindings_by_fixture[str(binding.get("fixture_id") or "")].append(binding)
 
     result: dict[str, dict[str, Any]] = {}
     for fixture in catalog.get("fixtures") or []:
@@ -240,39 +445,58 @@ def _fixture_status(
         expected = str(fixture.get("expected_sha256") or "").lower()
         decoded = str(fixture.get("decoded_pcm_sha256") or "").lower()
         evidence: list[str] = []
+        binding_ids: list[str] = []
+        invalid_bindings: list[str] = []
+        invalid_strong_rows: list[str] = []
         available = False
         reason = "fixture not found"
-        if rule == "always_generated_by_tests":
+
+        for binding in bindings_by_fixture.get(fixture_id) or []:
+            valid, binding_reason, binding_evidence = _verify_fixture_binding(
+                binding, catalog=catalog, fixture=fixture, strong_index=strong_index
+            )
+            if valid:
+                available = True
+                reason = binding_reason
+                evidence.extend(binding_evidence)
+                binding_ids.append(str(binding.get("binding_sha256") or ""))
+            else:
+                invalid_bindings.append(binding_reason)
+
+        if not available and rule == "always_generated_by_tests":
             available = True
             reason = "synthetic fixture is generated by the executable gates"
-        elif fixture_id in declared:
-            available = True
-            evidence.extend(declared[fixture_id])
-            reason = "inventory contains an explicit fixture declaration"
-        elif _is_sha256(expected) and expected in sha_index:
-            available = True
-            evidence.extend(sha_index[expected])
-            reason = "inventory contains the exact expected artifact identity"
-        elif _is_sha256(decoded) and decoded in sha_index:
-            available = True
-            evidence.extend(sha_index[decoded])
-            reason = "inventory contains the exact decoded PCM identity"
-        elif rule == "inventory_contains_source_audio_and_workspace_policy":
+        elif not available and _is_sha256(expected) and expected in strong_index:
+            verified_rows, invalid_strong_rows = _verified_inventory_rows(expected, strong_index[expected])
+            if verified_rows:
+                available = True
+                evidence.extend(verified_rows)
+                reason = "inventory contains the exact artifact bytes and they were reverified during audit"
+            else:
+                reason = "inventory declared a prior strong hash, but the current bytes no longer verify"
+        elif not available and rule == "inventory_contains_source_audio_and_workspace_policy":
             available = bool(classes.get("source_audio") and (root_roles.get("workspace") or classes.get("workspace_config") or classes.get("database")))
             reason = "source audio and workspace policy are present" if available else "requires source audio plus a workspace/policy authority"
-        elif rule == "inventory_contains_project_index_and_revision":
+        elif not available and rule == "inventory_contains_project_index_and_revision":
             available = bool(classes.get("project_index") and classes.get("project_revision"))
             reason = "project index and immutable revision are present" if available else "requires a project index and immutable revision"
-        elif rule == "node_receipt_contains_output_device":
+        elif not available and rule == "node_receipt_contains_output_device":
             available = any_audio_device
             reason = "a node reports a physical audio device" if available else "no node reports a physical audio device"
-        elif rule in {"user_supplied_exact_recording", "external_pack_or_pcm_identity_required"}:
-            reason = "requires an explicitly bound exact recording/pack/PCM identity"
+        elif not available and (_is_sha256(expected) and expected in declared_index):
+            reason = "the expected identity is only declared by metadata; the exact bytes are not strongly verified"
+        elif not available and rule in {"user_supplied_exact_recording", "external_pack_or_pcm_identity_required"}:
+            reason = "requires a sealed fixture binding whose exact bytes are present and verified"
+
         result[fixture_id] = {
             "fixture_id": fixture_id,
             "available": bool(available),
             "reason": reason,
             "evidence_item_ids": sorted(set(evidence)),
+            "binding_sha256s": sorted(set(value for value in binding_ids if _is_sha256(value))),
+            "invalid_binding_reasons": sorted(set(invalid_bindings)),
+            "invalid_strong_identity_reasons": sorted(set(invalid_strong_rows)),
+            "declared_identity_item_ids": sorted(set(declared_index.get(expected) or [])) if _is_sha256(expected) else [],
             "expected_sha256": expected or None,
             "decoded_pcm_sha256": decoded or None,
         }
@@ -394,8 +618,9 @@ def _load_existing_objects(inventory: Mapping[str, Any]) -> tuple[list[dict[str,
 
 
 def _object_identity(value: Mapping[str, Any]) -> str:
-    for field in ("receipt_sha256", "ledger_sha256", "decision_sha256", "node_sha256", "audit_sha256", "campaign_sha256", "catalog_sha256"):
-        digest = str(value.get(field) or "")
+    field = HOMELAB_HASH_FIELDS.get(str(value.get("kind") or ""))
+    if field:
+        digest = str(value.get(field) or "").lower()
         if _is_sha256(digest):
             return digest
     return _sha_json(value)
@@ -438,6 +663,37 @@ def _stage_fixture_coverage(value: Mapping[str, Any], required: Sequence[str]) -
     return set(str(item) for item in required).issubset(covered)
 
 
+def _validate_blind_audition_evidence(
+    catalog: Mapping[str, Any],
+    ledger: Mapping[str, Any],
+    object_index: Mapping[str, Mapping[str, Any]],
+) -> tuple[bool, str]:
+    refs = {
+        "assignment": str(ledger.get("assignment_sha256") or ""),
+        "authority": str(ledger.get("private_authority_sha256") or ""),
+        "submission": str(ledger.get("submission_sha256") or ""),
+    }
+    if any(not _is_sha256(value) for value in refs.values()):
+        return False, "blind audition ledger has no complete adjudication references"
+    missing = [name for name, identity in refs.items() if identity not in object_index]
+    if missing:
+        return False, "blind audition source objects are missing: " + ", ".join(missing)
+    try:
+        from earcrate.estate.homelab_review import adjudicate_review
+
+        recomputed = adjudicate_review(
+            catalog,
+            object_index[refs["assignment"]],
+            object_index[refs["authority"]],
+            object_index[refs["submission"]],
+        )
+    except Exception as exc:
+        return False, f"blind audition adjudication failed: {type(exc).__name__}: {exc}"[:500]
+    if recomputed.get("ledger_sha256") != ledger.get("ledger_sha256"):
+        return False, "blind audition ledger does not match recomputed adjudication"
+    return True, "blind audition source chain verified"
+
+
 def audit_homelab(
     inventory: Mapping[str, Any],
     nodes: Sequence[Mapping[str, Any]],
@@ -464,8 +720,10 @@ def audit_homelab(
             raise ValueError("homelab node belongs to another catalog revision")
         normalized_nodes.append(value)
 
-    fixtures = _fixture_status(active_catalog, inventory, normalized_nodes)
     objects, object_warnings = _load_existing_objects(inventory)
+    fixture_bindings = [value for value in objects if value.get("kind") == "earcrate_homelab_fixture_binding"]
+    fixtures = _fixture_status(active_catalog, inventory, normalized_nodes, fixture_bindings)
+    all_object_index = {_object_identity(value): value for value in objects}
     current_objects = [
         value for value in objects
         if value.get("kind") in {"earcrate_homelab_stage_receipt", "earcrate_homelab_audition_ledger", "earcrate_homelab_adoption_decision"}
@@ -507,7 +765,14 @@ def audit_homelab(
                 stage_evidence[stage] = identity
                 if value.get("kind") == "earcrate_homelab_audition_ledger":
                     verdict = str(value.get("verdict") or "")
-                    if verdict == "accept":
+                    blind_ok = True
+                    if stage == "blind_audition":
+                        blind_ok, blind_reason = _validate_blind_audition_evidence(
+                            active_catalog, value, all_object_index
+                        )
+                        if not blind_ok:
+                            warnings.append(blind_reason)
+                    if verdict == "accept" and blind_ok:
                         completed.append(stage)
                         audition_acceptance = True
                     elif verdict in {"reject", "revise"}:
@@ -798,6 +1063,7 @@ def record_homelab_audition(
     dimensions: Mapping[str, Any],
     fixture_ids: Sequence[str] = (),
     notes: Sequence[str] = (),
+    adjudication_refs: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     target = _validate_catalog_and_target(catalog, target_id)
     stages = [stage for stage in target["required_stages"] if stage in _AUDITION_STAGES]
@@ -815,6 +1081,13 @@ def record_homelab_audition(
         raise ValueError("candidate and control must be different artifacts")
     if stage == "blind_audition" and (not blinded or not randomized):
         raise ValueError("blind audition requires both blinding and randomized assignment")
+    refs = {str(key): str(value) for key, value in dict(adjudication_refs or {}).items()}
+    if stage == "blind_audition":
+        required_refs = {"assignment_sha256", "private_authority_sha256", "submission_sha256"}
+        if set(refs) != required_refs or any(not _is_sha256(value) for value in refs.values()):
+            raise ValueError("blind audition requires committed assignment, private authority, and submission evidence")
+    elif refs:
+        raise ValueError("adjudication_refs are only valid for a blind audition")
     if not playback_chain:
         raise ValueError("playback_chain is required")
     if not dimensions:
@@ -842,6 +1115,7 @@ def record_homelab_audition(
         "playback_chain": deepcopy(dict(playback_chain)),
         "dimensions": deepcopy(dict(dimensions)),
         "notes": [str(note) for note in notes],
+        **refs,
         "boundary": {
             "audition_is_not_adoption": True,
             "audition_is_not_legal_clearance": True,
@@ -1008,6 +1282,7 @@ def homelab_sweep(
 __all__ = [
     "homelab_catalog",
     "capture_homelab_node",
+    "bind_homelab_fixture",
     "audit_homelab",
     "propose_homelab_campaign",
     "record_homelab_stage",

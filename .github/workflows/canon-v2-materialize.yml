@@ -98,3 +98,11 @@ jobs:
           git add -A
           git commit -m "Publish canon v2 and freeze branch retention"
           git push origin HEAD:agent/canon-v2-housekeeping
+      - name: Retain recovered transport bytes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: canon-v2-recovered-raw-${{ github.run_id }}
+          path: canon-v2-recovered-raw.bin
+          if-no-files-found: error
+          retention-days: 7

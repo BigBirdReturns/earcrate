@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: canon-v2-finalize
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   finalize:
@@ -125,6 +125,7 @@ jobs:
               ".github/canon-v2-ledger.part1.b64",
               ".github/canon-v2-ledger.part2.b64",
               ".github/workflows/canon-v2-finalize.yml",
+              "docs/CANON_AND_CAMPAIGN_V2.md",
               "docs/canon/canon-ledger.v2.json",
           }
           actual = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())

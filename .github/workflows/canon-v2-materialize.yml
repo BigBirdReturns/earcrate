@@ -1,11 +1,6 @@
 name: canon-v2-materialize
 
 on:
-  push:
-    branches: [agent/canon-v2-housekeeping]
-    paths:
-      - ".github/canon_v2_materialize.py"
-      - ".github/workflows/canon-v2-materialize.yml"
   pull_request:
     branches: [main]
     paths:
@@ -21,9 +16,7 @@ concurrency:
 
 jobs:
   materialize:
-    if: >-
-      github.event_name == 'push' ||
-      github.event.pull_request.head.ref == 'agent/canon-v2-housekeeping'
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

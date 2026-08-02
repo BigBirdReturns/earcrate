@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   materialize:
-    if: ${{ false }}
+    if: github.event.pull_request.head.ref == 'agent/canon-v2-housekeeping'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

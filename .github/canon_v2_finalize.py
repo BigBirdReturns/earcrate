@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
+# This ordinary contents-API commit intentionally triggers the one-shot finalizer.
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = [
     ROOT / ".github" / "canon-v2-ledger.part0.b64",

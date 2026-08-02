@@ -118,3 +118,5 @@ This revision does not claim that a real estate sweep has run, any of the 87
 Homelab targets has been accepted, exact target recordings are locally custodied,
 a human has accepted a release candidate, rights are available, or the complete
 Buffalo has passed.
+
+<!-- exact-head verification trigger -->

@@ -42,6 +42,8 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 def main() -> int:
     ledger = json.loads(LEDGER_PATH.read_text(encoding="utf-8"))
     old_corrections = json.loads(CORRECTIONS_PATH.read_text(encoding="utf-8"))
+    previous_base_actual = old_corrections["base_actual_sha256"]
+    previous_effective = old_corrections["corrected_effective_sha256"]
 
     audit = ledger["audit"]
     audit["audit_date"] = AUDIT_DATE
@@ -108,7 +110,7 @@ def main() -> int:
     base.pop("ledger_sha256")
     base_actual = canonical_sha(base)
 
-    corrections = old_corrections
+    corrections = deepcopy(old_corrections)
     corrections["base_claimed_sha256"] = claimed
     corrections["base_actual_sha256"] = base_actual
     corrections["base_git_blob_sha1"] = blob_sha
@@ -157,13 +159,13 @@ def main() -> int:
     )
     readme = replace_once(
         readme,
-        f"base actual SHA:        {old_corrections['base_actual_sha256']}",
+        f"base actual SHA:        {previous_base_actual}",
         f"base actual SHA:        {base_actual}",
         "README base actual hash",
     )
     readme = replace_once(
         readme,
-        f"effective corrected SHA: {old_corrections['corrected_effective_sha256']}",
+        f"effective corrected SHA: {previous_effective}",
         f"effective corrected SHA: {corrected_effective}",
         "README effective hash",
     )

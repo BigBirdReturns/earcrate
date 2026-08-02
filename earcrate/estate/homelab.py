@@ -619,11 +619,10 @@ def _load_existing_objects(inventory: Mapping[str, Any]) -> tuple[list[dict[str,
 
 def _object_identity(value: Mapping[str, Any]) -> str:
     field = HOMELAB_HASH_FIELDS.get(str(value.get("kind") or ""))
-    if field:
-        digest = str(value.get(field) or "").lower()
-        if _is_sha256(digest):
-            return digest
-    return _sha_json(value)
+    digest = str(value.get(field or "") or "")
+    if not field or not _is_sha256(digest):
+        raise ValueError(f"Homelab object has no valid semantic identity: {value.get('kind')!r}")
+    return digest.lower()
 
 
 def _latest_by_stage(objects: Iterable[Mapping[str, Any]], *, target_id: str, node_sha256: str) -> dict[str, dict[str, Any]]:
@@ -641,7 +640,15 @@ def _latest_by_stage(objects: Iterable[Mapping[str, Any]], *, target_id: str, no
     return out
 
 
-def _decision_for_target(objects: Iterable[Mapping[str, Any]], *, target_id: str, catalog_sha256: str, manifest_sha256: str) -> dict[str, Any] | None:
+def _decision_for_target(
+    objects: Iterable[Mapping[str, Any]],
+    *,
+    target_id: str,
+    catalog_sha256: str,
+    manifest_sha256: str,
+    node_sha256: str,
+) -> dict[str, Any] | None:
+    """Return the latest decision for this exact target, manifest, and node."""
     rows = [
         dict(value)
         for value in objects
@@ -649,11 +656,70 @@ def _decision_for_target(objects: Iterable[Mapping[str, Any]], *, target_id: str
         and value.get("target_id") == target_id
         and value.get("catalog_sha256") == catalog_sha256
         and value.get("target_manifest_sha256") == manifest_sha256
+        and value.get("assigned_node_sha256") == node_sha256
     ]
     if not rows:
         return None
     rows.sort(key=lambda row: (str(row.get("decided_at") or ""), _object_identity(row)))
     return rows[-1]
+
+
+def _validate_current_decision(
+    decision: Mapping[str, Any],
+    *,
+    target: Mapping[str, Any],
+    selected: Mapping[str, Any],
+) -> tuple[bool, str]:
+    """Refuse a terminal decision whose node or accepted evidence is stale."""
+    node_sha256 = str((selected.get("node") or {}).get("node_sha256") or "")
+    if decision.get("assigned_node_sha256") != node_sha256:
+        return False, "terminal decision belongs to another Homelab node"
+
+    disposition = str(decision.get("decision") or "")
+    if disposition != "accepted":
+        return True, "current node-scoped terminal decision"
+
+    if selected.get("blockers"):
+        return False, "accepted decision is stale because current feasibility is blocked"
+    if selected.get("failed_stages") or selected.get("refused_stages"):
+        return False, "accepted decision is stale because a current stage failed or refused"
+
+    terminal_stage = str((target.get("required_stages") or [""])[-1])
+    required_nonterminal = {
+        str(stage)
+        for stage in target.get("required_stages") or []
+        if str(stage) != terminal_stage
+    }
+    completed = {str(stage) for stage in selected.get("completed_stages") or []}
+    missing = sorted(required_nonterminal - completed)
+    if missing:
+        return False, "accepted decision is stale because current stages are missing: " + ", ".join(missing)
+    if target.get("audition_required") and not selected.get("audition_acceptance_present"):
+        return False, "accepted decision is stale because its current audition is not accepted"
+
+    current_evidence = {
+        str(identity)
+        for stage, identity in dict(selected.get("stage_evidence") or {}).items()
+        if str(stage) in required_nonterminal and _is_sha256(str(identity))
+    }
+    supporting = {
+        str(identity)
+        for identity in decision.get("supporting_receipt_sha256s") or []
+        if _is_sha256(str(identity))
+    }
+    if not current_evidence.issubset(supporting):
+        return False, "accepted decision does not bind every current stage receipt"
+
+    scope = dict(decision.get("scope") or {})
+    if {str(stage) for stage in scope.get("completed_stages") or []} != completed:
+        return False, "accepted decision completed-stage scope no longer matches the audit"
+    required_fixtures = {
+        str(value)
+        for value in (target.get("requirements") or {}).get("fixture_ids") or []
+    }
+    if {str(value) for value in scope.get("fixture_ids") or []} != required_fixtures:
+        return False, "accepted decision fixture scope no longer matches the target manifest"
+    return True, "current accepted decision"
 
 
 def _stage_fixture_coverage(value: Mapping[str, Any], required: Sequence[str]) -> bool:
@@ -736,7 +802,7 @@ def audit_homelab(
             "status": value.get("status") or value.get("verdict") or value.get("decision"),
             "catalog_sha256": value.get("catalog_sha256"),
             "target_manifest_sha256": value.get("target_manifest_sha256"),
-            "node_sha256": value.get("node_sha256"),
+            "node_sha256": value.get("node_sha256") or value.get("assigned_node_sha256"),
         }
         for value in current_objects
     }
@@ -812,7 +878,17 @@ def audit_homelab(
             target_id=target_id,
             catalog_sha256=str(active_catalog["catalog_sha256"]),
             manifest_sha256=manifest,
+            node_sha256=str(selected["node"]["node_sha256"]),
         )
+        if decision:
+            decision_current, decision_reason = _validate_current_decision(
+                decision,
+                target=target,
+                selected=selected,
+            )
+            if not decision_current:
+                selected["warnings"] = sorted(set([*selected["warnings"], decision_reason]))
+                decision = None
         completed = set(selected["completed_stages"])
         terminal_stage = str(target["required_stages"][-1])
         if decision:
@@ -1151,6 +1227,21 @@ def decide_homelab_target(
     missing_receipts = [value for value in receipts if value not in evidence_index]
     if missing_receipts:
         raise ValueError("supporting receipts are not present in the audited estate: " + ", ".join(missing_receipts))
+    wrong_scope = [
+        identity
+        for identity in receipts
+        if (
+            (evidence_index.get(identity) or {}).get("target_id") != target_id
+            or (evidence_index.get(identity) or {}).get("catalog_sha256") != audit.get("catalog_sha256")
+            or (evidence_index.get(identity) or {}).get("target_manifest_sha256") != row.get("target_manifest_sha256")
+            or (evidence_index.get(identity) or {}).get("node_sha256") != row.get("assigned_node_sha256")
+        )
+    ]
+    if wrong_scope:
+        raise ValueError(
+            "supporting receipts do not belong to the current target, manifest, and node: "
+            + ", ".join(wrong_scope)
+        )
 
     if decision == "accepted":
         if row.get("feasibility") != "ready":
@@ -1162,8 +1253,19 @@ def decide_homelab_target(
             raise ValueError("cannot accept target while the latest current stage is failed or refused")
         if row.get("audition_required") and not row.get("audition_acceptance_present"):
             raise ValueError("audio/workflow target requires an accepting human audition")
-        if not receipts:
-            raise ValueError("accepted target requires supporting receipt identities")
+        current_stage_receipts = {
+            str(identity)
+            for stage, identity in dict(row.get("stage_evidence") or {}).items()
+            if stage not in _TERMINAL_STAGES and _is_sha256(str(identity))
+        }
+        if not current_stage_receipts:
+            raise ValueError("accepted target requires current stage receipt identities")
+        missing_current = sorted(current_stage_receipts - set(receipts))
+        if missing_current:
+            raise ValueError(
+                "accepted target decision must bind every current stage receipt: "
+                + ", ".join(missing_current)
+            )
     payload: dict[str, Any] = {
         "schema_version": HOMELAB_SCHEMA_VERSION,
         "kind": "earcrate_homelab_adoption_decision",
@@ -1184,6 +1286,7 @@ def decide_homelab_target(
         },
         "boundary": {
             "decision_is_target_and_manifest_scoped": True,
+            "decision_is_node_and_current_evidence_scoped": True,
             "decision_is_not_legal_clearance": True,
             "decision_is_not_whole_buffalo_passage": True,
         },
@@ -1289,5 +1392,6 @@ __all__ = [
     "record_homelab_audition",
     "decide_homelab_target",
     "homelab_sweep",
+    "homelab_seal",
     "homelab_validate_seal",
 ]

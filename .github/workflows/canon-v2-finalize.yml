@@ -113,6 +113,7 @@ jobs:
           rm .github/canon-v2-ledger.part1.b64
           rm .github/canon-v2-ledger.part2.b64
           rm .github/workflows/canon-v2-finalize.yml
+          git add -N docs/canon/canon-ledger.v2.json
           git diff --check
 
           python - <<'PY'

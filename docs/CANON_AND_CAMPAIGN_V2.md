@@ -6,7 +6,7 @@ append-only v1 ledger, and the local-estate/Homelab control plane landed.
 ```text
 audited main:             d511414daa0c7127c1e9cfdc64726979e6682e1f
 audit date:               2026-08-02
-ledger SHA-256:            a8c0ab71fafcc8d2bbdf9b3c0310a67992fdd6362eca9b4cc06c4f68bca89f55
+ledger SHA-256:            10d59af6b7bfea4f719b3a95d8d8bfb2c60110926e033c445ff8a9be2fb30396
 superseded v1 effective:   26eda6df9bb6e2196da6bb65b3e7d7f3e7f2c23f69347e2ac1d0f9ccefc089fe
 open pull requests:        0 at audit
 campaign epic:             #57

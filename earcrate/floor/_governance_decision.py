@@ -19,6 +19,7 @@ from earcrate.floor._governance_campaign import (
     _seal_campaign_bundle,
 )
 
+
 def floor_seal_blind_review(campaign: Mapping[str, Any], value: Mapping[str, Any]) -> dict[str, Any]:
     bundle = _seal_campaign_bundle(campaign)
     raw = _mapping(value, "blind review")
@@ -98,13 +99,18 @@ def _review_roles(bundle: Mapping[str, Any], reviews: Sequence[Mapping[str, Any]
     return roles
 
 
-def floor_seal_arbitration_assignment(campaign: Mapping[str, Any], reviews: Sequence[Mapping[str, Any]], value: Mapping[str, Any]) -> dict[str, Any]:
+def floor_seal_arbitration_assignment(
+    campaign: Mapping[str, Any],
+    reviews: Sequence[Mapping[str, Any]],
+    value: Mapping[str, Any],
+) -> dict[str, Any]:
     bundle = _seal_campaign_bundle(campaign)
     sealed_reviews = _seal_reviews(bundle, reviews)
     roles = _review_roles(bundle, sealed_reviews)
     if not ("candidate" in roles and "control" in roles):
         raise FloorError("arbitration may be assigned only for a split completed review quorum")
     raw = _mapping(value, "arbitration assignment")
+    claimed = raw.get("arbitration_assignment_sha256")
     arbitrator_id = _text(raw.get("arbitrator_id"), "arbitrator_id")
     forbidden = {
         bundle["candidate"]["builder"]["identity_id"],
@@ -124,15 +130,30 @@ def floor_seal_arbitration_assignment(campaign: Mapping[str, Any], reviews: Sequ
         "authentication_sha256": _sha(raw.get("authentication_sha256"), "arbitration authentication_sha256"),
         "reason": _text(raw.get("reason") or "split human review", "arbitration reason"),
     }
-    return _sealed(out, "arbitration_assignment_sha256")
+    sealed = _sealed(out, "arbitration_assignment_sha256")
+    if claimed is not None and claimed != sealed["arbitration_assignment_sha256"]:
+        raise FloorError("arbitration_assignment_sha256 hash mismatch; assignment was mutated after commit")
+    return sealed
 
 
-def floor_seal_arbitration_review(campaign: Mapping[str, Any], assignment: Mapping[str, Any], value: Mapping[str, Any]) -> dict[str, Any]:
+def floor_seal_arbitration_review(
+    campaign: Mapping[str, Any],
+    assignment: Mapping[str, Any],
+    value: Mapping[str, Any],
+) -> dict[str, Any]:
     bundle = _seal_campaign_bundle(campaign)
-    sealed_assignment = _sealed(_mapping(assignment, "arbitration assignment"), "arbitration_assignment_sha256")
+    sealed_assignment = _sealed(
+        _mapping(assignment, "arbitration assignment"),
+        "arbitration_assignment_sha256",
+    )
     if sealed_assignment["campaign_sha256"] != bundle["public_campaign"]["campaign_sha256"]:
         raise FloorError("arbitration assignment belongs to another campaign")
+    if sealed_assignment["candidate_sha256"] != bundle["candidate"]["candidate_sha256"]:
+        raise FloorError("arbitration assignment names another candidate")
+    if sealed_assignment["control_sha256"] != bundle["control"]["control_sha256"]:
+        raise FloorError("arbitration assignment names another control")
     raw = _mapping(value, "arbitration review")
+    claimed = raw.get("arbitration_review_sha256")
     if _text(raw.get("arbitrator_id"), "arbitrator_id") != sealed_assignment["arbitrator_id"]:
         raise FloorError("arbitration review identity does not match its assignment")
     if _sha(raw.get("authentication_sha256"), "arbitration authentication_sha256") != sealed_assignment["authentication_sha256"]:
@@ -150,13 +171,17 @@ def floor_seal_arbitration_review(campaign: Mapping[str, Any], assignment: Mappi
         "candidate_sha256": sealed_assignment["candidate_sha256"],
         "control_sha256": sealed_assignment["control_sha256"],
         "arbitration_assignment_sha256": sealed_assignment["arbitration_assignment_sha256"],
+        "arbitration_assignment": sealed_assignment,
         "review_sha256s": sealed_assignment["review_sha256s"],
         "arbitrator_id": sealed_assignment["arbitrator_id"],
         "authentication_sha256": sealed_assignment["authentication_sha256"],
         "verdict": verdict,
         "notes": notes,
     }
-    return _sealed(out, "arbitration_review_sha256")
+    sealed = _sealed(out, "arbitration_review_sha256")
+    if claimed is not None and claimed != sealed["arbitration_review_sha256"]:
+        raise FloorError("arbitration_review_sha256 hash mismatch; review was mutated after commit")
+    return sealed
 
 
 def floor_seal_rights_decision(campaign: Mapping[str, Any], value: Mapping[str, Any]) -> dict[str, Any]:
@@ -180,8 +205,18 @@ def floor_seal_rights_decision(campaign: Mapping[str, Any], value: Mapping[str, 
     if expires_at_dt <= valid_from_dt:
         raise FloorError("rights expiry must be later than valid_from")
     declared_use = _text(raw.get("declared_use"), "rights declared_use")
-    jurisdictions = sorted({_text(row, "rights jurisdiction") for row in _sequence(raw.get("jurisdictions"), "rights jurisdictions")})
-    channels = sorted({_text(row, "rights channel") for row in _sequence(raw.get("channels"), "rights channels")})
+    jurisdictions = sorted(
+        {
+            _text(row, "rights jurisdiction")
+            for row in _sequence(raw.get("jurisdictions"), "rights jurisdictions")
+        }
+    )
+    channels = sorted(
+        {
+            _text(row, "rights channel")
+            for row in _sequence(raw.get("channels"), "rights channels")
+        }
+    )
     if not jurisdictions or not channels:
         raise FloorError("rights decision requires at least one jurisdiction and channel")
     out = {
@@ -197,8 +232,16 @@ def floor_seal_rights_decision(campaign: Mapping[str, Any], value: Mapping[str, 
         "valid_from": valid_from,
         "expires_at": expires_at,
         "decided_by": authority,
-        "authentication_sha256": _sha(raw.get("authentication_sha256"), "rights authentication_sha256"),
-        "evidence_refs": sorted({_text(row, "rights evidence reference") for row in _sequence(raw.get("evidence_refs") or [], "rights evidence_refs")}),
+        "authentication_sha256": _sha(
+            raw.get("authentication_sha256"),
+            "rights authentication_sha256",
+        ),
+        "evidence_refs": sorted(
+            {
+                _text(row, "rights evidence reference")
+                for row in _sequence(raw.get("evidence_refs") or [], "rights evidence_refs")
+            }
+        ),
         "legal_determination": False,
     }
     return _sealed(out, "rights_decision_sha256")
@@ -219,6 +262,7 @@ def floor_decide_governed_release(
     minimum = bundle["public_campaign"]["minimum_reviewers"]
     completed = len(roles)
     selected: str | None = None
+    arbitration_assignment_sha: str | None = None
     arbitration_sha: str | None = None
     if completed < minimum:
         status_value, summary = "blocked", "review_quorum_pending"
@@ -226,11 +270,26 @@ def floor_decide_governed_release(
         if arbitration_review is None:
             status_value, summary = "blocked", "needs_arbitration"
         else:
-            arbitration = _sealed(_mapping(arbitration_review, "arbitration review"), "arbitration_review_sha256")
-            if arbitration["campaign_sha256"] != bundle["public_campaign"]["campaign_sha256"]:
-                raise FloorError("arbitration review belongs to another campaign")
-            if sorted(arbitration["review_sha256s"]) != sorted(row["review_sha256"] for row in sealed_reviews):
+            arbitration_raw = _mapping(arbitration_review, "arbitration review")
+            assignment_raw = _mapping(
+                arbitration_raw.get("arbitration_assignment"),
+                "arbitration review assignment",
+            )
+            assignment = floor_seal_arbitration_assignment(
+                bundle,
+                sealed_reviews,
+                assignment_raw,
+            )
+            arbitration = floor_seal_arbitration_review(
+                bundle,
+                assignment,
+                arbitration_raw,
+            )
+            if sorted(arbitration["review_sha256s"]) != sorted(
+                row["review_sha256"] for row in sealed_reviews
+            ):
                 raise FloorError("arbitration review does not bind the exact review set")
+            arbitration_assignment_sha = assignment["arbitration_assignment_sha256"]
             arbitration_sha = arbitration["arbitration_review_sha256"]
             if arbitration["verdict"] == "abstain":
                 status_value, summary = "blocked", "arbitration_abstained"
@@ -256,7 +315,18 @@ def floor_decide_governed_release(
             if not (valid_from_dt <= as_of_dt < expires_at_dt):
                 status_value, summary = "refused", "rights_expired"
             elif rights["status"] != "accepted_by_policy":
-                status_value, summary = "refused" if rights["status"] in {"blocked", "expired"} else "blocked", "rights_blocked" if rights["status"] in {"blocked", "expired"} else "rights_review_pending"
+                status_value, summary = (
+                    (
+                        "refused"
+                        if rights["status"] in {"blocked", "expired"}
+                        else "blocked"
+                    ),
+                    (
+                        "rights_blocked"
+                        if rights["status"] in {"blocked", "expired"}
+                        else "rights_review_pending"
+                    ),
+                )
             else:
                 status_value, summary = "eligible", "release_eligible"
     decision = {
@@ -272,6 +342,7 @@ def floor_decide_governed_release(
         "selected_role": selected,
         "release_eligible": status_value == "eligible" and selected == "candidate",
         "review_sha256s": sorted(row["review_sha256"] for row in sealed_reviews),
+        "arbitration_assignment_sha256": arbitration_assignment_sha,
         "arbitration_review_sha256": arbitration_sha,
         "rights_decision_sha256": None if rights is None else rights["rights_decision_sha256"],
         "rights": rights,

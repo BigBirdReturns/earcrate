@@ -72,9 +72,10 @@ def test_public_projection_redacts_windows_posix_embedded_paths_and_secrets() ->
     assert projection["payload"]["host"]["review_token_sha256"] == "f" * 64
     assert projection["payload"]["host"]["remote_url"] == "https://example.invalid/provider/status"
     assert projection["payload"]["credential_environment_names"] == ["FREESOUND_API_KEY"]
+    assert projection["payload"]["boundary"]["credential_values_recorded"] == "redacted"
     assert projection["source_identity"] == node["node_sha256"]
     assert projection["redaction"]["absolute_paths"] == 6
-    assert projection["redaction"]["sensitive_fields"] == 2
+    assert projection["redaction"]["sensitive_fields"] == 3
     assert projection["redaction"]["payload_is_original_authority"] is False
 
 

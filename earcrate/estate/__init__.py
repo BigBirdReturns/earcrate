@@ -1,4 +1,8 @@
-"""Local estate inventory, reconciliation, hardware, and provider acceptance."""
+"""Local estate inventory, reconciliation, hardware, and provider acceptance.
+
+This package reconciles physical and local evidence against repository canon;
+it never promotes feasibility into execution evidence or musical acceptance.
+"""
 
 from earcrate.estate.discover import redact_estate_inventory, scan_estate
 from earcrate.estate.homelab import (

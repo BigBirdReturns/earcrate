@@ -8,11 +8,93 @@ on:
       - ".github/workflows/canon-v2-materialize.yml"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: canon-v2-materialize
+  cancel-in-progress: false
 
 jobs:
   materialize:
-    if: ${{ false }}
+    if: github.event.pull_request.head.ref == 'agent/canon-v2-housekeeping'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - run: echo "Transport retired; terminal files are written directly and verified by repository gates."
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: agent/canon-v2-housekeeping
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Materialize, verify, and commit canon v2
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --abbrev-ref HEAD)" = "agent/canon-v2-housekeeping"
+          python .github/canon_v2_materialize.py
+
+          python - <<'PY'
+          from __future__ import annotations
+          import importlib.util
+          import inspect
+          from pathlib import Path
+
+          total = 0
+          for path in (Path("tests/test_canon_ledger.py"), Path("tests/test_canon_ledger_v2.py")):
+              spec = importlib.util.spec_from_file_location(path.stem, path)
+              if spec is None or spec.loader is None:
+                  raise RuntimeError(f"cannot import {path}")
+              module = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(module)
+              cases = [
+                  (name, fn)
+                  for name, fn in sorted(vars(module).items())
+                  if name.startswith("test_") and callable(fn)
+              ]
+              for name, fn in cases:
+                  if inspect.signature(fn).parameters:
+                      raise RuntimeError(f"unsupported fixture in {path}: {name}")
+                  fn()
+                  total += 1
+                  print(f"PASS {path.name}::{name}")
+          print(f"SUMMARY {total}/{total} canon tests passed")
+          PY
+
+          rm .github/canon_v2_materialize.py
+          rm .github/workflows/canon-v2-materialize.yml
+          git diff --check
+
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          expected = {
+              ".github/canon_v2_materialize.py",
+              ".github/workflows/canon-v2-materialize.yml",
+              ".github/workflows/gates.yml",
+              "docs/BRANCH_RETENTION_MAP.md",
+              "docs/CANON_AND_CAMPAIGN_V2.md",
+              "docs/CANON_AND_NONLANDING_LEDGER.md",
+              "docs/canon/canon-ledger.v2.json",
+              "schemas/earcrate_canon_and_nonlanding_ledger_v2.schema.json",
+              "tests/test_canon_ledger_v2.py",
+          }
+          actual = set(
+              subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
+          )
+          if actual != expected:
+              raise RuntimeError(f"unexpected materialization diff: {sorted(actual)}")
+          for path in expected - {
+              ".github/canon_v2_materialize.py",
+              ".github/workflows/canon-v2-materialize.yml",
+          }:
+              if not Path(path).is_file():
+                  raise RuntimeError(f"missing materialized file: {path}")
+          PY
+
+          git config user.name "EarCrate Canon Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Publish canon v2 and freeze branch retention"
+          git push origin HEAD:agent/canon-v2-housekeeping

@@ -20,6 +20,7 @@ from earcrate.estate.homelab_common import (
 )
 
 _ABSOLUTE_PATH_AT_START = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/|file://)", re.IGNORECASE)
+_NETWORK_URL = re.compile(r"\b(?:https?|ssh|git)://[^\s\"'<>]+", re.IGNORECASE)
 _EMBEDDED_ABSOLUTE_PATH = re.compile(
     r"(?:"
     r"file://[^\s\"'<>]+"
@@ -72,10 +73,11 @@ def _redacted_string(value: str) -> str:
 
 def _contains_absolute_path(value: str) -> bool:
     text = str(value)
-    return bool(
-        _ABSOLUTE_PATH_AT_START.match(text.strip())
-        or _EMBEDDED_ABSOLUTE_PATH.search(text)
-    )
+    stripped = text.strip()
+    if _ABSOLUTE_PATH_AT_START.match(stripped):
+        return True
+    without_network_urls = _NETWORK_URL.sub("", text)
+    return bool(_EMBEDDED_ABSOLUTE_PATH.search(without_network_urls))
 
 
 def _sensitive_key(value: str) -> bool:

@@ -23,6 +23,12 @@ def _node() -> dict:
             "host": {
                 "python_executable": "C:\\Users\\Owner\\EarCrate\\python.exe",
                 "working_directory": "/home/owner/earcrate",
+                "operator_note": "model cache is at D:\\Models\\MERT\\weights.bin",
+                "diagnostic_note": "temporary file lives at /mnt/fast/earcrate/cache.bin",
+                "remote_url": "https://example.invalid/provider/status",
+                "api_key": "do-not-export-this-api-key",
+                "access_token": "do-not-export-this-access-token",
+                "review_token_sha256": "f" * 64,
             },
             "roots": [{"path": "D:\\EarCrate\\Models", "exists": True}],
             "nvidia": {},
@@ -48,17 +54,27 @@ def _node() -> dict:
     )
 
 
-def test_public_projection_redacts_windows_posix_and_file_paths() -> None:
+def test_public_projection_redacts_windows_posix_embedded_paths_and_secrets() -> None:
     node = _node()
     projection = project_public_object(node)
     homelab_validate_seal(projection)
     text = json.dumps(projection, ensure_ascii=False, sort_keys=True)
     assert "C:\\\\Users" not in text
     assert "D:\\\\EarCrate" not in text
+    assert "D:\\\\Models" not in text
     assert "/home/owner/earcrate" not in text
     assert "/usr/bin/ffmpeg" not in text
+    assert "/mnt/fast/earcrate" not in text
+    assert "do-not-export-this-api-key" not in text
+    assert "do-not-export-this-access-token" not in text
+    assert projection["payload"]["host"]["api_key"] == "redacted"
+    assert projection["payload"]["host"]["access_token"] == "redacted"
+    assert projection["payload"]["host"]["review_token_sha256"] == "f" * 64
+    assert projection["payload"]["host"]["remote_url"] == "https://example.invalid/provider/status"
+    assert projection["payload"]["credential_environment_names"] == ["FREESOUND_API_KEY"]
     assert projection["source_identity"] == node["node_sha256"]
-    assert projection["redaction"]["absolute_paths"] == 4
+    assert projection["redaction"]["absolute_paths"] == 6
+    assert projection["redaction"]["sensitive_fields"] == 2
     assert projection["redaction"]["payload_is_original_authority"] is False
 
 
@@ -77,7 +93,10 @@ def test_public_export_contains_projections_not_authoritative_node_bytes(tmp_pat
     assert projection["projection_sha256"] == entry["projection_identity"]
     exported = json.dumps(projection, ensure_ascii=False, sort_keys=True)
     assert "C:\\\\Users" not in exported
+    assert "D:\\\\Models" not in exported
     assert "/usr/bin/ffmpeg" not in exported
+    assert "/mnt/fast/earcrate" not in exported
+    assert "do-not-export-this-api-key" not in exported
 
 
 def test_public_projection_schema_is_versioned() -> None:

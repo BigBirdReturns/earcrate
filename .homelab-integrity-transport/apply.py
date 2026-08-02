@@ -15,6 +15,7 @@ import subprocess
 import zipfile
 
 ARCHIVE_SHA256 = "af1de518de5a5ed50da56c1d2b6f94850f158397c6e5273a100f36af4d22e468"
+CHUNK_COUNT = 8
 EXPECTED_FILES = {
     "earcrate/estate/homelab.py": "1089d481b07343b2ebf1f99862389848b5b2464f460df2ffaa823d6a8409ba0e",
     "earcrate/estate/homelab_review.py": "49bf08675db30fea87848c48a2c75499a988930aaa6c45fd423b25409c9c0a23",
@@ -52,9 +53,10 @@ def _safe_member(name: str) -> PurePosixPath:
 
 
 def _load_archive(chunks_dir: Path) -> bytes:
-    chunks = sorted(chunks_dir.glob("overlay.*.b64"), key=lambda path: path.name)
-    if not chunks:
-        raise ValueError("no overlay chunks found")
+    chunks = [chunks_dir / f"overlay.{index:02d}.b64" for index in range(CHUNK_COUNT)]
+    missing = [path.name for path in chunks if not path.is_file()]
+    if missing:
+        raise ValueError("missing overlay chunks: " + ", ".join(missing))
     encoded = "".join("".join(path.read_text(encoding="ascii").split()) for path in chunks)
     archive = base64.b64decode(encoded, validate=True)
     digest = _sha256(archive)

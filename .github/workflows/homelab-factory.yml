@@ -1,0 +1,109 @@
+name: Homelab organ factory
+
+on:
+  pull_request:
+    paths:
+      - "earcrate/estate/homelab_factory.py"
+      - "earcrate/estate/homelab_specimens.py"
+      - "earcrate/estate/homelab_common.py"
+      - "scripts/RUN_HOMELAB_FACTORY.ps1"
+      - "scripts/RUN_HOMELAB_FACTORY.cmd"
+      - "scripts/run_homelab_factory.sh"
+      - "scripts/RUN_BEGGIN_TIMING.ps1"
+      - "scripts/RUN_BEGGIN_TIMING.cmd"
+      - "docs/HOMELAB_ORGAN_FACTORY.md"
+      - "proofs/homelab/2026-08-08-local-telemetry/**"
+      - "scripts/earcrate_factory.py"
+      - "scripts/earcrate_cloud_intake.py"
+      - "scripts/beggin_timing_pass.py"
+      - "build/make_homelab_factory_zipapp.py"
+      - "configs/homelab_factory/**"
+      - "schemas/earcrate_homelab_factory_v1.schema.json"
+      - "schemas/earcrate_homelab_cloud_specimens_v1.schema.json"
+      - "schemas/earcrate_beggin_timing_pass_v1.schema.json"
+      - "tests/test_homelab_factory.py"
+      - "tests/test_homelab_cloud_specimens.py"
+      - "tests/test_beggin_timing_pass.py"
+      - ".github/workflows/homelab-factory.yml"
+  push:
+    branches: [main]
+    paths:
+      - "earcrate/estate/homelab_factory.py"
+      - "earcrate/estate/homelab_specimens.py"
+      - "earcrate/estate/homelab_common.py"
+      - "scripts/RUN_HOMELAB_FACTORY.ps1"
+      - "scripts/RUN_HOMELAB_FACTORY.cmd"
+      - "scripts/run_homelab_factory.sh"
+      - "scripts/RUN_BEGGIN_TIMING.ps1"
+      - "scripts/RUN_BEGGIN_TIMING.cmd"
+      - "docs/HOMELAB_ORGAN_FACTORY.md"
+      - "proofs/homelab/2026-08-08-local-telemetry/**"
+      - "scripts/earcrate_factory.py"
+      - "scripts/earcrate_cloud_intake.py"
+      - "scripts/beggin_timing_pass.py"
+      - "build/make_homelab_factory_zipapp.py"
+      - "configs/homelab_factory/**"
+      - "schemas/earcrate_homelab_factory_v1.schema.json"
+      - "schemas/earcrate_homelab_cloud_specimens_v1.schema.json"
+      - "schemas/earcrate_beggin_timing_pass_v1.schema.json"
+      - "tests/test_homelab_factory.py"
+      - "tests/test_homelab_cloud_specimens.py"
+      - "tests/test_beggin_timing_pass.py"
+      - ".github/workflows/homelab-factory.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  factory:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install focused test dependencies
+        run: python -m pip install --upgrade pip pytest numpy scipy soundfile
+      - name: Compile factory modules
+        run: >-
+          python -m py_compile
+          earcrate/estate/homelab_common.py
+          earcrate/estate/homelab_specimens.py
+          earcrate/estate/homelab_factory.py
+          scripts/earcrate_cloud_intake.py
+          scripts/earcrate_factory.py
+          scripts/beggin_timing_pass.py
+          build/make_homelab_factory_zipapp.py
+      - name: Run source-free factory tests
+        run: >-
+          python -m pytest -q
+          tests/test_homelab_factory.py
+          tests/test_homelab_cloud_specimens.py
+          tests/test_beggin_timing_pass.py
+      - name: Build deterministic factory zipapp twice
+        shell: bash
+        run: |
+          python build/make_homelab_factory_zipapp.py --output build/factory-a.pyz
+          python build/make_homelab_factory_zipapp.py --output build/factory-b.pyz
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          a = Path('build/factory-a.pyz').read_bytes()
+          b = Path('build/factory-b.pyz').read_bytes()
+          assert a == b
+          print(hashlib.sha256(a).hexdigest())
+          PY
+          python build/factory-a.pyz --help
+      - name: Upload source-free factory executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: earcrate-homelab-factory-${{ matrix.os }}-py${{ matrix.python }}
+          path: build/factory-a.pyz
+          if-no-files-found: error
+          retention-days: 14

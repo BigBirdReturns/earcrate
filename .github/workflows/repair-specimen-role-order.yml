@@ -1,0 +1,71 @@
+name: Repair specimen role-order namespace
+
+on:
+  push:
+    branches:
+      - agent/homelab-audition-telemetry-20260808
+    paths:
+      - ".github/workflows/repair-specimen-role-order.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: agent/homelab-audition-telemetry-20260808
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Rename the specimen-local role vocabulary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('earcrate/estate/homelab_specimens.py')
+          text = path.read_text(encoding='utf-8')
+          definition = 'ROLE_ORDER = (\n'
+          use = 'ROLE_ORDER.index(row["role"]) if row["role"] in ROLE_ORDER else 999'
+          if text.count(definition) != 1:
+              raise SystemExit(f'expected one specimen ROLE_ORDER definition, found {text.count(definition)}')
+          if text.count(use) != 1:
+              raise SystemExit(f'expected one specimen ROLE_ORDER use, found {text.count(use)}')
+          text = text.replace(definition, 'SPECIMEN_ROLE_ORDER = (\n', 1)
+          text = text.replace(
+              use,
+              'SPECIMEN_ROLE_ORDER.index(row["role"]) if row["role"] in SPECIMEN_ROLE_ORDER else 999',
+              1,
+          )
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          python -m py_compile earcrate/estate/homelab_specimens.py
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          package = Path('earcrate')
+          definitions = [
+              path.name
+              for path in sorted(package.rglob('*.py'))
+              if re.search(r'^ROLE_ORDER\s*=', path.read_text(encoding='utf-8'), re.M)
+          ]
+          if definitions != ['deps.py']:
+              raise SystemExit(f'ROLE_ORDER still has shadow definitions: {definitions}')
+          PY
+      - name: Commit the ordinary source repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "earcrate-factory-repair"
+          git config user.email "actions@users.noreply.github.com"
+          git add earcrate/estate/homelab_specimens.py
+          git diff --cached --check
+          git commit -m "namespace specimen provider roles"
+          git push origin HEAD:agent/homelab-audition-telemetry-20260808

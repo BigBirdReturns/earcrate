@@ -61,6 +61,11 @@ jobs:
               return base64.b64decode(padded, validate=True)
 
           data = decode(encoded)
+          corrupt = Path('/tmp/factory-payload-corrupt.zip')
+          with corrupt.open('wb') as handle:
+              handle.write(data)
+              handle.flush()
+              os.fsync(handle.fileno())
           actual = hashlib.sha256(data).hexdigest()
           recovery = None
           if actual != expected:
@@ -132,6 +137,14 @@ jobs:
                       target.chmod(mode & 0o777)
           PY
           rm -rf .factory-payload .github/workflows/materialize-homelab-factory.yml
+      - name: Retain corrupt payload for recovery
+        if: failure() && steps.probe.outputs.needed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: corrupt-factory-payload-${{ github.run_id }}
+          path: /tmp/factory-payload-corrupt.zip
+          if-no-files-found: error
+          retention-days: 7
       - name: Validate materialized factory
         if: steps.probe.outputs.needed == 'true'
         shell: bash

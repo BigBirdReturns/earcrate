@@ -43,21 +43,61 @@ jobs:
           from pathlib import Path
           import base64
           import hashlib
+          import itertools
           import os
           import stat
           import zipfile
 
           root = Path('.').resolve()
-          parts = sorted((root / '.factory-payload').glob('part-*'))
-          if not parts:
+          paths = sorted((root / '.factory-payload').glob('part-*'))
+          if not paths:
               raise SystemExit('factory payload has no parts')
-          encoded = ''.join(''.join(path.read_text(encoding='ascii').split()) for path in parts)
-          encoded += '=' * (-len(encoded) % 4)
-          data = base64.b64decode(encoded, validate=True)
+          pieces = [''.join(path.read_text(encoding='ascii').split()) for path in paths]
+          encoded = ''.join(pieces)
           expected = '81287ffc7a9110b2324d8ab3152ab8efa3a6c5cf6d49a4a06a653666c890dcf1'
+
+          def decode(value: str) -> bytes:
+              padded = value + '=' * (-len(value) % 4)
+              return base64.b64decode(padded, validate=True)
+
+          data = decode(encoded)
           actual = hashlib.sha256(data).hexdigest()
+          recovery = None
           if actual != expected:
-              raise SystemExit(f'factory payload SHA-256 mismatch: expected {expected}, computed {actual}')
+              boundaries = []
+              offset = 0
+              for index, piece in enumerate(pieces[:-1]):
+                  offset += len(piece)
+                  boundaries.append((index, offset))
+              alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+              for index, offset in boundaries:
+                  prefix = encoded[:offset]
+                  suffix = encoded[offset:]
+                  for first, second in itertools.product(alphabet, repeat=2):
+                      candidate = prefix + first + second + suffix
+                      candidate_data = decode(candidate)
+                      if hashlib.sha256(candidate_data).hexdigest() == expected:
+                          data = candidate_data
+                          recovery = {
+                              'after_part': paths[index].name,
+                              'inserted_base64': first + second,
+                              'encoded_length_before': len(encoded),
+                              'encoded_length_after': len(candidate),
+                          }
+                          break
+                  if recovery:
+                      break
+          if hashlib.sha256(data).hexdigest() != expected:
+              lengths = {path.name: len(piece) for path, piece in zip(paths, pieces)}
+              raise SystemExit(
+                  'factory payload recovery failed: '
+                  f'expected {expected}, direct {actual}, lengths {lengths}'
+              )
+          if recovery:
+              print(f'factory payload recovered against sealed SHA-256: {recovery}')
+          else:
+              print('factory payload matched sealed SHA-256 without recovery')
+
           payload = Path('/tmp/factory-payload.zip')
           with payload.open('wb') as handle:
               handle.write(data)

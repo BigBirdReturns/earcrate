@@ -1,0 +1,103 @@
+{
+  "schema": "earcrate.beggin_audition_telemetry/v1",
+  "publication_boundary": {
+    "source_media_exported": false,
+    "derived_audio_exported": false,
+    "absolute_local_paths_exported": false,
+    "filename_provenance_claims_accepted": false,
+    "human_verdict_is_acceptance_authority": true
+  },
+  "sources": [
+    {
+      "role": "four_seasons_vocal_candidate",
+      "container_sha256": "22902bb33e3d1fbcef89e4f16f84539ad5705cc3f34193b054034fe6649c4c91",
+      "decoded_stereo_48k_float32_sha256": "ce536363790248cba34442f29d69be1350a16b5df3e95d2283eaeb60ed7f2bbc",
+      "duration_seconds": 186.084717,
+      "sample_rate": 44100,
+      "channels": 2,
+      "container_bit_rate": 320000,
+      "integrated_lufs": -14.01,
+      "true_peak_dbtp": 0.26,
+      "provenance": "unverified candidate; filename claim is not authority"
+    },
+    {
+      "role": "maneskin_instrumental_candidate",
+      "container_sha256": "808000b7ffc8fa5a80c82b447e8ebd9e97939646fc996bba308613c0e3f67fb8",
+      "decoded_stereo_48k_float32_sha256": "48c4452dc22f8ea0ff9119362c9af8ef5b17e234a362a0979090c1ade650fa66",
+      "duration_seconds": 195.488798,
+      "sample_rate": 44100,
+      "channels": 2,
+      "container_bit_rate": 320000,
+      "integrated_lufs": -9.57,
+      "true_peak_dbtp": 1.29,
+      "provenance": "unverified candidate; filename claim is not authority"
+    },
+    {
+      "role": "maneskin_vocal_timing_candidate",
+      "container_sha256": "0dfa10dbfe5523e261bfb2cbf4219ec0e77692d555977e4107ff10a22b790d81",
+      "decoded_stereo_48k_float32_sha256": "6c396da238a4016c26c6fd968823654bcac96cc735991400c008950bba2be786",
+      "duration_seconds": 210.256689,
+      "sample_rate": 44100,
+      "channels": 2,
+      "container_bit_rate": 320000,
+      "integrated_lufs": -16.53,
+      "true_peak_dbtp": -3.99,
+      "provenance": "unverified candidate; used only as a timing witness"
+    },
+    {
+      "role": "four_seasons_karaoke_structure_witness",
+      "container_sha256": "b75f79173ba6b85f7d51db344927bde308f51eeb38315e60e9f3d447108d4127",
+      "decoded_stereo_48k_float32_sha256": "5c6ce2d613ccc1307295a62f45013031723af5c18362c3bd0362427e8eaf21a0",
+      "duration_seconds": 191.494966,
+      "sample_rate": 44100,
+      "channels": 2,
+      "container_bit_rate": 320000,
+      "integrated_lufs": -12.50,
+      "true_peak_dbtp": 0.87,
+      "provenance": "karaoke realization; not original-master backing authority"
+    }
+  ],
+  "observed_vocal_landmarks_seconds": {
+    "four_seasons_candidate": {
+      "first_activity": 4.556803,
+      "first_hook_block_end": 22.974059,
+      "span": 18.417256
+    },
+    "maneskin_candidate": {
+      "first_activity": 0.666939,
+      "first_hook_block_end": 17.499592,
+      "span": 16.832653
+    }
+  },
+  "auditions": [
+    {
+      "id": "AUD-01",
+      "private_wav_sha256": "af4a9791f4d48e063c420e614805f73c5fbe06ee6aa0f76ac26ec593f476697c",
+      "duration_seconds": 30.0,
+      "transform": "preserve Frankie pitch; raise modern chassis three semitones; nominal global tempo seed",
+      "human_verdict": "rejected; kind of sucks"
+    },
+    {
+      "id": "AUD-02",
+      "private_wav_sha256": "2527e0718d0be963608dddb10b856ff9cf852cfdf857d62eeab3592faaae4212",
+      "duration_seconds": 30.0,
+      "transform": "preserve modern chassis; lower Frankie three semitones; nominal global tempo seed",
+      "known_execution_error": "an additional 660 ms delay was applied after the onset trim",
+      "human_verdict": "relative winner of the initial set, but the ending beggin-you repetitions are all off"
+    },
+    {
+      "id": "AUD-03",
+      "private_wav_sha256": "1d6b0ad41fad632a8689e2fded670b0cced6c7a5517bd7d8fa5b44e3c842778c",
+      "listening_copy_sha256": "8d324d88aa69309cb6eaaec22c838a8c638471c4a4bb918f65a6335616bf68c5",
+      "duration_seconds": 30.0,
+      "transform": "preserve modern chassis; lower Frankie three semitones; align observed vocal-block endpoints at tempo ratio 1.094138636",
+      "human_verdict": "pending"
+    }
+  ],
+  "derived_learning": {
+    "instrument_works": true,
+    "musical_question_answered": false,
+    "global_tempo_transform_rejected_as_phrase_alignment_contract": true,
+    "next_real_test": "independently place and audition each terminal beggin-you call against the exact modern timing witness"
+  }
+}

@@ -1,0 +1,3905 @@
+{
+  "kind": "earcrate_homelab_public_projection",
+  "payload": {
+    "catalog_sha256": "501cbd9b683d5e1c3da485fa5ccc446b9c7ef8b7ba60b4fa4d63ff4b4a77285a",
+    "cataloged_at": "2026-07-31",
+    "fixtures": [
+      {
+        "availability_rule": "always_generated_by_tests",
+        "evidence_tier": "synthetic",
+        "expected_sha256": null,
+        "fixture_id": "fixture.synthetic.regression"
+      },
+      {
+        "availability_rule": "exact_hash_required",
+        "evidence_tier": "authoritative_score",
+        "expected_sha256": "e029e1a3030800d7fb04c9f5163acb9270579a571d57f63eb63787df692d5845",
+        "fixture_id": "fixture.children.score_pdf"
+      },
+      {
+        "availability_rule": "user_supplied_exact_recording",
+        "evidence_tier": "blind_audio_inference",
+        "expected_sha256": null,
+        "fixture_id": "fixture.children.target_recording"
+      },
+      {
+        "availability_rule": "exact_hash_required",
+        "evidence_tier": "community_symbolic_witness",
+        "expected_sha256": "a7dabd71af884a4933b7e3c8077bc9d5e7b2e69de3fa9d370fd8b592d09cdf52",
+        "fixture_id": "fixture.flim.community_pack"
+      },
+      {
+        "availability_rule": "user_supplied_exact_recording",
+        "evidence_tier": "blind_audio_inference",
+        "expected_sha256": null,
+        "fixture_id": "fixture.flim.target_recording",
+        "note": "The community-symbolic proof explicitly withheld this recording from Pop2Piano, Music2MIDI, PiCoGen2, Basic Pitch, and the cephalopod."
+      },
+      {
+        "availability_rule": "exact_container_or_decoded_pcm_identity_required",
+        "evidence_tier": "blind_audio_inference",
+        "expected_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+        "fixture_id": "fixture.pretty_lights.source_audio"
+      },
+      {
+        "availability_rule": "external_pack_or_pcm_identity_required",
+        "decoded_pcm_sha256": "5da1bef8526576ca49628de636337e8fe9e100b4e0da7ada0605d164a4298e59",
+        "evidence_tier": "performance_realization",
+        "expected_sha256": "97bd2d4c3e7a38097956e2000db475e714c7fad67b51782b2905aeecfd8d0f9e",
+        "fixture_id": "fixture.pretty_lights.release_candidate_main_v1"
+      },
+      {
+        "availability_rule": "inventory_contains_source_audio_and_workspace_policy",
+        "evidence_tier": "approved_private_library",
+        "expected_sha256": null,
+        "fixture_id": "fixture.private_library.real"
+      },
+      {
+        "availability_rule": "inventory_contains_project_index_and_revision",
+        "evidence_tier": "accepted_project_revision",
+        "expected_sha256": null,
+        "fixture_id": "fixture.local_project.real"
+      },
+      {
+        "availability_rule": "node_receipt_contains_output_device",
+        "evidence_tier": "physical_device",
+        "expected_sha256": null,
+        "fixture_id": "fixture.audio_device.physical"
+      }
+    ],
+    "invariants": [
+      "Every swept target remains named until it has an explicit terminal disposition.",
+      "Installed, present, runnable, and feasible do not imply loaded, benchmarked, auditioned, or accepted.",
+      "Audio-affecting targets cannot be accepted without a human audition ledger.",
+      "Commercial and research comparators remain catalogued even when they cannot be automated.",
+      "No homelab audit installs software, downloads weights, invokes a service, loads a model, or decodes source audio."
+    ],
+    "kind": "earcrate_homelab_catalog",
+    "mame_mapping": {
+      "driver": "target manifest",
+      "machine_configuration": "content-addressed homelab node receipt",
+      "player_experience": "blind or downstream human audition ledger",
+      "rom_audit": "package, executable, model, credential, fixture, and license feasibility audit",
+      "software_list": "sealed source, score, project, library, and device fixtures",
+      "working_imperfect_not_working": "stage receipts, blockers, and terminal disposition"
+    },
+    "name": "EarCrate Homelab Provider Arcade v1",
+    "schema_version": 1,
+    "source_sweeps": [
+      {
+        "scope": "MIR, transforms, metadata, identification, evaluation, and data sources",
+        "source": "docs/OSS_INTEGRATION_AUDIT.md"
+      },
+      {
+        "scope": "transport, stretch, device hosts, synchronization, and licensing",
+        "source": "docs/DJ_ENGINE_OSS_SWEEP.md"
+      },
+      {
+        "scope": "providers, standards, supply chain, rights, and evaluation",
+        "source": "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+      },
+      {
+        "scope": "evaluated components",
+        "source": "third_party/components.lock.json"
+      },
+      {
+        "scope": "Pop2Piano, Music2MIDI, PiCoGen2, and transcription candidates",
+        "source": "project-session:transcription-sweep"
+      },
+      {
+        "scope": "crate, corpus, mashup, DJ, commercial, and research antecedents",
+        "source": "project-session:oss-community-commodity-sweep"
+      },
+      {
+        "scope": "recording-withholding boundary",
+        "source": "external:flim-community-symbolic-report"
+      }
+    ],
+    "summary": {
+      "audition_required": 57,
+      "decision_required": 87,
+      "fixtures": 10,
+      "target_classes": {
+        "adopted_core": 8,
+        "commercial_comparator": 7,
+        "external_host": 2,
+        "external_service": 6,
+        "interoperability_target": 20,
+        "native_library": 10,
+        "oss_provider": 25,
+        "research_system": 9
+      },
+      "targets": 87
+    },
+    "targets": [
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "regression",
+        "audition_required": true,
+        "capabilities": [
+          "decode",
+          "encode",
+          "media_probe"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "FFmpeg / ffprobe",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "ffmpeg",
+            "ffprobe"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "ffmpeg",
+        "target_manifest_sha256": "cd610019b529040be65ef94fc9ab9dcbeae5dfd19302d635ce699674eada05de"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "regression",
+        "audition_required": true,
+        "capabilities": [
+          "array_runtime",
+          "float_pcm"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "NumPy",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "numpy"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "numpy",
+        "target_manifest_sha256": "64643dc5f1884876541f618c1d849d23d1f5b089f709eb6f0f533895db467e58"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "regression",
+        "audition_required": true,
+        "capabilities": [
+          "polyphase_resample",
+          "signal_processing"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "SciPy",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "scipy"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "scipy",
+        "target_manifest_sha256": "43ee1ccc297e3a342cce574f1646b198b9ed23735edf8eba7ecbb9033815b657"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "regression",
+        "audition_required": true,
+        "capabilities": [
+          "lossless_audio_io"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "SoundFile / libsndfile",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "soundfile"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "soundfile",
+        "target_manifest_sha256": "b4720043c45d71d52a4ddced25bea55c2351531d63782cdaef16500824b43dd1"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "regression",
+        "audition_required": true,
+        "capabilities": [
+          "chroma",
+          "mel",
+          "onsets",
+          "baseline_beats"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "librosa",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "librosa"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "librosa",
+        "target_manifest_sha256": "70c5daa6493e4b68af8af168558ce6d6ded90562f82a81a27c579b7961a095dc"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "symbolic_roundtrip",
+        "audition_required": true,
+        "capabilities": [
+          "midi_codec"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "Mido",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "mido"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "mido",
+        "target_manifest_sha256": "8b375aa5ca194fc8fe9047c897bee06f90ccd381e6e4ef39a0e7ffd908856207"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "physical_device",
+        "audition_required": true,
+        "capabilities": [
+          "physical_audio_host",
+          "callback_io"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "python-sounddevice + PortAudio",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "sounddevice"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "sounddevice-portaudio",
+        "target_manifest_sha256": "4fc94ee716cf50a03c0405ab67bf0845a3c04971b0d4fc000b69c5481240ca9d"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "regression",
+        "audition_required": true,
+        "capabilities": [
+          "integrated_loudness"
+        ],
+        "current_state": "adopted_needs_real_node_receipt",
+        "display_name": "pyloudnorm",
+        "license_posture": "current_core_dependency",
+        "notes": [],
+        "required_stages": [
+          "local_identity_audit",
+          "real_fixture",
+          "regression_audition",
+          "retain_or_replace_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "pyloudnorm"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "adopted_core",
+        "target_id": "pyloudnorm",
+        "target_manifest_sha256": "bc2fe7fac3b7a06b564a0d7ab7e06d0eb8142ebe6d15c7416ca0fe179f224d78"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "audio_metadata",
+          "tag_reading"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "Mutagen",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "mutagen"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "native_library",
+        "target_id": "mutagen",
+        "target_manifest_sha256": "f41215e838bc6a845ddab7193074213c4aaa5a3e7e2f39485459d6f110117cc6"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "local_authority_store"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "SQLite",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/LOCAL_ESTATE_ARCHITECTURE.md"
+        ],
+        "target_class": "native_library",
+        "target_id": "sqlite",
+        "target_manifest_sha256": "d197358ecb8add7950c2078cf99d10cc9d422d8c74bd904035f2e3f18fc1b33d"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "gpu_model_runtime"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "PyTorch + torchaudio",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [
+            "torch",
+            "torchaudio"
+          ],
+          "python_any": []
+        },
+        "source_refs": [
+          "requirements.txt"
+        ],
+        "target_class": "native_library",
+        "target_id": "torch-torchaudio",
+        "target_manifest_sha256": "12bc03cdd887e791319574bd2310c4a0096244090f49c62fe8bb27206e482102"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "standard_mir_evaluation"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "mir_eval",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "mir-eval",
+            "mir_eval"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "native_library",
+        "target_id": "mir-eval",
+        "target_manifest_sha256": "100ebed4656452a6d4d988f3111f0883ec1930ef88563aa479289a4e08d12cb3"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "bounded_constraint_search"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "Google OR-Tools",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "ortools"
+          ]
+        },
+        "source_refs": [
+          "third_party/components.lock.json"
+        ],
+        "target_class": "native_library",
+        "target_id": "ortools",
+        "target_manifest_sha256": "69d6e2592d99c7da9763672ce579400d7ced0704249071b5736be5b3e996c75e"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "hard_invariant_satisfiability"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "Z3 Solver",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "z3-solver"
+          ]
+        },
+        "source_refs": [
+          "third_party/components.lock.json"
+        ],
+        "target_class": "native_library",
+        "target_id": "z3-solver",
+        "target_manifest_sha256": "1ff98d90147c30bdfda5c2948fd18f25262c8c0915dd64db20cf66a6fa5ef0a1"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "fast_symbolic_materialization",
+          "soundfont_render"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "Symusic",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "symusic"
+          ]
+        },
+        "source_refs": [
+          "third_party/components.lock.json"
+        ],
+        "target_class": "native_library",
+        "target_id": "symusic",
+        "target_manifest_sha256": "5662c01abc7c24b7c0ed469fae700c7a164f36032bfe68e9471bd604fce8a5c2"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "sfz_playback"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "LiquidSFZ",
+        "license_posture": "MPL-2.0_reviewed_weak_copyleft",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "liquidsfz"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "third_party/components.lock.json"
+        ],
+        "target_class": "native_library",
+        "target_id": "liquidsfz",
+        "target_manifest_sha256": "0d6e9c6d5fbb6d0b5ef095e19a8f7a9932b4acce1939902da199b2280d4b409a"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "arbitrary_resample",
+          "varispeed"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "libsamplerate",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "samplerate"
+          ]
+        },
+        "source_refs": [
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "native_library",
+        "target_id": "libsamplerate",
+        "target_manifest_sha256": "e39f68b12554b560abe79a3f63a1e9ae77191e61ec8892b9bc1f81976f130d35"
+      },
+      {
+        "adoption_intent": "retain_or_replace",
+        "audition_profile": "real_fixture_and_benchmark",
+        "audition_required": false,
+        "capabilities": [
+          "native_device_host",
+          "mixer",
+          "decode"
+        ],
+        "current_state": "surveyed_not_locally_accepted",
+        "display_name": "miniaudio",
+        "license_posture": "dependency_or_provider_review",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "real_fixture",
+          "benchmark",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "miniaudio"
+          ]
+        },
+        "source_refs": [
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "native_library",
+        "target_id": "miniaudio",
+        "target_manifest_sha256": "eb5712711d80c1affa3bdf45b74b817b95bdd081041d06eb3c6707a4f76807b2"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "beats",
+          "downbeats",
+          "tempo",
+          "key",
+          "functional_sections"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "All-In-One Music Structure Analyzer",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.flim.target_recording",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "allin1"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "allin1",
+        "target_manifest_sha256": "359f90364ca265ed1d72d45d5229bed9ee2ff6cbc2786df107d453496ff00839"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "beats",
+          "downbeats",
+          "chords",
+          "key"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "madmom",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "madmom"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "madmom",
+        "target_manifest_sha256": "f916a741070d084e98f4a78381c8dcd6ba9f5fbc57b0ab06287bb68cf4f108de"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "realtime_beats",
+          "downbeats"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "BeatNet",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "beatnet",
+            "BeatNet"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "beatnet",
+        "target_manifest_sha256": "5ddc58b037fb1fa8d1c35d3625d4fa8e0c2d5649e3994fc051a97058150d2c02"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "beats",
+          "downbeats"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Beat This",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "beat-this",
+            "beat_this"
+          ]
+        },
+        "source_refs": [
+          "third_party/components.lock.json"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "beat-this",
+        "target_manifest_sha256": "70655f6a7465ff0faf832be897adfe5d36f6d47af70862bac9bb8ebe93b6fb6a"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "structural_segmentation"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "sf_segmenter",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "sf-segmenter",
+            "sf_segmenter"
+          ]
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "sf-segmenter",
+        "target_manifest_sha256": "05bdb83c5f5184cdb0a34b6b80371298f50105ab5509afd8437cce6fd24d9199"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "monophonic_pitch",
+          "key_support"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "CREPE",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "crepe"
+          ]
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "crepe",
+        "target_manifest_sha256": "1769ec4fd5ea9d92f51c2771a1e2af893d105923cc5fcbbd6b56a3926af4e0a8"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "time_varying_chords",
+          "harmony"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Chordino / NNLS-Chroma",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "chordino",
+            "nnls-chroma"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "sonic-annotator"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "chordino-nnls-chroma",
+        "target_manifest_sha256": "5105fc795fc811a684f3083b8d42210d7bd743f8ec2bd0e99d0ac48d803e5cd3"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "music_structure_analysis"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "MSAF",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "msaf"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "msaf",
+        "target_manifest_sha256": "32044cb5362738f2ec4ffd6816de509663ee6e3ba7664f9d6d4d310c28b39946"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "notes",
+          "onsets",
+          "pitch_bends",
+          "midi_hypothesis"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Spotify Basic Pitch",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.flim.target_recording",
+            "fixture.children.target_recording"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "basic-pitch"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt",
+          "third_party/components.lock.json",
+          "external:flim-community-symbolic-report"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "basic-pitch",
+        "target_manifest_sha256": "a7a47e9d9b17d356e3ddcb20e0d54e88a98b5be7a69f57c178b3d26fc2981cc3"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "multi_instrument_transcription",
+          "midi_hypothesis"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Music2MIDI",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "music2midi"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.flim.target_recording"
+          ],
+          "gpu": "preferred",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:transcription-sweep",
+          "external:flim-community-symbolic-report"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "music2midi",
+        "target_manifest_sha256": "3e72e28d88b70b47ec94d7d5bd9b670e36083a6df5f6c03d43a1f424c0bd0cb6"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "piano_reduction",
+          "midi_hypothesis"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Pop2Piano",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "pop2piano"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.flim.target_recording",
+            "fixture.children.target_recording"
+          ],
+          "gpu": "preferred",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:transcription-sweep",
+          "external:flim-community-symbolic-report"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "pop2piano",
+        "target_manifest_sha256": "ad1ee405f936bf8a6bfa8d53f9edee2eecd330dd5843e836b61bc0c3be14bebb"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "piano_symbolic_generation",
+          "transcription_candidate"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "PiCoGen2",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "picogen2"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.flim.target_recording"
+          ],
+          "gpu": "preferred",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:transcription-sweep",
+          "external:flim-community-symbolic-report"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "picogen2",
+        "target_manifest_sha256": "5a2950c5daaa7b4ea897f78788398a5cbb1ce1062051a81b6c8e0d86863f6b92"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "blind_audio",
+        "audition_required": true,
+        "capabilities": [
+          "stem_separation",
+          "source_roles"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Demucs",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "blind_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "demucs",
+            "htdemucs"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "demucs"
+          ]
+        },
+        "source_refs": [
+          "requirements.txt",
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "demucs",
+        "target_manifest_sha256": "1f34b4f9ccac265aad7b03a4bb314ccc3183694d93d14f138cfedb29e3414d8a"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "blind_audio",
+        "audition_required": true,
+        "capabilities": [
+          "stem_separation",
+          "model_tournament"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Ultimate Vocal Remover model families",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "blind_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "uvr",
+            "mdx",
+            "vr-architecture"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "uvr",
+        "target_manifest_sha256": "4461b1ce412d75d6e375fd23ffc13b3de36ebc548f33be16512dc6fa389aeb7a"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "blind_audio",
+        "audition_required": true,
+        "capabilities": [
+          "native_stem_separation"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "demucs-rs",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "blind_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "demucs-rs"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "demucs-rs"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "demucs-rs",
+        "target_manifest_sha256": "bfdf203d3f226bd26c745a876a888842fac95978d94e9f86df4fb1981befc3c0"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "music_embeddings",
+          "retrieval"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "MERT",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "mert"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "transformers"
+          ]
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "mert",
+        "target_manifest_sha256": "29f177685ec0c585789df831f87aeb20a685cece67896aef6c5b3e74559e76cd"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "audio_text_embeddings",
+          "retrieval"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "LAION-CLAP",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "clap"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "laion-clap",
+            "msclap"
+          ]
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "laion-clap",
+        "target_manifest_sha256": "6d1818d8c91b59567dbe92d2bb046c8e303d66b2d9721a8464e4e7d5e42cfb15"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "music_embeddings",
+          "retrieval"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "MuQ",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "muq"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "preferred",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "muq"
+          ]
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "muq",
+        "target_manifest_sha256": "d937e0ee6f6f4ed2d77be89118b3d7df42685d4d7d8521092306c9df9ab99df9"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "transformed_audio_fingerprinting"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Panako",
+        "license_posture": "AGPL_and_patent_review_isolated_only",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "panako"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "panako",
+        "target_manifest_sha256": "8b40be8a25f944b5d3c15b94f83079574ec85184d8389dcfa8438a4c785bc566"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "recording_fingerprint"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Chromaprint / fpcalc",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "fpcalc"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "chromaprint",
+        "target_manifest_sha256": "9ea352d4f141899cf1dac729aedcdc01b6a37ae44c7ddcf83d879bec6537d092"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "blind_audio",
+        "audition_required": true,
+        "capabilities": [
+          "time_stretch",
+          "pitch_shift",
+          "key_lock"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Signalsmith Stretch",
+        "license_posture": "owner_review_required",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "blind_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [
+            "signalsmith"
+          ],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "signalsmith-stretch"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "third_party/components.lock.json",
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "signalsmith-stretch",
+        "target_manifest_sha256": "588c8e7c8e6a395ed03de8e513bc4819e480947714ad7408aa337e115afd95cb"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "blind_audio",
+        "audition_required": true,
+        "capabilities": [
+          "time_stretch",
+          "pitch_shift",
+          "key_lock"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Rubber Band / pyrubberband",
+        "license_posture": "GPL_or_commercial_provider_boundary",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "blind_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "rubberband"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "pyrubberband"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md",
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "rubberband",
+        "target_manifest_sha256": "99fc3f7350af2f753b71270160cbe7995b1a255f95e721445f1e68d21acee072"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "onsets",
+          "pitch",
+          "tempo",
+          "features"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "aubio",
+        "license_posture": "GPLv3_research_provider",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [
+            "aubio"
+          ],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "aubio"
+          ]
+        },
+        "source_refs": [
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "aubio",
+        "target_manifest_sha256": "1327407f81e6d392e131dad4b0ec1509b175ceb47a9d24302dd1bb6a6668a75c"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "key",
+          "hpcp",
+          "danceability",
+          "mir_features"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Essentia",
+        "license_posture": "AGPL_or_commercial_isolated_provider",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "essentia"
+          ]
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md",
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "essentia",
+        "target_manifest_sha256": "1875ef627a2d76be7d39aa7df8039f6078dae1ce74cf8b054cd2ae7b84f24ca9"
+      },
+      {
+        "adoption_intent": "candidate_provider",
+        "audition_profile": "blind_audio",
+        "audition_required": true,
+        "capabilities": [
+          "effects",
+          "plugin_hosting"
+        ],
+        "current_state": "surveyed_not_loaded",
+        "display_name": "Spotify Pedalboard",
+        "license_posture": "GPLv3_studio_optional",
+        "notes": [],
+        "required_stages": [
+          "asset_audit",
+          "load",
+          "fixture_run",
+          "benchmark",
+          "blind_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": [
+            "pedalboard"
+          ]
+        },
+        "source_refs": [
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "oss_provider",
+        "target_id": "pedalboard",
+        "target_manifest_sha256": "41db86c58216c7e285631c3fbd0f8d7f4280b03a0d54006c72edf157056c9513"
+      },
+      {
+        "adoption_intent": "external_service_candidate",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "fingerprint_lookup",
+          "recording_identity"
+        ],
+        "current_state": "surveyed_not_authenticated",
+        "display_name": "AcoustID",
+        "license_posture": "service_terms_required",
+        "notes": [],
+        "required_stages": [
+          "credential_audit",
+          "live_request",
+          "custody_review",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [
+            "ACOUSTID_API_KEY"
+          ],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "runtime",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "external_service",
+        "target_id": "acoustid",
+        "target_manifest_sha256": "08ca9cb9e08ab12146bfa9870703442753ea34b1cd120d2519ad06ae2b53e665"
+      },
+      {
+        "adoption_intent": "external_service_candidate",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "recording_metadata",
+          "relationships"
+        ],
+        "current_state": "surveyed_not_authenticated",
+        "display_name": "MusicBrainz",
+        "license_posture": "service_terms_required",
+        "notes": [],
+        "required_stages": [
+          "credential_audit",
+          "live_request",
+          "custody_review",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "runtime",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "external_service",
+        "target_id": "musicbrainz",
+        "target_manifest_sha256": "21ea3cd44b525ae94e967d1a0f455ab69bf1a4f415ce75fb61eda862002a9720"
+      },
+      {
+        "adoption_intent": "external_service_candidate",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "release_metadata",
+          "catalog_context"
+        ],
+        "current_state": "surveyed_not_authenticated",
+        "display_name": "Discogs",
+        "license_posture": "service_terms_required",
+        "notes": [],
+        "required_stages": [
+          "credential_audit",
+          "live_request",
+          "custody_review",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [
+            "DISCOGS_TOKEN"
+          ],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "runtime",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OSS_INTEGRATION_AUDIT.md"
+        ],
+        "target_class": "external_service",
+        "target_id": "discogs",
+        "target_manifest_sha256": "61d58ebdab6e18caf89b24a6b2401bf5afe7928b1035d5417251db76d2e73114"
+      },
+      {
+        "adoption_intent": "external_service_candidate",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "lawful_material",
+          "descriptor_search",
+          "similarity"
+        ],
+        "current_state": "surveyed_not_authenticated",
+        "display_name": "Freesound API",
+        "license_posture": "service_terms_required",
+        "notes": [],
+        "required_stages": [
+          "credential_audit",
+          "live_request",
+          "custody_review",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [
+            "FREESOUND_API_KEY"
+          ],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "runtime",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "external_service",
+        "target_id": "freesound",
+        "target_manifest_sha256": "91d4640dc8d11c0ea509dba5a7ef9bfa80f0332176dec0e6f9005682612628ac"
+      },
+      {
+        "adoption_intent": "external_service_candidate",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "cleared_sample_catalog",
+          "licensing_workflow"
+        ],
+        "current_state": "surveyed_not_authenticated",
+        "display_name": "Tracklib",
+        "license_posture": "commercial_catalog_terms",
+        "notes": [],
+        "required_stages": [
+          "credential_audit",
+          "live_request",
+          "custody_review",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "runtime",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "external_service",
+        "target_id": "tracklib",
+        "target_manifest_sha256": "b1f74b16e0ac9cdf23139c95c8ef386100b338b10de20dda656cd8a0ade291f4"
+      },
+      {
+        "adoption_intent": "external_service_candidate",
+        "audition_profile": "downstream_musical",
+        "audition_required": true,
+        "capabilities": [
+          "cleared_material",
+          "stems",
+          "midi",
+          "provenance"
+        ],
+        "current_state": "surveyed_not_authenticated",
+        "display_name": "Selekt",
+        "license_posture": "commercial_catalog_claims_require_independent_audit",
+        "notes": [],
+        "required_stages": [
+          "credential_audit",
+          "live_request",
+          "custody_review",
+          "downstream_audition",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "runtime",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "external_service",
+        "target_id": "selekt",
+        "target_manifest_sha256": "ca691f0222dfe77d075656b39deef168585543a614213adf847716e07179b9a9"
+      },
+      {
+        "adoption_intent": "external_host_candidate",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "decks",
+          "controllers",
+          "loops",
+          "key_lock",
+          "stems"
+        ],
+        "current_state": "architecture_reference_not_auditioned",
+        "display_name": "Mixxx",
+        "license_posture": "GPLv2_external_host_only",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [
+            "mixxx"
+          ],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": false,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "external_host",
+        "target_id": "mixxx",
+        "target_manifest_sha256": "fccea5d7a91cfccd33949900c8e1fa6b9f9b420a7050cbb797e9fe138542af15"
+      },
+      {
+        "adoption_intent": "external_host_candidate",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "tempo_phase_sync",
+          "network_transport_sync"
+        ],
+        "current_state": "architecture_reference_not_auditioned",
+        "display_name": "Ableton Link",
+        "license_posture": "GPL_or_proprietary_external_sync_seam",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/DJ_ENGINE_OSS_SWEEP.md"
+        ],
+        "target_class": "external_host",
+        "target_id": "ableton-link",
+        "target_manifest_sha256": "9098b5213095f96ad3d1d6530a77d773bd682c3cf440580a5102300a2ac22166"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "library_to_production_crate",
+          "stems",
+          "alignment",
+          "similarity"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "Polymath",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "polymath",
+        "target_manifest_sha256": "6ff78dce789350a3917683338c65798f84fb2c01b57876521a824875cd20f169"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "plugin_music_data_framework",
+          "crate_schema"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "Nendo",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "nendo",
+        "target_manifest_sha256": "4822724654b918a06344c06e7922dde2eca5667d5d6f334b8c70b4e55a45d961"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "corpus_concatenative_synthesis",
+          "descriptor_space"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "CataRT",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "catart",
+        "target_manifest_sha256": "0c083840decbe07b860c9716b53911401c3cbc491117bca53a8fd9e48704346c"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "corpus_concatenative_performance"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "SKataRT",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "skatart",
+        "target_manifest_sha256": "82d0f5191f307ec1c5a8e0352dff02c77b12602a92f603c324f5c8bf278a3e0e"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "visual_corpus_exploration",
+          "similarity_browsing"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "AudioStellar",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "audiostellar",
+        "target_manifest_sha256": "f5b1db9ad6bc1104bc920a76a7ca3f1130f26caeb2643d5807e6e992dd337396"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "corpus_exploration",
+          "concatenative_audio"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "ACorEx",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "acorex",
+        "target_manifest_sha256": "aa026aa99c55223d1ef19ba1a201c67cef1a021a9b10f098bfe584643c02c4ea"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "phrase_mashability",
+          "transform_aware_compatibility"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "AutoMashUpper",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "automashupper",
+        "target_manifest_sha256": "f07921acaca25081ae129be69ce5e2601321610194989e9d55f2f644ea07e78f"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "automatic_dj_pipeline",
+          "cue_selection",
+          "global_progression"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "From raw audio to a seamless mix (2018)",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "automatic-dj-2018",
+        "target_manifest_sha256": "9e42073c8c96796f407df6c7feb205b3259cea9bc5d73376c2fda7e007ad0d49"
+      },
+      {
+        "adoption_intent": "architecture_reference",
+        "audition_profile": "research_workflow",
+        "audition_required": true,
+        "capabilities": [
+          "structured_clip_composition",
+          "daw_lowering"
+        ],
+        "current_state": "reference_only_not_executed",
+        "display_name": "TOMI",
+        "license_posture": "source_and_license_review",
+        "notes": [],
+        "required_stages": [
+          "source_review",
+          "implementation_audit",
+          "fixture_trial",
+          "workflow_audition",
+          "organ_harvest_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.private_library.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "research_system",
+        "target_id": "tomi",
+        "target_manifest_sha256": "473b68c8cd383da5991c2951584a4d96998ca25225b2390b8e9a13e688e4f404"
+      },
+      {
+        "adoption_intent": "workflow_comparator",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "sample_relationship_reference"
+        ],
+        "current_state": "workflow_reference_not_auditioned",
+        "display_name": "WhoSampled",
+        "license_posture": "commercial_terms_and_manual_workflow",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "commercial_comparator",
+        "target_id": "whosampled",
+        "target_manifest_sha256": "e5662437ce9d38b1cff9a4255efb70e684b405a31535859672c62ebd9ec12e43"
+      },
+      {
+        "adoption_intent": "workflow_comparator",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "sample_similarity_browser"
+        ],
+        "current_state": "workflow_reference_not_auditioned",
+        "display_name": "Sononym",
+        "license_posture": "commercial_terms_and_manual_workflow",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "commercial_comparator",
+        "target_id": "sononym",
+        "target_manifest_sha256": "d4006991bcfb4a82af450641d42cf3fcaab6d97a4c920ed0717fccffc345ae77"
+      },
+      {
+        "adoption_intent": "workflow_comparator",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "stem_remix",
+          "midi_detection",
+          "two_turntables"
+        ],
+        "current_state": "workflow_reference_not_auditioned",
+        "display_name": "Fadr",
+        "license_posture": "commercial_terms_and_manual_workflow",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "commercial_comparator",
+        "target_id": "fadr",
+        "target_manifest_sha256": "a6f5a6b2ef6865116ec045f3e5ff32fc8dd2a5d533e83833aa9d0e28a1130776"
+      },
+      {
+        "adoption_intent": "workflow_comparator",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "four_decks",
+          "stems",
+          "key_lock",
+          "controllers"
+        ],
+        "current_state": "workflow_reference_not_auditioned",
+        "display_name": "Traktor Pro",
+        "license_posture": "commercial_terms_and_manual_workflow",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "commercial_comparator",
+        "target_id": "traktor",
+        "target_manifest_sha256": "b2815e49c045f4a31d8bf2c5d942cde187ac045ecac1d1d828ee76cc82f3cf70"
+      },
+      {
+        "adoption_intent": "workflow_comparator",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "stem_automation",
+          "timeline_dj_editing"
+        ],
+        "current_state": "workflow_reference_not_auditioned",
+        "display_name": "DJ.Studio",
+        "license_posture": "commercial_terms_and_manual_workflow",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "commercial_comparator",
+        "target_id": "djstudio",
+        "target_manifest_sha256": "7faab53bdb5b8fd5c6d950b1d83f130995bbf073101dac5bf26d47ac40885fe9"
+      },
+      {
+        "adoption_intent": "workflow_comparator",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "dj_library",
+          "stems",
+          "performance"
+        ],
+        "current_state": "workflow_reference_not_auditioned",
+        "display_name": "rekordbox",
+        "license_posture": "commercial_terms_and_manual_workflow",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "commercial_comparator",
+        "target_id": "rekordbox",
+        "target_manifest_sha256": "b1abac5dfe93dec8397dc033d746ecfb23a7024922335dafd77b4e5b34c3ab4d"
+      },
+      {
+        "adoption_intent": "workflow_comparator",
+        "audition_profile": "workflow_and_audio",
+        "audition_required": true,
+        "capabilities": [
+          "consumer_pro_dj",
+          "stem_transport"
+        ],
+        "current_state": "workflow_reference_not_auditioned",
+        "display_name": "djay",
+        "license_posture": "commercial_terms_and_manual_workflow",
+        "notes": [],
+        "required_stages": [
+          "install_review",
+          "workflow_audition",
+          "interoperability_trial",
+          "adoption_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": true,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.pretty_lights.source_audio",
+            "fixture.audio_device.physical"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "project-session:oss-community-commodity-sweep"
+        ],
+        "target_class": "commercial_comparator",
+        "target_id": "djay",
+        "target_manifest_sha256": "c6a4069cf729843d2728dad648b1ddc19c14980ee36c5d5b333e60f45e250bd8"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "annotation_interchange"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "JAMS",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "jams",
+        "target_manifest_sha256": "c5cb059e5eaecf56603576b863b0cd1f60dac6e2f71aebe956c42e15891c49ea"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "feature_plugin_adapter"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "Vamp plugin ecosystem",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "vamp",
+        "target_manifest_sha256": "a66275248938c8972b74af3338f89ac3101ac81736b0a9eb2144759c10075a49"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "score_interchange"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "MusicXML",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "musicxml",
+        "target_manifest_sha256": "62917fa7e94af09ce88e095c6105fd33e1bea5dd2000ec2774b1303a00b0c76b"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "score_interchange"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "MNX",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "mnx",
+        "target_manifest_sha256": "fd637e40264a5eb456d4c3e41be9b0bbbf8f88637309a4615c63a32d5ce656d7"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "performance_and_device_interchange"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "MIDI 2.0 / MIDI-CI",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "midi2-midici",
+        "target_manifest_sha256": "206f3a7e24ce13c865bb894a139861b4163d95159b55a733607be04251198e61"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "daw_project_interchange"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "DAWproject",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "dawproject",
+        "target_manifest_sha256": "90499378fd7bd517b7d03fb0debd628b006419aa930f913d4f7d4a4a7dc97d73"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "timeline_interchange"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "OpenTimelineIO",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "opentimelineio",
+        "target_manifest_sha256": "9db40c2587f617b83f72189e74ee331b133d687f2122b4ecf08041f97c6586fb"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "native_dsp_plugin_hosting"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "CLAP",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "clap",
+        "target_manifest_sha256": "aa6797b17b9d3cc44996b38adc07fc1e04f0f1a3925a910a9bba0b9141b1436b"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "portable_model_execution"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "ONNX",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "onnx",
+        "target_manifest_sha256": "d3bfcde85facdac3d8a37210cad5c62dc78e425be209b25347fe189e5c94f4c3"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "provider_packaging"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "OCI",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "oci",
+        "target_manifest_sha256": "2161624c1b4333605269c82093796e549d71c902f83cf079e8d3baf3e3c9cb6e"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "artifact_signatures"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "Sigstore",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "sigstore",
+        "target_manifest_sha256": "cf3cd1c3ea96c652d6223e86f7e7666ad70c112b09a1a6536347b75c8ce95daf"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "supply_chain_provenance"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "SLSA",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "slsa",
+        "target_manifest_sha256": "42b626a5f9666eae5066cf1c086a401c2d911b8541f21c1cf7d53764dd4ad23d"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "portable_research_objects"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "RO-Crate",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "ro-crate",
+        "target_manifest_sha256": "cef1dd1fa2e60dfeeb36ba22bb1946f4a1aeb5ede43561f07880c1b16d6f3c8f"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "derivation_graph"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "W3C PROV",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "w3c-prov",
+        "target_manifest_sha256": "70ca4f5141c02caa7896ad3a87ecd03a5ba76b427c8c56913c0ca0b4e945c25a"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "license_expression"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "SPDX",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "spdx",
+        "target_manifest_sha256": "fddd099caf354e7a074374c51da49dd93e82cb3992211126fff808c63f026b44"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "rights_policy_mapping"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "ODRL",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "odrl",
+        "target_manifest_sha256": "836ccc1f508a04ab281a2884c9a6aa0ba6921f1b824ce61b9f5e01350fcda77b"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "music_metadata_interchange"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "DDEX",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "ddex",
+        "target_manifest_sha256": "980a771eb0aaf12525bbfec1d31b112edcc4f1e3e3b2e4ffc14097c4cb191311"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "content_provenance"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "C2PA",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "c2pa",
+        "target_manifest_sha256": "98df8dd3055d4047101e56dfbfe375d83e955dc4a5358f310b3356aae7dc03f1"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "benchmark_fixture_bridge"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "mirdata",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "mirdata",
+        "target_manifest_sha256": "f5eb3a6089b5c61b3029c8a1d3897f6829e9219d9c2bec5547e513c5093fd4ab"
+      },
+      {
+        "adoption_intent": "interoperability_target",
+        "audition_profile": "none",
+        "audition_required": false,
+        "capabilities": [
+          "evaluation_campaign_bridge"
+        ],
+        "current_state": "mapping_only_not_roundtrip_proven",
+        "display_name": "MIREX",
+        "license_posture": "standard_or_specification",
+        "notes": [],
+        "required_stages": [
+          "mapping",
+          "roundtrip",
+          "external_validation",
+          "disposition_decision"
+        ],
+        "requirements": {
+          "asset_tokens": [],
+          "audio_device": false,
+          "credentials_all": [],
+          "executables_all": [],
+          "executables_any": [],
+          "fixture_ids": [
+            "fixture.synthetic.regression",
+            "fixture.local_project.real"
+          ],
+          "gpu": "none",
+          "manual_probe": true,
+          "network": "none",
+          "python_all": [],
+          "python_any": []
+        },
+        "source_refs": [
+          "docs/OPEN_MUSIC_EVIDENCE_FLOOR.md"
+        ],
+        "target_class": "interoperability_target",
+        "target_id": "mirex",
+        "target_manifest_sha256": "c6b4d38dad6fbd52b260c2c2aa612eee862b3b3321e34aaf20fbd0ea64eb7433"
+      }
+    ]
+  },
+  "projection_sha256": "66434119740dea9bbd4f874e9f98a811f1fa891065959d59e3b5083f9cff7993",
+  "redaction": {
+    "absolute_paths": 0,
+    "payload_is_original_authority": false,
+    "sensitive_fields": 0,
+    "source_object_required_for_authoritative_verification": true
+  },
+  "schema_version": 1,
+  "source_identity": "501cbd9b683d5e1c3da485fa5ccc446b9c7ef8b7ba60b4fa4d63ff4b4a77285a",
+  "source_kind": "earcrate_homelab_catalog"
+}

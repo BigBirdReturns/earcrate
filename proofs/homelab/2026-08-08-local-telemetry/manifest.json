@@ -1,0 +1,66 @@
+{
+  "boundary": {
+    "absolute_paths_exported": false,
+    "authoritative_object_bytes_exported": false,
+    "private_objects_exported": false,
+    "projections_require_source_objects_for_authoritative_verification": true,
+    "sensitive_objects_exported": false,
+    "source_media_exported": false
+  },
+  "created_at": "2026-08-09T00:35:40Z",
+  "entries": [
+    {
+      "absolute_paths_redacted": 2,
+      "bytes": 361597,
+      "path": "projections/earcrate_homelab_audit/40/598a2577cc70f4b1651e4f25e3e03c7406f8da25e0088da2761bafe197831b75.json",
+      "projection_identity": "598a2577cc70f4b1651e4f25e3e03c7406f8da25e0088da2761bafe197831b75",
+      "sensitive_fields_redacted": 0,
+      "sha256": "f347a10277e604aafe1b4a3a178f5bff834c3e35d24609d21149938d2d6f22e5",
+      "source_identity": "4014a5e0e306856a4a7efe1e8a3bf6bcb886346465f0c9652249bd21aa6e2beb",
+      "source_kind": "earcrate_homelab_audit"
+    },
+    {
+      "absolute_paths_redacted": 0,
+      "bytes": 349172,
+      "path": "projections/earcrate_homelab_campaign/99/5c896186d60c4fe5b680930a1b9db07a432cecfe7ffb04b9ba335d1cc4db69b8.json",
+      "projection_identity": "5c896186d60c4fe5b680930a1b9db07a432cecfe7ffb04b9ba335d1cc4db69b8",
+      "sensitive_fields_redacted": 0,
+      "sha256": "66edb90c446200bc8ea70236573ce96b0ecaf9f4ee0bd942b91c777b9e85b530",
+      "source_identity": "99de9b9adf86774f9cf3dba43134e1b15541e979071aeb96c2ca80d3473a3736",
+      "source_kind": "earcrate_homelab_campaign"
+    },
+    {
+      "absolute_paths_redacted": 0,
+      "bytes": 123091,
+      "path": "projections/earcrate_homelab_catalog/50/66434119740dea9bbd4f874e9f98a811f1fa891065959d59e3b5083f9cff7993.json",
+      "projection_identity": "66434119740dea9bbd4f874e9f98a811f1fa891065959d59e3b5083f9cff7993",
+      "sensitive_fields_redacted": 0,
+      "sha256": "3b850fe6e03b29670164df6419634b0d3d4ee10a5eb991875a2a1fa969fa3ecb",
+      "source_identity": "501cbd9b683d5e1c3da485fa5ccc446b9c7ef8b7ba60b4fa4d63ff4b4a77285a",
+      "source_kind": "earcrate_homelab_catalog"
+    },
+    {
+      "absolute_paths_redacted": 10,
+      "bytes": 16571,
+      "path": "projections/earcrate_homelab_node_receipt/e5/7907de261145d425a24801ddb7a6e02ffeb3ce3d12c0f257bffc267299a522e8.json",
+      "projection_identity": "7907de261145d425a24801ddb7a6e02ffeb3ce3d12c0f257bffc267299a522e8",
+      "sensitive_fields_redacted": 1,
+      "sha256": "0e6f0b3594a2056d500f6ae2db7f60bafd9f5b40f4bd85a32e91ec9884ab4638",
+      "source_identity": "e5d7150ec7a54c2b97b2da44d837277b8b2ed3d11f6df709920e726b4489f2ea",
+      "source_kind": "earcrate_homelab_node_receipt"
+    },
+    {
+      "absolute_paths_redacted": 0,
+      "bytes": 1520,
+      "path": "store.snapshot.projection.json",
+      "projection_identity": "057a03a9c2e90a7bed8e631098b3e86d893e0b96589cedc9072f1bf7cf7503e2",
+      "sensitive_fields_redacted": 0,
+      "sha256": "2608f88b69fd7ca5ba2ae6209bde7afad5cb5d3a3d33ac360b7c9b2fc5cc2f9c",
+      "source_identity": "b4960dd71fa9454a2e4f62cc7ed05e3dd4f51f10f188dad404eb894f826c81ad",
+      "source_kind": "earcrate_homelab_store_snapshot"
+    }
+  ],
+  "kind": "earcrate_homelab_public_export_manifest",
+  "manifest_sha256": "614d4e6cd3b3fda3431f93b0bca076bfcefc404da498560165ebca12a35a8991",
+  "schema_version": 1
+}

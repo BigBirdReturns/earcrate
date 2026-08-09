@@ -26,16 +26,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .factory-payload/part-* | base64 --decode > /tmp/factory-payload.zip
-          echo "81287ffc7a9110b2324d8ab3152ab8efa3a6c5cf6d49a4a06a653666c890dcf1  /tmp/factory-payload.zip" | sha256sum --check --strict
           python - <<'PY'
           from pathlib import Path
+          import base64
+          import hashlib
           import os
           import stat
           import zipfile
 
           root = Path('.').resolve()
-          with zipfile.ZipFile('/tmp/factory-payload.zip') as archive:
+          parts = sorted((root / '.factory-payload').glob('part-*'))
+          if not parts:
+              raise SystemExit('factory payload has no parts')
+          encoded = ''.join(''.join(path.read_text(encoding='ascii').split()) for path in parts)
+          encoded += '=' * (-len(encoded) % 4)
+          data = base64.b64decode(encoded, validate=True)
+          expected = '81287ffc7a9110b2324d8ab3152ab8efa3a6c5cf6d49a4a06a653666c890dcf1'
+          actual = hashlib.sha256(data).hexdigest()
+          if actual != expected:
+              raise SystemExit(f'factory payload SHA-256 mismatch: expected {expected}, computed {actual}')
+          payload = Path('/tmp/factory-payload.zip')
+          with payload.open('wb') as handle:
+              handle.write(data)
+              handle.flush()
+              os.fsync(handle.fileno())
+
+          with zipfile.ZipFile(payload) as archive:
               names = [item.filename for item in archive.infolist()]
               if len(names) != len(set(names)):
                   raise SystemExit('duplicate payload member')

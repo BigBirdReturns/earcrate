@@ -124,7 +124,7 @@ CASE_OVERRIDES: dict[str, dict[str, Any]] = {
     },
 }
 
-ROLE_ORDER = (
+SPECIMEN_ROLE_ORDER = (
     "custody", "fingerprint", "beat_grid", "tonality", "separation",
     "drum_separation", "transcription", "structure", "stretch",
     "render_reconstruction", "signal_evaluation", "symbolic_ingest",
@@ -1064,7 +1064,7 @@ def select_case_targets(
     unique: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in selected:
         unique[(str(row["job_id"]), str(row["role"]), str(row["target_id"]))] = row
-    return sorted(unique.values(), key=lambda row: (ROLE_ORDER.index(row["role"]) if row["role"] in ROLE_ORDER else 999, row["job_id"], row["target_id"]))
+    return sorted(unique.values(), key=lambda row: (SPECIMEN_ROLE_ORDER.index(row["role"]) if row["role"] in SPECIMEN_ROLE_ORDER else 999, row["job_id"], row["target_id"]))
 
 
 def _binding_index(bindings: Sequence[Mapping[str, Any]], suite: Mapping[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:

@@ -110,7 +110,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check pytest numpy scipy soundfile
+          python -m pip install --disable-pip-version-check pytest -r requirements.txt
           python -m py_compile \
             earcrate/estate/homelab_common.py \
             earcrate/estate/homelab_specimens.py \

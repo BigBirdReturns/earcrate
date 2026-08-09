@@ -110,6 +110,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           python -m pip install --disable-pip-version-check pytest -r requirements.txt
           python -m py_compile \
             earcrate/estate/homelab_common.py \

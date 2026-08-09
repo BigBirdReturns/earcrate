@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_homelab_cloud_specimens_v1.schema.json",
+  "title": "EarCrate Homelab cloud specimen objects v1",
+  "oneOf": [
+    {"$ref": "#/$defs/specimenSuite"},
+    {"$ref": "#/$defs/intakeReceipt"},
+    {"$ref": "#/$defs/sourceBinding"},
+    {"$ref": "#/$defs/trialReceipt"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "base": {
+      "type": "object",
+      "required": ["schema_version", "kind"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"type": "string"}
+      }
+    },
+    "specimenSuite": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "suite_id", "role_policy_sha256", "cases", "source_requirements", "summary", "boundary", "suite_sha256"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_specimen_suite"},
+            "suite_id": {"type": "string", "minLength": 1},
+            "role_policy_sha256": {"$ref": "#/$defs/sha256"},
+            "cases": {"type": "array", "minItems": 1},
+            "source_requirements": {"type": "array"},
+            "summary": {"type": "object"},
+            "boundary": {"type": "object"},
+            "suite_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "intakeReceipt": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "staged_at", "suite_sha256", "destination_path", "extracted_cases", "boundary", "receipt_sha256"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_specimen_intake_receipt"},
+            "suite_sha256": {"$ref": "#/$defs/sha256"},
+            "destination_path": {"type": "string", "minLength": 1},
+            "extracted_cases": {"type": "array", "minItems": 1},
+            "boundary": {"type": "object"},
+            "receipt_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "sourceBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "suite_sha256", "case_id", "source_id", "artifact_path", "artifact_sha256", "artifact_bytes", "bound_by", "reason", "boundary", "binding_sha256"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_specimen_source_binding"},
+            "suite_sha256": {"$ref": "#/$defs/sha256"},
+            "case_id": {"type": "string", "minLength": 1},
+            "source_id": {"type": "string", "minLength": 1},
+            "artifact_path": {"type": "string", "minLength": 1},
+            "artifact_sha256": {"$ref": "#/$defs/sha256"},
+            "artifact_bytes": {"type": "integer", "minimum": 1},
+            "canonical_pcm_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+            "bound_by": {"type": "string", "minLength": 1},
+            "reason": {"type": "string", "minLength": 1},
+            "boundary": {"type": "object"},
+            "binding_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "trialReceipt": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "required": ["kind", "suite_sha256", "campaign_sha256", "task_id", "outcome", "actor", "source_binding_sha256s", "derived_artifacts", "measurements", "authority", "boundary", "receipt_sha256"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_specimen_trial_receipt"},
+            "suite_sha256": {"$ref": "#/$defs/sha256"},
+            "campaign_sha256": {"$ref": "#/$defs/sha256"},
+            "task_id": {"type": "string", "minLength": 1},
+            "outcome": {"enum": ["passed", "failed", "refused", "accept", "reject", "revise", "abstain", "observed"]},
+            "actor": {"type": "object", "required": ["actor_id", "actor_type"]},
+            "source_binding_sha256s": {"type": "array", "items": {"$ref": "#/$defs/sha256"}},
+            "derived_artifacts": {"type": "array"},
+            "measurements": {"type": "object"},
+            "authority": {"type": "object"},
+            "boundary": {"type": "object"},
+            "receipt_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    }
+  }
+}

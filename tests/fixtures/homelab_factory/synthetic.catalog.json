@@ -1,0 +1,372 @@
+{
+  "boundary": {
+    "synthetic": true
+  },
+  "catalog_sha256": "c7a27fc9d530ae9d4a08d141c555febfe6475920377b4b1bba1b856ba67ad1f7",
+  "cataloged_at": "2026-08-08",
+  "fixtures": [],
+  "kind": "earcrate_homelab_catalog",
+  "name": "SYNTHETIC EXAMPLE ONLY",
+  "schema_version": 1,
+  "summary": {
+    "targets": 22
+  },
+  "targets": [
+    {
+      "capabilities": [
+        "decode",
+        "encode",
+        "media_probe",
+        "signal",
+        "loudness"
+      ],
+      "display_name": "FFmpeg / ffprobe",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "adopted_core",
+      "target_id": "ffmpeg",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "capabilities": [
+        "fingerprint",
+        "identification"
+      ],
+      "display_name": "Chromaprint / fpcalc",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "chromaprint",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000002"
+    },
+    {
+      "capabilities": [
+        "beat",
+        "downbeat",
+        "tempo"
+      ],
+      "display_name": "Beat This!",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "beat-this",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000003"
+    },
+    {
+      "capabilities": [
+        "beat",
+        "downbeat",
+        "meter"
+      ],
+      "display_name": "BeatNet",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "beatnet",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000004"
+    },
+    {
+      "capabilities": [
+        "key",
+        "tuning",
+        "chroma",
+        "rhythm",
+        "loudness"
+      ],
+      "display_name": "Essentia",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "native_library",
+      "target_id": "essentia",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000005"
+    },
+    {
+      "capabilities": [
+        "chroma",
+        "onsets",
+        "tempo",
+        "beat"
+      ],
+      "display_name": "librosa",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "adopted_core",
+      "target_id": "librosa",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000006"
+    },
+    {
+      "capabilities": [
+        "onset",
+        "pitch",
+        "tempo"
+      ],
+      "display_name": "aubio",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "aubio",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000007"
+    },
+    {
+      "capabilities": [
+        "source_separation",
+        "stems"
+      ],
+      "display_name": "Demucs / HTDemucs",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "demucs",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000008"
+    },
+    {
+      "capabilities": [
+        "source_separation",
+        "stems"
+      ],
+      "display_name": "python-audio-separator / BS-RoFormer / UVR",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "audio-separator",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000009"
+    },
+    {
+      "capabilities": [
+        "drum",
+        "percussion",
+        "substem",
+        "separation"
+      ],
+      "display_name": "LarsNet",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "research_system",
+      "target_id": "larsnet",
+      "target_manifest_sha256": "000000000000000000000000000000000000000000000000000000000000000a"
+    },
+    {
+      "capabilities": [
+        "transcription",
+        "notes",
+        "midi",
+        "pitch"
+      ],
+      "display_name": "Basic Pitch",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "basic-pitch",
+      "target_manifest_sha256": "000000000000000000000000000000000000000000000000000000000000000b"
+    },
+    {
+      "capabilities": [
+        "transcription",
+        "drum_events",
+        "notes"
+      ],
+      "display_name": "Omnizart",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "omnizart",
+      "target_manifest_sha256": "000000000000000000000000000000000000000000000000000000000000000c"
+    },
+    {
+      "capabilities": [
+        "structure",
+        "segmentation",
+        "sections"
+      ],
+      "display_name": "MSAF",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "msaf",
+      "target_manifest_sha256": "000000000000000000000000000000000000000000000000000000000000000d"
+    },
+    {
+      "capabilities": [
+        "structure",
+        "segmentation",
+        "sections"
+      ],
+      "display_name": "All-In-One structure analysis",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "research_system",
+      "target_id": "allin1",
+      "target_manifest_sha256": "000000000000000000000000000000000000000000000000000000000000000e"
+    },
+    {
+      "capabilities": [
+        "chord",
+        "harmony",
+        "vamp"
+      ],
+      "display_name": "Vamp Chordino",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "interoperability_target",
+      "target_id": "vamp-chordino",
+      "target_manifest_sha256": "000000000000000000000000000000000000000000000000000000000000000f"
+    },
+    {
+      "capabilities": [
+        "pitch",
+        "f0",
+        "tuning"
+      ],
+      "display_name": "CREPE",
+      "requirements": {
+        "gpu": "optional",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "crepe",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000010"
+    },
+    {
+      "capabilities": [
+        "stretch",
+        "pitch_shift",
+        "time_scale"
+      ],
+      "display_name": "Rubber Band",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "oss_provider",
+      "target_id": "rubber-band",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000011"
+    },
+    {
+      "capabilities": [
+        "audio_io",
+        "render"
+      ],
+      "display_name": "SoundFile / libsndfile",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "adopted_core",
+      "target_id": "soundfile",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000012"
+    },
+    {
+      "capabilities": [
+        "midi",
+        "symbolic"
+      ],
+      "display_name": "Mido",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "adopted_core",
+      "target_id": "mido",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000013"
+    },
+    {
+      "capabilities": [
+        "rack",
+        "render",
+        "dsp"
+      ],
+      "display_name": "EarCrate rack compiler",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "adopted_core",
+      "target_id": "earcrate-rack",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000014"
+    },
+    {
+      "capabilities": [
+        "evaluation",
+        "signal",
+        "metrics",
+        "quality"
+      ],
+      "display_name": "EarCrate independent signal evaluator",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "adopted_core",
+      "target_id": "earcrate-signal-evaluator",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000015"
+    },
+    {
+      "capabilities": [
+        "review",
+        "evaluation",
+        "tournament",
+        "evidence"
+      ],
+      "display_name": "EarCrate evidence adjudication",
+      "requirements": {
+        "gpu": "none",
+        "manual_probe": false,
+        "network": "none"
+      },
+      "target_class": "adopted_core",
+      "target_id": "earcrate-evidence-adjudication",
+      "target_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000016"
+    }
+  ]
+}

@@ -1,0 +1,1702 @@
+{
+  "boundary": {
+    "human_review_remains_acceptance_authority": true,
+    "original_archives_remain_independently_hashed": true,
+    "private_source_paths_present": false,
+    "provider_processes_executed": false,
+    "source_free": true,
+    "trial_success_is_provider_adoption": false
+  },
+  "cases": [
+    {
+      "archive_bytes": 66565,
+      "archive_name": "earcrate_animal_toxic_handoff_prep_v0.1.0.zip",
+      "archive_root": "earcrate_animal_toxic_handoff_prep_v0.1.0",
+      "archive_sha256": "d4dd8a0d8d0eff22db361142ca7706b0a2e4e5a4c0a5eae274bd65d63f2e58cf",
+      "auditions": [
+        {
+          "audition_id": "AUD-00",
+          "foreground": "Toxic vocal/identity",
+          "host_bpm": "143",
+          "method": "minimum viable reference; pitch-preserving tempo treatment",
+          "name": "control_overlap",
+          "pass_condition": "only used as control; does not need musical acceptance",
+          "percussion": "Animal direct separated candidate",
+          "purpose": "establish naive ceiling/failure modes"
+        },
+        {
+          "audition_id": "AUD-01",
+          "foreground": "Toxic lead vocal + selected non-drum identity",
+          "host_bpm": "143",
+          "method": "functional drum replacement",
+          "name": "strict_animal_chassis",
+          "pass_condition": "Britney remains intelligible and groove feels authored rather than pasted",
+          "percussion": "Animal kick/snare/hats/toms/rooms candidate",
+          "purpose": "test maximum modern impact"
+        },
+        {
+          "audition_id": "AUD-02",
+          "foreground": "Toxic lead + identity",
+          "host_bpm": "143",
+          "method": "role-based hybrid",
+          "name": "hybrid_percussion",
+          "pass_condition": "higher physical scale without clutter or loss of Toxic stop-start feel",
+          "percussion": "Animal kick/snare/impact + retained Toxic punctuation/hats where identity-bearing",
+          "purpose": "expected winner for percussion transplant"
+        },
+        {
+          "audition_id": "AUD-03",
+          "foreground": "Toxic lead + identity",
+          "host_bpm": "143",
+          "method": "symbolic re-performance",
+          "name": "event_reconstruction",
+          "pass_condition": "preserves Animal groove grammar and beats separated-stem candidate in blind review",
+          "percussion": "Animal-derived event ledger rendered with approved rack",
+          "purpose": "artifact-free alternative to drum stem stretch"
+        },
+        {
+          "audition_id": "AUD-04",
+          "foreground": "source ownership alternates",
+          "host_bpm": "143_to_150_or_reviewed",
+          "method": "G7/G7#9 -> Cm phrase seam",
+          "name": "harmonic_handoff",
+          "pass_condition": "transition reads as inevitable musical arrival",
+          "percussion": "ownership alternates",
+          "purpose": "prove unrelated-song compositional handoff"
+        },
+        {
+          "audition_id": "AUD-05",
+          "foreground": "selected Animal member phrases",
+          "host_bpm": "150_or_reviewed",
+          "method": "reverse transplant",
+          "name": "animal_vocals_over_toxic_grammar",
+          "pass_condition": "KATSEYE phrasing remains contemporary while Toxic grammar is unmistakable",
+          "percussion": "Toxic-style dry/gated or retained Toxic chassis",
+          "purpose": "prove bidirectionality"
+        },
+        {
+          "audition_id": "AUD-06",
+          "foreground": "alternating",
+          "host_bpm": "146.5",
+          "method": "both sources moved minimally",
+          "name": "split_host_146_5",
+          "pass_condition": "blind preference over AUD-02/AUD-04",
+          "percussion": "hybrid",
+          "purpose": "control whether balanced processing beats one-native-source strategy"
+        }
+      ],
+      "boundary": {
+        "copyrighted_score_pages_included": false,
+        "human_acceptance_claimed": false,
+        "provider_execution_performed": false,
+        "source_audio_included": false
+      },
+      "canonical_case_id": "animal-katseye-x-britney-toxic-handoff",
+      "case_manifest_path": "earcrate_animal_toxic_handoff_prep_v0.1.0/case.json",
+      "case_payload_sha256": "5722bcdb6bd24d73d31d4d1951b683031adf5156c996cb3d43055e52a15b3aba",
+      "checksum_coverage": {
+        "checked_files": 57,
+        "mismatches": 0,
+        "missing": 0,
+        "unknown": 0
+      },
+      "checksum_manifest_path": "earcrate_animal_toxic_handoff_prep_v0.1.0/checksums.sha256",
+      "control_question": "Does Animal's modern rhythmic body make Toxic hit harder while Toxic's negative space, punctuation, and vocal identity remain intact?",
+      "creative_objectives": [
+        "Put Britney foreground phrases over the best Animal percussion without losing Toxic negative space.",
+        "Exchange percussion ownership by function rather than replacing one monolithic drum stem.",
+        "Trade selected KATSEYE member phrases and Britney phrases at accepted boundaries.",
+        "Exploit same-key dominant-to-tonic seams for hard source handoffs.",
+        "Prove bidirectionality with an Animal-vocal-over-Toxic-grammar reverse transplant."
+      ],
+      "declared_created": "2026-08-08T18:30:00Z",
+      "hard_constraints": [
+        "No commercial audio, copied lyrics, purchased score pages, or leaked stems in this crate.",
+        "Exact masters and all derived audio remain private and content-addressed.",
+        "No fan/leaked stems in the accepted lane.",
+        "Pure full-band varispeed may not detune nominally same-key overlapping material by about 83 cents.",
+        "Signal sanity, human musical acceptance and rights policy remain separate gates."
+      ],
+      "member_count": 58,
+      "member_manifest_sha256": "f1005d7f4e2851b966626e44370f1301629c2360f39f0e231f7070f3aa9468fd",
+      "provider_jobs": [
+        {
+          "canonical_write_allowed": false,
+          "capability": "exact_source_preflight",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "katseye_animal",
+            "britney_toxic"
+          ],
+          "job_id": "P01",
+          "outputs": "source custody receipts",
+          "priority": "P0",
+          "provider_labels": [
+            "ffprobe",
+            "ffmpeg",
+            "Chromaprint/fpcalc optional"
+          ],
+          "purpose": "exact_source_preflight",
+          "role": "custody",
+          "source_job": {
+            "capability": "exact_source_preflight",
+            "inputs": [
+              "katseye_animal",
+              "britney_toxic"
+            ],
+            "job_id": "P01",
+            "output": "source custody receipts",
+            "priority": "P0",
+            "providers": [
+              "ffprobe",
+              "ffmpeg",
+              "Chromaprint/fpcalc optional"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "beat_downbeat_tracking",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "both masters",
+            "Animal official instrumental if acquired"
+          ],
+          "job_id": "P02",
+          "outputs": "candidate beat/downbeat grids",
+          "priority": "P0",
+          "provider_labels": [
+            "Beat This!",
+            "BeatNet",
+            "Essentia RhythmExtractor2013",
+            "aubio"
+          ],
+          "purpose": "beat_downbeat_tracking",
+          "role": "beat_grid",
+          "source_job": {
+            "capability": "beat_downbeat_tracking",
+            "inputs": [
+              "both masters",
+              "Animal official instrumental if acquired"
+            ],
+            "job_id": "P02",
+            "output": "candidate beat/downbeat grids",
+            "priority": "P0",
+            "providers": [
+              "Beat This!",
+              "BeatNet",
+              "Essentia RhythmExtractor2013",
+              "aubio"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "key_tuning_chroma",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "both masters",
+            "Animal official instrumental"
+          ],
+          "job_id": "P03",
+          "outputs": "key/tuning witnesses by section",
+          "priority": "P0",
+          "provider_labels": [
+            "Essentia",
+            "librosa",
+            "custom chroma/tuning estimator"
+          ],
+          "purpose": "key_tuning_chroma",
+          "role": "tonality",
+          "source_job": {
+            "capability": "key_tuning_chroma",
+            "inputs": [
+              "both masters",
+              "Animal official instrumental"
+            ],
+            "job_id": "P03",
+            "output": "key/tuning witnesses by section",
+            "priority": "P0",
+            "providers": [
+              "Essentia",
+              "librosa",
+              "custom chroma/tuning estimator"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "source_separation_general",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "both masters"
+          ],
+          "job_id": "P04",
+          "outputs": "vocals/drums/bass/other candidates",
+          "priority": "P0",
+          "provider_labels": [
+            "BS-RoFormer family via audio-separator",
+            "Demucs/HTDemucs"
+          ],
+          "purpose": "source_separation_general",
+          "role": "separation",
+          "source_job": {
+            "capability": "source_separation_general",
+            "inputs": [
+              "both masters"
+            ],
+            "job_id": "P04",
+            "output": "vocals/drums/bass/other candidates",
+            "priority": "P0",
+            "providers": [
+              "BS-RoFormer family via audio-separator",
+              "Demucs/HTDemucs"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "animal_accompaniment_validation",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "Animal master",
+            "Animal official instrumental"
+          ],
+          "job_id": "P05",
+          "outputs": "instrumental edition-match and separator leakage scores",
+          "priority": "P0",
+          "provider_labels": [
+            "alignment plus null/residual evaluator"
+          ],
+          "purpose": "animal_accompaniment_validation",
+          "role": "symbolic_ingest",
+          "source_job": {
+            "capability": "animal_accompaniment_validation",
+            "inputs": [
+              "Animal master",
+              "Animal official instrumental"
+            ],
+            "job_id": "P05",
+            "output": "instrumental edition-match and separator leakage scores",
+            "priority": "P0",
+            "providers": [
+              "alignment plus null/residual evaluator"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "drum_substem_separation",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "accepted Animal drums",
+            "accepted Toxic drums"
+          ],
+          "job_id": "P06",
+          "outputs": "kick/snare/toms/hats/cymbals candidates",
+          "priority": "P1",
+          "provider_labels": [
+            "LarsNet",
+            "Separate-and-Detect if implementation available"
+          ],
+          "purpose": "drum_substem_separation",
+          "role": "drum_separation",
+          "source_job": {
+            "capability": "drum_substem_separation",
+            "inputs": [
+              "accepted Animal drums",
+              "accepted Toxic drums"
+            ],
+            "job_id": "P06",
+            "output": "kick/snare/toms/hats/cymbals candidates",
+            "priority": "P1",
+            "providers": [
+              "LarsNet",
+              "Separate-and-Detect if implementation available"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "drum_event_transcription",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "Animal instrumental/drums",
+            "Toxic drums"
+          ],
+          "job_id": "P07",
+          "outputs": "event-ledger candidates",
+          "priority": "P1",
+          "provider_labels": [
+            "STRUM if available",
+            "aubio onset",
+            "Omnizart drums",
+            "custom onset classifier"
+          ],
+          "purpose": "drum_event_transcription",
+          "role": "transcription",
+          "source_job": {
+            "capability": "drum_event_transcription",
+            "inputs": [
+              "Animal instrumental/drums",
+              "Toxic drums"
+            ],
+            "job_id": "P07",
+            "output": "event-ledger candidates",
+            "priority": "P1",
+            "providers": [
+              "STRUM if available",
+              "aubio onset",
+              "Omnizart drums",
+              "custom onset classifier"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "structure_segmentation",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "both masters"
+          ],
+          "job_id": "P08",
+          "outputs": "section-boundary candidates",
+          "priority": "P1",
+          "provider_labels": [
+            "MIR structural provider plus repetition/chroma/onset features"
+          ],
+          "purpose": "structure_segmentation",
+          "role": "tonality",
+          "source_job": {
+            "capability": "structure_segmentation",
+            "inputs": [
+              "both masters"
+            ],
+            "job_id": "P08",
+            "output": "section-boundary candidates",
+            "priority": "P1",
+            "providers": [
+              "MIR structural provider plus repetition/chroma/onset features"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "vocal_phrase_alignment",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "accepted vocal candidates"
+          ],
+          "job_id": "P09",
+          "outputs": "phrase boundary candidates, no lyric text committed",
+          "priority": "P1",
+          "provider_labels": [
+            "Whisper/lyrics alignment only if user supplies lawful lyrics locally",
+            "pitch/onset phrase detector"
+          ],
+          "purpose": "vocal_phrase_alignment",
+          "role": "tonality",
+          "source_job": {
+            "capability": "vocal_phrase_alignment",
+            "inputs": [
+              "accepted vocal candidates"
+            ],
+            "job_id": "P09",
+            "output": "phrase boundary candidates, no lyric text committed",
+            "priority": "P1",
+            "providers": [
+              "Whisper/lyrics alignment only if user supplies lawful lyrics locally",
+              "pitch/onset phrase detector"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "time_stretch_tournament",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "percussion and vocal phrases only"
+          ],
+          "job_id": "P10",
+          "outputs": "derived audition candidates with artifact metrics",
+          "priority": "P1",
+          "provider_labels": [
+            "Rubber Band CLI",
+            "librosa/soxr candidates",
+            "DAW-quality local stretch if configured"
+          ],
+          "purpose": "time_stretch_tournament",
+          "role": "stretch",
+          "source_job": {
+            "capability": "time_stretch_tournament",
+            "inputs": [
+              "percussion and vocal phrases only"
+            ],
+            "job_id": "P10",
+            "output": "derived audition candidates with artifact metrics",
+            "priority": "P1",
+            "providers": [
+              "Rubber Band CLI",
+              "librosa/soxr candidates",
+              "DAW-quality local stretch if configured"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "rack_reconstruction",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "accepted drum event ledger",
+            "approved local EarAtoms"
+          ],
+          "job_id": "P11",
+          "outputs": "sealed racks, bindings, rendered drum reconstruction",
+          "priority": "P1",
+          "provider_labels": [
+            "EarCrate rack compiler/render-rack"
+          ],
+          "purpose": "rack_reconstruction",
+          "role": "render_reconstruction",
+          "source_job": {
+            "capability": "rack_reconstruction",
+            "inputs": [
+              "accepted drum event ledger",
+              "approved local EarAtoms"
+            ],
+            "job_id": "P11",
+            "output": "sealed racks, bindings, rendered drum reconstruction",
+            "priority": "P1",
+            "providers": [
+              "EarCrate rack compiler/render-rack"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "mix_style_measurement",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "accepted stems"
+          ],
+          "job_id": "P12",
+          "outputs": "production-grammar feature vectors",
+          "priority": "P2",
+          "provider_labels": [
+            "spectral/transient/decay metrics",
+            "StemFX research adapter if feasible"
+          ],
+          "purpose": "mix_style_measurement",
+          "role": "render_reconstruction",
+          "source_job": {
+            "capability": "mix_style_measurement",
+            "inputs": [
+              "accepted stems"
+            ],
+            "job_id": "P12",
+            "output": "production-grammar feature vectors",
+            "priority": "P2",
+            "providers": [
+              "spectral/transient/decay metrics",
+              "StemFX research adapter if feasible"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "candidate_signal_eval",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "AUD-01..AUD-06"
+          ],
+          "job_id": "P13",
+          "outputs": "signal evaluations",
+          "priority": "P0 before review",
+          "provider_labels": [
+            "independent EarCrate signal evaluator"
+          ],
+          "purpose": "candidate_signal_eval",
+          "role": "signal_evaluation",
+          "source_job": {
+            "capability": "candidate_signal_eval",
+            "inputs": [
+              "AUD-01..AUD-06"
+            ],
+            "job_id": "P13",
+            "output": "signal evaluations",
+            "priority": "P0 before review",
+            "providers": [
+              "independent EarCrate signal evaluator"
+            ]
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "human_musical_review",
+          "case_id": "animal-katseye-x-britney-toxic-handoff",
+          "inputs": [
+            "qualified auditions"
+          ],
+          "job_id": "P14",
+          "outputs": "accept/revise/reject verdicts",
+          "priority": "P0 before full arrangement",
+          "provider_labels": [
+            "human review"
+          ],
+          "purpose": "human_musical_review",
+          "role": "adjudication",
+          "source_job": {
+            "capability": "human_musical_review",
+            "inputs": [
+              "qualified auditions"
+            ],
+            "job_id": "P14",
+            "output": "accept/revise/reject verdicts",
+            "priority": "P0 before full arrangement",
+            "providers": [
+              "human review"
+            ]
+          }
+        }
+      ],
+      "provider_jobs_path": "earcrate_animal_toxic_handoff_prep_v0.1.0/earcrate/provider_jobs.json",
+      "source_case_id": "animal-katseye-x-britney-toxic-handoff",
+      "source_free": true,
+      "source_roles": [
+        {
+          "artist": "KATSEYE",
+          "exact_local_edition": "unbound",
+          "expected_duration_seconds": {
+            "maximum": 165,
+            "minimum": 150
+          },
+          "identity_status": "exact local edition unresolved until binding",
+          "nominal_witnesses": {
+            "duration_seconds": 158,
+            "key": "C minor",
+            "tempo_bpm": 150
+          },
+          "recording_role": "2026 modern hybrid live/programmed percussion chassis and multi-singer foreground",
+          "source_id": "katseye_animal",
+          "title": "Animal"
+        },
+        {
+          "artist": "Britney Spears",
+          "exact_local_edition": "unbound",
+          "expected_duration_seconds": {
+            "maximum": 205,
+            "minimum": 190
+          },
+          "identity_status": "exact local edition unresolved until binding",
+          "nominal_witnesses": {
+            "duration_seconds": 199,
+            "key": "C minor",
+            "tempo_bpm": 143
+          },
+          "recording_role": "2003/2004 identity-rich vocal, dry rhythmic grammar, cinematic harmony and string/sample punctuation",
+          "source_id": "britney_toxic",
+          "title": "Toxic"
+        }
+      ],
+      "specimen_class": "cross_song_compatible_pop_production_grammar",
+      "title": "KATSEYE “Animal” × Britney Spears “Toxic” percussion and identity handoff study",
+      "uncompressed_bytes": 113944
+    },
+    {
+      "archive_bytes": 110455,
+      "archive_name": "earcrate_beggin_handoff_prep_v0.1.0.zip",
+      "archive_root": "earcrate_beggin_handoff_prep_v0.1.0",
+      "archive_sha256": "0548416d41313c1dd23b584b59b4f320f1f77b53bfcedb1cc23364236ec7c136",
+      "auditions": [
+        {
+          "audition_id": "AUD-01",
+          "classification": "rhythm replacement",
+          "comparison": "Four Seasons source; same passage with reconstructed drums",
+          "foreground": "Four Seasons lead/backing vocal candidate",
+          "hard_gates": "vocal intelligibility; drum transient retention; no pitched bleed conflict; no flams",
+          "host_bpm": "accepted Four Seasons grid, nominal 130",
+          "host_key": "D minor",
+          "human_question": "Does this feel like the original performance becoming physically larger?",
+          "name": "Vintage vocal / modern separated drums",
+          "pitched_modern_layers": "none",
+          "priority": "1",
+          "rhythm": "best Måneskin drum-stem candidate",
+          "window": "first complete hook plus one narrative phrase"
+        },
+        {
+          "audition_id": "AUD-02",
+          "classification": "symbolic drum replacement",
+          "comparison": "AUD-01 blind A/B",
+          "foreground": "same accepted Four Seasons vocal candidate",
+          "hard_gates": "event accountability; no generic quantization; cymbal continuity; rack coverage",
+          "host_bpm": "accepted Four Seasons grid",
+          "host_key": "D minor",
+          "human_question": "Does the rebuild preserve Ethan's push, accents, fills, and scale without separator residue?",
+          "name": "Vintage vocal / reconstructed modern drum genome",
+          "pitched_modern_layers": "none",
+          "priority": "2",
+          "rhythm": "adjudicated MIDI bound to approved multi-zone drum rack",
+          "window": "same exact window as AUD-01"
+        },
+        {
+          "audition_id": "AUD-03",
+          "classification": "foreground authority exchange",
+          "comparison": "same material as static overlay",
+          "foreground": "one complete Frankie phrase group, then one complete Damiano phrase group",
+          "hard_gates": "no mid-word cut; breath boundary; destination harmony supports lead; center image remains clear",
+          "host_bpm": "accepted shared or transitioned grid",
+          "host_key": "source-dependent with explicit boundary",
+          "human_question": "Do the singers sound like actors in one arrangement rather than two files taking turns?",
+          "name": "Phrase-trading source swap",
+          "pitched_modern_layers": "destination-only after key strategy",
+          "priority": "3",
+          "rhythm": "modern drums continuous if accepted",
+          "window": "16 to 24 bars around aligned semantic anchors"
+        },
+        {
+          "audition_id": "AUD-04",
+          "classification": "modulation and full-band source swap",
+          "comparison": "common-tone and hard-cut alternatives",
+          "foreground": "vintage source into modern source",
+          "hard_gates": "no accidental polytonality; downbeat continuity; intentional key perception; no room-tail tear",
+          "host_bpm": "accepted vintage to accepted modern",
+          "host_key": "D minor to B minor",
+          "human_question": "Does the modulation read as authored escalation?",
+          "name": "Percussion-void D minor to B minor handoff",
+          "pitched_modern_layers": "enter only after B minor is established",
+          "priority": "4",
+          "rhythm": "percussion-only bridge",
+          "window": "one or two transition bars plus destination impact"
+        },
+        {
+          "audition_id": "AUD-05",
+          "classification": "harmonic bridge",
+          "comparison": "AUD-04",
+          "foreground": "D/A common-tone texture and bounded vocal fragment",
+          "hard_gates": "common tones audible; destination tonic unambiguous; no shifted-vocal identity damage",
+          "host_bpm": "one- or two-bar ramp",
+          "host_key": "D minor to B minor",
+          "human_question": "Does the bridge increase tension without sounding like a theory exercise?",
+          "name": "Sparse common-tone bridge",
+          "pitched_modern_layers": "bass enters on destination tonic",
+          "priority": "5",
+          "rhythm": "room pulse or floor tom",
+          "window": "4 to 8 bars"
+        },
+        {
+          "audition_id": "AUD-06",
+          "classification": "scored vocal unison/response",
+          "comparison": "single-lead versions",
+          "foreground": "one hook fragment with controlled register assignment",
+          "hard_gates": "consonant alignment; tuning; no center smear; no more than bounded impact length",
+          "host_bpm": "accepted grid",
+          "host_key": "one accepted key",
+          "human_question": "Does the collision feel earned and larger than either lead alone?",
+          "name": "Bounded dual-vocal impact",
+          "pitched_modern_layers": "accepted accompaniment",
+          "priority": "6",
+          "rhythm": "modern chassis",
+          "window": "one to four bars"
+        },
+        {
+          "audition_id": "AUD-07",
+          "classification": "hierarchy reversal",
+          "comparison": "modern hard ending",
+          "foreground": "Four Seasons texture or original ending atom",
+          "hard_gates": "transition rationale; no arbitrary fade; vintage identity restored",
+          "host_bpm": "destination-to-vintage or free source-authentic close",
+          "host_key": "B minor to D minor or keyless release",
+          "human_question": "Does the ending make the full arrangement feel composed?",
+          "name": "Vintage close after modern crest",
+          "pitched_modern_layers": "none after reversal",
+          "priority": "7",
+          "rhythm": "modern drums removed or reduced to room tail",
+          "window": "final 8 to 16 bars"
+        }
+      ],
+      "boundary": {
+        "copyrighted_score_pages_included": false,
+        "human_acceptance_claimed": false,
+        "provider_execution_performed": false,
+        "source_audio_included": false
+      },
+      "canonical_case_id": "beggin-four-seasons-x-maneskin-handoff",
+      "case_manifest_path": "earcrate_beggin_handoff_prep_v0.1.0/case.json",
+      "case_payload_sha256": "f91bc9a991a8d5f694c0213260a6316ee520d4d277a6c80e2e6c479cd3b0a122",
+      "checksum_coverage": {
+        "checked_files": 64,
+        "mismatches": 0,
+        "missing": 0,
+        "unknown": 0
+      },
+      "checksum_manifest_path": "earcrate_beggin_handoff_prep_v0.1.0/checksums.sha256",
+      "control_question": "Does the modern percussion chassis increase physical force while Frankie Valli remains the performance authority and every terminal 'beggin you' phrase lands?",
+      "creative_objectives": [
+        "Place the Four Seasons lead and backing vocals over a physically larger modern percussion chassis.",
+        "Exchange lead authority between Frankie Valli and Damiano David at phrase or section boundaries.",
+        "Preserve each recording's recognizability instead of flattening both into a continuous overlay.",
+        "Use a percussion-led modulation or symbolic re-performance when the arrangement moves from D minor to B minor.",
+        "Produce short, reviewable audition hypotheses before lowering a complete arrangement."
+      ],
+      "declared_created": "2026-08-08T00:00:00Z",
+      "hard_constraints": [
+        "No source audio, proprietary score pages, game assets, purchased MIDI, or purchased multitracks are included.",
+        "Every local source and derived artifact must be content-hashed and retained outside the repository unless policy admits it.",
+        "Community charts, commercial arrangements, model outputs, and closed-platform parts remain evidence or candidates until adjudicated.",
+        "An untreated D-minor full band may not be overlaid with an untreated B-minor full band and called compatible.",
+        "Signal sanity, musical acceptance, and rights eligibility remain independent gates."
+      ],
+      "member_count": 65,
+      "member_manifest_sha256": "f063f4b90f58888848f245b5aa3c6f4a968239abc8e982033b0571a6b8a2b24e",
+      "provider_jobs": [
+        {
+          "canonical_write_allowed": false,
+          "capability": "source_identity_and_signal_scan",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both local masters"
+          ],
+          "job_id": "P00-source-preflight",
+          "outputs": [
+            "preflight_receipt.json",
+            "ffprobe JSON",
+            "signal logs"
+          ],
+          "priority": "required",
+          "provider_labels": [
+            "ffprobe/ffmpeg plus case scripts"
+          ],
+          "purpose": "source_identity_and_signal_scan",
+          "role": "custody",
+          "source_job": {
+            "capability": "source_identity_and_signal_scan",
+            "gate": "required",
+            "inputs": [
+              "both local masters"
+            ],
+            "job_id": "P00-source-preflight",
+            "outputs": [
+              "preflight_receipt.json",
+              "ffprobe JSON",
+              "signal logs"
+            ],
+            "provider": "ffprobe/ffmpeg plus case scripts",
+            "tier": "exact_local_source"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "audio_fingerprint",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both local masters"
+          ],
+          "job_id": "P01-fingerprint",
+          "outputs": [
+            "fingerprints.json"
+          ],
+          "priority": "required when available; otherwise explicit refusal",
+          "provider_labels": [
+            "Chromaprint/fpcalc"
+          ],
+          "purpose": "audio_fingerprint",
+          "role": "fingerprint",
+          "source_job": {
+            "capability": "audio_fingerprint",
+            "gate": "required when available; otherwise explicit refusal",
+            "inputs": [
+              "both local masters"
+            ],
+            "job_id": "P01-fingerprint",
+            "outputs": [
+              "fingerprints.json"
+            ],
+            "provider": "Chromaprint/fpcalc",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "beat_downbeat_tracking",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both masters and selected stems"
+          ],
+          "job_id": "P02-beat-this",
+          "outputs": [
+            "beats.json",
+            "downbeats.json",
+            "tempo_segments.json"
+          ],
+          "priority": "candidate",
+          "provider_labels": [
+            "Beat This!"
+          ],
+          "purpose": "beat_downbeat_tracking",
+          "role": "beat_grid",
+          "source_job": {
+            "capability": "beat_downbeat_tracking",
+            "gate": "candidate",
+            "inputs": [
+              "both masters and selected stems"
+            ],
+            "job_id": "P02-beat-this",
+            "outputs": [
+              "beats.json",
+              "downbeats.json",
+              "tempo_segments.json"
+            ],
+            "provider": "Beat This!",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "beat_downbeat_meter_tracking",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both masters and selected stems"
+          ],
+          "job_id": "P03-beatnet",
+          "outputs": [
+            "beats.json",
+            "downbeats.json",
+            "meter.json"
+          ],
+          "priority": "candidate",
+          "provider_labels": [
+            "BeatNet"
+          ],
+          "purpose": "beat_downbeat_meter_tracking",
+          "role": "beat_grid",
+          "source_job": {
+            "capability": "beat_downbeat_meter_tracking",
+            "gate": "candidate",
+            "inputs": [
+              "both masters and selected stems"
+            ],
+            "job_id": "P03-beatnet",
+            "outputs": [
+              "beats.json",
+              "downbeats.json",
+              "meter.json"
+            ],
+            "provider": "BeatNet",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "key_tuning_rhythm_loudness_features",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both masters and stems"
+          ],
+          "job_id": "P04-essentia",
+          "outputs": [
+            "essentia_features.json"
+          ],
+          "priority": "candidate",
+          "provider_labels": [
+            "Essentia"
+          ],
+          "purpose": "key_tuning_rhythm_loudness_features",
+          "role": "beat_grid",
+          "source_job": {
+            "capability": "key_tuning_rhythm_loudness_features",
+            "gate": "candidate",
+            "inputs": [
+              "both masters and stems"
+            ],
+            "job_id": "P04-essentia",
+            "outputs": [
+              "essentia_features.json"
+            ],
+            "provider": "Essentia",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "onset_pitch_tempo_baseline",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both masters and drum candidates"
+          ],
+          "job_id": "P05-aubio-baseline",
+          "outputs": [
+            "aubio_events.json"
+          ],
+          "priority": "baseline",
+          "provider_labels": [
+            "aubio"
+          ],
+          "purpose": "onset_pitch_tempo_baseline",
+          "role": "beat_grid",
+          "source_job": {
+            "capability": "onset_pitch_tempo_baseline",
+            "gate": "baseline",
+            "inputs": [
+              "both masters and drum candidates"
+            ],
+            "job_id": "P05-aubio-baseline",
+            "outputs": [
+              "aubio_events.json"
+            ],
+            "provider": "aubio",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "source_separation",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both masters"
+          ],
+          "job_id": "P10-bs-roformer",
+          "outputs": [
+            "vocals",
+            "drums",
+            "bass",
+            "guitar/other as supported",
+            "reconstruction"
+          ],
+          "priority": "tournament entrant",
+          "provider_labels": [
+            "BS-RoFormer inference"
+          ],
+          "purpose": "source_separation",
+          "role": "separation",
+          "source_job": {
+            "capability": "source_separation",
+            "gate": "tournament entrant",
+            "inputs": [
+              "both masters"
+            ],
+            "job_id": "P10-bs-roformer",
+            "outputs": [
+              "vocals",
+              "drums",
+              "bass",
+              "guitar/other as supported",
+              "reconstruction"
+            ],
+            "provider": "BS-RoFormer inference",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "source_separation",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both masters"
+          ],
+          "job_id": "P11-demucs",
+          "outputs": [
+            "vocals",
+            "drums",
+            "bass",
+            "guitar",
+            "piano/other by model"
+          ],
+          "priority": "tournament entrant",
+          "provider_labels": [
+            "Demucs"
+          ],
+          "purpose": "source_separation",
+          "role": "separation",
+          "source_job": {
+            "capability": "source_separation",
+            "gate": "tournament entrant",
+            "inputs": [
+              "both masters"
+            ],
+            "job_id": "P11-demucs",
+            "outputs": [
+              "vocals",
+              "drums",
+              "bass",
+              "guitar",
+              "piano/other by model"
+            ],
+            "provider": "Demucs",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "source_separation",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "both masters"
+          ],
+          "job_id": "P12-audio-separator-model-sweep",
+          "outputs": [
+            "model-specific stem candidates"
+          ],
+          "priority": "tournament entrants; no automatic winner",
+          "provider_labels": [
+            "python-audio-separator"
+          ],
+          "purpose": "source_separation",
+          "role": "separation",
+          "source_job": {
+            "capability": "source_separation",
+            "gate": "tournament entrants; no automatic winner",
+            "inputs": [
+              "both masters"
+            ],
+            "job_id": "P12-audio-separator-model-sweep",
+            "outputs": [
+              "model-specific stem candidates"
+            ],
+            "provider": "python-audio-separator",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "drum_substem_separation",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "best full-mix and drum-stem candidates"
+          ],
+          "job_id": "P13-larsnet",
+          "outputs": [
+            "drum instrument sub-stem candidates"
+          ],
+          "priority": "candidate",
+          "provider_labels": [
+            "LarsNet"
+          ],
+          "purpose": "drum_substem_separation",
+          "role": "drum_separation",
+          "source_job": {
+            "capability": "drum_substem_separation",
+            "gate": "candidate",
+            "inputs": [
+              "best full-mix and drum-stem candidates"
+            ],
+            "job_id": "P13-larsnet",
+            "outputs": [
+              "drum instrument sub-stem candidates"
+            ],
+            "provider": "LarsNet",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "drum_event_transcription",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "every surviving drum-stem candidate"
+          ],
+          "job_id": "P20-omnizart-drums",
+          "outputs": [
+            "drum MIDI/event observations"
+          ],
+          "priority": "candidate only; released checkpoint quality must be measured",
+          "provider_labels": [
+            "Omnizart"
+          ],
+          "purpose": "drum_event_transcription",
+          "role": "transcription",
+          "source_job": {
+            "capability": "drum_event_transcription",
+            "gate": "candidate only; released checkpoint quality must be measured",
+            "inputs": [
+              "every surviving drum-stem candidate"
+            ],
+            "job_id": "P20-omnizart-drums",
+            "outputs": [
+              "drum MIDI/event observations"
+            ],
+            "provider": "Omnizart",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "pitched_note_transcription",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "isolated bass, guitar, piano and selected vocal candidates"
+          ],
+          "job_id": "P21-basic-pitch",
+          "outputs": [
+            "note observations and raw model outputs"
+          ],
+          "priority": "candidate only",
+          "provider_labels": [
+            "Basic Pitch"
+          ],
+          "purpose": "pitched_note_transcription",
+          "role": "transcription",
+          "source_job": {
+            "capability": "pitched_note_transcription",
+            "gate": "candidate only",
+            "inputs": [
+              "isolated bass, guitar, piano and selected vocal candidates"
+            ],
+            "job_id": "P21-basic-pitch",
+            "outputs": [
+              "note observations and raw model outputs"
+            ],
+            "provider": "Basic Pitch",
+            "tier": "blind_audio_inference"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "symbolic_witness_ingest",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "licensed MIDI if acquired",
+            "manual annotations from scores"
+          ],
+          "job_id": "P30-score-midi-ingest",
+          "outputs": [
+            "source-independent event ledger",
+            "roundtrip receipt",
+            "comparison maps"
+          ],
+          "priority": "candidate until aligned",
+          "provider_labels": [
+            "EarCrate exact MIDI ledger plus manual score annotations"
+          ],
+          "purpose": "symbolic_witness_ingest",
+          "role": "symbolic_ingest",
+          "source_job": {
+            "capability": "symbolic_witness_ingest",
+            "gate": "candidate until aligned",
+            "inputs": [
+              "licensed MIDI if acquired",
+              "manual annotations from scores"
+            ],
+            "job_id": "P30-score-midi-ingest",
+            "outputs": [
+              "source-independent event ledger",
+              "roundtrip receipt",
+              "comparison maps"
+            ],
+            "provider": "EarCrate exact MIDI ledger plus manual score annotations",
+            "tier": "licensed_score_or_performance_realization"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "cross_modal_evidence_adjudication",
+          "case_id": "beggin-four-seasons-x-maneskin-handoff",
+          "inputs": [
+            "all timing, harmony, stem and event candidates"
+          ],
+          "job_id": "P40-adjudication",
+          "outputs": [
+            "accepted beat map",
+            "accepted phrase anchors",
+            "accepted drum-event ledger",
+            "rejections and rationale"
+          ],
+          "priority": "required",
+          "provider_labels": [
+            "EarCrate plus human reviewer"
+          ],
+          "purpose": "cross_modal_evidence_adjudication",
+          "role": "adjudication",
+          "source_job": {
+            "capability": "cross_modal_evidence_adjudication",
+            "gate": "required",
+            "inputs": [
+              "all timing, harmony, stem and event candidates"
+            ],
+            "job_id": "P40-adjudication",
+            "outputs": [
+              "accepted beat map",
+              "accepted phrase anchors",
+              "accepted drum-event ledger",
+              "rejections and rationale"
+            ],
+            "provider": "EarCrate plus human reviewer",
+            "tier": "cross_modal_accepted"
+          }
+        }
+      ],
+      "provider_jobs_path": "earcrate_beggin_handoff_prep_v0.1.0/earcrate/provider_jobs.json",
+      "source_case_id": "beggin-four-seasons-x-maneskin-handoff",
+      "source_free": true,
+      "source_roles": [
+        {
+          "artist": "The 4 Seasons",
+          "expected_duration_seconds": {
+            "maximum": 185.0,
+            "minimum": 165.0
+          },
+          "identity_hints": {
+            "candidate_digital_master_isrcs": [
+              "USRH11400296",
+              "USRH10720925"
+            ],
+            "iswc": "T-070.880.775-3",
+            "musicbrainz_release_id": "b74de8cc-6b75-44e7-bfc2-6bbc83936d92",
+            "musicbrainz_work_id": "c481c8ae-038f-3782-ada0-51ad74a47886",
+            "note": "The exact local edition remains unknown until hash, tags, duration, fingerprint, and listening confirmation."
+          },
+          "identity_status": "exact local edition unresolved until binding",
+          "recording_role": "1967 original performance and preferred vocal narrative spine",
+          "source_id": "four_seasons_beggin",
+          "title": "Beggin'"
+        },
+        {
+          "artist": "Måneskin",
+          "expected_duration_seconds": {
+            "maximum": 220.0,
+            "minimum": 205.0
+          },
+          "identity_hints": {
+            "candidate_isrc": "ITB001700846",
+            "musicbrainz_release_id": "172958b1-493d-4b2d-b5fe-b366a3522b5e",
+            "note": "The exact local edition remains unknown until hash, tags, duration, fingerprint, and listening confirmation.",
+            "spotify_track_id": "3Wrjm47oTz2sjIgck11l5e"
+          },
+          "identity_status": "exact local edition unresolved until binding",
+          "recording_role": "2017 modern rhythm, bass, guitar, and contrasting vocal performance",
+          "source_id": "maneskin_beggin",
+          "title": "Beggin'"
+        }
+      ],
+      "specimen_class": "same_composition_different_era",
+      "title": "Beggin' × Beggin': Four Seasons and Måneskin handoff study",
+      "uncompressed_bytes": 268035
+    },
+    {
+      "archive_bytes": 23997,
+      "archive_name": "earcrate_sombr_yellow_handoff_prep_v0.1.0.zip",
+      "archive_root": "earcrate_sombr_yellow_handoff_prep_v0.1.0",
+      "archive_sha256": "28fa8f88e5c2efa2c90edadc53e35b891beaf3e0eb68febfc5fa8784809f58a2",
+      "auditions": [
+        {
+          "goal": "align phrase clocks without pitch correction; no organ swap",
+          "id": "AUD01",
+          "name": "tempo-neighbor neutral",
+          "pass": "groove feels natural and downbeats agree after local map adjudication"
+        },
+        {
+          "goal": "sombr lead + target-native harmony with Yellow-style guitar width reconstructed or safely adapted",
+          "id": "AUD02",
+          "name": "chorus width transplant",
+          "pass": "larger chorus, clear vocal, no cover imitation"
+        },
+        {
+          "goal": "transfer Yellow drum dynamics/microtiming behavior into sombr section",
+          "id": "AUD03",
+          "name": "drum lift transplant",
+          "pass": "physical lift improves without flattening target groove"
+        },
+        {
+          "goal": "combine target guitar layers with reconstructed Yellow-like open resonance",
+          "id": "AUD04",
+          "name": "hybrid guitar ancestry",
+          "pass": "ancestry perceptible but both identities remain distinct"
+        },
+        {
+          "goal": "use only isolated, reviewed, artifact-clean source-derived atoms where musically justified",
+          "id": "AUD05",
+          "name": "source-audio surgical exchange",
+          "pass": "no bleed, chirp, tuning smear or copied-hook dependency"
+        },
+        {
+          "goal": "Yellow foreground through sombr-informed drum/bass/space grammar",
+          "id": "AUD06",
+          "name": "reverse modernization",
+          "pass": "Yellow live feel survives"
+        },
+        {
+          "goal": "compare against generic 88-90 BPM guitar-pop chassis",
+          "id": "AUD07",
+          "name": "blind ancestry control",
+          "pass": "Yellow-derived grammar beats generic control on predefined dimensions"
+        }
+      ],
+      "boundary": {
+        "copyrighted_score_pages_included": false,
+        "human_acceptance_claimed": false,
+        "provider_execution_performed": false,
+        "source_audio_included": false
+      },
+      "canonical_case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+      "case_manifest_path": "earcrate_sombr_yellow_handoff_prep_v0.1.0/manifest/case_manifest.json",
+      "case_payload_sha256": "141a63bbe2c47d4807d0dbb73c54f0766d738fda4cf1a41f6633c7c284a193c7",
+      "checksum_coverage": {
+        "checked_files": 29,
+        "mismatches": 0,
+        "missing": 0,
+        "unknown": 0
+      },
+      "checksum_manifest_path": "earcrate_sombr_yellow_handoff_prep_v0.1.0/CHECKSUMS.sha256",
+      "control_question": "Does the target chorus acquire Yellow-like width and inevitability without becoming a Coldplay imitation?",
+      "creative_objectives": [],
+      "declared_created": "2026-08-08",
+      "hard_constraints": [],
+      "member_count": 30,
+      "member_manifest_sha256": "555de0f1aefcf5b0400ba3546673a439edeb423c699bd7400ee062cbc22526d3",
+      "provider_jobs": [
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P01-beat-this",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "beat_this"
+          ],
+          "purpose": "beat/downbeat candidates",
+          "role": "beat_grid",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "beat_this",
+            "purpose": "beat/downbeat candidates"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P02-beatnet",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "beatnet"
+          ],
+          "purpose": "beat/downbeat candidates",
+          "role": "beat_grid",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "beatnet",
+            "purpose": "beat/downbeat candidates"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P03-essentia",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "essentia"
+          ],
+          "purpose": "tempo/key/chroma/onset/dynamics",
+          "role": "beat_grid",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "essentia",
+            "purpose": "tempo/key/chroma/onset/dynamics"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P04-librosa",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "librosa"
+          ],
+          "purpose": "diagnostic onset/chroma/tempogram",
+          "role": "beat_grid",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "librosa",
+            "purpose": "diagnostic onset/chroma/tempogram"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P05-vamp-chordino",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "vamp_chordino"
+          ],
+          "purpose": "chord candidates",
+          "role": "tonality",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "vamp_chordino",
+            "purpose": "chord candidates"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P06-crepe-or-pesto",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "crepe_or_pesto"
+          ],
+          "purpose": "pitch/tuning reference on monophonic or stable material",
+          "role": "tonality",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "crepe_or_pesto",
+            "purpose": "pitch/tuning reference on monophonic or stable material"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P07-demucs",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "demucs"
+          ],
+          "purpose": "stem candidate",
+          "role": "separation",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "demucs",
+            "purpose": "stem candidate"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P08-bs-roformer-audio-separator",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "bs_roformer_audio_separator"
+          ],
+          "purpose": "stem candidate",
+          "role": "separation",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "bs_roformer_audio_separator",
+            "purpose": "stem candidate"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P09-larsnet",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "larsnet"
+          ],
+          "purpose": "drum separation candidate",
+          "role": "drum_separation",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "larsnet",
+            "purpose": "drum separation candidate"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P10-basic-pitch",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "basic_pitch"
+          ],
+          "purpose": "isolated-stem note observations",
+          "role": "tonality",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "basic_pitch",
+            "purpose": "isolated-stem note observations"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P11-omnizart",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "omnizart"
+          ],
+          "purpose": "drum/note observations",
+          "role": "transcription",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "omnizart",
+            "purpose": "drum/note observations"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P12-msaf-or-allin1",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "msaf_or_allin1"
+          ],
+          "purpose": "section boundary candidates",
+          "role": "structure",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "msaf_or_allin1",
+            "purpose": "section boundary candidates"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P13-chromaprint",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "chromaprint"
+          ],
+          "purpose": "edition fingerprint",
+          "role": "fingerprint",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "chromaprint",
+            "purpose": "edition fingerprint"
+          }
+        },
+        {
+          "canonical_write_allowed": false,
+          "capability": "",
+          "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+          "inputs": [],
+          "job_id": "P14-ffmpeg-ebur128-astats",
+          "outputs": [],
+          "priority": "candidate",
+          "provider_labels": [
+            "ffmpeg_ebur128_astats"
+          ],
+          "purpose": "signal measurements",
+          "role": "custody",
+          "source_job": {
+            "canonical_write": false,
+            "provider": "ffmpeg_ebur128_astats",
+            "purpose": "signal measurements"
+          }
+        }
+      ],
+      "provider_jobs_path": "earcrate_sombr_yellow_handoff_prep_v0.1.0/providers/provider_jobs.json",
+      "source_case_id": "earcrate_sombr_yellow_handoff_prep_v0.1.0",
+      "source_free": true,
+      "source_roles": [
+        {
+          "artist": "sombr",
+          "identity_status": "exact local edition unresolved until binding",
+          "recording_role": "target song, lead vocal, modern production body",
+          "source_id": "sombr_my_body_isnt_ready",
+          "title": "My Body Isn't Ready"
+        },
+        {
+          "artist": "Coldplay",
+          "identity_status": "exact local edition unresolved until binding",
+          "recording_role": "arrangement-ancestry, guitar-width, live-band-lift donor",
+          "source_id": "coldplay_yellow",
+          "title": "Yellow"
+        }
+      ],
+      "specimen_class": "cross_song_arrangement_ancestry",
+      "title": "sombr 'My Body Isn't Ready' × Coldplay 'Yellow' arrangement-ancestry study",
+      "uncompressed_bytes": 36946
+    }
+  ],
+  "compiled_from_declared_date": "2026-08-08T18:30:00Z",
+  "kind": "earcrate_homelab_specimen_suite",
+  "role_policy_sha256": "180606c1ea86cd676d1a939f6316621523b32bfe751bcbc54a5c76766ccc3306",
+  "schema_version": 1,
+  "source_requirements": [
+    {
+      "artist": "KATSEYE",
+      "case_id": "animal-katseye-x-britney-toxic-handoff",
+      "identity_status": "exact local edition unresolved until binding",
+      "recording_role": "2026 modern hybrid live/programmed percussion chassis and multi-singer foreground",
+      "source_id": "katseye_animal",
+      "title": "Animal"
+    },
+    {
+      "artist": "Britney Spears",
+      "case_id": "animal-katseye-x-britney-toxic-handoff",
+      "identity_status": "exact local edition unresolved until binding",
+      "recording_role": "2003/2004 identity-rich vocal, dry rhythmic grammar, cinematic harmony and string/sample punctuation",
+      "source_id": "britney_toxic",
+      "title": "Toxic"
+    },
+    {
+      "artist": "The 4 Seasons",
+      "case_id": "beggin-four-seasons-x-maneskin-handoff",
+      "identity_status": "exact local edition unresolved until binding",
+      "recording_role": "1967 original performance and preferred vocal narrative spine",
+      "source_id": "four_seasons_beggin",
+      "title": "Beggin'"
+    },
+    {
+      "artist": "Måneskin",
+      "case_id": "beggin-four-seasons-x-maneskin-handoff",
+      "identity_status": "exact local edition unresolved until binding",
+      "recording_role": "2017 modern rhythm, bass, guitar, and contrasting vocal performance",
+      "source_id": "maneskin_beggin",
+      "title": "Beggin'"
+    },
+    {
+      "artist": "sombr",
+      "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+      "identity_status": "exact local edition unresolved until binding",
+      "recording_role": "target song, lead vocal, modern production body",
+      "source_id": "sombr_my_body_isnt_ready",
+      "title": "My Body Isn't Ready"
+    },
+    {
+      "artist": "Coldplay",
+      "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+      "identity_status": "exact local edition unresolved until binding",
+      "recording_role": "arrangement-ancestry, guitar-width, live-band-lift donor",
+      "source_id": "coldplay_yellow",
+      "title": "Yellow"
+    }
+  ],
+  "suite_id": "earcrate-cloud-organ-transplant-suite-v1",
+  "suite_sha256": "e9726dfd4048a88a13b973b6bb9af03fb6e58285f432cf9747b17a0d7ec5a666",
+  "summary": {
+    "archive_bytes": 201017,
+    "archive_members": 153,
+    "archives": 3,
+    "auditions": 21,
+    "cases": 3,
+    "provider_jobs": 42,
+    "source_bindings_required": 6
+  }
+}

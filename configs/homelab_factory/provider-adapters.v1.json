@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "kind": "earcrate_homelab_factory_adapter_policy",
+  "description": "Production defaults. Local overrides may add exact model filenames and provider argv without modifying repository policy.",
+  "adapters": {
+    "ffmpeg": {
+      "handler": "ffmpeg_probe",
+      "executables": ["ffmpeg", "ffprobe"],
+      "timeout_seconds": 900
+    },
+    "chromaprint": {
+      "handler": "chromaprint",
+      "executables": ["fpcalc"],
+      "timeout_seconds": 300
+    },
+    "demucs": {
+      "handler": "demucs",
+      "python_module": "demucs.separate",
+      "model": "htdemucs",
+      "two_stems": "drums",
+      "timeout_seconds": 7200
+    },
+    "audio-separator": {
+      "handler": "audio_separator",
+      "timeout_seconds": 7200,
+      "note": "A local override must provide one exact model_filename; no mutable best/latest model is selected here."
+    },
+    "librosa": {
+      "handler": "librosa_observe",
+      "python_distribution": "librosa",
+      "timeout_seconds": 1800
+    },
+    "aubio": {
+      "handler": "aubio_observe",
+      "python_distribution": "aubio",
+      "timeout_seconds": 1800
+    },
+    "basic-pitch": {
+      "handler": "basic_pitch",
+      "python_distribution": "basic-pitch",
+      "timeout_seconds": 7200
+    },
+    "rubber-band": {
+      "handler": "rubberband",
+      "executables": ["rubberband"],
+      "time_ratio": 1.0,
+      "timeout_seconds": 1800
+    },
+    "soundfile": {
+      "handler": "identity",
+      "python_distribution": "soundfile",
+      "timeout_seconds": 60
+    },
+    "mido": {
+      "handler": "identity",
+      "python_distribution": "mido",
+      "timeout_seconds": 60
+    },
+    "earcrate-signal-evaluator": {
+      "handler": "signal_evaluator",
+      "executables": ["ffmpeg", "ffprobe"],
+      "timeout_seconds": 1800
+    }
+  },
+  "recipe_plugins": {},
+  "boundary": {
+    "provider_not_listed_is_refused_with_evidence": true,
+    "local_override_may_add_exact_commands": true,
+    "shell_execution_forbidden": true,
+    "model_identity_must_be_recorded": true,
+    "provider_execution_is_not_adoption": true
+  }
+}

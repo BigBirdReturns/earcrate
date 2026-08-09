@@ -1,0 +1,56 @@
+{
+  "assignment_sha256": "301b56a5eaeac5a3a584449522662ec4ace7a33aee70221d401c73caaff30d1a",
+  "choices": [
+    "A",
+    "B",
+    "C",
+    "tie",
+    "reject_all",
+    "abstain"
+  ],
+  "context": {
+    "campaign_sha256": "cc8bc09a3659817711a539aeb0f6e9a8eb6cf09a8d768803fefb28c8cad3c01e",
+    "case_id": "beggin-four-seasons-x-maneskin-handoff",
+    "source_identities": {
+      "four_seasons_vocal": "22902bb33e3d1fbcef89e4f16f84539ad5705cc3f34193b054034fe6649c4c91",
+      "maneskin_drums": "3efb85217021ec3e7159f4eb31eb61ff501ecf72b82e3767a0549de26db066bd",
+      "maneskin_instrumental": "808000b7ffc8fa5a80c82b447e8ebd9e97939646fc996bba308613c0e3f67fb8",
+      "maneskin_timing_witness": "0dfa10dbfe5523e261bfb2cbf4219ec0e77692d555977e4107ff10a22b790d81"
+    }
+  },
+  "created_at": "2026-08-09T04:59:12Z",
+  "dimensions": [
+    "Frankie vocal authority",
+    "terminal phrase placement",
+    "percussion impact",
+    "groove continuity",
+    "separator residue",
+    "cymbal and room continuity",
+    "source recognizability",
+    "desire to hear the next phrase"
+  ],
+  "instructions": "Listen level matched. Select the option whose terminal calls land and whose percussion adds force without reducing Frankie to an effect.",
+  "kind": "earcrate_beggin_timing_public_assignment",
+  "options": {
+    "A": {
+      "bytes": 7680092,
+      "duration_seconds": 20.0,
+      "media_kind": "audio/wav",
+      "sha256": "1b6c41e67a2044ea4908616522222b78018d033c01ee3cf63627cf069f62fcfb"
+    },
+    "B": {
+      "bytes": 7680092,
+      "duration_seconds": 20.0,
+      "media_kind": "audio/wav",
+      "sha256": "96a8642067bb4b2fd9e1a065e5f20d5ba83c54eb3fa5335f9f016249a799f659"
+    },
+    "C": {
+      "bytes": 7680092,
+      "duration_seconds": 20.0,
+      "media_kind": "audio/wav",
+      "sha256": "feedb75ff77d089dbaf4988347d53ba45fadfd3d18ee99afdb35b98a4de31885"
+    }
+  },
+  "private_authority_sha256": "833d415b668fb59e3da2f2f58c5800070204ade19bb79f98998468e5401e7ca5",
+  "schema_version": 1
+}

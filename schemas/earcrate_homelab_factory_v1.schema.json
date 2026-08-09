@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_homelab_factory_v1.schema.json",
+  "title": "EarCrate Homelab organ factory v1",
+  "oneOf": [
+    {"$ref": "#/$defs/factoryManifest"},
+    {"$ref": "#/$defs/factoryRecipe"},
+    {"$ref": "#/$defs/factoryRun"},
+    {"$ref": "#/$defs/factoryState"},
+    {"$ref": "#/$defs/qualityArchive"},
+    {"$ref": "#/$defs/reviewAssignment"},
+    {"$ref": "#/$defs/privateAuthority"},
+    {"$ref": "#/$defs/reviewSubmission"},
+    {"$ref": "#/$defs/reviewLedger"},
+    {"$ref": "#/$defs/preferenceUpdate"},
+    {"$ref": "#/$defs/circulationPacket"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "base": {
+      "type": "object",
+      "required": ["schema_version", "kind"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"type": "string"}
+      }
+    },
+    "factoryManifest": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "manifest_sha256", "suite_sha256", "catalog_sha256", "audit_sha256", "recipes", "provider_tasks", "authority"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_manifest"},
+            "manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "suite_sha256": {"$ref": "#/$defs/sha256"},
+            "catalog_sha256": {"$ref": "#/$defs/sha256"},
+            "audit_sha256": {"$ref": "#/$defs/sha256"},
+            "recipes": {"type": "array", "items": {"$ref": "#/$defs/factoryRecipe"}},
+            "provider_tasks": {"type": "array"},
+            "authority": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "factoryRecipe": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "recipe_sha256", "case_id", "variant", "selected_provider_tasks", "operations", "protected_invariants", "authority"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_recipe"},
+            "recipe_sha256": {"$ref": "#/$defs/sha256"},
+            "case_id": {"type": "string", "minLength": 1},
+            "variant": {"type": "string", "minLength": 1},
+            "selected_provider_tasks": {"type": "object", "additionalProperties": {"type": "string"}},
+            "operations": {"type": "array", "items": {"type": "string"}},
+            "protected_invariants": {"type": "array", "items": {"type": "string"}},
+            "authority": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["name", "sha256", "bytes", "media_kind"],
+      "properties": {
+        "name": {"type": "string"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "media_kind": {"type": "string"}
+      }
+    },
+    "factoryRun": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "run_sha256", "factory_manifest_sha256", "recipe_sha256", "case_id", "outcome", "artifacts", "authority"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_run"},
+            "run_sha256": {"$ref": "#/$defs/sha256"},
+            "factory_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "recipe_sha256": {"$ref": "#/$defs/sha256"},
+            "case_id": {"type": "string"},
+            "outcome": {"enum": ["passed", "failed", "refused"]},
+            "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+            "authority": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "factoryState": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "state_sha256", "factory_manifest_sha256", "campaign_sha256", "tasks", "objects"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_state"},
+            "state_sha256": {"$ref": "#/$defs/sha256"},
+            "factory_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "campaign_sha256": {"$ref": "#/$defs/sha256"},
+            "tasks": {"type": "object"},
+            "objects": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "qualityArchive": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "archive_sha256", "factory_manifest_sha256", "case_id", "entries", "frontier", "selection_policy"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_quality_archive"},
+            "archive_sha256": {"$ref": "#/$defs/sha256"},
+            "factory_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "case_id": {"type": "string"},
+            "entries": {"type": "array"},
+            "frontier": {"type": "array"},
+            "selection_policy": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "reviewAssignment": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "assignment_sha256", "archive_sha256", "case_id", "reviewer_id", "options", "private_authority_commitment", "review_token_sha256"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_review_assignment"},
+            "assignment_sha256": {"$ref": "#/$defs/sha256"},
+            "archive_sha256": {"$ref": "#/$defs/sha256"},
+            "case_id": {"type": "string"},
+            "reviewer_id": {"type": "string"},
+            "options": {"type": "object", "minProperties": 2},
+            "private_authority_commitment": {"$ref": "#/$defs/sha256"},
+            "review_token_sha256": {"$ref": "#/$defs/sha256"}
+          },
+          "not": {"anyOf": [{"required": ["option_map"]}, {"required": ["source_artifacts"]}, {"required": ["review_token"]}]}
+        }
+      ]
+    },
+    "privateAuthority": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "authority_sha256", "assignment_sha256", "option_map", "source_artifacts", "review_token", "review_token_sha256"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_private_assignment_authority"},
+            "authority_sha256": {"$ref": "#/$defs/sha256"},
+            "assignment_sha256": {"$ref": "#/$defs/sha256"},
+            "option_map": {"type": "object"},
+            "source_artifacts": {"type": "object"},
+            "review_token": {"type": "string", "minLength": 20},
+            "review_token_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "reviewSubmission": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "submission_sha256", "assignment_sha256", "reviewer_id", "choice", "review_token_sha256", "submission_proof_hmac_sha256"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_review_submission"},
+            "submission_sha256": {"$ref": "#/$defs/sha256"},
+            "assignment_sha256": {"$ref": "#/$defs/sha256"},
+            "reviewer_id": {"type": "string"},
+            "choice": {"type": "string"},
+            "review_token_sha256": {"$ref": "#/$defs/sha256"},
+            "submission_proof_hmac_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "reviewLedger": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "ledger_sha256", "assignment_sha256", "private_authority_sha256", "submission_sha256", "verdict", "authority"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_factory_review_ledger"},
+            "ledger_sha256": {"$ref": "#/$defs/sha256"},
+            "assignment_sha256": {"$ref": "#/$defs/sha256"},
+            "private_authority_sha256": {"$ref": "#/$defs/sha256"},
+            "submission_sha256": {"$ref": "#/$defs/sha256"},
+            "verdict": {"type": "string"},
+            "authority": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "preferenceUpdate": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "update_sha256", "factory_manifest_sha256", "review_ledger_sha256", "scope", "review_patch", "next_round", "authority"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_preference_update"},
+            "update_sha256": {"$ref": "#/$defs/sha256"},
+            "factory_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "review_ledger_sha256": {"$ref": "#/$defs/sha256"},
+            "scope": {"const": "fixture_and_review_dimensions_only"},
+            "review_patch": {"type": "object"},
+            "next_round": {"type": "object"},
+            "authority": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "circulationPacket": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "required": ["kind", "packet_sha256", "factory_manifest_sha256", "campaign_sha256", "entries", "boundary"],
+          "properties": {
+            "kind": {"const": "earcrate_homelab_circulation_packet"},
+            "packet_sha256": {"$ref": "#/$defs/sha256"},
+            "factory_manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "campaign_sha256": {"$ref": "#/$defs/sha256"},
+            "entries": {"type": "array"},
+            "boundary": {"type": "object"}
+          }
+        }
+      ]
+    }
+  }
+}

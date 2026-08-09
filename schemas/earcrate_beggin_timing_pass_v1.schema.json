@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schema/earcrate_beggin_timing_pass_v1.schema.json",
+  "title": "EarCrate Beggin timing pass v1",
+  "oneOf": [
+    {"$ref": "#/$defs/campaignReceipt"},
+    {"$ref": "#/$defs/timeMap"},
+    {"$ref": "#/$defs/humanReview"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "segment": {
+      "type": "object",
+      "required": ["source_start", "source_end", "target_start", "target_end", "atempo", "mode"],
+      "properties": {
+        "source_start": {"type": "number", "minimum": 0},
+        "source_end": {"type": "number", "exclusiveMinimum": 0},
+        "target_start": {"type": "number", "minimum": 0},
+        "target_end": {"type": "number", "exclusiveMinimum": 0},
+        "atempo": {"type": "number", "exclusiveMinimum": 0},
+        "mode": {"type": "string"}
+      }
+    },
+    "timeMap": {
+      "type": "object",
+      "required": ["schema_version", "kind", "candidate_id", "segments", "time_map_sha256"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"const": "earcrate_beggin_candidate_time_map"},
+        "candidate_id": {"enum": ["onset_only", "global_block", "phrase_local"]},
+        "segments": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/segment"}},
+        "time_map_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "campaignReceipt": {
+      "type": "object",
+      "required": ["schema_version", "kind", "case_id", "source_identities", "candidate_sha256s", "signal_receipts", "status", "receipt_sha256"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"const": "earcrate_beggin_timing_campaign_receipt"},
+        "case_id": {"const": "beggin-four-seasons-x-maneskin-handoff"},
+        "candidate_sha256s": {
+          "type": "object",
+          "required": ["onset_only", "global_block", "phrase_local"],
+          "additionalProperties": {"$ref": "#/$defs/sha256"}
+        },
+        "status": {"enum": ["signal_sane_human_review_pending", "signal_gate_failed"]},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "humanReview": {
+      "type": "object",
+      "required": ["schema_version", "kind", "assignment_sha256", "choice", "verdict", "review_sha256"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"const": "earcrate_beggin_timing_human_review"},
+        "assignment_sha256": {"$ref": "#/$defs/sha256"},
+        "choice": {"type": "string"},
+        "verdict": {"enum": ["prefer", "tie", "reject", "abstain"]},
+        "review_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "earcrate.beggin_timing_campaign_config.v1",
+  "case_id": "beggin-four-seasons-x-maneskin-handoff",
+  "source_window_seconds": {
+    "start": 4.556803,
+    "end": 22.974059,
+    "role": "Four Seasons first hook block"
+  },
+  "target_window_seconds": {
+    "start": 0.666939,
+    "end": 17.499592,
+    "role": "Maneskin first hook timing witness"
+  },
+  "output_duration_seconds": 20.0,
+  "target_vocal_witness_container_sha256": "0dfa10dbfe5523e261bfb2cbf4219ec0e77692d555977e4107ff10a22b790d81",
+  "candidate_contracts": {
+    "onset_only": "Align first vocal activity and preserve native source duration.",
+    "global_block": "Map both hook endpoints with one atempo transform.",
+    "phrase_local": "Use constrained vocal-to-vocal DTW, then independently onset-lock the final three calls with only bounded local duration change."
+  },
+  "mix_contract": {
+    "source_pitch_preserved": true,
+    "vocal_component_lufs": -18.0,
+    "drum_component_lufs": -20.0,
+    "final_integrated_lufs": -14.0,
+    "final_true_peak_dbtp": -2.0,
+    "level_matching_required": true
+  },
+  "control_question": "Does the Maneskin percussion make Frankie physically larger while every terminal call lands naturally, rather than merely becoming louder, busier, or mathematically synchronized?"
+}

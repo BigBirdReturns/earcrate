@@ -52,6 +52,7 @@ jobs:
           if not parts:
               raise SystemExit('factory payload has no parts')
           encoded = ''.join(''.join(path.read_text(encoding='ascii').split()) for path in parts)
+          encoded += '=' * (-len(encoded) % 4)
           data = base64.b64decode(encoded, validate=True)
           expected = '81287ffc7a9110b2324d8ab3152ab8efa3a6c5cf6d49a4a06a653666c890dcf1'
           actual = hashlib.sha256(data).hexdigest()

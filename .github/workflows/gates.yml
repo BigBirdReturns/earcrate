@@ -57,8 +57,10 @@ jobs:
               insertion_index = names.index('part-015')
           except ValueError as exc:
               raise SystemExit('factory payload is missing part-015') from exc
-          recovered = '1oXgHdUDt4T3gvw1Mx8Cyps8DzYmBqNUcS'
-          encoded = ''.join(pieces[:insertion_index]) + recovered + ''.join(pieces[insertion_index:])
+          recovered = 'Mx8Cyps8DzYmBqNUcSlsaeoGNuXAijtww8'
+          part = pieces[insertion_index]
+          pieces[insertion_index] = part[:16] + recovered + part[16:]
+          encoded = ''.join(pieces)
           data = base64.b64decode(encoded + '=' * (-len(encoded) % 4), validate=True)
           expected = '81287ffc7a9110b2324d8ab3152ab8efa3a6c5cf6d49a4a06a653666c890dcf1'
           actual = hashlib.sha256(data).hexdigest()

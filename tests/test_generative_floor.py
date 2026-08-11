@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import base64
 import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sys
+import threading
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -131,6 +134,84 @@ def test_command_provider_produces_receipt_and_generated_material(tmp_path: Path
     source_row = material_to_performance_source(material, source_id="generated-band-001")
     assert source_row["source_kind"] == "generated_material"
     assert source_row["container_sha256"] == receipt["artifacts"][0]["sha256"]
+
+
+def test_portable_music_server_contract_checks_install_and_runs_inline_audio(tmp_path: Path) -> None:
+    class Handler(BaseHTTPRequestHandler):
+        received: dict = {}
+
+        def log_message(self, format: str, *args: object) -> None:
+            return
+
+        def _send(self, value: dict) -> None:
+            body = json.dumps(value).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self) -> None:
+            if self.path == "/health":
+                self._send({"status": "ok", "loaded_models": ["ace_step_v15"], "worker_count": 1})
+            elif self.path == "/api/models":
+                self._send({"models": [{"id": "ace_step_v15", "name": "ACE-Step v1.5", "env": "ace_step_v15", "install_status": "installed", "env_installed": True, "weights_installed": True}]})
+            else:
+                self.send_error(404)
+
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length") or 0)
+            Handler.received = json.loads(self.rfile.read(length).decode("utf-8"))
+            self._send({
+                "status": "completed",
+                "audio_base64": base64.b64encode(b"RIFF-http-generated-audio").decode("ascii"),
+                "sample_rate": 48000,
+                "duration_sec": 1.0,
+                "inference_time_sec": 0.25,
+                "format": "wav",
+                "model": "ace_step_v15",
+                "entry_id": "entry-test-001",
+            })
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        catalog = load_json(CATALOG_PATH)
+        provider = _provider(catalog, "ace-step-1.5")
+        asset = _fake_asset(tmp_path)
+        adapter = {
+            "kind": "http_json",
+            "base_url": f"http://127.0.0.1:{server.server_port}",
+            "health_endpoint": "/health",
+            "models_endpoint": "/api/models",
+            "model_id": "ace_step_v15",
+            "require_model_installed": True,
+            "endpoint": "/api/music/{model_id}",
+            "request_template": {"duration": 1.0, "output_format": "wav", "skip_post_process": True, "model_params": {"task_type": "text2music"}},
+            "timeout_seconds": 60,
+        }
+        probe = probe_provider(provider, local_override={"adapter": adapter, "model_assets": [asset]})
+        assert probe["ready"] is True
+        assert probe["evidence"]["host_model"]["weights_installed"] is True
+        request_value = build_generation_request(
+            provider_id="ace-step-1.5", task_mode="text_to_music", model_repository="ace-step/ACE-Step-1.5",
+            model_revision="commit:test", model_assets=[{key: asset[key] for key in ("name", "sha256", "bytes")}],
+            seed=99, prompt={"caption": "short test"},
+        )
+        receipt = execute_generation_request(
+            request_value, provider=provider, probe=probe, local_adapter=adapter,
+            private_source_paths={}, output_directory=tmp_path / "http-run", node_identity={"node_id": "test-node"},
+        )
+        assert receipt["outcome"] == "observed"
+        assert receipt["execution"]["response_metadata"]["entry_id"] == "entry-test-001"
+        assert Handler.received["model_params"]["task_type"] == "text2music"
+        assert "params" not in Handler.received
+        assert Handler.received["skip_post_process"] is True
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_frontier_deduplicates_audio_and_preserves_incumbent_control(tmp_path: Path) -> None:

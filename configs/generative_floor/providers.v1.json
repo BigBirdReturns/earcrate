@@ -1,6 +1,6 @@
 {
   "catalog_id": "earcrate-open-generative-floor-v1",
-  "catalog_sha256": "0551703e961809984fa87000c6450c1afee1d0f43fe9fbadda74d95274b0de67",
+  "catalog_sha256": "28d0a19cc9883985849ffbeb4d074ccb9fc83a85d0d1862c9d330da4149fceda",
   "cataloged_at": "2026-08-11",
   "description": "Open and commodity generative music systems admitted as untrusted material producers under EarCrate authority.",
   "kind": "earcrate_generation_provider_catalog",
@@ -90,6 +90,17 @@
       "provider_class": "specialist_model",
       "provider_id": "songecho",
       "repository": {"license": "audit repository, checkpoint, and training-data terms before use", "revision_policy": "exact git commit and exact ACE-Step-derived checkpoint hashes required per request", "url": "https://github.com/lsfhuihuiff/SongEcho_ICLR2026"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["vocal_to_bgm", "reference_conditioned", "segment_generation"],
+      "display_name": "MIDI-SAG singing-accompaniment pipeline",
+      "hardware": {"multi_component_pipeline": true, "preferred_estate_role": "rtx3090-compositional-accompaniment", "recommended_vram_gb": 24},
+      "model_families": ["Singing-Vocal-Beat-Tracking", "GAME", "AccoMontage2", "MuseControlLite", "Stable-Audio-Open-1.0"],
+      "notes": ["Detected mode chains vocal beat tracking, vocal-to-MIDI transcription, chord harmonization, and backing generation.", "Ground-truth mode accepts an explicit vocal MIDI authority; full-song mode supports section-specific prompts.", "Bundled third-party components retain separate licenses and exact asset requirements."],
+      "provider_class": "specialist_model",
+      "provider_id": "midi-sag",
+      "repository": {"license": "Apache-2.0 for the orchestration repository; audit every bundled third-party component and checkpoint separately", "revision_policy": "exact git commit and exact beat, transcription, harmonization, generator, and codec asset hashes required per request", "url": "https://github.com/fundwotsai2001/MIDI-SAG"}
     },
     {
       "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},

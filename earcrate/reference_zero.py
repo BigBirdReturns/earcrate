@@ -501,9 +501,9 @@ def render_performance_score(
         fade_out = int(clip.get("fade_out_samples", 0))
         output_duration = max(1, round((source_end - source_start) / tempo_scale))
         chain = [
+            f"aformat=sample_rates={sample_rate}:channel_layouts={'mono' if channels == 1 else 'stereo'}",
             f"atrim=start_sample={source_start}:end_sample={source_end}",
             "asetpts=PTS-STARTPTS",
-            f"aformat=sample_rates={sample_rate}:channel_layouts={'mono' if channels == 1 else 'stereo'}",
         ]
         if abs(tempo_scale - 1.0) > 1e-9 or abs(pitch_semitones) > 1e-9:
             pitch_factor = 2.0 ** (pitch_semitones / 12.0)

@@ -291,3 +291,88 @@ def test_rejects_absolute_path_inside_score(tmp_path: Path) -> None:
     broken = seal(broken)
     with pytest.raises(ValidationError):
         validate_performance_score(broken)
+
+
+def _write_impulse_44100(path: Path, *, impulse_frame: int, seconds: float = 2.0) -> None:
+    sample_rate = 44100
+    frames = round(seconds * sample_rate)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate)
+        data = bytearray()
+        for index in range(frames):
+            value = 32000 if index == impulse_frame else 0
+            data.extend(struct.pack("<hh", value, value))
+        handle.writeframes(bytes(data))
+
+
+def test_clip_samples_are_timeline_domain_for_non_timeline_rate_sources(tmp_path: Path) -> None:
+    """Score sample indices are timeline-rate; a 44.1 kHz source must be resampled before trimming.
+
+    Regression: atrim ran before aformat, so 48 kHz indices were applied to native-rate
+    streams and every cut on a 44.1 kHz source landed 8.84 percent late.
+    """
+    source = tmp_path / "impulse-44100.wav"
+    _write_impulse_44100(source, impulse_frame=44100)  # impulse at exactly 1.0 s
+    score = seal(
+        {
+            "schema_version": 1,
+            "kind": "earcrate_performance_score",
+            "created_at": "2026-08-11T00:00:00Z",
+            "score_id": "reference-zero-sample-domain-test",
+            "title": "sample domain regression",
+            "timeline": {"sample_rate": 48000, "channels": 2, "duration_samples": 48000, "shared_events": []},
+            "sources": [
+                {"source_id": "a", "role": "lead", "container_sha256": sha256_file(source), "canonical_pcm_sha256": None},
+            ],
+            "tracks": [
+                {
+                    "track_id": "lead",
+                    "role": "lead",
+                    "ownership": "source-a",
+                    "gain_db": 0.0,
+                    "pan": 0.0,
+                    "clips": [
+                        {
+                            "clip_id": "cut-1",
+                            "source_id": "a",
+                            "source_start_sample": 24000,
+                            "source_end_sample": 72000,
+                            "target_start_sample": 0,
+                            "tempo_scale": 1.0,
+                            "pitch_semitones": 0.0,
+                            "gain_db": 0.0,
+                            "pan": 0.0,
+                            "fade_in_samples": 0,
+                            "fade_out_samples": 0,
+                            "musical_function": "impulse-carrier",
+                            "occurrence_id": "occ-1",
+                            "locked": True,
+                        }
+                    ],
+                }
+            ],
+            "master": {"gain_db": 0.0, "peak_limit_dbfs": None, "codec": "pcm_s16le"},
+            "invariants": {},
+            "authority": {"status": "test", "allow_unused_sources": False},
+            "command_history": [],
+        }
+    )
+    validate_performance_score(score)
+    bindings = create_source_bindings(score, paths={"a": source})
+    output = tmp_path / "out.wav"
+    render_performance_score(score, bindings, output_path=output, receipt_path=tmp_path / "receipt.json")
+    with wave.open(str(output), "rb") as handle:
+        assert handle.getframerate() == 48000
+        raw = handle.readframes(handle.getnframes())
+    peak_frame = 0
+    peak_value = 0
+    for frame in range(len(raw) // 4):
+        value = abs(struct.unpack_from("<h", raw, frame * 4)[0])
+        if value > peak_value:
+            peak_value = value
+            peak_frame = frame
+    assert peak_value > 8000, "impulse missing from rendered window"
+    # The 1.0 s impulse sits 0.5 s into the [0.5 s, 1.5 s) timeline-domain cut.
+    assert abs(peak_frame - 24000) <= 240, f"impulse at frame {peak_frame}, expected ~24000 (timeline-domain cut)"

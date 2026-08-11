@@ -1,0 +1,14 @@
+{
+  "provider_id": "ace-step-1.5",
+  "adapter": {
+    "kind": "http_json",
+    "base_url": "http://127.0.0.1:9150",
+    "health_endpoint": "/health",
+    "endpoint": "/api/music/{model_id}",
+    "download_endpoint": "/api/outputs/{output_id}/audio",
+    "model_id": "ace_step_v15",
+    "request_template": {"prompt": "{task_mode}", "seed": "{seed}", "output_format": "wav", "skip_post_process": true, "params": {"earcrate_request_path": "{request_json}"}},
+    "timeout_seconds": 7200
+  },
+  "model_assets": [{"name": "<exact-model-file>", "path": "<private-local-path>", "sha256": "<64-hex-sha256>", "bytes": 1}]
+}

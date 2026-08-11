@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "campaign_id": "beggin-suno-bones-v1",
+  "fixture_id": "beggin-four-seasons-x-maneskin-handoff",
+  "facts": {
+    "same_musical_work": true,
+    "relationship": "cover/version",
+    "foreground_authority": "four_seasons_vocal",
+    "desired_production_grammar": "maneskin_modern_live_band",
+    "source_preserving_incumbent": "reference-zero-v5-performance-score",
+    "completed_reference_count": 0,
+    "generic_cross_song_alignment_prohibited": true,
+    "minimal_intervention_prior": true
+  },
+  "controls": [
+    {"control_id": "source-preserving-v5", "purpose": "continuous donor band plus locally fitted Frankie phrases", "authority": "incumbent diagnostic only; human acceptance remains false"},
+    {"control_id": "naive-co-play", "purpose": "serious literal co-play baseline", "authority": "mandatory blind-review control"}
+  ],
+  "tasks": [
+    {"task_id": "GF01-ace-complete-frankie", "strategy_family": "generative_reperformance", "task_mode": "complete", "purpose": "Generate a coherent modern live-band accompaniment that follows Frankie rather than forcing Frankie onto a fixed band grid.", "conditioning_source_ids": ["four_seasons_vocals"], "provider_candidates": ["ace-step-1.5"], "requested_variants": 8, "acceptance_dimensions": ["one-band coherence", "lead vocal authority", "phrase freedom", "percussion impact", "desire to continue"]},
+    {"task_id": "GF02-ace-vocal-to-bgm", "strategy_family": "generative_reperformance", "task_mode": "vocal_to_bgm", "purpose": "Generate a rhythm section around the exact source vocal with modern rock energy and no replacement lead vocal.", "conditioning_source_ids": ["four_seasons_vocals"], "provider_candidates": ["ace-step-1.5"], "requested_variants": 8, "acceptance_dimensions": ["rubato following", "backbeat lock", "vocal authority", "arrangement payoff"]},
+    {"task_id": "GF03-ace-cover", "strategy_family": "complete_cover_oracle", "task_mode": "cover", "purpose": "Produce a melody- and form-preserving modern reinterpretation as a performance oracle, without granting source identity authority.", "conditioning_source_ids": ["four_seasons_master"], "provider_candidates": ["ace-step-1.5", "songecho"], "requested_variants": 6, "acceptance_dimensions": ["work recognizability", "section fidelity", "modern production body", "originality"]},
+    {"task_id": "GF04-ace-repaint-transition", "strategy_family": "hybrid_connective_tissue", "task_mode": "repaint", "purpose": "Regenerate only one transition and one drum fill around the hook while preserving accepted source material outside the mask.", "conditioning_source_ids": ["reference_zero_v5_mix"], "provider_candidates": ["ace-step-1.5", "diffrhythm"], "requested_variants": 6, "acceptance_dimensions": ["transition inevitability", "boundary continuity", "artifact control", "source preservation"]},
+    {"task_id": "GF05-ace-lego-drum-room", "strategy_family": "hybrid_connective_tissue", "task_mode": "lego", "purpose": "Add a new drum-room or percussion layer to a source-preserving score without replacing the vocal or continuous band spine.", "conditioning_source_ids": ["reference_zero_v5_mix"], "provider_candidates": ["ace-step-1.5"], "requested_variants": 6, "acceptance_dimensions": ["percussion physicality", "room continuity", "vocal authority", "minimal intervention"]},
+    {"task_id": "GF06-songgeneration-bgm", "strategy_family": "generative_reperformance", "task_mode": "bgm_only", "purpose": "Generate accompaniment-only takes from structured section text and a short modern-rock prompt-audio witness.", "conditioning_source_ids": ["maneskin_style_prompt", "beggin_section_plan"], "provider_candidates": ["songgeneration-2"], "requested_variants": 6, "acceptance_dimensions": ["section control", "instrumental coherence", "prompt fidelity", "space for Frankie"]},
+    {"task_id": "GF07-songgeneration-dual-track", "strategy_family": "complete_cover_oracle", "task_mode": "dual_track", "purpose": "Generate vocal and accompaniment separately so EarCrate can retain, replace, or reject each track independently.", "conditioning_source_ids": ["beggin_section_plan", "maneskin_style_prompt"], "provider_candidates": ["songgeneration-2"], "requested_variants": 4, "acceptance_dimensions": ["track independence", "section coherence", "mix-ready material", "lyric alignment"]},
+    {"task_id": "GF08-yue-dual-track-icl", "strategy_family": "reference_conditioned_oracle", "task_mode": "dual_track_icl", "purpose": "Use separate vocal and instrumental prompts to test whether an autoregressive model can infer a shared performance body.", "conditioning_source_ids": ["four_seasons_vocals_prompt", "maneskin_instrumental_prompt", "beggin_section_plan"], "provider_candidates": ["yue"], "requested_variants": 4, "acceptance_dimensions": ["shared-performance coherence", "prompt following", "section stability", "vocal identity distance"]},
+    {"task_id": "GF09-heartmula-section-control", "strategy_family": "text_conditioned_oracle", "task_mode": "segment_generation", "purpose": "Test long-form section planning and production grammar without reference-audio claims the released model does not support.", "conditioning_source_ids": ["beggin_section_plan"], "provider_candidates": ["heartmula", "muse"], "requested_variants": 4, "acceptance_dimensions": ["section arc", "payoff", "instrumentation", "long-range coherence"]},
+    {"task_id": "GF10-diffrhythm-edit-control", "strategy_family": "fast_edit_control", "task_mode": "repaint", "purpose": "Provide a fast independent diffusion control for localized transition regeneration.", "conditioning_source_ids": ["reference_zero_v5_mix"], "provider_candidates": ["diffrhythm"], "requested_variants": 6, "acceptance_dimensions": ["edit locality", "continuity", "speed", "musical usefulness"]},
+    {"task_id": "GF11-muse-suno-teacher-comparator", "strategy_family": "suno_distilled_comparator", "task_mode": "segment_generation", "purpose": "Test the open Suno-teacher-distilled token-model family under the same structured section contract.", "conditioning_source_ids": ["beggin_section_plan"], "provider_candidates": ["muse"], "requested_variants": 4, "acceptance_dimensions": ["style control", "section control", "audio aesthetics", "useful material rate"]}
+  ],
+  "frontier_policy": {"maximum_human_options": 4, "incumbent_control_required": true, "strategy_diversity_required": true, "minimum_distinct_strategy_families": 3, "duplicate_audio_identities_forbidden": true, "human_review_is_acceptance_authority": true, "full_song_permission": false},
+  "privacy": {"source_audio_stays_local": true, "commercial_cloud_upload_forbidden": true, "public_circulation_is_source_free": true}
+}

@@ -72,3 +72,14 @@ jobs:
           assert schema['$id']
           assert len(campaign['tasks']) == 11
           PY
+      - name: Exercise one-command Windows capability pass
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass `
+            -File scripts\RUN_GENERATIVE_FLOOR.ps1 `
+            -Workspace "build\generative-probe-${{ matrix.python }}" `
+            -ProbeOnly
+          $plan = Get-Content -LiteralPath "build\generative-probe-${{ matrix.python }}\generation-campaign.json" -Raw | ConvertFrom-Json
+          if ($plan.summary.tasks -ne 11) { throw "Expected 11 tasks, got $($plan.summary.tasks)" }
+          if (-not (Test-Path -LiteralPath "build\generative-probe-${{ matrix.python }}\LOCAL_NEXT_ACTIONS.md")) { throw "Missing local next actions" }

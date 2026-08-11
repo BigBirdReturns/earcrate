@@ -1,47 +1,46 @@
 # EarCrate Generative Provider Floor
 
-## Why this exists
+## Purpose
 
-EarCrate has built a private, content-addressed authority system around music work. It can bind exact recordings and models, execute providers across several nodes, preserve receipts, prepare blind review, and reproduce an explicit PerformanceScore without allowing the renderer to invent musical decisions. It has not yet proved one automatically recovered musical reference.
+EarCrate has built a private, content-addressed authority system around musical computation. It can bind exact recordings and models, execute providers across multiple Estate nodes, preserve receipts, prepare blind review, and reproduce an explicit PerformanceScore without allowing the renderer to invent decisions. It has not yet completed an automatically recovered musical reference.
 
-The open music-generation ecosystem has solved a different part of the problem. ACE-Step 1.5, SongGeneration 2, HeartMuLa, YuE, DiffRhythm, Muse, SongEcho, and related studios can generate coherent songs, covers, accompaniment, continuations, edits, and alternate takes. Their native outputs are generally audio files, stems, model sessions, or service records. They do not share one portable authority contract, and they do not automatically become safe material in an EarCrate project.
+The open ecosystem has built the learned performance organs EarCrate did not train: ACE-Step 1.5, SongGeneration 2, HeartMuLa, YuE, DiffRhythm, Muse, SongEcho, MIDI-SAG, and related local studios can generate songs, covers, accompaniment, continuations, repaints, separate tracks, and alternate takes. Their native outputs do not share one portable authority contract and do not automatically become safe material in an EarCrate project.
 
-The Generative Provider Floor connects these two bodies. External systems become untrusted material producers. EarCrate remains the authority for exact inputs, provider and model identity, rights scope, output custody, human review, generated-material selection, and final PerformanceScore execution.
+The Generative Provider Floor combines these bodies. External systems are untrusted material producers. EarCrate remains the authority for exact input, repository, checkpoint, codec, host, node, GPU, seed, rights, output, review, generated-material, and PerformanceScore identities.
 
-## What EarCrate contributes that the generators do not
+## What EarCrate contributes
 
 | EarCrate organ | Contribution |
 | --- | --- |
-| Exact source and canonical PCM identity | Detects changed inputs and prevents a take from being attributed to different source bytes. |
-| Provider Arcade and Homelab estate | Separates catalogued, installed, loadable, executed, benchmarked, auditioned, and adopted states. |
-| Cross-node receipt model | Records node, GPU, environment, model and codec assets, request, output, and return identity without assuming one CUDA namespace. |
-| Open Music Evidence Floor | Lets providers submit observations or materials without granting canonical musical authority. |
+| Exact source and canonical PCM identity | Detects changed inputs and prevents attribution to different bytes. |
+| Provider Arcade and Homelab Estate | Separates catalogued, installed, loadable, executed, benchmarked, auditioned, and adopted states. |
+| Cross-node receipts | Records provider, host, node, GPU, environment, model assets, request, output, and return identity without assuming one CUDA namespace. |
+| Open Music Evidence Floor | Lets a provider submit observations or material without receiving canonical musical authority. |
 | PerformanceScore | Represents every selected source, clip, transform, ownership decision, and master operation in a portable exact score. |
-| Deterministic renderer | Rebuilds an accepted score without selecting, repairing, substituting, or skipping musical material. |
-| Blind owner review | Treats `reject_all`, control wins, ties, and abstention as complete evidence rather than forcing promotion of a least-bad take. |
-| Scoped ReviewPatch | Changes only declared descendants and preserves unrelated evidence and historical decisions. |
-| Privacy and publication membrane | Keeps private recordings, model paths, prompts, review maps, and credentials local while circulating source-free identities and outcomes. |
+| Deterministic renderer | Rebuilds the score without selecting, repairing, substituting, tiling, or skipping material. |
+| Blind owner review | Treats control wins, ties, `reject_all`, and abstention as complete evidence. |
+| Scoped ReviewPatch | Changes declared descendants while preserving unrelated evidence and history. |
+| Privacy and publication membrane | Keeps source audio, model paths, prompts, review maps, and credentials local while circulating source-free identities. |
 
-These organs do not compensate for weak generation. They make strong generation usable, comparable, reproducible, and governable.
+These organs do not compensate for weak generation. They make strong generation comparable, reproducible, editable, and governable.
 
-## What the open generators contribute that EarCrate has not built
+## What the external organs contribute
 
 | Provider family | Native material operations |
 | --- | --- |
-| ACE-Step 1.5 | Text-to-music, cover/remix, repaint, complete/vocal-to-BGM, Lego layer addition, Extract, separation, retakes, extensions, reference conditioning, LoRA personalization. |
-| SongGeneration 2 | Structured lyrics-to-song, reference prompt audio, BGM-only, vocal-only, and separate vocal/accompaniment output. |
-| HeartMuLa | Long-form lyrics-and-tag-conditioned generation, HeartCodec, lyric transcription, audio-text retrieval, RL-aligned model variants. |
-| YuE | Autoregressive full-song generation, continuation, single-track and dual-track in-context reference conditioning, LoRA. |
-| DiffRhythm | Fast diffusion generation, editing, continuation, instrumental generation, reference conditioning. |
-| Muse | Reproducible long-form token generation, segment-level structure control, released training and evaluation pipeline, Suno-teacher synthetic dataset. |
-| SongEcho | Melody-preserving cover generation built as a specialist task. |
-| Portable Music Server and community studios | Isolated environments, one model per worker, multi-GPU routing, installation management, REST APIs, take libraries, and local operator surfaces. |
+| ACE-Step 1.5 | Text-to-music, cover/remix, repaint, Complete/vocal-to-BGM, Lego, Extract, separation, retakes, extensions, reference conditioning, LoRA. |
+| SongGeneration 2 | Structured lyrics-to-song, audio prompts, BGM-only, vocal-only, and separate vocal/accompaniment output. |
+| HeartMuLa | Long-form lyrics-and-tag-conditioned generation, HeartCodec, lyric transcription, retrieval, and aligned model variants. |
+| YuE | Autoregressive generation, continuation, single-track and dual-track in-context conditioning, LoRA. |
+| DiffRhythm | Fast diffusion generation, editing, continuation, instrumental generation, and reference conditioning. |
+| Muse | Reproducible long-form token generation, section control, released training/evaluation pipeline, and Suno-teacher synthetic data. |
+| SongEcho | Melody-preserving cover generation as a specialist operation. |
+| MIDI-SAG | Vocal beat tracking, vocal-to-MIDI transcription, chord harmonization, section prompts, and Stable-Audio-based backing generation. |
+| Portable Music Server and studios | Isolated environments, model installation, worker lifecycle, multi-GPU routing, APIs, output libraries, and operator surfaces. |
 
-EarCrate should consume these operations instead of recreating their inference engines.
+EarCrate consumes these operations instead of reimplementing their inference engines.
 
 ## Authority objects
-
-The floor introduces the following sealed objects:
 
 ```text
 earcrate_generation_provider_catalog
@@ -54,17 +53,17 @@ earcrate_generation_frontier
 earcrate_generation_public_projection
 ```
 
-A generation request must contain the provider and task mode, exact repository revision, exact model, codec, LoRA, and auxiliary asset hashes, an explicit seed, portable prompt and section conditions, portable source commitments by content identity, an output contract, and the private-use and rights scope.
+A request contains the provider and task mode, exact repository revision, exact model, codec, LoRA, and auxiliary asset hashes, explicit seed, portable prompt and section conditions, portable source commitments, output contract, and private-use and rights scope.
 
-A run receipt records the request, provider, node, GPU, exact model assets, outcome, and generated artifact identities. Raw commands, logs, paths, credentials, source bytes, and model bytes remain private. A successful run creates evidence, not acceptance.
+A run receipt records the request, provider, execution host, node, GPU, exact assets, outcome, and generated artifact identities. Raw commands, logs, paths, credentials, source bytes, model bytes, and private service responses remain local. A successful run creates evidence, not acceptance.
 
-A generated material object is an unreviewed candidate. It enters a PerformanceScore only after selection, using the generated artifact SHA-256 as a new source identity and retaining its generation receipt and material identities.
+A generated-material object is an unreviewed candidate. It enters a PerformanceScore only after selection and retains its generation request, receipt, provider, model, seed, and artifact identities.
 
 ## Strategy-specific organisms
 
-The factory does not ask one model to become the entire arrangement system. It compiles organisms for distinct operations.
+The factory does not ask one model to become the entire arrangement system.
 
-### Source-preserving organism
+### Source-preserving
 
 ```text
 work identity and material census
@@ -74,47 +73,63 @@ work identity and material census
 → deterministic render
 ```
 
-### Generative re-performance organism
+### Generative re-performance
 
 ```text
-source vocal or melody condition
-→ accompaniment, cover, or dual-track generator
+source vocal, melody, section, or style condition
+→ accompaniment, cover, or dual-track generation
 → alternate takes
-→ hard signal and identity gates
+→ hard identity and signal gates
 → owner selection
-→ generated material source
+→ generated material
 → PerformanceScore
 ```
 
-### Hybrid organism
+### Compositional accompaniment
+
+```text
+source vocal
+→ vocal beat tracking
+→ vocal MIDI
+→ chord harmonization
+→ section-controlled backing generation
+→ intermediate and final receipts
+→ owner selection
+→ PerformanceScore
+```
+
+### Hybrid repair
 
 ```text
 accepted source-preserving score
 → repaint one region, generate one fill, add one layer, or replace one weak instrument
-→ preserve all material outside the declared mask
+→ preserve material outside the mask
 → owner review against incumbent
 → revised PerformanceScore
 ```
 
 ## Beggin Suno-bones campaign
 
-`configs/generative_floor/beggin-suno-bones.v1.json` defines eleven operations:
+`configs/generative_floor/beggin-suno-bones.v1.json` defines twelve operations:
 
 ```text
 ACE-Step Complete and vocal-to-BGM around Frankie
-ACE-Step or SongEcho melody-preserving cover oracle
+ACE-Step or SongEcho cover oracle
 ACE-Step or DiffRhythm transition repaint
-ACE-Step Lego drum-room layer
-SongGeneration BGM-only and dual-track generation
+ACE-Step Lego drum-room addition
+SongGeneration BGM-only and dual-track output
 YuE dual-track ICL
-HeartMuLa and Muse section-control comparators
+HeartMuLa and Muse section-control comparison
+DiffRhythm fast-edit control
+Muse Suno-teacher-distilled comparison
+MIDI-SAG compositional vocal-to-backing pipeline
 ```
 
-The incumbent Reference Zero v5 score and a serious naive co-play remain controls. At most four strategy-diverse files reach the owner. Full-song and release permission remain closed.
+The Reference Zero v5 score and a serious naive co-play remain controls. At most four audio-distinct, strategy-diverse files reach the owner. Full-song and release permission remain closed.
 
-## Local estate cutover
+## Local Estate cutover
 
-First run a source-free capability pass:
+A source-free capability pass performs no install, download, or generation:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `
@@ -123,70 +138,31 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -ProbeOnly
 ```
 
-This does not install, download, or execute a model. It produces one probe receipt per provider, a generation campaign, and `LOCAL_NEXT_ACTIONS.md`.
+It writes one provider probe, the bounded campaign, and `LOCAL_NEXT_ACTIONS.md`.
 
-For an installed provider, create one private override from the template. The override supplies the exact executable or loopback service adapter and exact local model-asset identities. It is never committed.
+Private overrides supply an exact executable or loopback service adapter plus exact local model assets. When a model runs through a commodity host, the runner probes the host first and inserts the sealed host-probe identity into the model override inside the private workspace. The operator does not copy authority hashes by hand.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `
   -File scripts\RUN_GENERATIVE_FLOOR.ps1 `
   -Workspace "S:\Temp\EarCrate\generative-floor\beggin-002" `
-  -ProviderOverride "S:\Temp\EarCrate\private\generative-overrides\ace-step-1.5.json" `
-  -ProviderOverride "S:\Temp\EarCrate\private\generative-overrides\songgeneration-2.json" `
-  -ProviderOverride "S:\Temp\EarCrate\private\generative-overrides\portable-music-server.json"
+  -ProviderOverride "S:\Temp\EarCrate\private\generative-overrides\portable-music-server-host.json" `
+  -ProviderOverride "S:\Temp\EarCrate\private\generative-overrides\ace-step-1.5-via-host.json" `
+  -ProviderOverride "S:\Temp\EarCrate\private\generative-overrides\midi-sag.json"
 ```
 
-Each ready task receives an exact generation request. The request CLI refuses mutable model labels without pinned asset hashes and refuses implicit random seeds.
+Every ready task then receives an exact request. The CLI refuses mutable model labels without pinned assets and refuses an implicit random seed. Execution requires private source bindings, local adapter, node identity, and GPU identity. Output directories are immutable.
 
-```powershell
-python scripts\earcrate_generative_floor.py request `
-  --provider ace-step-1.5 `
-  --task-mode complete `
-  --model-repository ace-step/ACE-Step-1.5 `
-  --model-revision <exact-commit> `
-  --asset "acestep-v15-xl-base.safetensors:<sha256>:<bytes>" `
-  --asset "vae.safetensors:<sha256>:<bytes>" `
-  --seed 1001 `
-  --prompt-json '{"caption":"modern live rock band following an urgent rubato male lead; no replacement lead vocal"}' `
-  --conditioning-json '[{"source_id":"four_seasons_vocals","container_sha256":"<sha256>","role":"lead_vocal"}]' `
-  --output "S:\Temp\EarCrate\generative-floor\beggin-002\requests\ace-complete-1001.json"
-```
-
-Execution requires a private source-binding map, local adapter, node identity, and GPU identity. The output directory is immutable.
-
-```powershell
-python scripts\earcrate_generative_floor.py run `
-  --catalog configs\generative_floor\providers.v1.json `
-  --provider ace-step-1.5 `
-  --probe "S:\Temp\EarCrate\generative-floor\beggin-002\probes\ace-step-1.5.probe.json" `
-  --request "S:\Temp\EarCrate\generative-floor\beggin-002\requests\ace-complete-1001.json" `
-  --adapter "S:\Temp\EarCrate\private\generative-overrides\ace-step-1.5.json" `
-  --source-bindings "S:\Temp\EarCrate\private\generative-bindings\beggin.json" `
-  --node-json "S:\Temp\EarCrate\private\estate\node.json" `
-  --gpu-json "S:\Temp\EarCrate\private\estate\gpu-3090-a.json" `
-  --output "S:\Temp\EarCrate\generative-floor\beggin-002\runs\ace-complete-1001"
-```
-
-A selected artifact is converted into an EarCrate generated-material candidate, not directly into an accepted score:
-
-```powershell
-python scripts\earcrate_generative_floor.py materialize `
-  --receipt "...\generation-receipt.json" `
-  --artifact-sha256 <sha256> `
-  --role accompaniment `
-  --musical-function "modern band following source vocal" `
-  --strategy generative_reperformance `
-  --output "...\materials\ace-complete-1001.json"
-```
-
-The frontier command deduplicates by audio identity, preserves the incumbent, and prefers distinct strategy families. Owner review remains a separate existing EarCrate authority.
+A selected artifact is converted into an EarCrate generated-material candidate, never directly into an accepted score. The frontier deduplicates by audio identity, retains the incumbent, and prefers distinct strategy families. Existing owner-review authority decides the result.
 
 ## Commodity-host policy
 
-The floor catalogs `portable-music-server` as a host, not as musical authority. Its isolated environments, worker lifecycle, multi-GPU API, install management, and output library are useful commodities. EarCrate must independently verify its exact revision, generated environment manifests, model assets, output identity, and real-GPU behavior. Its default mastering is disabled or treated as a separate declared transform when comparing raw model output.
+Portable Music Server is catalogued as a host rather than musical authority. EarCrate independently verifies the host revision, its sealed probe, the requested model ID, environment installation, weight installation, exact local assets, output identity, and real-GPU execution. A healthy gateway alone does not establish model readiness.
 
-The same rule applies to ACE-Step Studio, ComfyUI graphs, SongGeneration Studio, HeartMuse, YuE-UI, AudioLab, and future local hosts. EarCrate should harvest reliable setup and execution bodies while retaining its own request, receipt, material, review, and score contracts.
+The current server implementation accepts `model_params` and returns inline `audio_base64` plus `entry_id`; the EarCrate adapter is tested against that executable contract. Host documentation is treated as a witness, not execution authority. Default mastering is disabled or retained as a separate declared transform during model comparison.
+
+The same rule applies to ACE-Step Studio, ComfyUI graphs, SongGeneration Studio, HeartMuse, YuE-UI, AudioLab, and future hosts. EarCrate harvests reliable setup and execution bodies while retaining its own request, receipt, material, review, and score contracts.
 
 ## Non-claims
 
-This floor does not claim that any model is installed on the current estate, that a checkpoint license has been approved, that a private Beggin generation has run, that generated material is good, or that EarCrate has completed a reference. It makes those claims independently provable and lets the local estate run every serious open strategy under one authority model.
+This floor does not claim that a model is installed on the Estate, that checkpoint licenses have been approved, that a private Beggin generation has run, that generated material is good, or that EarCrate has completed a reference. It makes those claims independently testable and allows every serious open strategy to enter through one authority model.

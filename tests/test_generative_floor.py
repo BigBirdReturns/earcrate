@@ -4,8 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
-
-import pytest
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -46,6 +45,17 @@ def _provider(catalog: dict, provider_id: str) -> dict:
     return next(dict(row) for row in catalog["providers"] if row["provider_id"] == provider_id)
 
 
+def _assert_raises(error_type: type[BaseException], message_fragment: str, fn: Callable[[], object]) -> None:
+    try:
+        fn()
+    except error_type as exc:
+        assert message_fragment in str(exc), f"expected {message_fragment!r} in {exc!r}"
+        return
+    except Exception as exc:
+        raise AssertionError(f"expected {error_type.__name__}, received {type(exc).__name__}: {exc}") from exc
+    raise AssertionError(f"expected {error_type.__name__}")
+
+
 def test_catalog_names_generation_bones_without_granting_authority() -> None:
     catalog = load_json(CATALOG_PATH)
     assert validate_provider_catalog(catalog) == catalog["catalog_sha256"]
@@ -74,8 +84,7 @@ def test_generation_request_requires_exact_model_assets_and_seed(tmp_path: Path)
     broken.pop("request_sha256")
     broken["model"] = {"repository": "x", "revision": "y", "assets": []}
     broken = seal(broken)
-    with pytest.raises(ValidationError, match="pin at least one"):
-        validate_generation_request(broken)
+    _assert_raises(ValidationError, "pin at least one", lambda: validate_generation_request(broken))
 
 
 def test_campaign_selects_only_probed_capable_providers(tmp_path: Path) -> None:
@@ -166,7 +175,8 @@ def test_portable_music_server_is_a_host_not_model_authority() -> None:
 
 
 def test_generated_material_source_enters_reference_zero_score() -> None:
-    rz = pytest.importorskip("earcrate.reference_zero")
+    import earcrate.reference_zero as rz
+
     source = {
         "source_id": "generated-band-001", "container_sha256": "f" * 64, "canonical_pcm_sha256": None,
         "source_kind": "generated_material", "generated_material_sha256": "e" * 64,

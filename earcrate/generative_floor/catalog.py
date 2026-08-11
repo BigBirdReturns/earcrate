@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from pathlib import Path
 import shutil
 from typing import Any, Mapping, Sequence
@@ -173,6 +174,17 @@ def _hash_declared_asset(path: str | Path, expected: Mapping[str, Any]) -> dict[
     return {"name": identity.name, "sha256": identity.sha256, "bytes": identity.bytes, "media_kind": identity.media_kind}
 
 
+def _fetch_json(url: str, *, timeout: int) -> dict[str, Any]:
+    with urllib_request.urlopen(url, timeout=timeout) as response:
+        body = response.read()
+        if int(response.status) >= 400:
+            raise ProviderUnavailable(f"HTTP {response.status} from {url}")
+    value = json.loads(body.decode("utf-8"))
+    if not isinstance(value, dict):
+        raise ProviderUnavailable(f"JSON object required from {url}")
+    return value
+
+
 def probe_provider(
     provider: Mapping[str, Any],
     *,
@@ -180,6 +192,7 @@ def probe_provider(
     node_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     provider_id = require_nonempty(provider.get("provider_id"), label="provider_id")
+    provider_class = str(provider.get("provider_class") or "")
     override = deepcopy(dict(local_override or {}))
     blockers: list[str] = []
     evidence: dict[str, Any] = {}
@@ -201,31 +214,73 @@ def probe_provider(
                     "bytes": Path(executable).stat().st_size,
                 }
     elif adapter_kind == "http_json":
-        base_url = str(adapter.get("base_url") or "")
+        base_url = str(adapter.get("base_url") or "").rstrip("/")
         if not base_url.startswith(("http://127.0.0.1", "http://localhost")):
             blockers.append("http_json adapter must target a loopback local service")
         evidence["base_url_class"] = "loopback" if not blockers else "invalid"
         if not blockers:
+            timeout = int(adapter.get("probe_timeout_seconds") or 5)
             health_endpoint = str(adapter.get("health_endpoint") or "/health")
             try:
-                with urllib_request.urlopen(base_url.rstrip("/") + health_endpoint, timeout=int(adapter.get("probe_timeout_seconds") or 5)) as response:
-                    evidence["health"] = {"http_status": int(response.status), "bytes": len(response.read())}
-                if evidence["health"]["http_status"] >= 400:
-                    blockers.append(f"local service health returned {evidence['health']['http_status']}")
+                health = _fetch_json(base_url + health_endpoint, timeout=timeout)
+                evidence["health"] = {
+                    "status": health.get("status"),
+                    "worker_count": health.get("worker_count"),
+                    "loaded_models": list(health.get("loaded_models") or []),
+                }
+                if health.get("status") not in {"ok", "healthy", True}:
+                    blockers.append(f"local service health is not ready: {health.get('status')!r}")
             except Exception as exc:
                 blockers.append(f"local service unavailable: {type(exc).__name__}: {exc}")
+
+            model_id = str(adapter.get("model_id") or "")
+            if model_id and not blockers:
+                try:
+                    models_endpoint = str(adapter.get("models_endpoint") or "/api/models")
+                    models_payload = _fetch_json(base_url + models_endpoint, timeout=timeout)
+                    rows = [dict(row) for row in models_payload.get("models") or [] if isinstance(row, Mapping)]
+                    model_row = next((row for row in rows if str(row.get("id") or "") == model_id), None)
+                    if model_row is None:
+                        blockers.append(f"local host does not catalogue model id: {model_id}")
+                    else:
+                        evidence["host_model"] = {
+                            "id": model_id,
+                            "name": model_row.get("name"),
+                            "env": model_row.get("env"),
+                            "install_status": model_row.get("install_status"),
+                            "env_installed": bool(model_row.get("env_installed")),
+                            "weights_installed": bool(model_row.get("weights_installed")),
+                        }
+                        if adapter.get("require_model_installed", True):
+                            if not evidence["host_model"]["env_installed"]:
+                                blockers.append(f"model environment is not installed: {model_id}")
+                            if not evidence["host_model"]["weights_installed"]:
+                                blockers.append(f"model weights are not installed: {model_id}")
+                except Exception as exc:
+                    blockers.append(f"model readiness probe failed: {type(exc).__name__}: {exc}")
     elif adapter_kind == "unconfigured":
         blockers.append("no local adapter configured")
     else:
         blockers.append(f"unsupported adapter kind: {adapter_kind}")
 
     assets = []
-    for row in override.get("model_assets") or []:
+    declared_assets = [dict(row) for row in override.get("model_assets") or []]
+    for row in declared_assets:
         try:
             assets.append(_hash_declared_asset(str(row.get("path") or ""), row))
         except Exception as exc:
             blockers.append(f"model asset unavailable: {type(exc).__name__}: {exc}")
+    if not declared_assets and (provider_class in {"foundation_model", "specialist_model"} or adapter.get("model_id")):
+        blockers.append("no exact local model or codec assets declared")
     evidence["model_assets"] = assets
+
+    if provider_class == "commodity_host":
+        host_revision = str(override.get("repository_revision") or "")
+        if not host_revision:
+            blockers.append("commodity host requires an exact local repository revision")
+        else:
+            evidence["host_repository_revision"] = host_revision
+
     node = deepcopy(dict(node_identity or {}))
     node.pop("absolute_paths", None)
     return seal(

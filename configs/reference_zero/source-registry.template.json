@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "earcrate_reference_zero_source_registry_template",
+  "instructions": "Replace each identity with the exact local source hash. Do not add artifact paths to this portable registry.",
+  "sources": [
+    {
+      "source_id": "four_seasons_vocal",
+      "role": "lead_vocal_authority",
+      "container_sha256": "REPLACE_WITH_64_HEX_SHA256",
+      "canonical_pcm_sha256": null
+    },
+    {
+      "source_id": "four_seasons_instrumental",
+      "role": "source_harmonic_and_percussion_identity",
+      "container_sha256": "REPLACE_WITH_64_HEX_SHA256",
+      "canonical_pcm_sha256": null
+    },
+    {
+      "source_id": "maneskin_drums",
+      "role": "modern_drum_material",
+      "container_sha256": "REPLACE_WITH_64_HEX_SHA256",
+      "canonical_pcm_sha256": null
+    },
+    {
+      "source_id": "maneskin_bass",
+      "role": "modern_bass_material",
+      "container_sha256": "REPLACE_WITH_64_HEX_SHA256",
+      "canonical_pcm_sha256": null
+    },
+    {
+      "source_id": "maneskin_other",
+      "role": "modern_harmonic_and_room_material",
+      "container_sha256": "REPLACE_WITH_64_HEX_SHA256",
+      "canonical_pcm_sha256": null
+    }
+  ]
+}

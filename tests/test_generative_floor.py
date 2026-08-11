@@ -191,9 +191,10 @@ def test_portable_music_server_contract_checks_install_and_runs_inline_audio(tmp
             "request_template": {"duration": 1.0, "output_format": "wav", "skip_post_process": True, "model_params": {"task_type": "text2music"}},
             "timeout_seconds": 60,
         }
-        probe = probe_provider(provider, local_override={"adapter": adapter, "model_assets": [asset]})
+        probe = probe_provider(provider, local_override={"adapter": adapter, "model_assets": [asset], "execution_host_probe_sha256": "e" * 64})
         assert probe["ready"] is True
         assert probe["evidence"]["host_model"]["weights_installed"] is True
+        assert probe["evidence"]["execution_host_probe_sha256"] == "e" * 64
         request_value = build_generation_request(
             provider_id="ace-step-1.5", task_mode="text_to_music", model_repository="ace-step/ACE-Step-1.5",
             model_revision="commit:test", model_assets=[{key: asset[key] for key in ("name", "sha256", "bytes")}],

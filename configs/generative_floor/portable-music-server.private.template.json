@@ -1,6 +1,6 @@
 {
   "provider_id": "ace-step-1.5",
-  "execution_host_probe_sha256": "<portable-music-server-probe-sha256>",
+  "execution_host_provider_id": "portable-music-server",
   "adapter": {
     "kind": "http_json",
     "base_url": "http://127.0.0.1:9150",

@@ -4,12 +4,9 @@ import base64
 from collections import defaultdict
 from copy import deepcopy
 import json
-import mimetypes
 import os
 from pathlib import Path
-import shutil
 import subprocess
-import sys
 import time
 from typing import Any, Mapping, MutableMapping, Sequence
 from urllib import request as urllib_request
@@ -27,7 +24,6 @@ from .core import (
     atomic_write,
     canonical_json_bytes,
     is_sha256,
-    looks_like_local_path,
     now_utc,
     redact,
     require_portable,
@@ -177,8 +173,8 @@ def execute_generation_request(
         prompt = dict(request.get("prompt") or {})
         payload.setdefault("prompt", prompt.get("caption") or prompt.get("style") or "")
         payload.setdefault("seed", request.get("seed"))
-        payload.setdefault("params", {})
-        payload["params"].setdefault("earcrate_request_sha256", request_sha)
+        if "model_params" in payload and not isinstance(payload["model_params"], Mapping):
+            raise ValidationError("http_json model_params must be an object")
         req = urllib_request.Request(
             base_url + endpoint,
             data=json.dumps(payload).encode("utf-8"),
@@ -190,24 +186,25 @@ def execute_generation_request(
             with urllib_request.urlopen(req, timeout=int(adapter.get("timeout_seconds") or 7200)) as response:
                 decoded = json.loads(response.read().decode("utf-8"))
                 status = response.status
+            if not isinstance(decoded, Mapping):
+                raise ValidationError("local HTTP provider must return a JSON object")
             if decoded.get("audio_base64"):
                 suffix = "." + str(decoded.get("format") or "wav").lstrip(".")
                 target = output / f"generated{suffix}"
-                atomic_write(target, base64.b64decode(decoded["audio_base64"]), exclusive=True)
+                atomic_write(target, base64.b64decode(str(decoded["audio_base64"]), validate=True), exclusive=True)
                 output_paths.append(target)
-            output_id = decoded.get("output_id")
-            if output_id and not output_paths and adapter.get("download_endpoint"):
-                download_url = base_url + str(adapter["download_endpoint"]).format(output_id=output_id)
+            external_id = decoded.get("output_id") or decoded.get("entry_id")
+            if external_id and not output_paths and adapter.get("download_endpoint"):
+                download_url = base_url + str(adapter["download_endpoint"]).format(output_id=external_id, entry_id=external_id)
                 with urllib_request.urlopen(download_url, timeout=900) as response:
-                    suffix = mimetypes.guess_extension(response.headers.get_content_type()) or ".wav"
-                    target = output / f"generated{suffix}"
+                    target = output / "generated.wav"
                     atomic_write(target, response.read(), exclusive=True)
                     output_paths.append(target)
             private_metadata = {key: value for key, value in decoded.items() if key != "audio_base64"}
             write_json(output / "execution.private.json", {"adapter_kind": adapter_kind, "response_metadata": private_metadata}, exclusive=True)
             allowed = {
                 key: decoded.get(key)
-                for key in ("status", "model", "sample_rate", "duration_sec", "format", "generation_time_sec", "output_id")
+                for key in ("status", "model", "sample_rate", "duration_sec", "format", "generation_time_sec", "inference_time_sec", "output_id", "entry_id")
                 if key in decoded
             }
             command_evidence = {
@@ -219,7 +216,7 @@ def execute_generation_request(
             outcome = "observed" if output_paths else "failed"
             if outcome == "failed":
                 refusal = "local HTTP provider returned no resolvable audio"
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
             command_evidence = {"adapter_kind": adapter_kind, "error_type": type(exc).__name__}
             refusal = "local HTTP provider request failed"
     else:

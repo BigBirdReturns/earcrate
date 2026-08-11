@@ -217,6 +217,12 @@ def probe_provider(
         base_url = str(adapter.get("base_url") or "").rstrip("/")
         if not base_url.startswith(("http://127.0.0.1", "http://localhost")):
             blockers.append("http_json adapter must target a loopback local service")
+        if provider_class != "commodity_host":
+            host_probe_sha = str(override.get("execution_host_probe_sha256") or "").lower()
+            if not is_sha256(host_probe_sha):
+                blockers.append("model-over-HTTP probe requires execution_host_probe_sha256")
+            else:
+                evidence["execution_host_probe_sha256"] = host_probe_sha
         evidence["base_url_class"] = "loopback" if not blockers else "invalid"
         if not blockers:
             timeout = int(adapter.get("probe_timeout_seconds") or 5)

@@ -8,7 +8,7 @@ acceptance remains false.
 Contract identity:
 
 ```text
-b53de69559415574e77ad2eb12e1952edf66b3de780d18faed5ab7ab84f3a0cd
+858d39452319e90e054c5a4994f07f7ccfcd5d38f011a46ed6834e7a766f1048
 ```
 
 Parent owner-review receipt:
@@ -96,6 +96,19 @@ creates one immutable incumbent area plus three child workspaces. The generated
 `NEXT_ACTIONS.md` is the local execution order. Each child is rendered through
 the existing Reference Zero renderer and must reproduce identical canonical PCM
 twice.
+
+## Organs and duties
+
+This iteration uses the existing cabinet as an ensemble rather than selecting one
+tool to become the song. MusicBrainz and Essentia preserve the same-work
+relationship. The current stem census rejects silence, bleed, and separation
+ghosts before composition. Beat This witnesses donor downbeats without
+overriding Frankie. EarCrate onsets select fills and percussion events. Rubber
+Band performs only the bounded band transforms. The A1-07 conductor and
+PlayerPiano validate setup, response, release, ownership, and silence
+obligations. The minimal-intervention TasteSpec and quality-diversity frontier
+limit search. PerformanceScore and the Reference Zero renderer execute and
+reproduce the result. Blind owner review remains the only musical authority.
 
 ## Machine admission
 

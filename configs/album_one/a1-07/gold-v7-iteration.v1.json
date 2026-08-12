@@ -79,7 +79,7 @@
       "strategy": "production_integration"
     }
   ],
-  "contract_sha256": "b53de69559415574e77ad2eb12e1952edf66b3de780d18faed5ab7ab84f3a0cd",
+  "contract_sha256": "858d39452319e90e054c5a4994f07f7ccfcd5d38f011a46ed6834e7a766f1048",
   "created_at": "2026-08-12T00:00:00Z",
   "estate_execution_order": [
     "Verify the exact gold-v6 owner-review receipt and freeze its score, render, bindings, and receipts under immutable custody.",
@@ -158,6 +158,75 @@
       "gold-v7-production": [
         "The clip and transform graph is structurally identical to gold-v6.",
         "Only declared mix and master fields differ."
+      ]
+    }
+  },
+  "organ_roles": {
+    "composition_validation": {
+      "duty": "Require every handoff or arc intervention to declare setup, response, release, ownership, and silence obligations.",
+      "organs": [
+        "A1-07 track conductor",
+        "PlayerPiano obligation validation"
+      ]
+    },
+    "event_map": {
+      "duty": "Locate and classify donor fills, attacks, and original-era percussion events used by the interplay child.",
+      "organs": [
+        "EarCrate onset baseline"
+      ]
+    },
+    "material_census": {
+      "duty": "Classify activity, bleed, silence, room, and usable musical roles before any source is admitted; do not rerun separation unless the current evidence is stale or defective.",
+      "organs": [
+        "private official and separated stems",
+        "Demucs and RoFormer evidence already in custody"
+      ]
+    },
+    "performance_clock": {
+      "duty": "Keep Frankie's native performance as temporal authority through the inherited core.",
+      "organs": [
+        "continuous Frankie lead-vocal waveform",
+        "accepted phrase and section correspondence"
+      ]
+    },
+    "pulse_witness": {
+      "duty": "Witness downbeats and bar boundaries for the donor band; it may not override Frankie's measured bar durations.",
+      "organs": [
+        "Beat This"
+      ]
+    },
+    "review": {
+      "duty": "Keep machine qualification separate from musical authority; only the owner can promote a child.",
+      "organs": [
+        "blind owner frontier"
+      ]
+    },
+    "score_and_render": {
+      "duty": "Account for every selected source and transform and reproduce each child twice to identical canonical PCM.",
+      "organs": [
+        "PerformanceScore",
+        "Reference Zero exact renderer"
+      ]
+    },
+    "taste_and_search": {
+      "duty": "Penalize unnecessary changes, retain strategy diversity, and preserve the incumbent rather than optimizing one metric.",
+      "organs": [
+        "gold-v6 owner preference",
+        "minimal-intervention TasteSpec",
+        "quality-diversity frontier"
+      ]
+    },
+    "time_transform": {
+      "duty": "Apply bounded bar-scale transforms to the band while leaving Frankie untransformed.",
+      "organs": [
+        "Rubber Band"
+      ]
+    },
+    "work_identity": {
+      "duty": "Maintain the accepted same-work cover relationship and prohibit generic cross-song alignment.",
+      "organs": [
+        "MusicBrainz work/cover relationship",
+        "Essentia cover-song similarity"
       ]
     }
   },

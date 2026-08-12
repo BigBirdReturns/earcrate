@@ -26,7 +26,7 @@ def _load_cli():
 def test_gold_v7_contract_is_sealed_and_binds_the_real_parent_review() -> None:
     cli = _load_cli()
     contract = cli.load_contract(CONTRACT)
-    assert contract["contract_sha256"] == "b53de69559415574e77ad2eb12e1952edf66b3de780d18faed5ab7ab84f3a0cd"
+    assert contract["contract_sha256"] == "858d39452319e90e054c5a4994f07f7ccfcd5d38f011a46ed6834e7a766f1048"
     assert contract["parent"]["owner_review_receipt_sha256"] == (
         "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3"
     )
@@ -156,6 +156,31 @@ def test_album_manifest_promotes_gold_v6_to_protected_incumbent() -> None:
         "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3"
     )
     assert evidence["gold_v7_contract_sha256"] == (
-        "b53de69559415574e77ad2eb12e1952edf66b3de780d18faed5ab7ab84f3a0cd"
+        "858d39452319e90e054c5a4994f07f7ccfcd5d38f011a46ed6834e7a766f1048"
     )
     assert evidence["recovery_open"] is False
+
+
+def test_gold_v7_assigns_existing_organs_to_explicit_duties() -> None:
+    contract = _load()
+    roles = contract["organ_roles"]
+    assert set(roles) == {
+        "work_identity",
+        "material_census",
+        "performance_clock",
+        "pulse_witness",
+        "event_map",
+        "time_transform",
+        "composition_validation",
+        "taste_and_search",
+        "score_and_render",
+        "review",
+    }
+    assert roles["pulse_witness"]["organs"] == ["Beat This"]
+    assert roles["event_map"]["organs"] == ["EarCrate onset baseline"]
+    assert roles["time_transform"]["organs"] == ["Rubber Band"]
+    assert "PlayerPiano obligation validation" in roles["composition_validation"]["organs"]
+    assert roles["score_and_render"]["organs"] == [
+        "PerformanceScore",
+        "Reference Zero exact renderer",
+    ]

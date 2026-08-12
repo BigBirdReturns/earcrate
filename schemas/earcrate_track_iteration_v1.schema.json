@@ -76,6 +76,28 @@
       ],
       "type": "object"
     },
+    "organ_roles": {
+      "additionalProperties": {
+        "required": [
+          "organs",
+          "duty"
+        ],
+        "type": "object"
+      },
+      "required": [
+        "work_identity",
+        "material_census",
+        "performance_clock",
+        "pulse_witness",
+        "event_map",
+        "time_transform",
+        "composition_validation",
+        "taste_and_search",
+        "score_and_render",
+        "review"
+      ],
+      "type": "object"
+    },
     "owner_frontier": {
       "required": [
         "incumbent",
@@ -144,6 +166,7 @@
     "locked_invariants",
     "children",
     "machine_admission",
+    "organ_roles",
     "owner_frontier",
     "estate_execution_order",
     "estate_return_contract",

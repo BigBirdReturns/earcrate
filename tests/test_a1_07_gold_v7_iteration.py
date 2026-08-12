@@ -140,3 +140,22 @@ def test_cli_command_surface_verifies_contract() -> None:
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
     assert payload["track_id"] == "A1-07"
+
+
+def test_album_manifest_promotes_gold_v6_to_protected_incumbent() -> None:
+    manifest_path = ROOT / "configs" / "album_one" / "manifest.v1.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    track = next(row for row in manifest["tracks"] if row["track_id"] == "A1-07")
+    evidence = track["private_evidence_commitments"]
+    assert track["status"]["evidence_state"] == (
+        "gold_v6_preferred_incumbent_gold_v7_active"
+    )
+    assert track["status"]["human_acceptance"] is False
+    assert evidence["protected_incumbent_id"] == "gold-v6"
+    assert evidence["gold_v6_owner_review_receipt_sha256"] == (
+        "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3"
+    )
+    assert evidence["gold_v7_contract_sha256"] == (
+        "b53de69559415574e77ad2eb12e1952edf66b3de780d18faed5ab7ab84f3a0cd"
+    )
+    assert evidence["recovery_open"] is False

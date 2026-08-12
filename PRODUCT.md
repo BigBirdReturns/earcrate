@@ -1,61 +1,140 @@
-# EarCrate — what it is
+# EarCrate: product authority
 
-> EarCrate is a local-first music system that turns a personal library into both a
-> polished listening environment and an editable generative studio. Automatic
-> arrangements are first-class projects, and every machine decision can be
-> inspected, overridden, saved, and reproduced.
+EarCrate's immediate product is **Album One**. The repository is successful when
+it produces seven owner-accepted, exactly reproducible musical masters and a
+coherent album sequence. The long-term local-first listener, creator, live,
+provider, and library systems remain part of the product, but their present value
+is measured by whether they help complete those seven works.
 
-One private catalog supports two coupled experiences:
+Current product truth:
 
-- **Listener** — polished library management, discovery, queueing, playback, radio,
-  and continuity.
-- **Creator** — open any generated set as a non-destructive **project** and change
-  the musical decisions: audition, replace, trim, move, mute/solo, lock, re-stem,
-  re-transition, undo/redo, save, reopen, re-render.
+- Album masters accepted: **0/7**
+- System references completed: **0/7**
+- Active proving track: **A1-07, Beggin' × Beggin'**
+- Completed-reference claims remain closed until owner acceptance and withheld
+  recovery both pass.
 
-The catalog, analyzer, stem service, retriever, composer, renderer, and Workbench
-are the actors connecting those two experiences. Deterministic receipts,
-reversible operations, and human-over-machine precedence are means, not the end.
-**Future work is judged by whether it advances that complete loop** — not by gate
-count or by whether a method got called.
+`ALBUM_ONE.md` and `configs/album_one/manifest.v1.json` name the commissioned
+works, their evidence states, and their next musical gates. This file defines the
+product relationship between that program and the reusable system.
 
-This file is the architecture-of-record for *intent*. The engine (`AGENTS.md`,
-`EARCRATE_REBUILD_PLAN_v3.md`) is the architecture-of-record for *safety*. Where a
-feature claim and this document disagree, this document names the target.
+## The product loop
 
----
+One private catalog and one governed execution estate support a coupled loop:
+
+1. **Understand the work.** Establish recording identity, work identity, source
+   roles, section correspondence, gesture or performance authority, and the
+   track-specific musical question.
+2. **Assemble evidence.** Run type-correct MIR, score, MIDI, separation,
+   transcription, retrieval, generative, DSP, and human observations without
+   granting any provider canonical authority.
+3. **Compose a track.** A conductor chooses sources, ownership, timing,
+   interaction, restraint, transformations, transitions, and form against a
+   declared baseline.
+4. **Render exactly.** A portable score accounts for every selected clip,
+   transform, gain, fade, and master decision; the renderer executes rather than
+   improvises.
+5. **Listen and decide.** Blind or controlled owner review accepts, revises,
+   rejects, ties, or abstains. Machine sanity never substitutes for taste.
+6. **Learn narrowly.** Accepted and rejected evidence updates the scoped track or
+   mechanism without rewriting unrelated history.
+7. **Assemble the album.** Accepted masters are sequenced, balanced, and reviewed
+   as one record. Rights remain a separate gate.
+
+The catalog, analyzer, provider floor, factory, score readers, MIDI system,
+retriever, conductor, renderer, Workbench, and review surfaces are the actors
+connecting this loop. Their receipts and safety rules are necessary means. They
+are not the musical result.
+
+## Two completion ledgers
+
+### Album-master ledger
+
+A track is an album master when the owner accepts the music, all selected material
+and interventions are accounted for, and the accepted output is exactly
+reproducible. Human authorship, machine assistance, and mixed workflows are
+allowed. The ledger records what music actually exists.
+
+### System-reference ledger
+
+EarCrate completes a reference only after an accepted master exists, the gold
+decisions are withheld, and the system recovers a candidate that blindly beats
+the naive control. This ledger measures autonomous recovery. It may trail the
+album-master ledger and may never be silently conflated with it.
+
+Rights and publication are neither ledger. They require separate decisions.
 
 ## Honest capability matrix
 
-Statuses are **evidentiary**, not aspirational. A capability is only "functional"
-if a user-visible path produces the result end to end. "Call site present" means
-the wiring exists but the runtime is unproven — it is NOT "done".
+Statuses are evidentiary. A capability is functional only when a user-visible
+path produces an accountable result on real material.
 
-| Capability | Status | Evidence / gap |
-|---|---|---|
-| Scan / analyze / extract / ear-crate pipeline | functional (gated) | drives real audio; graceful on corrupt/silence/empty |
-| Deterministic segment identity + judgment survival | functional (gated) | `test_force_rebuild_preserves_judgments` |
-| L0 sound identity (`pcm_sha`) deposited by scan | functional (gated) | `test_pcm_identity_feeds_stems` |
-| Loop-megamix render (varispeed, multi-deck, quality gates) | functional | real WAV out; **not verified by ear on a real library** |
-| Per-loop review + quota (human beats machine) | functional (gated) | `test_quota_preserves_human_loop_approval` |
-| Reversible mutations (signature-gated) | functional (gated) | `test_destructive_mutations_require_signature` |
-| Retrieval seam (`CandidateRetriever`, full-scan default) | functional (behavior-preserving) | call routes through the seam; not yet scalable (no query/limit) |
-| **Stem separation (vocal-on-instrumental)** | **infrastructure only — OFF/unverified** | call site in render; `_run_demucs` is a stub; no provider selection; provider/renderer use different stores; no GPU receipt |
-| LATTICE UI (7 modes, transport, skins) | functional | drives live data, 0 console errors headless |
-| Editable Workbench (project + command model) | **not started** | Workbench proposes/visualizes/saves/loads/renders; rail blocks are display, not editable clips |
-| Listener polish (durable queue/playhead, fast search, gapless, install/updater) | **not started** | prototype `.cmd` installer; browser `<audio>` playback |
-| Real-time preview/transport engine | **not started** | offline WAV render + `<audio>` only |
-| Perceptual validation (A/B listening ledger) | **not started** | no musical-quality evidence yet |
-| Autonomous engine ↔ edits reciprocity | **partial** | locks/vetoes/favorites exist; listener/creator behavior not yet fed back |
-| §5.3 monolith table teardown | not started (intentionally last) | invariants gated; extraction should follow the project model, not precede it |
+| Capability | Current status | Album relevance |
+| --- | --- | --- |
+| Exact source custody, private bindings, and source-free circulation | Functional | Required by every track |
+| Deterministic score lowering and two-render identity | Functional | Reproduces declared decisions but does not make them musical |
+| Homelab CPU/GPU scheduling and cross-node receipts | Functional | Runs album organs without making the Estate invent campaigns |
+| Provider catalog, probe, and lifecycle states | Functional infrastructure | Supplies low-authority evidence and material |
+| Score, MIDI, MixScore, and player-piano authority | Functional in bounded paths | Central to Children and Flim |
+| Stem separation and bounded transforms | Machine-proven in selected campaigns | Useful organs; not a conductor |
+| Blind review, reject-all, tie, and scoped review patches | Functional | Preserves owner authority |
+| Work identity and section correspondence | Partial | Essential to Beggin and future same-work tracks |
+| Track-specific conductor and arrangement reasoning | Incomplete | Primary musical bottleneck |
+| Accepted Album One masters | **0/7** | Product outcome not yet achieved |
+| Withheld-answer system references | **0/7** | Autonomy outcome not yet achieved |
+| Album sequencing and mastering | Not started | Begins after accepted masters exist |
+| Editable Workbench and consumer listener polish | Long-term target | Must eventually expose and preserve accepted projects |
 
----
+## Repository acceptance rule
 
-## Rules that hold across the whole product
-1. **No claim without a receipt.** "Functional" requires a user-visible end-to-end
-   result, not a green gate over a fake.
-2. **Human decision beats machine convenience** (locks, vetoes, favorites,
-   signatures), and that precedence is gated.
-3. **Every generated set is a reproducible, editable project**, never a dead file.
-4. **Local-first, private.** Source audio never leaves the machine; network stays
-   opt-in behind a seam.
+A change advances the product only when it declares:
+
+- the Album One track or repeated album-wide bottleneck it serves;
+- the exact musical failure being addressed;
+- the incumbent or naive control;
+- the owner audition that changes because the work exists;
+- any private execution still required.
+
+A provider implementation without this attachment is infrastructure. A
+successful generation without owner acceptance is candidate material. A
+deterministic rejected score is a diagnostic. A green gate count is evidence
+about software, not evidence that a track works.
+
+## The active proving path
+
+A1-07 Beggin is the active proving track. It has already exposed and retained the
+project's central lessons:
+
+- same-work identity can dominate alignment mathematics;
+- section correspondence must precede arrangement decisions;
+- material census must reject silent and ghost stems;
+- minimal intervention can outperform elaborate event confetti;
+- a band and singer need shared performance authority rather than synchronized
+  file playback;
+- Beat This, EarCrate onset observations, and Rubber Band won bounded owner
+  auditions, but organ victories do not compose a track;
+- generative systems are useful only as bounded material suppliers or alternate
+  mechanisms;
+- exact reproduction of a rejected arrangement is valuable evidence, but not
+  progress toward an accepted master.
+
+Reference Zero therefore requires an accepted gold performance before automatic
+recovery can claim anything. The factory and generative floor serve that
+requirement rather than replacing it.
+
+## Long-term product
+
+After repeated Album One mechanisms succeed, EarCrate generalizes them into the
+complete local listener and creator system:
+
+- polished library management, discovery, queueing, playback, and continuity;
+- generated sets and songs as editable, versioned projects;
+- audition, replace, trim, move, mute, solo, lock, re-stem, re-transition,
+  undo, redo, save, reopen, and re-render;
+- live phrase planning and performance over sealed private material;
+- durable personal taste and review history with human precedence;
+- local-first privacy and explicit network seams.
+
+Future work is judged first by Album One and then by whether it strengthens that
+complete loop. The controlling product question is whether EarCrate is producing
+better accepted music and preserving the decisions that made it better.

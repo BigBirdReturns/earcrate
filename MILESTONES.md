@@ -1,88 +1,182 @@
-# EarCrate — order of work
+# EarCrate: Album One order of work
 
-The control question for any change: **can it prove, on the real machine and the
-real library, that EarCrate produces better audio, a smoother listening
-experience, or meaningful creative control over a musical decision?** Gate count
-and "a method was called" do not answer that question.
+The control question for every milestone is: **which Album One track becomes more
+likely to reach an owner-accepted master, and what listening control proves that
+change?**
 
-§5.3 (the generic monolith table teardown) is **LAST**, not next: a table
-teardown before the project model exists risks clean modules around the wrong
-abstraction.
+The honest starting point is **0/7 accepted album masters** and **0/7 completed
+system references**. Beggin is the active proving track because it has the deepest
+retained evidence and the clearest musical failure.
 
----
+## 0. Make Album One the repository authority
 
-## 1. Make the current vertical path truthful  ← immediate, blocks PR #25 merge
-PR #25 is an architecture-and-safety increment, not a completed stem feature. Its
-claims must become accurate before it merges. Either **complete** the stem path or
-keep it **split-and-labelled as infrastructure with the feature OFF** (done in
-v0.8.25).
+This milestone is the front-door refocus.
 
-**Completion criteria (the "stem feature works" definition of done):**
-- A real `_run_demucs` invocation (Demucs on torch+CUDA), guarded.
-- Optional `torch`/`demucs` dependency + a documented install path.
-- Explicit provider selection through workspace config (choose `demucs`), not the
-  hard-coded `noop` default.
-- A user-visible **capability probe** (can torch+demucs+CUDA load?) surfaced in
-  Setup/doctor — honest on a no-GPU box.
-- **One workspace-scoped persistent `ArtifactStore`** injected into BOTH the
-  provider and the renderer (kill the two-temp-dirs bug).
-- A **cache lookup before separation** (don't re-run Demucs for a known stem).
-- **Surfaced** provider/artifact errors (not a silent `except: return None`).
-- Keep the existing no-op byte-identity test.
+Completion criteria:
 
-**The 4060 receipt (the only proof that counts — must be produced on the GPU box):**
-1. clean install → `pip install torch demucs` (or the documented extra)
-2. configure the workspace to select the `demucs` provider
-3. separate ONE real track → a `vocals` artifact persists in the workspace store
-4. render a set → a vocal layer reports `stem_source="vocals"` (not `"mix"`)
-5. render again → the second render reuses the cache and does NOT run Demucs
-6. paste the receipt (paths + timings + the two render reports) into the PR.
+- `ALBUM_ONE.md` names the seven commissioned tracks and their current boundaries.
+- `configs/album_one/manifest.v1.json` is sealed, append-only, and executable-test
+  protected.
+- `README.md`, `AGENTS.md`, `PRODUCT.md`, `MILESTONES.md`, and
+  `README_FIRST.txt` put Album One before infrastructure.
+- the pull-request template requires `album_scope`, `musical_gap`,
+  `control_or_baseline`, `owner_audition_effect`, and
+  `private_execution_required`;
+- answer-key corpora remain calibration and do not inflate the album count;
+- PRs #70, #71, and #72 are explicitly classified as album-wide factory,
+  A1-07 Reference Zero, and low-authority A1-07 material providers.
 
-**Also in this milestone — real-library defects already observed on `main` (these
-outrank a refactor because they came from the actual library, not a fixture):**
-- AcoustID identify produced ~0 useful identities out of 585 attempts — investigate
-  the request/parse/rate-limit path.
-- Stale DB state between identity application and reorganization.
-- Workspace-pointer mismatch between package (`python -m earcrate`) and CLI
-  invocation.
+This milestone does not claim that any music was completed.
 
-## 2. Encode the product contract
-`PRODUCT.md` (done, v0.8.25) + a versioned capability matrix with **user-visible
-acceptance tests** per capability. Never label a capability "wired" when the
-evidence only proves a method was called.
+## 1. Complete the Beggin gold performance
 
-## 3. The editable-project slice (first real unification of listener + creator)
-Make Workbench genuinely editable. A generated arrangement opens as a **versioned
-project**; the user can audition, replace, trim, move, mute/solo, lock; adjust
-gain/fades; choose a stem; change a transition; undo/redo; save; reopen; re-render.
+Do not launch another broad provider sweep. The next acceptable result is one
+owner-accepted Beggin performance authored from the full retained evidence.
 
-Project schema (composer emits it, Workbench edits it, renderer consumes it
-without inventing decisions): rails/tracks, source refs, clips, stem selection,
-start/end, loop bounds, transform params, gain/pan, fades, transition data,
-mute/solo, locks, automation envelopes, append-only command history.
+Required inputs:
 
-**Acceptance (on a real library):** pick a resident → generate a 2-min set → open
-in Workbench → replace/trim a vocal → lower one layer → change a transition →
-undo/redo → save → restart EarCrate → reopen → produce a *different verified*
-render.
+- exact private CORE and ATTEMPTS custody;
+- same-work identity and section-correspondence map;
+- material census that distinguishes useful stems from silence and separation
+  ghosts;
+- accepted pulse and transform evidence, including Beat This, EarCrate onset
+  observations, and Rubber Band;
+- Reference Zero score and exact renderer;
+- a serious naive co-play control;
+- the owner verdict ledger, including reject-all and tie.
 
-## 4. Perceptual validation
-Library cleanup has real evidence (~5,400 files, 336+ hours). Musical OUTPUT does
-not. Keep a private local test crate + an A/B listening ledger for vocal bleed,
-beat alignment, harmonic clashes, low-end masking, transition continuity,
-loudness, repetition, recognizability, overall preference. Automated gates catch
-regressions; human listening decides if it's getting musically better.
+Required musical behavior:
 
-## 5. Consumer polish as a system property
-Signed installer + updater (retire the `.cmd`); progressive scanning; durable
-queue/playhead/volume/project/job state across restarts; artwork + robust metadata
-review; fast global search; keyboard nav + accessibility; every background job has
-progress/cancel/recover/comprehensible-failure. (The single-file build can stay a
-distribution target but should stop dictating the source architecture; a real UI
-state/accessibility surface will outgrow one inlined HTML blob.)
+- Frankie and the modern band share one performance timeline;
+- phrase and section authority are explicit;
+- the band responds, supports, releases, and pays off rather than merely playing
+  underneath;
+- transformations are minimized and justified;
+- the piece has enough duration and form to establish, develop, and resolve;
+- every intervention has a musical function and can be removed in an ablation.
 
-## 6. Decompose the monolith along product boundaries (§5.3, LAST)
-Extract catalog/library, analysis/derived artifacts, retrieval, composition,
-projects+command history, rendering, background jobs, and provider runtime — as
-the editable-project work requires them, so the modules form around the real
-abstractions instead of a generic table split.
+Completion criteria:
+
+1. the owner accepts the gold performance;
+2. its portable score accounts for every selected source and transform;
+3. two independent renders have identical canonical PCM;
+4. the owner-accepted master is recorded as A1-07 album-master acceptance;
+5. automatic recovery remains explicitly unproven.
+
+## 2. Run the Beggin withheld-answer recovery challenge
+
+Only the accepted gold from Milestone 1 may define the hidden answer key.
+
+Completion criteria:
+
+- gold clip and conductor decisions remain private;
+- the incumbent naive control is rendered through the same renderer;
+- the organ factory and generative floor receive only the allowed evidence;
+- candidate selection preserves strategy diversity and audio deduplication;
+- the owner receives a small blind frontier;
+- a candidate must beat the naive control, not merely be least bad;
+- control win, tie, reject-all, and abstention terminate the lineage honestly;
+- a candidate win records A1-07 system-reference completion without granting
+  release rights.
+
+## 3. Return to A1-01 Pretty Lights
+
+Pretty Lights has the strongest earlier release-candidate and reproducibility
+lineage. The work should resume from the retained proof pack rather than from a
+new transcription or new MIDI guess.
+
+Completion criteria:
+
+- recover the strongest retained candidate, source bindings, phrase contract,
+  time map, signal evaluation, and previous owner notes;
+- compare against the supplied Pretty Lights reference on phrase identity,
+  recurrence, transitions, source ownership, production logic, and overall
+  legibility;
+- obtain an owner verdict on an album-length candidate;
+- seal an accepted master and then, separately, run the withheld recovery gate.
+
+## 4. Complete the cross-modal references
+
+### A1-02 Children
+
+Bind the exact reference recording and require the score, reconstructed MIDI,
+MixScore, player piano, private racks, and audio observations to converge on one
+performance. The audio may not be treated as a loose timbral rendering of the
+score.
+
+### A1-03 Flim
+
+Bind the exact The Bad Plus performance and require the community-symbolic
+witness, blind audio, ensemble roles, transport, and adjacent-move evidence to
+converge. The target is the performed arrangement, not merely the Aphex Twin
+composition.
+
+For both tracks, accepted gold comes before automatic recovery.
+
+## 5. Complete the cross-song transplants
+
+### A1-04 Animal × Toxic
+
+Bind exact editions and compare functional percussion replacement, role-based
+hybrid, symbolic drum re-performance, harmonic handoff, reverse transplant, and
+balanced-host control. The winner must increase physical scale while preserving
+Toxic's negative space and identity.
+
+### A1-05 My Body Isn't Ready × Yellow
+
+Bind exact editions and compare neutral alignment, chorus-width transplant, drum
+lift, hybrid guitar ancestry, source-audio surgical exchange, reverse
+modernization, and generic guitar-pop control. The winner must acquire Yellow-like
+inevitability without becoming a Coldplay imitation.
+
+The factory may schedule organs only after the exact source, hypothesis, and
+control contracts exist.
+
+## 6. Materialize the Stateside gesture track
+
+A1-06 currently exists as a perceptual commission rather than a repository
+specimen.
+
+Completion criteria:
+
+- isolate the exact ascending gesture in the private Stateside recording;
+- describe contour, rhythm, articulation, ornamentation, harmony, timbre, and
+  production context without relying on a genre label;
+- curate a rights-eligible Punjabi or bhangra comparison corpus and negative
+  controls;
+- build a held-out retrieval and transformation audition;
+- require the owner to identify which mechanism preserves the association;
+- turn the accepted mechanism into an album-length arrangement contract.
+
+## 7. Assemble Album One
+
+This milestone begins only when accepted masters exist.
+
+Completion criteria:
+
+- seven owner-accepted, exactly reproducible masters;
+- final sequence locked independently of commission order;
+- album-level transitions, pacing, loudness, spectral continuity, and silence
+  accepted;
+- track titles and credits finalized;
+- private source and model custody retained;
+- rights position recorded separately for every track;
+- album-master count and system-reference count reported side by side;
+- no rejected diagnostic is promoted to fill a sequencing hole.
+
+## 8. Generalize repeated successes into the product
+
+Only mechanisms that repeatedly helped Album One should become the generalized
+floor. Likely candidates include work identity, section correspondence, material
+census, track-specific conductor contracts, exact PerformanceScore execution,
+blind control review, cross-modal convergence, gesture retrieval, and bounded
+provider substitution.
+
+After that evidence exists, continue the editable Workbench, listener polish,
+live runtime, install and update path, accessibility, and decomposition work.
+Generic monolith teardown remains last; modules should form around proven album
+abstractions rather than around speculative tables.
+
+The milestone failure mode to avoid is a green infrastructure stack with no
+accepted music. Album One remains the front of the repository until that condition
+changes.

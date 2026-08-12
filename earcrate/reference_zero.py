@@ -545,13 +545,21 @@ def render_performance_score(
         )
 
     master = dict(score.get("master") or {})
-    master_chain = [f"amix=inputs={len(labels)}:duration=longest:normalize=0", f"atrim=end_sample={duration_samples}", "asetpts=PTS-STARTPTS"]
+    master_chain = [
+        f"amix=inputs={len(labels)}:duration=longest:normalize=0",
+        f"apad=whole_len={duration_samples}",
+        f"atrim=end_sample={duration_samples}",
+        "asetpts=PTS-STARTPTS",
+    ]
     master_gain = float(master.get("gain_db", 0.0))
     if abs(master_gain) > 1e-12:
         master_chain.append(f"volume={_linear_gain(master_gain):.12g}")
     peak_limit = master.get("peak_limit_dbfs")
     if peak_limit not in {None, ""}:
-        master_chain.append(f"alimiter=limit={_linear_gain(float(peak_limit)):.12g}")
+        # FFmpeg's alimiter enables automatic level compensation by default,
+        # which lifts the limited signal back toward 0 dBFS and defeats the
+        # score's declared ceiling. Preserve the requested absolute ceiling.
+        master_chain.append(f"alimiter=limit={_linear_gain(float(peak_limit)):.12g}:level=false")
     filters.append(f"{''.join(labels)}{','.join(master_chain)}[out]")
     argv.extend(["-filter_complex", ";".join(filters), "-map", "[out]", "-ar", str(sample_rate), "-ac", str(channels), "-map_metadata", "-1", "-fflags", "+bitexact", "-flags:a", "+bitexact"])
     codec = str(master.get("codec") or "pcm_s24le")

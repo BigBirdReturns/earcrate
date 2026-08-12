@@ -169,6 +169,30 @@ def test_score_is_portable_and_render_is_exact(tmp_path: Path) -> None:
     assert reproduction["canonical_pcm_sha256"]
 
 
+def test_renderer_honors_timeline_length_and_absolute_peak_ceiling(tmp_path: Path) -> None:
+    source_a, source_b, score, _ = _fixture(tmp_path)
+    revised = json.loads(json.dumps(score))
+    revised.pop("score_sha256")
+    for track in revised["tracks"]:
+        clip = track["clips"][0]
+        clip["source_end_sample"] = 24000
+        clip["gain_db"] = 12.0
+        clip["fade_in_samples"] = 0
+        clip["fade_out_samples"] = 0
+    revised["master"] = {"gain_db": 0.0, "peak_limit_dbfs": -6.0, "codec": "pcm_s16le"}
+    revised = seal(revised)
+    bindings = create_source_bindings(revised, paths={"a": source_a, "b": source_b})
+
+    output = tmp_path / "bounded.wav"
+    render_performance_score(revised, bindings, output_path=output)
+    with wave.open(str(output), "rb") as handle:
+        assert handle.getnframes() == 48000
+        raw = handle.readframes(handle.getnframes())
+
+    peak = max(abs(value[0]) for value in struct.iter_unpack("<h", raw))
+    assert peak <= round(32767 * (10.0 ** (-6.0 / 20.0))) + 2
+
+
 def test_source_mutation_fails_closed(tmp_path: Path) -> None:
     source_a, _, score, bindings = _fixture(tmp_path)
     source_a.write_bytes(source_a.read_bytes() + b"mutation")

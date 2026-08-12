@@ -4,7 +4,8 @@ import argparse
 import json
 import sys
 from collections.abc import Mapping
-from typing import Sequence
+from pathlib import Path
+from typing import Any, Sequence
 
 from .catalog import (
     build_generation_request,
@@ -20,6 +21,14 @@ from .execution import (
     execute_generation_request,
     generated_material_from_receipt,
 )
+
+
+def _load_json_argument(value: str) -> Any:
+    """Load an inline JSON value or a JSON file named by a CLI argument."""
+    stripped = value.lstrip()
+    if stripped.startswith(("{", "[", '"')):
+        return json.loads(value)
+    return json.loads(Path(value).read_text(encoding="utf-8-sig"))
 
 
 def cli_main(argv: Sequence[str] | None = None) -> int:
@@ -115,8 +124,8 @@ def cli_main(argv: Sequence[str] | None = None) -> int:
                 model_revision=args.model_revision,
                 model_assets=assets,
                 seed=args.seed,
-                prompt=json.loads(args.prompt_json),
-                conditioning=json.loads(args.conditioning_json),
+                prompt=_load_json_argument(args.prompt_json),
+                conditioning=_load_json_argument(args.conditioning_json),
             )
             write_json(args.output, request_value, exclusive=True)
             print(json.dumps({"ok": True, "request_sha256": request_value["request_sha256"]}, indent=2))

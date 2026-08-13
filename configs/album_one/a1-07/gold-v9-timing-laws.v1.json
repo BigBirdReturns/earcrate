@@ -12,7 +12,7 @@
     "review_peak_ceiling_dbfs": -2.0,
     "review_target_lufs": -14.0
   },
-  "contract_sha256": "517901e07ee18283f7105a17750a633bf25f63344ab4a665083dab348766c05b",
+  "contract_sha256": "2c4a2653689ca048243f2aaba6a81211bc0e998cb129fa0cf8e0efb38b714704",
   "created_at": "2026-08-13T17:35:00Z",
   "descent_id": "a1-07-gold-v9-timing-laws",
   "kind": "earcrate_track_descent_contract",
@@ -29,7 +29,7 @@
     "frankie_clip_rows_must_match_parent_exactly": true,
     "native_pocket_must_use_only_tempo_scale_1": true,
     "no_owner_frontier_if_fewer_than_two_candidates_qualify": true,
-    "phrase_reset_must_use_only_tempo_scale_1": true,
+    "phrase_reset_must_use_no_more_than_one_tempo_scale_per_four_slot_phrase": true,
     "quiet_intro_and_tail_must_match_positive_arc_exactly_outside_core_joins": true,
     "single_speed_must_use_exactly_one_band_tempo_scale": true
   },
@@ -84,10 +84,10 @@
     {
       "candidate_id": "gold-v9-phrase-reset",
       "label": "phrase-reset",
-      "mechanism": "run donor-band clips at native tempo within four-slot phrases and reset phase only at phrase boundaries using the original conducted target anchors",
-      "phase_rule": "hard musical re-cue only every four donor slots",
-      "tempo_rule": "native donor tempo inside each phrase",
-      "why": "tests DJ-style nudging: preserve pocket, hide synchronization at phrase boundaries instead of dragging every bar"
+      "mechanism": "use one constant donor-band tempo scale per four-slot phrase, chosen to fit that phrase's original conducted span, and reset phase only at phrase boundaries",
+      "phase_rule": "re-cue only at four-slot phrase boundaries",
+      "tempo_rule": "one constant tempo scale per four-slot phrase",
+      "why": "tests DJ-style nudging: preserve a stable pocket inside each phrase and hide synchronization changes at phrase boundaries instead of dragging every bar"
     }
   ],
   "track_id": "A1-07"

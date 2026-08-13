@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from array import array
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -8,6 +9,7 @@ from typing import Any, Mapping, Sequence
 from .common import (
     AUDIO_SUFFIXES,
     EXPECTED,
+    HEX64,
     DescentError,
     bytes_to_samples,
     canonical_pcm_sha256,
@@ -163,12 +165,53 @@ def load_machine(
     }
 
 
+def owner_review_identity(path: Path) -> str:
+    """Return the receipt's semantic self-seal, independent of JSON formatting.
+
+    Gold-v6 used the older Reference Zero review ledger. Its authority identity is
+    the top-level self-seal inside the JSON object, not the hash of pretty-printed
+    file bytes. Accept both canonical encodings used by the historical writers.
+    Unsealed fixture objects retain raw-file identity for the synthetic gate only.
+    """
+
+    receipt = load_json(path)
+    matches: list[tuple[str, str]] = []
+    saw_sha = False
+    for field, raw_claimed in receipt.items():
+        claimed = str(raw_claimed or "").lower()
+        if not HEX64.fullmatch(claimed):
+            continue
+        saw_sha = True
+        body = dict(receipt)
+        body.pop(field, None)
+        canonical = json.dumps(
+            body,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        candidates = {
+            hashlib.sha256(canonical).hexdigest(),
+            hashlib.sha256(canonical + b"\n").hexdigest(),
+        }
+        if claimed in candidates:
+            matches.append((field, claimed))
+    if len(matches) > 1:
+        fields = ", ".join(field for field, _ in matches)
+        raise DescentError(f"ambiguous gold-v6 owner-review semantic seals: {fields}")
+    if matches:
+        return matches[0][1]
+    if saw_sha:
+        raise DescentError("gold-v6 owner-review semantic seal mismatch")
+    return sha256_file(path)
+
+
 def verify_inputs(v7_workspace: Path, *, ffmpeg: str) -> dict[str, Any]:
     root = v7_workspace.expanduser().absolute()
     if not root.is_dir():
         raise DescentError(f"v7 workspace missing: {root}")
     owner_receipt = root / "incumbent" / "owner-review.receipt.json"
-    if sha256_file(owner_receipt) != EXPECTED["owner_review"]:
+    if owner_review_identity(owner_receipt) != EXPECTED["owner_review"]:
         raise DescentError("wrong gold-v6 owner-review receipt")
     parent_score = root / "incumbent" / "performance-score.json"
     parent_score_value = load_json(parent_score)

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import secrets
 import subprocess
 import sys
 from typing import Any, Iterable, Mapping, Sequence
@@ -48,6 +49,21 @@ def canonical_sha256(payload: Mapping[str, Any], field: str) -> str:
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def legacy_review_sha256(payload: Mapping[str, Any], field: str) -> str:
+    body = deepcopy(dict(payload))
+    body.pop(field, None)
+    encoded = (
+        json.dumps(
+            body,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -112,7 +128,13 @@ def verify_parent(contract: Mapping[str, Any], receipt: Path) -> dict[str, Any]:
     if not receipt.is_file() or receipt.is_symlink():
         raise ContractError(f"regular owner receipt required: {receipt}")
     expected = str(contract["parent"]["owner_review_receipt_sha256"])
-    observed = rz.sha256_file(receipt)
+    payload = load_json(receipt)
+    declared = require_hex64(payload.get("review_sha256"), "review_sha256")
+    observed = legacy_review_sha256(payload, "review_sha256")
+    if declared != observed:
+        raise ContractError(
+            f"parent owner receipt seal mismatch: declared {declared}, observed {observed}"
+        )
     if observed != expected:
         raise ContractError(
             f"wrong parent owner receipt: expected {expected}, observed {observed}"
@@ -122,6 +144,7 @@ def verify_parent(contract: Mapping[str, Any], receipt: Path) -> dict[str, Any]:
         "kind": "a1_07_gold_v7_parent_verification",
         "contract_sha256": contract["contract_sha256"],
         "owner_review_receipt_sha256": observed,
+        "owner_review_receipt_file_sha256": rz.sha256_file(receipt),
     }
 
 
@@ -207,6 +230,20 @@ def scaffold(
     incumbent = root / "incumbent"
     incumbent.mkdir()
     shutil.copyfile(parent_review_receipt, incumbent / "owner-review.receipt.json")
+    owner_receipt = load_json(parent_review_receipt)
+    authority_source = parent_review_receipt.parent / "assignment-authority.json"
+    if not authority_source.is_file() or authority_source.is_symlink():
+        raise ContractError(f"private assignment authority required: {authority_source}")
+    authority = load_json(authority_source)
+    authority_declared = require_hex64(
+        authority.get("authority_sha256"), "authority_sha256"
+    )
+    authority_observed = legacy_review_sha256(authority, "authority_sha256")
+    if authority_declared != authority_observed:
+        raise ContractError("private assignment authority seal mismatch")
+    if owner_receipt.get("private_authority_sha256") != authority_observed:
+        raise ContractError("owner receipt does not bind the private assignment authority")
+    shutil.copyfile(authority_source, incumbent / "assignment-authority.private.json")
     for child in contract["children"]:
         child_root = root / str(child["candidate_id"])
         (child_root / "authoring").mkdir(parents=True)
@@ -264,7 +301,16 @@ def bind_incumbent(
     )
     container_sha = rz.sha256_file(audio_path)
     owner_receipt = load_json(owner_receipt_path)
-    commitments = _owner_commitments(owner_receipt)
+    authority_path = incumbent / "assignment-authority.private.json"
+    if not authority_path.is_file():
+        raise ContractError("private assignment authority was not frozen")
+    private_authority = load_json(authority_path)
+    authority_sha = legacy_review_sha256(private_authority, "authority_sha256")
+    if private_authority.get("authority_sha256") != authority_sha:
+        raise ContractError("frozen private assignment authority seal mismatch")
+    if owner_receipt.get("private_authority_sha256") != authority_sha:
+        raise ContractError("owner receipt and frozen private authority disagree")
+    commitments = _owner_commitments(owner_receipt) | _owner_commitments(private_authority)
     if score_sha not in commitments:
         raise ContractError("owner receipt does not commit the proposed gold-v6 score")
     if pcm_sha not in commitments and container_sha not in commitments:
@@ -299,7 +345,7 @@ def bind_incumbent(
 
 def _is_frankie_track(track: Mapping[str, Any], sources: Mapping[str, Mapping[str, Any]]) -> bool:
     header = " ".join(
-        str(track.get(key) or "") for key in ("track_id", "role", "ownership")
+        str(track.get(key) or "") for key in ("track_id", "role")
     ).lower()
     if "frankie" in header or "lead_vocal" in header or "lead-vocal" in header:
         return True
@@ -334,15 +380,6 @@ def derive_production(
             vocal_tracks.append(str(track["track_id"]))
             track["processing"] = [
                 {"op": "highpass", "frequency_hz": 70.0, "poles": 2},
-                {
-                    "op": "compressor",
-                    "threshold_db": -18.0,
-                    "ratio": 1.3,
-                    "attack_ms": 15.0,
-                    "release_ms": 120.0,
-                    "makeup_db": 0.0,
-                    "knee": 2.0,
-                },
             ]
         else:
             band_tracks.append(str(track["track_id"]))
@@ -354,15 +391,6 @@ def derive_production(
                     "width_q": 0.8,
                     "gain_db": -1.5,
                 },
-                {
-                    "op": "compressor",
-                    "threshold_db": -10.0,
-                    "ratio": 1.5,
-                    "attack_ms": 12.0,
-                    "release_ms": 160.0,
-                    "makeup_db": 0.0,
-                    "knee": 2.0,
-                },
             ]
     if not vocal_tracks or not band_tracks:
         raise ContractError("production child requires Frankie and donor-band tracks")
@@ -370,19 +398,9 @@ def derive_production(
     master = dict(child.get("master") or {})
     if master.get("processing"):
         raise ContractError("parent already has master processing")
-    master["processing"] = [
-        {
-            "op": "compressor",
-            "threshold_db": -8.0,
-            "ratio": 1.2,
-            "attack_ms": 20.0,
-            "release_ms": 200.0,
-            "makeup_db": 0.0,
-            "knee": 2.0,
-        }
-    ]
-    if master.get("peak_limit_dbfs") in {None, ""}:
-        master["peak_limit_dbfs"] = -2.0
+    master["processing"] = []
+    master["gain_db"] = float(master.get("gain_db", 0.0)) - 0.5
+    master["peak_limit_dbfs"] = -2.0
     child["master"] = master
     child["score_id"] = f"{child.get('score_id', 'gold-v6')}-gold-v7-production"
     child["title"] = f"{child.get('title', 'A1-07')} gold-v7 production"
@@ -425,6 +443,406 @@ def derive_production(
         "kind": analysis["kind"],
         "score_sha256": child["score_sha256"],
         "bindings_sha256": child_bindings["bindings_sha256"],
+        "output_dir": str(root),
+    }
+
+
+def _source_from_audio(
+    path: Path,
+    *,
+    source_id: str,
+    role: str,
+    sample_rate: int,
+    channels: int,
+    ffmpeg: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    artifact = path.expanduser().absolute()
+    if not artifact.is_file() or artifact.is_symlink():
+        raise ContractError(f"regular audio source required: {artifact}")
+    container = rz.sha256_file(artifact)
+    pcm = rz.canonical_pcm_sha256(
+        artifact,
+        sample_rate=sample_rate,
+        channels=channels,
+        ffmpeg=ffmpeg,
+    )
+    source = {
+        "source_id": source_id,
+        "role": role,
+        "bytes": artifact.stat().st_size,
+        "container_sha256": container,
+        "canonical_pcm_sha256": pcm,
+    }
+    binding = {
+        "source_id": source_id,
+        "artifact_path": str(artifact),
+        "bytes": artifact.stat().st_size,
+        "container_sha256": container,
+        "canonical_pcm_sha256": pcm,
+    }
+    return source, binding
+
+
+def _decision_history(clips: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    history = []
+    for index, clip in enumerate(clips, start=1):
+        encoded = json.dumps(
+            dict(clip), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        history.append({
+            "sequence": index,
+            "command_id": f"gold-v7-author-{index:04d}",
+            "actor": "local-estate-conductor",
+            "operation": "place_clip",
+            "target": clip["clip_id"],
+            "parameters_sha256": hashlib.sha256(encoded).hexdigest(),
+        })
+    return history
+
+
+def _write_score_and_bindings(
+    output_dir: Path,
+    score: Mapping[str, Any],
+    binding_rows: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any], Path]:
+    root = output_dir.expanduser().absolute()
+    if root.exists():
+        raise ContractError(f"authoring directory exists: {root}")
+    root.mkdir(parents=True)
+    sealed_score = rz.seal(score)
+    bindings = rz.seal({
+        "schema_version": 1,
+        "kind": "earcrate_performance_source_bindings",
+        "created_at": rz.now_utc(),
+        "score_sha256": sealed_score["score_sha256"],
+        "visibility": "sensitive",
+        "bindings": [dict(row) for row in binding_rows],
+    })
+    rz.validate_performance_score(sealed_score)
+    rz.validate_source_bindings(bindings, sealed_score)
+    _atomic_write_json(root / "performance-score.json", sealed_score)
+    _atomic_write_json(root / "source-bindings.private.json", bindings)
+    return sealed_score, bindings, root
+
+
+def derive_interplay(
+    *,
+    parent_score_path: Path,
+    parent_audio_path: Path,
+    parent_bindings_path: Path,
+    four_seasons_drums_path: Path,
+    output_dir: Path,
+    ffmpeg: str,
+) -> dict[str, Any]:
+    parent = load_json(parent_score_path)
+    parent_sha = rz.validate_performance_score(parent)
+    parent_bindings = load_json(parent_bindings_path)
+    rz.validate_source_bindings(parent_bindings, parent)
+    timeline = dict(parent["timeline"])
+    sample_rate = int(timeline["sample_rate"])
+    channels = int(timeline["channels"])
+    duration = int(timeline["duration_samples"])
+    compound_source, compound_binding = _source_from_audio(
+        parent_audio_path,
+        source_id="gold_v6_reviewed_compound",
+        role="protected_incumbent_compound",
+        sample_rate=sample_rate,
+        channels=channels,
+        ffmpeg=ffmpeg,
+    )
+    source_index = _source_index(parent)
+    binding_index = {
+        str(row["source_id"]): dict(row)
+        for row in parent_bindings.get("bindings") or []
+    }
+    modern_source = source_index["maneskin_drums"]
+    modern_binding = binding_index["maneskin_drums"]
+    original_source, original_binding = _source_from_audio(
+        four_seasons_drums_path,
+        source_id="four_seasons_drums",
+        role="original_era_percussion_response",
+        sample_rate=sample_rate,
+        channels=channels,
+        ffmpeg=ffmpeg,
+    )
+    fill_start = round(115.838 * sample_rate)
+    fill_end = round(116.784 * sample_rate)
+    fill_target_end = 671299
+    fill_target_start = fill_target_end - (fill_end - fill_start)
+    response_start = round(14.7447 * sample_rate)
+    response_end = round(15.2000 * sample_rate)
+    response_target_start = 412162
+    response_target_end = response_target_start + response_end - response_start
+    masks = [
+        {
+            "start_sample": response_target_start,
+            "end_sample": response_target_end,
+            "musical_function": "four_seasons_percussion_answer_on_bar_five_downbeat",
+        },
+        {
+            "start_sample": fill_target_start,
+            "end_sample": fill_target_end,
+            "musical_function": "maneskin_fill_punctuation_resolving_to_bar_eight_downbeat",
+        },
+    ]
+    clips = [
+        {
+            "clip_id": "gold-v7-interplay-protected-core",
+            "source_id": "gold_v6_reviewed_compound",
+            "source_start_sample": 0,
+            "source_end_sample": duration,
+            "target_start_sample": 0,
+            "tempo_scale": 1.0,
+            "pitch_semitones": 0.0,
+            "gain_db": 0.0,
+            "pan": 0.0,
+            "fade_in_samples": 0,
+            "fade_out_samples": 0,
+            "musical_function": "protected_gold_v6_core_continuous_frankie_and_band_law",
+            "occurrence_id": "gold_v6_reviewed_occurrence",
+            "locked": True,
+        },
+        {
+            "clip_id": "gold-v7-interplay-four-seasons-answer",
+            "source_id": "four_seasons_drums",
+            "source_start_sample": response_start,
+            "source_end_sample": response_end,
+            "target_start_sample": response_target_start,
+            "tempo_scale": 1.0,
+            "pitch_semitones": 0.0,
+            "gain_db": -7.0,
+            "pan": 0.0,
+            "fade_in_samples": 240,
+            "fade_out_samples": 480,
+            "musical_function": masks[0]["musical_function"],
+            "occurrence_id": "four_seasons_downbeat_14_7447",
+            "locked": True,
+        },
+        {
+            "clip_id": "gold-v7-interplay-maneskin-fill",
+            "source_id": "maneskin_drums",
+            "source_start_sample": fill_start,
+            "source_end_sample": fill_end,
+            "target_start_sample": fill_target_start,
+            "tempo_scale": 1.0,
+            "pitch_semitones": 0.0,
+            "gain_db": -4.5,
+            "pan": 0.0,
+            "fade_in_samples": 240,
+            "fade_out_samples": 480,
+            "musical_function": masks[1]["musical_function"],
+            "occurrence_id": "maneskin_fill_115_838_116_784",
+            "locked": True,
+        },
+    ]
+    score = {
+        "schema_version": 1,
+        "kind": "earcrate_performance_score",
+        "created_at": rz.now_utc(),
+        "score_id": "album-one-a1-07-gold-v7-interplay",
+        "title": "A1-07 gold-v7 interplay - two bounded cross-era ownership events",
+        "timeline": timeline,
+        "sources": [compound_source, original_source, modern_source],
+        "tracks": [
+            {
+                "track_id": "protected-gold-v6-core",
+                "role": "protected_incumbent_compound",
+                "ownership": "complete_gold_v6_core",
+                "gain_db": 0.0,
+                "pan": 0.0,
+                "clips": [clips[0]],
+            },
+            {
+                "track_id": "four-seasons-response",
+                "role": "bounded_percussion_response",
+                "ownership": "four_seasons_temporary_answer",
+                "gain_db": 0.0,
+                "pan": 0.0,
+                "clips": [clips[1]],
+            },
+            {
+                "track_id": "maneskin-fill-handoff",
+                "role": "bounded_fill_punctuation",
+                "ownership": "maneskin_temporary_fill",
+                "gain_db": 0.0,
+                "pan": 0.0,
+                "clips": [clips[2]],
+            },
+        ],
+        "master": {"gain_db": 0.0, "peak_limit_dbfs": None, "codec": "pcm_s24le"},
+        "invariants": dict(parent["invariants"]),
+        "authority": {
+            "status": "bounded_gold_descendant",
+            "allow_unused_sources": False,
+            "parent_score_sha256": parent_sha,
+            "protected_compound_parent_pcm_sha256": compound_source["canonical_pcm_sha256"],
+            "iteration_contract": "gold-v7-interplay",
+            "handoff_event_count": 2,
+            "masked_seconds_total": sum(row["end_sample"] - row["start_sample"] for row in masks) / sample_rate,
+            "frankie_edits": 0,
+            "global_timing_changes": 0,
+            "generated_lead_vocals": 0,
+            "musical_acceptance": False,
+        },
+        "command_history": _decision_history(clips),
+    }
+    sealed_score, bindings, root = _write_score_and_bindings(
+        output_dir,
+        score,
+        [compound_binding, original_binding, modern_binding],
+    )
+    _atomic_write_json(root / "mutation-masks.json", {
+        "schema_version": 1,
+        "kind": "a1_07_mutation_masks",
+        "candidate_id": "gold-v7-interplay",
+        "sample_rate": sample_rate,
+        "masks": masks,
+        "evidence": {
+            "maneskin_fill_seconds": [115.838, 116.784],
+            "four_seasons_downbeat_seconds": 14.7447,
+            "earcrate_onset_boundary_used": True,
+            "rubber_band_tempo_scale": 1.0,
+        },
+    })
+    return {
+        "ok": True,
+        "kind": "a1_07_gold_v7_interplay_derivation",
+        "score_sha256": sealed_score["score_sha256"],
+        "bindings_sha256": bindings["bindings_sha256"],
+        "masked_seconds_total": score["authority"]["masked_seconds_total"],
+        "output_dir": str(root),
+    }
+
+
+def derive_arc(
+    *,
+    parent_score_path: Path,
+    parent_audio_path: Path,
+    parent_bindings_path: Path,
+    output_dir: Path,
+    ffmpeg: str,
+) -> dict[str, Any]:
+    parent = load_json(parent_score_path)
+    parent_sha = rz.validate_performance_score(parent)
+    parent_bindings = load_json(parent_bindings_path)
+    rz.validate_source_bindings(parent_bindings, parent)
+    parent_timeline = dict(parent["timeline"])
+    sample_rate = int(parent_timeline["sample_rate"])
+    channels = int(parent_timeline["channels"])
+    parent_duration = int(parent_timeline["duration_samples"])
+    core_start = round(19.2 * sample_rate)
+    duration = core_start + parent_duration
+    compound_source, compound_binding = _source_from_audio(
+        parent_audio_path,
+        source_id="gold_v6_reviewed_compound",
+        role="protected_incumbent_compound",
+        sample_rate=sample_rate,
+        channels=channels,
+        ffmpeg=ffmpeg,
+    )
+    source_index = _source_index(parent)
+    tracks: list[dict[str, Any]] = []
+    clips: list[dict[str, Any]] = []
+    for parent_track in parent["tracks"]:
+        track = deepcopy(dict(parent_track))
+        track_id = str(track.get("track_id"))
+        selected: list[dict[str, Any]] = []
+        if _is_frankie_track(track, source_index):
+            selected = [deepcopy(dict(row)) for row in track.get("clips") or []]
+            for row in selected:
+                row["clip_id"] = f"arc-build-{row['clip_id']}"
+                row["musical_function"] = "continuous_frankie_build_clock_before_protected_payoff"
+                row["occurrence_id"] = "gold_v7_arc_sparse_build_occurrence"
+        elif track_id == "mk-other":
+            selected = [deepcopy(dict(row)) for row in track.get("clips") or []]
+            for index, row in enumerate(selected):
+                row["clip_id"] = f"arc-build-{row['clip_id']}"
+                row["gain_db"] = -16.0 if index < 3 else (-12.0 if index < 6 else -9.0)
+                row["musical_function"] = "progressive_harmonic_ownership_under_frankie_clock"
+                row["occurrence_id"] = "gold_v7_arc_sparse_build_occurrence"
+        elif track_id == "mk-bass":
+            selected = [deepcopy(dict(row)) for row in (track.get("clips") or [])[3:]]
+            for index, row in enumerate(selected):
+                row["clip_id"] = f"arc-build-{row['clip_id']}"
+                row["gain_db"] = -7.0 if index < 3 else -4.0
+                row["musical_function"] = "bass_enters_after_sparse_setup_under_frankie_clock"
+                row["occurrence_id"] = "gold_v7_arc_sparse_build_occurrence"
+        elif track_id == "mk-drums":
+            selected = [deepcopy(dict(row)) for row in (track.get("clips") or [])[6:]]
+            for row in selected:
+                row["clip_id"] = f"arc-build-{row['clip_id']}"
+                row["gain_db"] = -3.0
+                row["musical_function"] = "drums_arrive_for_build_release_into_protected_payoff"
+                row["occurrence_id"] = "gold_v7_arc_sparse_build_occurrence"
+        if selected:
+            track["track_id"] = f"arc-build-{track_id}"
+            track["ownership"] = f"arc_build:{track.get('ownership', '')}"
+            track["clips"] = selected
+            tracks.append(track)
+            clips.extend(selected)
+    compound_clip = {
+        "clip_id": "gold-v7-arc-protected-payoff",
+        "source_id": "gold_v6_reviewed_compound",
+        "source_start_sample": 0,
+        "source_end_sample": parent_duration,
+        "target_start_sample": core_start,
+        "tempo_scale": 1.0,
+        "pitch_semitones": 0.0,
+        "gain_db": 0.0,
+        "pan": 0.0,
+        "fade_in_samples": 0,
+        "fade_out_samples": 0,
+        "musical_function": "sample_identical_gold_v6_payoff_after_sparse_build",
+        "occurrence_id": "gold_v6_reviewed_occurrence",
+        "locked": True,
+    }
+    tracks.append({
+        "track_id": "protected-gold-v6-payoff",
+        "role": "protected_incumbent_compound",
+        "ownership": "complete_gold_v6_core",
+        "gain_db": 0.0,
+        "pan": 0.0,
+        "clips": [compound_clip],
+    })
+    clips.append(compound_clip)
+    timeline = dict(parent_timeline)
+    timeline["duration_samples"] = duration
+    score = {
+        "schema_version": 1,
+        "kind": "earcrate_performance_score",
+        "created_at": rz.now_utc(),
+        "score_id": "album-one-a1-07-gold-v7-arc",
+        "title": "A1-07 gold-v7 arc - sparse conducted build into protected payoff",
+        "timeline": timeline,
+        "sources": [*deepcopy(parent["sources"]), compound_source],
+        "tracks": tracks,
+        "master": {"gain_db": 0.0, "peak_limit_dbfs": None, "codec": "pcm_s24le"},
+        "invariants": dict(parent["invariants"]),
+        "authority": {
+            "status": "bounded_gold_descendant",
+            "allow_unused_sources": False,
+            "parent_score_sha256": parent_sha,
+            "protected_compound_parent_pcm_sha256": compound_source["canonical_pcm_sha256"],
+            "iteration_contract": "gold-v7-arc",
+            "new_section_occurrences": 1,
+            "protected_core_start_sample": core_start,
+            "protected_core_duration_samples": parent_duration,
+            "musical_acceptance": False,
+        },
+        "command_history": _decision_history(clips),
+    }
+    sealed_score, bindings, root = _write_score_and_bindings(
+        output_dir,
+        score,
+        [*[dict(row) for row in parent_bindings["bindings"]], compound_binding],
+    )
+    return {
+        "ok": True,
+        "kind": "a1_07_gold_v7_arc_derivation",
+        "score_sha256": sealed_score["score_sha256"],
+        "bindings_sha256": bindings["bindings_sha256"],
+        "duration_seconds": duration / sample_rate,
+        "protected_core_start_sample": core_start,
         "output_dir": str(root),
     }
 
@@ -492,6 +910,201 @@ def _processing_filters(
     return normalized, filters
 
 
+def _render_processed_score(
+    score: Mapping[str, Any],
+    bindings: Mapping[str, Any],
+    *,
+    output_path: Path,
+    receipt_path: Path,
+    ffmpeg: str,
+    ffprobe: str,
+) -> dict[str, Any]:
+    score_sha = rz.validate_performance_score(score)
+    binding_sha = rz.validate_source_bindings(bindings, score)
+    output = output_path.expanduser().absolute()
+    if output.exists():
+        raise ContractError(f"render output exists: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    stage_root = output.parent / f".{output.stem}.track-stages-{os.getpid()}"
+    if stage_root.exists():
+        raise ContractError(f"render stage directory exists: {stage_root}")
+    stage_root.mkdir()
+    try:
+        binding_rows = {
+            str(row["source_id"]): dict(row)
+            for row in bindings.get("bindings") or []
+        }
+        source_rows = {
+            str(row["source_id"]): dict(row)
+            for row in score.get("sources") or []
+        }
+        stage_outputs: list[Path] = []
+        stage_receipts: dict[str, str] = {}
+        clip_receipts: list[dict[str, Any]] = []
+        for index, source_track in enumerate(score["tracks"]):
+            track = deepcopy(dict(source_track))
+            track.pop("processing", None)
+            used = {
+                str(clip["source_id"])
+                for clip in track.get("clips") or []
+            }
+            track_score = deepcopy(dict(score))
+            track_score.pop("score_sha256", None)
+            track_score["score_id"] = (
+                f"{score.get('score_id', 'performance')}-stage-{track['track_id']}"
+            )
+            track_score["title"] = f"{score.get('title', 'Performance')} stage {track['track_id']}"
+            track_score["sources"] = [source_rows[key] for key in sorted(used)]
+            track_score["tracks"] = [track]
+            track_score["master"] = {
+                "gain_db": 0.0,
+                "peak_limit_dbfs": None,
+                "codec": "pcm_s24le",
+            }
+            authority = dict(track_score.get("authority") or {})
+            authority["allow_unused_sources"] = False
+            authority["render_stage_for_score_sha256"] = score_sha
+            track_score["authority"] = authority
+            track_score = rz.seal(track_score)
+            track_bindings = deepcopy(dict(bindings))
+            track_bindings.pop("bindings_sha256", None)
+            track_bindings["score_sha256"] = track_score["score_sha256"]
+            track_bindings["bindings"] = [binding_rows[key] for key in sorted(used)]
+            track_bindings = rz.seal(track_bindings)
+            stage_output = stage_root / f"track-{index:02d}.wav"
+            stage_receipt_path = stage_root / f"track-{index:02d}.receipt.json"
+            stage_receipt = render_score(
+                track_score,
+                track_bindings,
+                output_path=stage_output,
+                receipt_path=stage_receipt_path,
+                ffmpeg=ffmpeg,
+                ffprobe=ffprobe,
+            )
+            stage_outputs.append(stage_output)
+            stage_receipts[str(source_track["track_id"])] = stage_receipt[
+                "receipt_sha256"
+            ]
+            clip_receipts.extend(stage_receipt["clips"])
+
+        timeline = dict(score["timeline"])
+        sample_rate = int(timeline["sample_rate"])
+        channels = int(timeline["channels"])
+        duration_samples = int(timeline["duration_samples"])
+        argv = [
+            ffmpeg,
+            "-nostdin",
+            "-hide_banner",
+            "-v",
+            "error",
+            "-y",
+            "-filter_threads",
+            "1",
+            "-filter_complex_threads",
+            "1",
+            "-threads",
+            "1",
+        ]
+        for stage_output in stage_outputs:
+            argv.extend(["-i", str(stage_output)])
+        filters: list[str] = []
+        labels: list[str] = []
+        processing_receipts: dict[str, Any] = {}
+        for index, track in enumerate(score["tracks"]):
+            normalized, operations = _processing_filters(
+                track.get("processing"),
+                sample_rate=sample_rate,
+                label=f"track.{track['track_id']}.processing",
+            )
+            output_label = f"[t{index}]"
+            chain = operations or ["anull"]
+            filters.append(f"[{index}:a:0]{','.join(chain)}{output_label}")
+            labels.append(output_label)
+            if normalized:
+                processing_receipts[str(track["track_id"])] = normalized
+        master = dict(score.get("master") or {})
+        normalized_master, master_operations = _processing_filters(
+            master.get("processing"),
+            sample_rate=sample_rate,
+            label="master.processing",
+        )
+        master_chain = [
+            f"amix=inputs={len(labels)}:duration=longest:normalize=0",
+            *master_operations,
+            f"apad=whole_len={duration_samples}",
+            f"atrim=end_sample={duration_samples}",
+            "asetpts=PTS-STARTPTS",
+        ]
+        master_gain = float(master.get("gain_db", 0.0))
+        if abs(master_gain) > 1e-12:
+            master_chain.append(f"volume={rz._linear_gain(master_gain):.12g}")
+        if master.get("peak_limit_dbfs") not in {None, ""}:
+            master_chain.append(
+                f"alimiter=limit={rz._linear_gain(float(master['peak_limit_dbfs'])):.12g}:level=false"
+            )
+        filters.append(f"{''.join(labels)}{','.join(master_chain)}[out]")
+        codec = str(master.get("codec") or "pcm_s24le")
+        argv.extend([
+            "-filter_complex", ";".join(filters), "-map", "[out]",
+            "-ar", str(sample_rate), "-ac", str(channels), "-map_metadata", "-1",
+            "-fflags", "+bitexact", "-flags:a", "+bitexact", "-c:a", codec,
+            str(output),
+        ])
+        result = rz._run(argv, timeout=int(master.get("timeout_seconds") or 7200))
+        if result.returncode != 0 or not output.is_file():
+            if output.exists():
+                output.unlink()
+            raise ContractError(
+                f"v7 processed render failed ({result.returncode}): {result.stderr[-3000:]}"
+            )
+        output_pcm = rz.canonical_pcm_sha256(
+            output,
+            sample_rate=sample_rate,
+            channels=channels,
+            ffmpeg=ffmpeg,
+        )
+        receipt = rz.seal({
+            "schema_version": 1,
+            "kind": "earcrate_performance_render_receipt",
+            "rendered_at": rz.now_utc(),
+            "score_sha256": score_sha,
+            "bindings_sha256": binding_sha,
+            "ffmpeg_version": rz.ffmpeg_version(ffmpeg),
+            "output": {
+                "name": output.name,
+                "bytes": output.stat().st_size,
+                "container_sha256": rz.sha256_file(output),
+                "canonical_pcm_sha256": output_pcm,
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "duration_samples": duration_samples,
+                "codec": codec,
+            },
+            "clip_count": len(clip_receipts),
+            "clips": clip_receipts,
+            "track_processing": processing_receipts,
+            "master_processing": normalized_master,
+            "track_stage_receipt_sha256": stage_receipts,
+            "command": {
+                "argv": argv,
+                "returncode": 0,
+                "stderr_tail": result.stderr[-3000:],
+            },
+            "ffprobe": rz.ffprobe_audio(output, ffprobe=ffprobe),
+            "authority": {
+                "renderer_invented_decisions": False,
+                "all_selected_clips_accounted": True,
+                "human_acceptance": False,
+                "inference_success": False,
+            },
+        })
+        rz.write_json(receipt_path, receipt, exclusive=True)
+        return receipt
+    finally:
+        if stage_root.exists():
+            shutil.rmtree(stage_root)
+
+
 def render_score(
     score: Mapping[str, Any],
     bindings: Mapping[str, Any],
@@ -503,6 +1116,17 @@ def render_score(
 ) -> dict[str, Any]:
     score_sha = rz.validate_performance_score(score)
     binding_sha = rz.validate_source_bindings(bindings, score)
+    if any(track.get("processing") for track in score.get("tracks") or []) or (
+        score.get("master") or {}
+    ).get("processing"):
+        return _render_processed_score(
+            score,
+            bindings,
+            output_path=output_path,
+            receipt_path=receipt_path,
+            ffmpeg=ffmpeg,
+            ffprobe=ffprobe,
+        )
     timeline = dict(score["timeline"])
     sample_rate = int(timeline["sample_rate"])
     channels = int(timeline["channels"])
@@ -521,7 +1145,20 @@ def render_score(
     if output.exists():
         raise ContractError(f"render output exists: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    argv = [ffmpeg, "-nostdin", "-hide_banner", "-v", "error", "-y"]
+    argv = [
+        ffmpeg,
+        "-nostdin",
+        "-hide_banner",
+        "-v",
+        "error",
+        "-y",
+        "-filter_threads",
+        "1",
+        "-filter_complex_threads",
+        "1",
+        "-threads",
+        "1",
+    ]
     filters: list[str] = []
     labels: list[str] = []
     track_labels: dict[str, list[str]] = {}
@@ -767,6 +1404,27 @@ def _require_frankie_unchanged(parent: Mapping[str, Any], candidate: Mapping[str
         raise ContractError("Frankie clip graph changed")
 
 
+def _require_frankie_native(parent: Mapping[str, Any], candidate: Mapping[str, Any]) -> None:
+    parent_sources = _source_index(parent)
+    candidate_sources = _source_index(candidate)
+    ids = _frankie_ids(parent)
+    for source_id in ids:
+        if candidate_sources.get(source_id) != parent_sources[source_id]:
+            raise ContractError(f"Frankie source changed: {source_id}")
+    candidate_clips = [
+        clip
+        for clip in _clip_index(candidate).values()
+        if str(clip.get("source_id")) in ids
+    ]
+    if not candidate_clips:
+        raise ContractError("arc requires Frankie-led build material")
+    for clip in candidate_clips:
+        if abs(float(clip.get("tempo_scale", 1.0)) - 1.0) > 1e-12:
+            raise ContractError("Frankie timing transform is prohibited")
+        if abs(float(clip.get("pitch_semitones", 0.0))) > 1e-12:
+            raise ContractError("Frankie pitch transform is prohibited")
+
+
 def _validate_receipts(
     score_sha: str,
     candidate_audio: Path,
@@ -787,10 +1445,9 @@ def _validate_receipts(
     hashes = []
     for path in (receipt_a_path, receipt_b_path):
         receipt = load_json(path)
-        receipt_sha = rz.validate_sealed(
+        receipt_sha = rz.validate_seal(
             receipt,
             kind="earcrate_performance_render_receipt",
-            field="receipt_sha256",
         )
         if receipt.get("score_sha256") != score_sha:
             raise ContractError(f"render receipt belongs to another score: {path}")
@@ -888,7 +1545,6 @@ def verify_candidate(
     channels = int(timeline["channels"])
     if parent["timeline"]["sample_rate"] != sample_rate or parent["timeline"]["channels"] != channels:
         raise ContractError("candidate audio format differs from parent")
-    _require_frankie_unchanged(parent, candidate)
     candidate_pcm, candidate_container, reproduction_pair = _validate_receipts(
         candidate_sha,
         candidate_audio_path,
@@ -910,6 +1566,7 @@ def verify_candidate(
     masks: list[dict[str, Any]] = []
 
     if candidate_id == "gold-v7-production":
+        _require_frankie_unchanged(parent, candidate)
         if parent["timeline"] != candidate["timeline"] or parent["sources"] != candidate["sources"]:
             raise ContractError("production child changed timeline or sources")
         parent_tracks = {str(row["track_id"]): dict(row) for row in parent["tracks"]}
@@ -926,6 +1583,9 @@ def verify_candidate(
             raise ContractError("production child must not declare masks")
         checks.append("arrangement_structure_identity")
     elif candidate_id == "gold-v7-interplay":
+        compound = _source_index(candidate).get("gold_v6_reviewed_compound")
+        if not compound or compound.get("canonical_pcm_sha256") != parent_pcm:
+            raise ContractError("interplay does not bind the protected gold-v6 PCM")
         if parent["timeline"] != candidate["timeline"]:
             raise ContractError("interplay changed timeline")
         if masks_path is None:
@@ -941,6 +1601,7 @@ def verify_candidate(
         _outside_masks_equal(parent_bytes, candidate_bytes, masks, channels)
         checks.append("outside_mask_pcm_identity")
     else:
+        _require_frankie_native(parent, candidate)
         if masks_path is not None:
             raise ContractError("arc child must not declare masks")
         duration = int(timeline["duration_samples"])
@@ -1058,6 +1719,254 @@ def record_result(
     }
 
 
+def _measure_loudness(
+    path: Path,
+    *,
+    ffmpeg: str,
+    target_true_peak_dbtp: float = -2.0,
+) -> dict[str, float]:
+    result = subprocess.run(
+        [
+            ffmpeg, "-nostdin", "-hide_banner", "-i", str(path),
+            "-af", (
+                "loudnorm=I=-14:"
+                f"TP={target_true_peak_dbtp:.6f}:LRA=11:print_format=json"
+            ),
+            "-f", "null", "NUL",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+        shell=False,
+    )
+    if result.returncode != 0:
+        raise ContractError(f"loudness measurement failed: {result.stderr[-2000:]}")
+    start = result.stderr.rfind("{\n")
+    end = result.stderr.rfind("}")
+    if start < 0 or end < start:
+        raise ContractError("loudness measurement returned no JSON")
+    payload = json.loads(result.stderr[start : end + 1])
+    return {
+        "integrated_lufs": float(payload["input_i"]),
+        "true_peak_dbtp": float(payload["input_tp"]),
+        "loudness_range_lu": float(payload["input_lra"]),
+        "threshold_lufs": float(payload["input_thresh"]),
+        "target_offset_db": float(payload["target_offset"]),
+    }
+
+
+def _make_review_audio(
+    source: Path,
+    destination: Path,
+    *,
+    ffmpeg: str,
+) -> dict[str, Any]:
+    if destination.exists():
+        raise ContractError(f"review destination already exists: {destination}")
+    review_true_peak_target = -2.2
+    before = _measure_loudness(
+        source,
+        ffmpeg=ffmpeg,
+        target_true_peak_dbtp=review_true_peak_target,
+    )
+    stage = destination.with_name(f".{destination.stem}.loudnorm-stage.wav")
+    if stage.exists():
+        raise ContractError(f"review staging file already exists: {stage}")
+    measured_filter = (
+        f"loudnorm=I=-14:TP={review_true_peak_target:.6f}:LRA=11:"
+        f"measured_I={before['integrated_lufs']:.9f}:"
+        f"measured_TP={before['true_peak_dbtp']:.9f}:"
+        f"measured_LRA={before['loudness_range_lu']:.9f}:"
+        f"measured_thresh={before['threshold_lufs']:.9f}:"
+        f"offset={before['target_offset_db']:.9f}:"
+        "linear=true:print_format=summary"
+    )
+    try:
+        first = subprocess.run(
+            [
+                ffmpeg, "-nostdin", "-hide_banner", "-v", "error", "-n",
+                "-i", str(source), "-af", measured_filter,
+                "-ar", "48000", "-ac", "2", "-map_metadata", "-1",
+                "-fflags", "+bitexact", "-flags:a", "+bitexact",
+                "-c:a", "pcm_f32le", str(stage),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            shell=False,
+        )
+        if first.returncode != 0 or not stage.is_file():
+            raise ContractError(f"review loudnorm pass failed: {first.stderr[-2000:]}")
+        intermediate = _measure_loudness(stage, ffmpeg=ffmpeg)
+        correction_gain_db = -14.0 - intermediate["integrated_lufs"]
+        peak_limit = 10.0 ** (review_true_peak_target / 20.0)
+        correction_filter = (
+            f"volume={correction_gain_db:.9f}dB,"
+            f"alimiter=limit={peak_limit:.12f}:attack=5:release=50:level=false"
+        )
+        second = subprocess.run(
+            [
+                ffmpeg, "-nostdin", "-hide_banner", "-v", "error", "-n",
+                "-i", str(stage), "-af", correction_filter,
+                "-ar", "48000", "-ac", "2", "-map_metadata", "-1",
+                "-fflags", "+bitexact", "-flags:a", "+bitexact",
+                "-c:a", "pcm_s24le", str(destination),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            shell=False,
+        )
+        if second.returncode != 0 or not destination.is_file():
+            raise ContractError(f"review correction pass failed: {second.stderr[-2000:]}")
+        after = _measure_loudness(destination, ffmpeg=ffmpeg)
+        if after["integrated_lufs"] > -13.85 or after["integrated_lufs"] < -14.20:
+            raise ContractError(f"review loudness outside gate: {after['integrated_lufs']}")
+        if after["true_peak_dbtp"] > -2.0:
+            raise ContractError(f"review true peak outside gate: {after['true_peak_dbtp']}")
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        stage.unlink(missing_ok=True)
+    return {
+        "source_container_sha256": rz.sha256_file(source),
+        "review_container_sha256": rz.sha256_file(destination),
+        "bytes": destination.stat().st_size,
+        "duration_seconds": float(rz.ffprobe_audio(destination)["format"]["duration"]),
+        "normalization": "measured_two_pass_ebu_r128_with_true_peak_ceiling",
+        "correction_gain_db": correction_gain_db,
+        "source_measurement": before,
+        **after,
+    }
+
+
+def prepare_frontier(
+    contract: Mapping[str, Any],
+    *,
+    ledger_path: Path,
+    ffmpeg: str,
+    ffprobe: str,
+) -> dict[str, Any]:
+    ledger = load_json(ledger_path)
+    qualified = [
+        candidate_id
+        for candidate_id in CHILDREN
+        if ledger["machine_gate_result_by_candidate"][candidate_id].get("state") == "qualified"
+    ]
+    minimum = int(contract["machine_admission"]["minimum_qualified_children"])
+    if len(qualified) < minimum:
+        raise ContractError("owner frontier is prohibited below two qualified children")
+    root = ledger_path.parent
+    public = root / "review-public"
+    private = root / "review-private"
+    if public.exists() or private.exists():
+        raise ContractError("owner frontier already exists")
+    public.mkdir()
+    private.mkdir()
+    candidates: dict[str, Path] = {
+        "gold-v6": next((root / "incumbent").glob("gold-v6.*")),
+    }
+    for candidate_id in qualified:
+        machine = load_json(root / candidate_id / "machine" / "machine-receipt.json")
+        candidates[candidate_id] = root / candidate_id / "machine" / str(
+            machine["qualified_audio_name"]
+        )
+    labels = [chr(ord("A") + index) for index in range(len(candidates))]
+    shuffled = sorted(candidates)
+    secrets.SystemRandom().shuffle(shuffled)
+    option_map = dict(zip(labels, shuffled))
+    measurements: dict[str, Any] = {}
+    options: dict[str, Any] = {}
+    try:
+        for label, candidate_id in option_map.items():
+            destination = public / f"{label}.wav"
+            measurements[candidate_id] = _make_review_audio(
+                candidates[candidate_id], destination, ffmpeg=ffmpeg
+            )
+            options[label] = {
+                "sha256": rz.sha256_file(destination),
+                "bytes": destination.stat().st_size,
+                "duration_seconds": measurements[candidate_id]["duration_seconds"],
+                "media_kind": "audio/wav",
+            }
+        authority = {
+            "schema_version": 1,
+            "kind": "a1_07_gold_v7_private_assignment",
+            "created_at": rz.now_utc(),
+            "nonce": secrets.token_hex(32),
+            "contract_sha256": contract["contract_sha256"],
+            "option_map": option_map,
+            "candidate_sources": {
+                candidate_id: {
+                    "path": str(path),
+                    "sha256": rz.sha256_file(path),
+                    "bytes": path.stat().st_size,
+                }
+                for candidate_id, path in candidates.items()
+            },
+            "measurements": measurements,
+        }
+        authority["authority_sha256"] = canonical_sha256(authority, "authority_sha256")
+        assignment = {
+            "schema_version": 1,
+            "kind": "a1_07_gold_v7_public_assignment",
+            "created_at": rz.now_utc(),
+            "contract_sha256": contract["contract_sha256"],
+            "private_authority_sha256": authority["authority_sha256"],
+            "options": options,
+            "choices": [*labels, "tie", "reject_all", "abstain"],
+            "control_question": (
+                "Which option, if any, improves the protected incumbent without breaking "
+                "continuous Frankie, same-work identity, or the band-follows-singer law?"
+            ),
+            "instructions": (
+                "Listen at a fixed playback level. The longer option must be judged first "
+                "as a whole passage and then on its inherited payoff. Relative preference "
+                "does not equal Album One acceptance; reject_all remains valid."
+            ),
+        }
+        assignment["assignment_sha256"] = canonical_sha256(
+            assignment, "assignment_sha256"
+        )
+        _atomic_write_json(private / "assignment-authority.json", authority)
+        _atomic_write_json(public / "assignment.json", assignment)
+        (public / "REVIEW.txt").write_text(
+            "Choose A, B, C, D, tie, reject_all, or abstain.\n"
+            "Which option, if any, improves gold-v6 without breaking continuous Frankie, "
+            "same-work identity, or the band-follows-singer law?\n"
+            "The longer option must work as a whole passage and preserve its inherited payoff.\n"
+            "Relative preference does not equal Album One acceptance.\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        shutil.rmtree(public, ignore_errors=True)
+        shutil.rmtree(private, ignore_errors=True)
+        raise
+    ledger["owner_frontier_created"] = True
+    ledger["review_public_path_or_null"] = str(public)
+    ledger["notes"].append({
+        "kind": "owner_frontier",
+        "assignment_sha256": assignment["assignment_sha256"],
+        "private_authority_sha256": authority["authority_sha256"],
+        "audio_file_count": len(options),
+        "target_lufs": -14.0,
+        "peak_ceiling_dbtp": -2.0,
+    })
+    _atomic_write_json(ledger_path, ledger)
+    return {
+        "ok": True,
+        "kind": "a1_07_gold_v7_owner_frontier",
+        "qualified_children": qualified,
+        "audio_file_count": len(options),
+        "assignment_sha256": assignment["assignment_sha256"],
+        "review_public": str(public),
+    }
+
+
 def verify_return(
     contract: Mapping[str, Any],
     *,
@@ -1116,6 +2025,54 @@ def verify_return(
     frontier = bool(ledger.get("owner_frontier_created"))
     if len(qualified) < minimum and frontier:
         raise ContractError("owner frontier is prohibited below two qualified children")
+    if len(qualified) >= minimum and not frontier:
+        raise ContractError("qualified frontier threshold passed but owner frontier is absent")
+    if frontier:
+        public = ledger_path.parent / "review-public"
+        private = ledger_path.parent / "review-private"
+        declared_public = Path(str(ledger.get("review_public_path_or_null") or ""))
+        if declared_public.resolve() != public.resolve():
+            raise ContractError("review public path mismatch")
+        assignment_path = public / "assignment.json"
+        authority_path = private / "assignment-authority.json"
+        if not assignment_path.is_file() or not authority_path.is_file():
+            raise ContractError("owner frontier assignment files are incomplete")
+        if not (public / "REVIEW.txt").is_file():
+            raise ContractError("owner frontier instructions are absent")
+        assignment = load_json(assignment_path)
+        authority = load_json(authority_path)
+        if assignment.get("assignment_sha256") != canonical_sha256(assignment, "assignment_sha256"):
+            raise ContractError("public assignment seal mismatch")
+        if authority.get("authority_sha256") != canonical_sha256(authority, "authority_sha256"):
+            raise ContractError("private assignment authority seal mismatch")
+        if assignment.get("private_authority_sha256") != authority.get("authority_sha256"):
+            raise ContractError("public/private assignment binding mismatch")
+        if assignment.get("contract_sha256") != contract["contract_sha256"] or authority.get("contract_sha256") != contract["contract_sha256"]:
+            raise ContractError("owner frontier belongs to another contract")
+        if "option_map" in assignment:
+            raise ContractError("private option map leaked into public assignment")
+        expected_candidates = {"gold-v6", *qualified}
+        option_map = dict(authority.get("option_map") or {})
+        options = dict(assignment.get("options") or {})
+        expected_labels = [chr(ord("A") + index) for index in range(len(expected_candidates))]
+        if sorted(option_map) != expected_labels or set(option_map.values()) != expected_candidates:
+            raise ContractError("private option map does not match qualified frontier")
+        if sorted(options) != expected_labels or len(options) > 4:
+            raise ContractError("public option set does not match qualified frontier")
+        audio_files = sorted(public.glob("*.wav"))
+        if [path.stem for path in audio_files] != expected_labels:
+            raise ContractError("public review audio set is incomplete")
+        expected_public_files = {"assignment.json", "REVIEW.txt", *(f"{label}.wav" for label in expected_labels)}
+        if {path.name for path in public.iterdir() if path.is_file()} != expected_public_files:
+            raise ContractError("unexpected file in public owner frontier")
+        for label, audio in zip(expected_labels, audio_files):
+            row = dict(options[label])
+            if row.get("sha256") != rz.sha256_file(audio) or int(row.get("bytes", -1)) != audio.stat().st_size:
+                raise ContractError(f"public review audio changed: {label}")
+            candidate_id = option_map[label]
+            measurement = dict((authority.get("measurements") or {}).get(candidate_id) or {})
+            if measurement.get("review_container_sha256") != row.get("sha256"):
+                raise ContractError(f"review measurement binding mismatch: {label}")
     if bool(ledger.get("private_material_exported")):
         raise ContractError("private material export is prohibited")
     return {
@@ -1124,6 +2081,31 @@ def verify_return(
         "qualified_children": qualified,
         "qualified_child_count": len(qualified),
         "owner_frontier_created": frontier,
+    }
+
+
+def refresh_head(
+    contract: Mapping[str, Any],
+    *,
+    ledger_path: Path,
+) -> dict[str, Any]:
+    ledger = load_json(ledger_path)
+    if ledger.get("contract_sha256") != contract["contract_sha256"]:
+        raise ContractError("return belongs to another contract")
+    previous = require_git_oid(ledger.get("exact_branch_head"), "exact_branch_head")
+    current = current_git_head()
+    ledger["exact_branch_head"] = current
+    ledger["notes"].append({
+        "kind": "exact_branch_head_refreshed",
+        "previous_exact_branch_head": previous,
+        "exact_branch_head": current,
+    })
+    _atomic_write_json(ledger_path, ledger)
+    return {
+        "ok": True,
+        "kind": "a1_07_gold_v7_exact_branch_head_refresh",
+        "previous_exact_branch_head": previous,
+        "exact_branch_head": current,
     }
 
 
@@ -1156,6 +2138,21 @@ def parser() -> argparse.ArgumentParser:
     derive.add_argument("--parent-bindings", type=Path, required=True)
     derive.add_argument("--output-dir", type=Path, required=True)
 
+    interplay = sub.add_parser("derive-interplay")
+    interplay.add_argument("--parent-score", type=Path, required=True)
+    interplay.add_argument("--parent-audio", type=Path, required=True)
+    interplay.add_argument("--parent-bindings", type=Path, required=True)
+    interplay.add_argument("--four-seasons-drums", type=Path, required=True)
+    interplay.add_argument("--output-dir", type=Path, required=True)
+    interplay.add_argument("--ffmpeg", default="ffmpeg")
+
+    arc = sub.add_parser("derive-arc")
+    arc.add_argument("--parent-score", type=Path, required=True)
+    arc.add_argument("--parent-audio", type=Path, required=True)
+    arc.add_argument("--parent-bindings", type=Path, required=True)
+    arc.add_argument("--output-dir", type=Path, required=True)
+    arc.add_argument("--ffmpeg", default="ffmpeg")
+
     render = sub.add_parser("render-twice")
     render.add_argument("--score", type=Path, required=True)
     render.add_argument("--bindings", type=Path, required=True)
@@ -1182,9 +2179,16 @@ def parser() -> argparse.ArgumentParser:
     record.add_argument("--reason", required=True)
     record.add_argument("--machine-receipt", type=Path)
 
+    frontier = sub.add_parser("prepare-frontier")
+    frontier.add_argument("--ledger", type=Path, required=True)
+    frontier.add_argument("--ffmpeg", default="ffmpeg")
+    frontier.add_argument("--ffprobe", default="ffprobe")
+
     returned = sub.add_parser("verify-return")
     returned.add_argument("--ledger", type=Path, required=True)
     returned.add_argument("--ffmpeg", default="ffmpeg")
+    refreshed = sub.add_parser("refresh-head")
+    refreshed.add_argument("--ledger", type=Path, required=True)
     return root
 
 
@@ -1222,6 +2226,23 @@ def main(argv: list[str] | None = None) -> int:
                 parent_bindings_path=args.parent_bindings,
                 output_dir=args.output_dir,
             )
+        elif args.command == "derive-interplay":
+            result = derive_interplay(
+                parent_score_path=args.parent_score,
+                parent_audio_path=args.parent_audio,
+                parent_bindings_path=args.parent_bindings,
+                four_seasons_drums_path=args.four_seasons_drums,
+                output_dir=args.output_dir,
+                ffmpeg=args.ffmpeg,
+            )
+        elif args.command == "derive-arc":
+            result = derive_arc(
+                parent_score_path=args.parent_score,
+                parent_audio_path=args.parent_audio,
+                parent_bindings_path=args.parent_bindings,
+                output_dir=args.output_dir,
+                ffmpeg=args.ffmpeg,
+            )
         elif args.command == "render-twice":
             result = render_twice(
                 score_path=args.score,
@@ -1253,12 +2274,21 @@ def main(argv: list[str] | None = None) -> int:
                 reason=args.reason,
                 machine_receipt_path=args.machine_receipt,
             )
+        elif args.command == "prepare-frontier":
+            result = prepare_frontier(
+                contract,
+                ledger_path=args.ledger,
+                ffmpeg=args.ffmpeg,
+                ffprobe=args.ffprobe,
+            )
         elif args.command == "verify-return":
             result = verify_return(
                 contract,
                 ledger_path=args.ledger,
                 ffmpeg=args.ffmpeg,
             )
+        elif args.command == "refresh-head":
+            result = refresh_head(contract, ledger_path=args.ledger)
         else:
             raise ContractError(f"unsupported command: {args.command}")
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

@@ -37,6 +37,21 @@ def canonical_sha256(payload: Mapping[str, Any], field: str) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def beggin_review_sha256(payload: Mapping[str, Any], field: str) -> str:
+    body = dict(payload)
+    body.pop(field, None)
+    data = (
+        json.dumps(
+            body,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+
 def load_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -96,7 +111,13 @@ def verify_parent(contract: Mapping[str, Any], receipt: Path) -> dict[str, Any]:
     if not receipt.is_file() or receipt.is_symlink():
         raise ContractError(f"regular owner receipt required: {receipt}")
     expected = str(contract["parent"]["owner_review_receipt_sha256"])
-    observed = sha256_file(receipt)
+    payload = load_json(receipt)
+    declared = require_hex64(payload.get("review_sha256"), "review_sha256")
+    observed = beggin_review_sha256(payload, "review_sha256")
+    if declared != observed:
+        raise ContractError(
+            f"parent owner receipt seal mismatch: declared {declared}, observed {observed}"
+        )
     if observed != expected:
         raise ContractError(
             f"wrong parent owner receipt: expected {expected}, observed {observed}"
@@ -106,6 +127,7 @@ def verify_parent(contract: Mapping[str, Any], receipt: Path) -> dict[str, Any]:
         "kind": "a1_07_gold_v7_parent_verification",
         "contract_sha256": contract["contract_sha256"],
         "owner_review_receipt_sha256": observed,
+        "owner_review_receipt_file_sha256": sha256_file(receipt),
     }
 
 

@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $Python = (Get-Command python).Source
-$Cli = Join-Path $Repo 'scripts\earcrate_a1_07_gold_v7.py'
+$Cli = Join-Path $Repo 'scripts\earcrate_a1_07_gold_v7_execute.py'
 $Contract = Join-Path $Repo 'configs\album_one\a1-07\gold-v7-iteration.v1.json'
 
 if (-not (Test-Path -LiteralPath $Cli -PathType Leaf)) {
@@ -31,7 +31,7 @@ if ($VerifyReturn) {
 & $Python $Cli --contract $Contract verify-parent --receipt $ParentReviewReceipt
 if ($LASTEXITCODE -ne 0) { throw "Wrong gold-v6 owner-review receipt" }
 
-& $Python $Cli --contract $Contract scaffold --workspace $Workspace
+& $Python $Cli --contract $Contract scaffold --workspace $Workspace --parent-review-receipt $ParentReviewReceipt
 if ($LASTEXITCODE -ne 0) { throw "A1-07 gold-v7 workspace scaffold failed" }
 
 Write-Host "A1-07 gold-v7 workspace prepared: $Workspace"

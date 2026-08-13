@@ -23,6 +23,15 @@ def _load_cli():
     return module
 
 
+def _load_execution_cli():
+    path = ROOT / "scripts" / "earcrate_a1_07_gold_v7_execute.py"
+    spec = importlib.util.spec_from_file_location("earcrate_a1_07_gold_v7_execute", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_gold_v7_contract_is_sealed_and_binds_the_real_parent_review() -> None:
     cli = _load_cli()
     contract = cli.load_contract(CONTRACT)
@@ -32,6 +41,55 @@ def test_gold_v7_contract_is_sealed_and_binds_the_real_parent_review() -> None:
     )
     assert contract["parent"]["human_acceptance"] is False
     assert contract["parent"]["protected_incumbent"] is True
+
+
+def test_parent_verifier_checks_the_canonical_review_seal(tmp_path: Path) -> None:
+    cli = _load_cli()
+    receipt = {
+        "kind": "earcrate_beggin_timing_human_review",
+        "selected_candidate_id": "gold-v6",
+    }
+    receipt["review_sha256"] = cli.beggin_review_sha256(receipt, "review_sha256")
+    receipt_path = tmp_path / "owner-review.receipt.json"
+    receipt_path.write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    contract = {
+        "contract_sha256": "1" * 64,
+        "parent": {"owner_review_receipt_sha256": receipt["review_sha256"]},
+    }
+
+    verified = cli.verify_parent(contract, receipt_path)
+
+    assert verified["owner_review_receipt_sha256"] == receipt["review_sha256"]
+    assert verified["owner_review_receipt_file_sha256"] == cli.sha256_file(receipt_path)
+
+    receipt["selected_candidate_id"] = "mutated"
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    try:
+        cli.verify_parent(contract, receipt_path)
+    except cli.ContractError as exc:
+        assert "seal mismatch" in str(exc)
+    else:
+        raise AssertionError("mutated parent review receipt was accepted")
+
+
+def test_execution_parent_verifier_checks_legacy_canonical_seal(tmp_path: Path) -> None:
+    cli = _load_execution_cli()
+    receipt = {"kind": "earcrate_beggin_timing_human_review", "choice": "A"}
+    receipt["review_sha256"] = cli.legacy_review_sha256(receipt, "review_sha256")
+    path = tmp_path / "owner-review.receipt.json"
+    path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    contract = {
+        "contract_sha256": "1" * 64,
+        "parent": {"owner_review_receipt_sha256": receipt["review_sha256"]},
+    }
+
+    verified = cli.verify_parent(contract, path)
+
+    assert verified["owner_review_receipt_sha256"] == receipt["review_sha256"]
+    assert verified["owner_review_receipt_file_sha256"] == cli.rz.sha256_file(path)
 
 
 def test_gold_v7_has_three_causally_distinct_bounded_children() -> None:

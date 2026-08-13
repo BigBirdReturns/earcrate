@@ -53,8 +53,17 @@ progress.
 - Do not send work to the local Estate unless the repository already supplies the
   track contract, source requirements, controls, execution plan, and expected
   returned evidence.
+- Owner reviews must disclose the intended musical delta and the invariant set for
+  every option before listening. Blind provider or source identity only when that
+  isolation answers a real question; never make the owner infer what changed by
+  guessing from the audio.
+- If every option shares the same dominant audible mechanism or defect, classify
+  the frontier as non-discriminating and iterate that mechanism. Do not require an
+  owner ranking of tiny downstream deltas.
 - Keep copyrighted source media, private prompts, lyrics, paths, credentials,
-  model assets, option maps, and owner-review authority outside the repository.
+  model assets, private option maps, and owner-review authority outside the
+  repository. Public cut notes may disclose musical mechanisms without exposing
+  private media or credentials.
 
 ## Album One completion model
 

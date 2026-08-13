@@ -258,15 +258,13 @@ def _synthetic_v7(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     return root, identities
 
 
-def test_end_to_end_build_creates_two_review_lanes(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_end_to_end_build_creates_two_review_lanes(tmp_path: Path) -> None:
     v7, identities = _synthetic_v7(tmp_path)
     original = dict(c.EXPECTED)
+    original_current_git_head = cli.current_git_head
     c.EXPECTED.clear()
     c.EXPECTED.update(identities)
-    monkeypatch.setattr(cli, "current_git_head", lambda _root: "a" * 40)
+    cli.current_git_head = lambda _root: "a" * 40
     try:
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         output = tmp_path / "v8"
@@ -289,6 +287,7 @@ def test_end_to_end_build_creates_two_review_lanes(
             ffmpeg="ffmpeg",
         )["ok"] is True
     finally:
+        cli.current_git_head = original_current_git_head
         c.EXPECTED.clear()
         c.EXPECTED.update(original)
 

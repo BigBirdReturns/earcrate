@@ -1,0 +1,10 @@
+Album One Sprint 01 return states
+
+machine_work_ready
+frontier_ready
+blocked_exact_source
+blocked_exact_credential
+blocked_rights_or_custody
+failed
+
+A frontier is admitted only when it contains setup, body, and payoff or release; one to four semantically disclosed cuts; two reproduction receipts per cut; and no shared dominant audible defect.

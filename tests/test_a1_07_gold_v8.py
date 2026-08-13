@@ -170,7 +170,16 @@ def _synthetic_v7(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     root = tmp_path / "v7"
     (root / "incumbent").mkdir(parents=True)
     owner = root / "incumbent" / "owner-review.receipt.json"
-    owner.write_text('{"owner":true}\n', encoding="utf-8")
+    owner_review = {
+        "schema_version": 1,
+        "kind": "earcrate_beggin_timing_human_review",
+        "selected_candidate_id": "gold-v6",
+        "verdict": "prefer",
+    }
+    owner_review["review_sha256"] = c.sha256_bytes(
+        c.canonical_json_bytes(owner_review) + b"\n"
+    )
+    c.atomic_write_json(owner, owner_review)
     c.write_s32_wav(
         root / "incumbent" / "gold-v6.wav",
         parent,
@@ -213,7 +222,7 @@ def _synthetic_v7(tmp_path: Path) -> tuple[Path, dict[str, str]]:
         ),
     }
     identities = {
-        "owner_review": c.sha256_file(owner),
+        "owner_review": owner_review["review_sha256"],
         "parent_score": scores["parent_score"],
         "parent_pcm": c.sha256_bytes(parent),
         "production_score": scores["production_score"],
@@ -260,6 +269,9 @@ def _synthetic_v7(tmp_path: Path) -> tuple[Path, dict[str, str]]:
 
 def test_end_to_end_build_creates_two_review_lanes(tmp_path: Path) -> None:
     v7, identities = _synthetic_v7(tmp_path)
+    assert c.sha256_file(v7 / "incumbent" / "owner-review.receipt.json") != (
+        identities["owner_review"]
+    )
     original = dict(c.EXPECTED)
     original_current_git_head = cli.current_git_head
     c.EXPECTED.clear()

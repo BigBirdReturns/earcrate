@@ -10,9 +10,11 @@ from .common import (
     EXPECTED,
     DescentError,
     bytes_to_samples,
+    canonical_json_bytes,
     canonical_pcm_sha256,
     ffprobe_info,
     load_json,
+    sha256_bytes,
     sha256_file,
     validate_seal,
 )
@@ -168,8 +170,15 @@ def verify_inputs(v7_workspace: Path, *, ffmpeg: str) -> dict[str, Any]:
     if not root.is_dir():
         raise DescentError(f"v7 workspace missing: {root}")
     owner_receipt = root / "incumbent" / "owner-review.receipt.json"
-    if sha256_file(owner_receipt) != EXPECTED["owner_review"]:
+    owner_review = load_json(owner_receipt)
+    claimed_review = str(owner_review.get("review_sha256") or "").lower()
+    if claimed_review != EXPECTED["owner_review"]:
         raise DescentError("wrong gold-v6 owner-review receipt")
+    legacy_body = dict(owner_review)
+    legacy_body.pop("review_sha256", None)
+    observed_review = sha256_bytes(canonical_json_bytes(legacy_body) + b"\n")
+    if observed_review != claimed_review:
+        raise DescentError("gold-v6 owner-review receipt seal mismatch")
     parent_score = root / "incumbent" / "performance-score.json"
     parent_score_value = load_json(parent_score)
     if str(parent_score_value.get("score_sha256") or "") != EXPECTED["parent_score"]:

@@ -129,7 +129,7 @@ def _band_scales(score: dict) -> list[list[float]]:
 def test_contract_discloses_differences_and_seals() -> None:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     assert c.validate_seal(contract, "contract_sha256") == (
-        "2c4a2653689ca048243f2aaba6a81211bc0e998cb129fa0cf8e0efb38b714704"
+        "d2b5926f3bb3f460d2f98f0b46e2f0929c075e46456f14aa200a4cc743780711"
     )
     assert contract["owner_signal"]["v8_frontier_disposition"] == (
         "non_discriminating_no_ranking_required"

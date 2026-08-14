@@ -1,38 +1,50 @@
 # Album One Sprint 01 execution
 
-Album One runs seven track lanes in parallel. A1-07 remains the proving track for reusable timing and conductor behavior, but it is not a dependency for A1-01 through A1-06.
+Album One retains seven parallel workstreams, but the Estate is not the repository integration test. A lane may execute locally only after the repository preflight proves a complete music-producing path.
 
-## Single Estate entrypoint
+## Phase 1: repository preflight
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts\RUN_ALBUM_ONE_SPRINT_01.ps1 `
+  -PreflightOnly
+```
+
+The preflight recursively evaluates the selected adapter rather than trusting the campaign label. It checks the adapter entrypoint, complete input contract, representative invocation evidence, performance-realization output, full-form duration floor, non-silent audio requirement, reproduction receipts, and disclosed musical delta.
+
+The current exact result is zero authorized lanes. No local adapter command should be executed from this campaign state.
+
+## Phase 2: verified private binding
+
+When a future repository change makes at least one lane executable, the Estate supplies the private binding manifest and verifies every file binding:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `
   -File scripts\RUN_ALBUM_ONE_SPRINT_01.ps1 `
   -Workspace "D:\Projects\Products\EarCrate\sessions\album-one-sprint-01" `
+  -Bindings "D:\Projects\Products\EarCrate\private\album-one-sprint-01.bindings.json" `
   -VerifyBytes `
-  -ExecuteReadyAdapters `
-  -OpenWorkspace
+  -ExecuteReadyAdapters
 ```
 
-The first run creates the durable workspace, a private source-binding manifest, seven track dossiers, the task queue, and a source-free public projection. With populated bindings, the same command verifies the exact private objects, materializes adapter commands, fans out runnable adapters, and leaves every lane in a typed state.
+`-ExecuteReadyAdapters` without `-VerifyBytes` is refused. The runner executes only `authorized_track_ids` from the sealed preflight report. Any `NEXT_COMMAND.ps1` or `NEXT_COMMAND.txt` belonging to an unauthorized lane is deleted from the workspace.
 
-The runner never copies private source audio into the repository or public projection. It refuses to overwrite an existing workspace.
+## Readiness states
 
-## Track states
+`campaign_task_materialized` means only that a dossier exists. It is not adapter readiness.
 
-`campaign_task_materialized` means only that EarCrate wrote the track dossier. It is not adapter readiness. Readiness advances separately through `tool_contract_ready`, `symbolic_evidence_ready`, `performance_realization_ready`, and `frontier_ready`. A missing adapter artifact contract, silent output, or output below the declared full-form floor prevents the corresponding owner-facing readiness state.
+`tool_contract_ready` means the executable body and declared interface agree. It does not mean the inputs are present or the output is musical.
 
-`frontier_ready` means the lane has one to four full-form, reproducible cuts; every musical delta is disclosed; setup, body, and payoff or release are present; and the cuts do not share one dominant audible defect.
+`symbolic_evidence_ready` means symbolic evidence exists. It does not mean audible performance exists.
 
-`blocked_exact_source`, `blocked_exact_credential`, and `blocked_rights_or_custody` are legal only when the complete runnable contract is already present and the blocker names the exact missing object.
+`performance_realization_ready` requires a non-silent, duration-qualified, reproducible full-form result from a proven invocation.
 
-`failed` requires the exact failure. “Needs research” is not a terminal state.
+`frontier_ready` additionally requires one to four semantically disclosed cuts, complete dramatic function, no shared dominant defect, and separate owner review authority.
 
-## Owner-time boundary
+Exact-source, exact-artifact, credential, rights, and performance-realization blockers remain separate. A blocker may be called irreducible only when the rest of the runnable contract is already present.
 
-Short excerpts, separator tests, pulse trials, timing-law probes, provider seed sweeps, and stem checks remain machine-side. Except where the musical object is inherently short, no owner frontier may be a unit test. The owner receives a complete dramatic proposition.
+## Current blockers
 
-Each track receives at most one owner frontier in this sprint and at most four cuts. Provider identity may be blinded when useful. The musical operation and invariant set may not be hidden.
+A1-01 lacks a full-form reconstruction adapter. A1-02 lacks the complete exact score pack and a full-performance rack renderer. A1-03 has only a silent, sub-floor community-symbolic summary. A1-04 and A1-05 lack Album-form conductor wrappers. A1-06 lacks an executable gesture-to-arrangement path. A1-07 remains a core-only timing diagnostic.
 
-## Sprint exit
-
-Sprint 01 ends only when all seven tracks have either a machine-qualified full-form frontier or an exact irreducible blocker with the complete runnable contract already prepared. Album acceptance, system-reference completion, and release rights remain separate later authorities.
+No owner audio is authorized by this state. Album One remains 0/7 accepted masters and 0/7 completed system references.

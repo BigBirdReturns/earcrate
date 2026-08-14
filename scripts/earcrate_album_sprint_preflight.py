@@ -12,14 +12,7 @@ SCRIPT_ROOT = Path(__file__).resolve().parent
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from album_sprint_preflight import (
-    HOMELAB_FORBIDDEN_SWITCHES,
-    HOMELAB_REQUIRED_SWITCHES,
-    apply_workspace,
-    build_report,
-    campaign_and_contract,
-    load_bindings,
-)
+from album_sprint_preflight import apply_workspace, build_report, campaign_and_contract, load_bindings
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CAMPAIGN = ROOT / "configs/album_one/sprint-01/campaign.v1.json"
@@ -37,7 +30,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         campaign, preflight = campaign_and_contract(args.campaign, args.preflight_contract)
         bindings = load_bindings(args.bindings, campaign, args.verify_bytes)
-        report = build_report(campaign, preflight, bindings)
+        report = build_report(
+            campaign,
+            preflight,
+            bindings,
+            bindings_bytes_verified=bool(args.verify_bytes),
+        )
         removed = apply_workspace(report, args.workspace) if args.workspace else []
         output = dict(report)
         output["removed_unauthorized_commands"] = removed

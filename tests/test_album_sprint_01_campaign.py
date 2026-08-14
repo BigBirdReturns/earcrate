@@ -16,19 +16,22 @@ sprint = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sprint)
 
 
-def test_campaign_is_sealed_parallel_and_full_form() -> None:
+def test_campaign_is_sealed_parallel_full_form_and_fail_closed() -> None:
     campaign = sprint.contract(CONTRACT)
     assert campaign["contract_sha256"] == (
-        "85f3b31106dd6c5ee9e9687edce3ac13d8b2c69fb2763544e455e5faa3dd4516"
+        "d6950f41246629762a717e66765a4b869afe4c500318cfccc46732c28bffcb2c"
     )
     assert [row["track_id"] for row in campaign["tracks"]] == list(sprint.TRACK_IDS)
     assert campaign["program_truth"]["proving_track_is_not_album_mutex"] is True
     assert campaign["owner_time_budget"]["frontiers_per_track_max"] == 1
     assert campaign["owner_time_budget"]["cuts_per_frontier_max"] == 4
+    assert "machine_work_ready" not in campaign["terminal_states"]
     assert all(
         "payoff_or_release" in row["full_form"]["required_functions"]
         for row in campaign["tracks"]
     )
+    assert all(row["machine_can_progress_without_frontier_bindings"] is False for row in campaign["tracks"])
+    assert all((row.get("entrypoint") or {}).get("template") is None for row in campaign["tracks"])
 
 
 def test_one_command_prepares_all_seven_dossiers() -> None:
@@ -134,9 +137,11 @@ def test_exact_blocker_requires_runnable_contract() -> None:
         assert recorded["state"] == "blocked_exact_source"
 
 
-def test_powershell_is_the_single_fanout_entrypoint() -> None:
+def test_powershell_is_the_single_fail_closed_fanout_entrypoint() -> None:
     text = POWERSHELL.read_text(encoding="utf-8")
     assert "earcrate_album_sprint_01.py" in text
+    assert "earcrate_album_sprint_preflight.py" in text
     assert "dispatch" in text
     assert "ExecuteReadyAdapters" in text
+    assert "estate_execution_authorized" in text
     assert "TASK_QUEUE.json" in text

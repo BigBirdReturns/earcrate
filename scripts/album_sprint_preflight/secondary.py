@@ -27,16 +27,17 @@ def homelab(track_id: str, spec: Mapping[str, Any], campaign_track: Mapping[str,
     if HOMELAB_FORBIDDEN_SWITCHES & template_args:
         errors.append("campaign template uses nonexistent switches: " + ", ".join(sorted(HOMELAB_FORBIDDEN_SWITCHES & template_args)))
     if not HOMELAB_REQUIRED_SWITCHES.issubset(template_args):
-        errors.append("campaign template omits the actual factory switches")
+        errors.append("campaign has no executable full-form factory command")
     result["tool_contract_ready"] = not errors
     absent = missing(bindings, list(spec.get("required_bindings") or []))
     result["binding_contract_ready"] = not absent
-    result["representative_invocation_ready"] = result["tool_contract_ready"] and result["binding_contract_ready"]
+    result["representative_invocation_ready"] = False
     result["observations"] = {
         "case_id": spec.get("case_id"), "runner_switches": sorted(runner_args),
         "campaign_template_switches": sorted(template_args),
         "provider_factory_available": runner.is_file() and factory.is_file(),
         "album_full_form_floor_enforced": False,
+        "representative_invocation_receipt_bound": False,
     }
     if errors:
         result["blockers"].append(blocker(
@@ -48,12 +49,18 @@ def homelab(track_id: str, spec: Mapping[str, Any], campaign_track: Mapping[str,
             "The factory requires exact source, catalog, and audit inputs before invocation.",
             missing_binding_ids=absent,
         ))
-    result["blockers"].append(blocker(
-        "blocked_full_form_adapter", "output_contract",
-        "The Homelab factory can emit provider trials, but this lane has no wrapper enforcing setup, body, payoff, duration, and deterministic full-form reproduction.",
-        minimum_duration_seconds=float(spec["minimum_seconds"]),
-        maximum_duration_seconds=float(spec["maximum_seconds"]),
-    ))
+    result["blockers"].extend([
+        blocker(
+            "blocked_representative_invocation", "execution_evidence",
+            "No exact-head receipt proves a complete Album-form invocation for this case."
+        ),
+        blocker(
+            "blocked_full_form_adapter", "output_contract",
+            "The Homelab factory can emit provider trials, but this lane has no wrapper enforcing setup, body, payoff, duration, and deterministic full-form reproduction.",
+            minimum_duration_seconds=float(spec["minimum_seconds"]),
+            maximum_duration_seconds=float(spec["maximum_seconds"]),
+        ),
+    ])
     return result
 
 
@@ -84,16 +91,21 @@ def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) 
     result["tool_contract_ready"] = runner.is_file() and contract_path.is_file()
     absent = missing(bindings, list(spec.get("required_bindings") or []))
     result["binding_contract_ready"] = not absent
-    result["representative_invocation_ready"] = result["tool_contract_ready"] and result["binding_contract_ready"]
+    result["representative_invocation_ready"] = False
     result["observations"] = {
         "review_scope": scope, "positive_arc_reapplication_deferred": arc_deferred,
         "minimum_full_form_seconds": float(spec["minimum_seconds"]),
+        "representative_full_form_invocation_receipt_bound": False,
     }
     if absent:
         result["blockers"].append(blocker(
             "blocked_exact_source", "binding_contract",
-            "The qualified private v7 workspace is not bound.", missing_binding_ids=absent,
+            "The qualified private v7 workspace and Beggin CORE custody are not both bound.", missing_binding_ids=absent,
         ))
+    result["blockers"].append(blocker(
+        "blocked_representative_invocation", "execution_evidence",
+        "No exact-head receipt proves a 45–120 second stable-pocket Beggin arc."
+    ))
     if "core" in scope.casefold() or arc_deferred:
         result["blockers"].append(blocker(
             "blocked_full_form_adapter", "output_contract",

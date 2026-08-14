@@ -15,7 +15,7 @@ def inspect_track(track_id: str, spec: Mapping[str, Any], campaign_track: Mappin
     elif probe == "children_score_compiler":
         result = children(track_id, spec, bindings)
     elif probe == "flim_symbolic_report":
-        result = flim(track_id, spec)
+        result = flim(track_id, spec, bindings)
     elif probe == "homelab_factory":
         result = homelab(track_id, spec, campaign_track, bindings)
     elif probe == "gesture_adapter":
@@ -42,12 +42,24 @@ def inspect_track(track_id: str, spec: Mapping[str, Any], campaign_track: Mappin
     return result
 
 
-def build_report(campaign: Mapping[str, Any], preflight: Mapping[str, Any], bindings: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+def build_report(
+    campaign: Mapping[str, Any],
+    preflight: Mapping[str, Any],
+    bindings: Mapping[str, Mapping[str, Any]],
+    *,
+    bindings_bytes_verified: bool = False,
+) -> dict[str, Any]:
     campaign_tracks = {str(row["track_id"]): row for row in campaign.get("tracks") or []}
     tracks: dict[str, Any] = {}
     counts: dict[str, int] = {}
     for track_id, spec in (preflight.get("tracks") or {}).items():
         result = inspect_track(track_id, spec, campaign_tracks[track_id], bindings.get(track_id) or {})
+        if result["music_producing_path_ready"] and not bindings_bytes_verified:
+            result["blockers"].append(blocker(
+                "blocked_unverified_bindings", "binding_contract",
+                "Exact binding bytes were not verified for this preflight."
+            ))
+            result["music_producing_path_ready"] = False
         tracks[track_id] = result
         counts[result["state"]] = counts.get(result["state"], 0) + 1
     lane_count = sum(bool(row["music_producing_path_ready"]) for row in tracks.values())
@@ -56,9 +68,10 @@ def build_report(campaign: Mapping[str, Any], preflight: Mapping[str, Any], bind
         "sprint_id": campaign["sprint_id"], "campaign_sha256": campaign["contract_sha256"],
         "preflight_contract_sha256": preflight["preflight_contract_sha256"],
         "tracks": tracks, "state_counts": counts,
+        "bindings_bytes_verified": bool(bindings_bytes_verified),
         "music_producing_lane_count": lane_count,
         "performance_realization_ready_count": sum(bool(row["performance_realization_ready"]) for row in tracks.values()),
-        "estate_execution_authorized": lane_count > 0,
+        "estate_execution_authorized": lane_count > 0 and bool(bindings_bytes_verified),
         "authorized_track_ids": [track_id for track_id, row in tracks.items() if row["music_producing_path_ready"]],
         "private_paths_included": False, "source_audio_exported": False,
     }, "report_sha256")
@@ -70,9 +83,10 @@ def apply_workspace(report: Mapping[str, Any], workspace: Path) -> list[str]:
         raise RuntimeError(f"workspace does not exist: {root}")
     removed: list[str] = []
     authorized = set(report.get("authorized_track_ids") or [])
-    for path in root.glob("tracks/A1-*/NEXT_COMMAND.ps1"):
-        if path.parent.name not in authorized:
-            path.unlink(missing_ok=True)
-            removed.append(str(path))
+    for name in ("NEXT_COMMAND.ps1", "NEXT_COMMAND.txt"):
+        for path in root.glob(f"tracks/A1-*/{name}"):
+            if path.parent.name not in authorized:
+                path.unlink(missing_ok=True)
+                removed.append(str(path))
     write_json(root / "PREFLIGHT.json", report)
     return removed

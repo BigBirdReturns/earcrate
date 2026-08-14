@@ -34,6 +34,9 @@ if ($Status) {
     if ($LASTEXITCODE -ne 0) { throw "Album Sprint status verification failed" }
     exit 0
 }
+if ($ExecuteReadyAdapters -and -not $VerifyBytes) {
+    throw "ExecuteReadyAdapters requires -VerifyBytes; unverified private bindings cannot authorize Estate execution"
+}
 
 $RepoPreflightArgs = @(
     $PreflightCli,

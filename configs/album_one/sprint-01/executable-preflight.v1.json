@@ -1,6 +1,6 @@
 {
   "authority": "No Estate adapter command may execute unless this preflight proves a complete music-producing path for that lane.",
-  "base_campaign_sha256": "85f3b31106dd6c5ee9e9687edce3ac13d8b2c69fb2763544e455e5faa3dd4516",
+  "base_campaign_sha256": "d6950f41246629762a717e66765a4b869afe4c500318cfccc46732c28bffcb2c",
   "boundary": {
     "estate_execution_default": "closed",
     "owner_frontier_authority": false,
@@ -18,7 +18,7 @@
     "reproduction_receipts_required",
     "musical_delta_disclosed"
   ],
-  "preflight_contract_sha256": "11c992ddfcf11a4822879ae09babbd9726baf9b07e67d5c93baad1abe6312a5f",
+  "preflight_contract_sha256": "7e17d7ddc1657fe4d69cf0f04b491ad81fefcc520761f019898e398329458ba6",
   "prohibited_authorization_inputs": [
     "campaign_task_materialized",
     "provider_process_completed",
@@ -54,10 +54,26 @@
     },
     "A1-02": {
       "adapter": "score_audio_convergence",
+      "convergence_bindings": [
+        "exact_reference_audio"
+      ],
       "execution_class": "score_compiler_without_performance_renderer",
       "minimum_seconds": 120.0,
+      "performance_bindings": [
+        "approved_rack_library"
+      ],
       "repo_probe": "children_score_compiler",
       "required_bindings": [
+        "score_pdf",
+        "score_extraction",
+        "score_reconstruction_midi",
+        "score_proof_receipt",
+        "mix_score",
+        "mix_execution_ledger",
+        "exact_reference_audio",
+        "approved_rack_library"
+      ],
+      "score_pack_bindings": [
         "score_pdf",
         "score_extraction",
         "score_reconstruction_midi",
@@ -71,7 +87,10 @@
       "execution_class": "symbolic_report_without_audio_renderer",
       "minimum_seconds": 120.0,
       "repo_probe": "flim_symbolic_report",
-      "required_bindings": []
+      "required_bindings": [
+        "exact_bad_plus_performance_audio",
+        "approved_piano_bass_drum_racks"
+      ]
     },
     "A1-04": {
       "adapter": "homelab_specimen_full_form",
@@ -120,7 +139,8 @@
       "minimum_seconds": 45.0,
       "repo_probe": "gold_v9_contract",
       "required_bindings": [
-        "a1_07_gold_v7_workspace"
+        "a1_07_gold_v7_workspace",
+        "beggin_core_private_store"
       ]
     }
   }

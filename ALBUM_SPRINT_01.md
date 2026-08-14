@@ -15,7 +15,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -OpenWorkspace
 ```
 
-The command verifies the campaign, creates a durable workspace without overwriting prior work, materializes all seven track dossiers and the private binding template, fans out ready adapters, and writes a source-free public projection.
+The command verifies the campaign, creates a durable workspace without overwriting prior work, materializes all seven track dossiers and the private binding template, fans out contract-complete adapters, and writes a source-free public projection. Dossier creation is reported as `campaign_task_materialized`; it is never evidence that an adapter or musical result is ready.
 
 ## Owner-facing rule
 

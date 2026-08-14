@@ -19,7 +19,7 @@ _spec.loader.exec_module(sprint)
 def test_campaign_is_sealed_parallel_and_full_form() -> None:
     campaign = sprint.contract(CONTRACT)
     assert campaign["contract_sha256"] == (
-        "068780e8e5acdbdea4e1d3df14ca6856b1f1a791c069efab42e874825b8d55b6"
+        "85f3b31106dd6c5ee9e9687edce3ac13d8b2c69fb2763544e455e5faa3dd4516"
     )
     assert [row["track_id"] for row in campaign["tracks"]] == list(sprint.TRACK_IDS)
     assert campaign["program_truth"]["proving_track_is_not_album_mutex"] is True
@@ -46,6 +46,29 @@ def test_one_command_prepares_all_seven_dossiers() -> None:
             assert (root / "TRACK_RESULT.private.template.json").is_file()
         status = sprint.status(campaign, workspace)
         assert set(status["track_states"]) == set(sprint.TRACK_IDS)
+
+
+def test_dossier_materialization_does_not_claim_adapter_readiness() -> None:
+    campaign = sprint.contract(CONTRACT)
+    tracks = sprint.by_track(campaign)
+    template = sprint.bindings_template(campaign)
+    resolved, missing = sprint.resolve_bindings(campaign, template, verify_bytes=False)
+
+    children = sprint.task(campaign, tracks["A1-02"], resolved["A1-02"], missing["A1-02"])
+    assert children["initial_state"] == "campaign_task_materialized"
+    assert children["readiness"]["tool_contract_ready"] is False
+    blocker = children["readiness"]["blockers"][0]
+    assert blocker["kind"] == "blocked_exact_artifact_pack"
+    assert blocker["missing_artifact_ids"] == list(sprint.CHILDREN_SCORE_ARTIFACTS)
+
+    flim = sprint.task(campaign, tracks["A1-03"], resolved["A1-03"], missing["A1-03"])
+    assert flim["initial_state"] == "campaign_task_materialized"
+    assert flim["readiness"]["symbolic_evidence_ready"] is True
+    assert flim["readiness"]["performance_realization_ready"] is False
+    blocker = flim["readiness"]["blockers"][0]
+    assert blocker["kind"] == "blocked_performance_realization"
+    assert blocker["decoded_float_pcm_max_abs"] == 0.0
+    assert blocker["observed_duration_seconds"] < blocker["minimum_duration_seconds"]
 
 
 def test_frontier_admission_requires_full_form_disclosed_distinct_cuts() -> None:

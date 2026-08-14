@@ -19,9 +19,16 @@ DEFAULT_CONTRACT = ROOT / "configs" / "album_one" / "sprint-01" / "campaign.v1.j
 TRACK_IDS = tuple(f"A1-{i:02d}" for i in range(1, 8))
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 STATES = {
-    "machine_work_ready", "frontier_ready", "blocked_exact_source",
+    "campaign_task_materialized", "tool_contract_ready", "symbolic_evidence_ready",
+    "performance_realization_ready", "frontier_ready", "blocked_exact_source",
+    "blocked_exact_artifact_pack", "blocked_performance_realization",
     "blocked_exact_credential", "blocked_rights_or_custody", "failed",
 }
+
+CHILDREN_SCORE_ARTIFACTS = (
+    "score_pdf", "score_extraction", "score_reconstruction_midi",
+    "score_proof_receipt", "mix_score", "mix_execution_ledger",
+)
 
 
 class SprintError(RuntimeError):
@@ -213,9 +220,53 @@ def resolve_bindings(
     return resolved, missing
 
 
+def adapter_readiness(track: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, Any]:
+    """Report observed adapter evidence without promoting dossier creation to readiness."""
+    adapter = track.get("adapter")
+    blockers: list[dict[str, Any]] = []
+    symbolic = False
+    if adapter == "score_audio_convergence":
+        specimen = load(ROOT / "specimens" / "children_v1.json")
+        external = {
+            row["artifact_id"] for row in specimen.get("artifacts") or []
+            if row.get("status") == "bound" and not row.get("repository_managed")
+        }
+        missing = [
+            artifact for artifact in CHILDREN_SCORE_ARTIFACTS
+            if artifact in external and not (bindings.get(artifact) or {}).get("available")
+        ]
+        if missing:
+            blockers.append({
+                "kind": "blocked_exact_artifact_pack",
+                "missing_artifact_ids": missing,
+                "detail": "The selected Children adapter requires the complete exact score pack.",
+            })
+    elif adapter == "community_symbolic_ensemble":
+        witness = load(ROOT / "specimens" / "flim_bad_plus_v1.community-symbolic.json")
+        symbolic = witness.get("evidence_tier") == "community_symbolic_witness"
+        duration = float((witness.get("witness") or {}).get("duration_seconds") or 0)
+        amplitude = float((witness.get("reproducibility") or {}).get("decoded_float_pcm_max_abs") or 0)
+        minimum = float((track.get("full_form") or {}).get("minimum_seconds") or 0)
+        blockers.append({
+            "kind": "blocked_performance_realization",
+            "observed_duration_seconds": duration,
+            "minimum_duration_seconds": minimum,
+            "decoded_float_pcm_max_abs": amplitude,
+            "detail": "Community-symbolic evidence is silent and below the declared full-form floor.",
+        })
+    return {
+        "campaign_task_materialized": True,
+        "tool_contract_ready": adapter == "score_audio_convergence" and not blockers,
+        "symbolic_evidence_ready": symbolic,
+        "performance_realization_ready": False,
+        "frontier_ready": False,
+        "blockers": blockers,
+    }
+
+
 def task(campaign: Mapping[str, Any], track: Mapping[str, Any], bindings: Mapping[str, Any], missing: Sequence[str]) -> dict[str, Any]:
     can_progress = bool(track.get("machine_can_progress_without_frontier_bindings"))
-    state = "machine_work_ready" if not missing or can_progress else "blocked_exact_source"
+    state = "campaign_task_materialized"
     return sealed({
         "schema_version": 1, "kind": "earcrate_album_sprint_track_task",
         "sprint_id": campaign["sprint_id"], "contract_sha256": campaign["contract_sha256"],
@@ -223,6 +274,7 @@ def task(campaign: Mapping[str, Any], track: Mapping[str, Any], bindings: Mappin
         "reference_class": track["reference_class"], "adapter": track["adapter"],
         "initial_state": state, "frontier_binding_missing": list(missing),
         "source_free_progress_allowed": can_progress,
+        "readiness": adapter_readiness(track, bindings),
         "repo_evidence": track["repo_evidence"], "full_form": track["full_form"],
         "control": track["control"], "machine_steps": track["machine_steps"],
         "owner_delta": track["owner_delta"], "blocker_policy": track["blocker_policy"],

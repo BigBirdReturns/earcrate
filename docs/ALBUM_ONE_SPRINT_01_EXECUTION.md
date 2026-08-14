@@ -19,7 +19,7 @@ The runner never copies private source audio into the repository or public proje
 
 ## Track states
 
-`machine_work_ready` means that the Estate has a complete dossier and can continue machine work. It does not mean an owner audition exists.
+`campaign_task_materialized` means only that EarCrate wrote the track dossier. It is not adapter readiness. Readiness advances separately through `tool_contract_ready`, `symbolic_evidence_ready`, `performance_realization_ready`, and `frontier_ready`. A missing adapter artifact contract, silent output, or output below the declared full-form floor prevents the corresponding owner-facing readiness state.
 
 `frontier_ready` means the lane has one to four full-form, reproducible cuts; every musical delta is disclosed; setup, body, and payoff or release are present; and the cuts do not share one dominant audible defect.
 

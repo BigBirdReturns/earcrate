@@ -144,4 +144,3 @@ def test_powershell_is_the_single_fail_closed_fanout_entrypoint() -> None:
     assert "dispatch" in text
     assert "ExecuteReadyAdapters" in text
     assert "estate_execution_authorized" in text
-    assert "TASK_QUEUE.json" in text

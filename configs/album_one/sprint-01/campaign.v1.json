@@ -1,0 +1,467 @@
+{
+  "album_id": "earcrate-album-one",
+  "contract_sha256": "d6950f41246629762a717e66765a4b869afe4c500318cfccc46732c28bffcb2c",
+  "created_at": "2026-08-13T18:20:00Z",
+  "estate_policy": {
+    "overwrite_existing_workspace": false,
+    "owner_frontier_requires_complete_musical_proposition": true,
+    "parallel_track_lanes": 7,
+    "private_bindings_remain_local": true,
+    "public_projection_source_free": true,
+    "single_entrypoint": "scripts/RUN_ALBUM_ONE_SPRINT_01.ps1",
+    "source_audio_may_not_enter_repository": true
+  },
+  "kind": "earcrate_album_sprint_campaign",
+  "owner_time_budget": {
+    "cuts_per_frontier_max": 4,
+    "frontiers_per_track_max": 1,
+    "musical_delta_disclosed": true,
+    "musical_operation_may_not_be_blinded": true,
+    "owner_diagnosis_required": false,
+    "provider_identity_may_be_blinded": true,
+    "shared_dominant_defect_invalidates_frontier": true
+  },
+  "program_issue": 73,
+  "program_truth": {
+    "accepted_album_masters": 0,
+    "active_workstreams": [
+      "A1-01",
+      "A1-02",
+      "A1-03",
+      "A1-04",
+      "A1-05",
+      "A1-06",
+      "A1-07"
+    ],
+    "completed_system_references": 0,
+    "proving_track": "A1-07",
+    "proving_track_is_not_album_mutex": true
+  },
+  "purpose": "Materialize all seven Album One workstreams, report exact blockers, and authorize Estate execution only for adapters proven to produce reproducible full-form music.",
+  "schema_version": 1,
+  "sprint_id": "album-one-sprint-01",
+  "sprint_issue": 79,
+  "terminal_states": [
+    "campaign_task_materialized",
+    "tool_contract_ready",
+    "symbolic_evidence_ready",
+    "performance_realization_ready",
+    "frontier_ready",
+    "blocked_exact_source",
+    "blocked_exact_artifact_pack",
+    "blocked_performance_realization",
+    "blocked_exact_credential",
+    "blocked_rights_or_custody",
+    "failed"
+  ],
+  "tracks": [
+    {
+      "adapter": "retained_candidate_fidelity",
+      "blocker_policy": "Exact source custody and a deterministic 60-second-or-longer reconstruction adapter must both exist before execution.",
+      "control": "supplied reference plus one serious non-reference-faithful control",
+      "entrypoint": {
+        "kind": "estate_agent_desk",
+        "template": null
+      },
+      "full_form": {
+        "maximum_seconds": 420.0,
+        "minimum_seconds": 60.0,
+        "required_functions": [
+          "setup",
+          "body",
+          "payoff_or_release"
+        ],
+        "whole_work_allowed": true
+      },
+      "machine_can_progress_without_frontier_bindings": false,
+      "machine_steps": [
+        "Verify the retained proof and release-candidate identities before rebuilding anything.",
+        "Reproduce the strongest retained candidate from its committed execution object.",
+        "Measure form coverage, recurrence, phrase ownership, transitions, and reference legibility across the complete retained form.",
+        "Prepare at most three semantically disclosed cuts: retained incumbent, one bounded repair if machine evidence justifies it, and one serious negative control."
+      ],
+      "owner_delta": "reference fidelity and full-form legibility; no hidden tool or model swap",
+      "reference_class": "reference_fidelity_reconstruction",
+      "repo_evidence": [
+        "proofs/specimens/pretty_lights_empire_release_candidate_v1/proof.json",
+        "proofs/specimens/pretty_lights_empire_release_candidate_v1/release_candidate.json"
+      ],
+      "source_bindings": [
+        {
+          "binding_id": "supplied_reference_audio",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "reference_authority"
+        },
+        {
+          "binding_id": "retained_candidate_audio",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "incumbent_candidate"
+        },
+        {
+          "binding_id": "serious_negative_control",
+          "private": true,
+          "required_for_frontier": false,
+          "role": "negative_control"
+        }
+      ],
+      "track_id": "A1-01",
+      "working_title": "Pretty Lights — Empire State of Mind"
+    },
+    {
+      "adapter": "score_audio_convergence",
+      "blocker_policy": "The complete exact six-artifact score pack and an approved full-performance rack renderer are required; exact reference audio is additionally required for convergence.",
+      "control": "neutral score realization versus cross-modal performance realization",
+      "entrypoint": {
+        "kind": "estate_agent_desk",
+        "template": null
+      },
+      "full_form": {
+        "maximum_seconds": 600.0,
+        "minimum_seconds": 120.0,
+        "required_functions": [
+          "setup",
+          "body",
+          "payoff_or_release"
+        ],
+        "whole_work_allowed": true
+      },
+      "machine_can_progress_without_frontier_bindings": false,
+      "machine_steps": [
+        "Compile the complete bound score, MIDI, MixScore, PlayerPiano, and rack evidence into one whole-form PerformanceScore.",
+        "Render the complete source-free score realization before the exact recording is bound.",
+        "When exact reference audio is bound, run whole-form score-to-audio alignment and compare performance timing, dynamics, articulation, and form.",
+        "Prepare no phrase demos; the owner frontier must contain complete dramatic form."
+      ],
+      "owner_delta": "neutral notation playback versus accountable performance realization of the same complete work",
+      "reference_class": "cross_modal_score_audio_reconstruction",
+      "repo_evidence": [
+        "specimens/children_v1.json",
+        "proofs/specimens/children_v1.score-side.proof.json"
+      ],
+      "source_bindings": [
+        {
+          "binding_id": "score_pdf",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "score_contract"
+        },
+        {
+          "binding_id": "score_extraction",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "score_contract"
+        },
+        {
+          "binding_id": "score_reconstruction_midi",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "score_contract"
+        },
+        {
+          "binding_id": "score_proof_receipt",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "score_contract"
+        },
+        {
+          "binding_id": "mix_score",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "performance_contract"
+        },
+        {
+          "binding_id": "mix_execution_ledger",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "performance_contract"
+        },
+        {
+          "binding_id": "exact_reference_audio",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "audio_authority"
+        },
+        {
+          "binding_id": "approved_rack_library",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "performance_material"
+        }
+      ],
+      "track_id": "A1-02",
+      "working_title": "Robert Miles — Children"
+    },
+    {
+      "adapter": "community_symbolic_ensemble",
+      "blocker_policy": "The retained community-symbolic summary is not executable performance material; exact note-event custody, approved trio racks, and full-form rendering must exist before execution.",
+      "control": "literal symbolic playback versus performance-arrangement realization",
+      "entrypoint": {
+        "kind": "estate_agent_desk",
+        "template": null
+      },
+      "full_form": {
+        "maximum_seconds": 600.0,
+        "minimum_seconds": 120.0,
+        "required_functions": [
+          "setup",
+          "body",
+          "payoff_or_release"
+        ],
+        "whole_work_allowed": true
+      },
+      "machine_can_progress_without_frontier_bindings": false,
+      "machine_steps": [
+        "Compile the complete community-symbolic witness into piano, acoustic bass, drums, transport, and ensemble obligations.",
+        "Render the complete ensemble realization and the proof-carrying adjacent move.",
+        "Bind the exact Bad Plus performance and run blind-audio/symbolic convergence across the complete form.",
+        "Reject any result that recovers only the Aphex Twin composition while missing The Bad Plus arrangement and ensemble behavior."
+      ],
+      "owner_delta": "literal notes versus recovered Bad Plus performance grammar over the complete form",
+      "reference_class": "performance_arrangement_reconstruction",
+      "repo_evidence": [
+        "specimens/flim_bad_plus_v1.json",
+        "specimens/flim_bad_plus_v1.community-symbolic.json"
+      ],
+      "source_bindings": [
+        {
+          "binding_id": "exact_bad_plus_performance_audio",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "performance_authority"
+        },
+        {
+          "binding_id": "approved_piano_bass_drum_racks",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "ensemble_material"
+        }
+      ],
+      "track_id": "A1-03",
+      "working_title": "Aphex Twin / The Bad Plus — Flim"
+    },
+    {
+      "adapter": "homelab_specimen_full_form",
+      "blocker_policy": "Exact private editions, current Homelab catalog and audit receipts, and an Album full-form conductor wrapper are all required before execution.",
+      "control": "serious naive overlap and identity-preserving Toxic control",
+      "entrypoint": {
+        "kind": "estate_agent_desk",
+        "template": null
+      },
+      "full_form": {
+        "maximum_seconds": 90.0,
+        "minimum_seconds": 60.0,
+        "required_functions": [
+          "setup",
+          "body",
+          "payoff_or_release"
+        ],
+        "whole_work_allowed": false
+      },
+      "machine_can_progress_without_frontier_bindings": false,
+      "machine_steps": [
+        "Run material census, stem-role evidence, pulse, percussion-event, harmony, and section correspondence before composition.",
+        "Build a 60–90 second arrangement whose setup preserves Toxic negative space, whose body imports Animal-derived physical force, and whose payoff remains unmistakably Toxic.",
+        "Include the reverse transplant only when it is a causally useful control.",
+        "Prepare at most four semantically named cuts; short stem experiments remain machine-side."
+      ],
+      "owner_delta": "which production and percussion roles move from Animal into Toxic, and which Toxic identity elements remain fixed",
+      "reference_class": "cross_song_production_grammar_transplant",
+      "repo_evidence": [
+        "configs/homelab_factory/specimen-suite.v1.json"
+      ],
+      "source_bindings": [
+        {
+          "binding_id": "katseye_animal_exact_edition",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "production_body_donor"
+        },
+        {
+          "binding_id": "britney_toxic_exact_edition",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "identity_bearing_target"
+        },
+        {
+          "binding_id": "homelab_catalog",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "provider_catalog_authority"
+        },
+        {
+          "binding_id": "homelab_audit",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "estate_capability_authority"
+        }
+      ],
+      "specimen_case_id": "animal-katseye-x-britney-toxic-handoff",
+      "track_id": "A1-04",
+      "working_title": "KATSEYE Animal × Britney Spears Toxic"
+    },
+    {
+      "adapter": "homelab_specimen_full_form",
+      "blocker_policy": "Exact private editions, current Homelab catalog and audit receipts, and an Album full-form conductor wrapper are all required before execution.",
+      "control": "neutral alignment and reverse-modernization control",
+      "entrypoint": {
+        "kind": "estate_agent_desk",
+        "template": null
+      },
+      "full_form": {
+        "maximum_seconds": 90.0,
+        "minimum_seconds": 60.0,
+        "required_functions": [
+          "setup",
+          "body",
+          "payoff_or_release"
+        ],
+        "whole_work_allowed": false
+      },
+      "machine_can_progress_without_frontier_bindings": false,
+      "machine_steps": [
+        "Map chorus width, drum lift, guitar resonance, vocal authority, harmonic function, and section ancestry.",
+        "Build a 60–90 second arrangement with setup, body, and payoff rather than isolated chorus surgery.",
+        "Compare neutral alignment, ancestry transfer, and reverse modernization only when each is a complete musical proposition.",
+        "Preserve distinct song identities and reject generic Coldplay imitation."
+      ],
+      "owner_delta": "how Yellow-like scale, live-band lift, and inevitability enter the sombr song while its identity stays intact",
+      "reference_class": "cross_song_arrangement_ancestry",
+      "repo_evidence": [
+        "configs/homelab_factory/specimen-suite.v1.json"
+      ],
+      "source_bindings": [
+        {
+          "binding_id": "sombr_my_body_isnt_ready_exact_edition",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "identity_bearing_target"
+        },
+        {
+          "binding_id": "coldplay_yellow_exact_edition",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "arrangement_ancestry_donor"
+        },
+        {
+          "binding_id": "homelab_catalog",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "provider_catalog_authority"
+        },
+        {
+          "binding_id": "homelab_audit",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "estate_capability_authority"
+        }
+      ],
+      "specimen_case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+      "track_id": "A1-05",
+      "working_title": "sombr My Body Isn’t Ready × Coldplay Yellow"
+    },
+    {
+      "adapter": "gesture_corpus_arrangement",
+      "blocker_policy": "Exact source and held-out corpora plus an executable gesture-retrieval-to-arrangement adapter are required before execution.",
+      "control": "non-bhangra contour/rhythm control matched for superficial ascent",
+      "entrypoint": {
+        "kind": "estate_agent_desk",
+        "template": null
+      },
+      "full_form": {
+        "maximum_seconds": 75.0,
+        "minimum_seconds": 45.0,
+        "required_functions": [
+          "setup",
+          "body",
+          "payoff_or_release"
+        ],
+        "whole_work_allowed": false
+      },
+      "machine_can_progress_without_frontier_bindings": false,
+      "machine_steps": [
+        "Isolate the exact ascending Stateside gesture and represent contour, rhythm, articulation, ornamentation, timbre, and context.",
+        "Run held-out retrieval against curated bhangra/Punjabi positives and matched non-bhangra negatives.",
+        "Identify the smallest causal mechanism that survives the controls.",
+        "Compose a 45–75 second arrangement demonstrating that mechanism in context; do not stop at retrieval."
+      ],
+      "owner_delta": "the exact contour/rhythm/articulation mechanism that creates the bhangra-adjacent reading, versus a matched non-bhangra control",
+      "reference_class": "perceptual_gesture_to_arrangement",
+      "repo_evidence": [
+        "ALBUM_SPRINT_01.md"
+      ],
+      "source_bindings": [
+        {
+          "binding_id": "pinkpantheress_stateside_exact_edition",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "gesture_source"
+        },
+        {
+          "binding_id": "curated_bhangra_comparison_corpus",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "positive_comparison_corpus"
+        },
+        {
+          "binding_id": "non_bhangra_negative_control_corpus",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "negative_control_corpus"
+        }
+      ],
+      "track_id": "A1-06",
+      "working_title": "PinkPantheress Stateside / bhangra gesture"
+    },
+    {
+      "adapter": "timing_law_full_form",
+      "blocker_policy": "Gold v9 remains a core-only diagnostic. Exact v7/Core custody and a separate 45–120 second arc renderer are required before Album execution.",
+      "control": "stable timing-law incumbent and serious literal co-play, never another bar-dragging family",
+      "entrypoint": {
+        "kind": "estate_agent_desk",
+        "template": null
+      },
+      "full_form": {
+        "maximum_seconds": 120.0,
+        "minimum_seconds": 45.0,
+        "required_functions": [
+          "setup",
+          "body",
+          "payoff_or_release"
+        ],
+        "whole_work_allowed": false
+      },
+      "machine_can_progress_without_frontier_bindings": false,
+      "machine_steps": [
+        "Close v8 as non-discriminating and run single-speed, native-pocket, phrase-reset, or superior timing-law probes machine-side.",
+        "Reject timing laws with audible continuous drag, destructive drift, or repeated phase correction before owner review.",
+        "Rebuild the positive quiet-source-led introduction and crescendo under the surviving stable timing law.",
+        "Produce at least 45 seconds containing setup, stable body/groove, payoff, and semantically disclosed timing law."
+      ],
+      "owner_delta": "stable band-following law and complete dramatic arc; no hidden mix-only variants sharing the same timing defect",
+      "reference_class": "same_work_cross_era_performance_arrangement",
+      "repo_evidence": [
+        "configs/album_one/a1-07/gold-v9-timing-laws.v1.json",
+        "scripts/earcrate_a1_07_gold_v9.py",
+        "scripts/RUN_A1_07_GOLD_V9.ps1"
+      ],
+      "source_bindings": [
+        {
+          "binding_id": "a1_07_gold_v7_workspace",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "qualified_private_evidence_workspace"
+        },
+        {
+          "binding_id": "beggin_core_private_store",
+          "private": true,
+          "required_for_frontier": true,
+          "role": "source_and_stem_custody"
+        }
+      ],
+      "track_id": "A1-07",
+      "working_title": "The Four Seasons Beggin’ × Måneskin Beggin’"
+    }
+  ]
+}

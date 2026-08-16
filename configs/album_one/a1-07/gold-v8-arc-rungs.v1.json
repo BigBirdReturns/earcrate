@@ -1,0 +1,132 @@
+{
+  "album_id": "earcrate-album-one",
+  "contract_sha256": "b17df74823d6194bd36a5e77489e0e09571eb87bc3b94578b4fdff5600e139ab",
+  "created_at": "2026-08-12T00:00:00Z",
+  "descent_id": "a1-07-gold-v8-arc-rungs",
+  "handoff_selection_policy": {
+    "human_selection_required": false,
+    "maximum_masks": 1,
+    "rank_order": [
+      "fill",
+      "launch",
+      "handoff",
+      "answer",
+      "response",
+      "release",
+      "punctuation",
+      "ownership"
+    ],
+    "tie_break": "larger mean absolute PCM difference from gold-v6 inside the declared mask"
+  },
+  "input_commitments": {
+    "gold_v6_pcm_sha256": "0733d87869f34710cd0d2e06875ae876eb100b5065f4159e8199a2672ee863f8",
+    "gold_v6_score_sha256": "7fdb7873702e4cd7b43e6e01fefdad89786e4461842b8c3358a63565a464d6cf",
+    "gold_v7_arc_pcm_sha256": "a80ad01fe529aa4292beed2cc13b8bdc48afdcf7a75ab0a96b7ecf30caf5476c",
+    "gold_v7_arc_score_sha256": "796f40eacfe02e99f63d0cfee81d5f27eeeaa0384c6711cc25c51146e96aeba5",
+    "gold_v7_contract_sha256": "858d39452319e90e054c5a4994f07f7ccfcd5d38f011a46ed6834e7a766f1048",
+    "gold_v7_interplay_pcm_sha256": "dac665b3ca517b770c500465f11a5e6461e6352bb0d90efa8e8bf775cb43af2b",
+    "gold_v7_interplay_score_sha256": "00e80e1984f22024d1473a86baf4eb399a98462c491b30093cae17c4043b1ab3",
+    "gold_v7_production_pcm_sha256": "cad48725fead8b53fbe85d6bca14a461aff57ed2ed9a66cab78eb67558410f5e",
+    "gold_v7_production_score_sha256": "6b55040010a6cc3052b58baeae99b0311c6e8a7aa099009302774cadf7747515",
+    "owner_review_receipt_sha256": "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3"
+  },
+  "kind": "earcrate_track_descent_contract",
+  "locked_invariants": [
+    "The exact gold-v7 arc introduction and crescendo remain sample-identical outside declared core joins.",
+    "The exact gold-v6 core remains the temporal and vocal authority.",
+    "Frankie is never pitch-shifted, time-stretched, phrase-chopped, replaced, or doubled by a generated lead.",
+    "The modern band continues to follow the accepted same-work and bar-conduction law.",
+    "No new provider family, seed sweep, full-song render, or generic alignment is permitted.",
+    "Every rung is a content-addressed compound score rendered twice to byte-identical PCM."
+  ],
+  "machine_gate": {
+    "all_input_identities_must_match": true,
+    "arc_intro_and_tail_must_remain_exact": true,
+    "both_descendants_must_be_distinct": true,
+    "handoff_must_differ_only_inside_one_declared_mask": true,
+    "owner_frontier_requires_both_descendants": true,
+    "positive_arc_must_contain_exactly_one_sample_identical_gold_v6_core": true,
+    "production_core_interior_must_match_qualified_v7_production": true
+  },
+  "render_policy": {
+    "canonical_pcm_identity_required": true,
+    "container_byte_identity_required": true,
+    "core_join_ms": 20.0,
+    "handoff_fade_ms": 12.0,
+    "independent_renders": 2,
+    "no_master_processing_during_compound_splice": true,
+    "sample_format": "signed 32-bit PCM"
+  },
+  "review_policy": {
+    "core_window_lane": [
+      "gold-v6-core",
+      "production-core",
+      "production-plus-handoff-core"
+    ],
+    "owner_diagnosis_required": false,
+    "peak_ceiling_dbfs": -2.0,
+    "relative_preference_does_not_equal_album_acceptance": true,
+    "roles_withheld": true,
+    "target_lufs": -14.0,
+    "whole_arc_lane": [
+      "gold-v8-arc-control",
+      "gold-v8-arc-production",
+      "gold-v8-arc-handoff"
+    ]
+  },
+  "rungs": [
+    {
+      "candidate_id": "gold-v8-arc-control",
+      "may_change": [],
+      "mechanism": "exact gold-v7 arc audio, including quiet introduction, crescendo, and sample-identical gold-v6 core",
+      "must_preserve": [
+        "entire gold-v7 arc PCM"
+      ],
+      "role": "positive_module_control"
+    },
+    {
+      "candidate_id": "gold-v8-arc-production",
+      "may_change": [
+        "bounded crossfade joins at the core boundaries"
+      ],
+      "mechanism": "exact gold-v7 arc introduction and tail with the production-integrated v7 core spliced into the embedded gold-v6 window",
+      "must_preserve": [
+        "arc intro before the core",
+        "arc tail after the core",
+        "core duration",
+        "Frankie timing"
+      ],
+      "role": "first_descendant"
+    },
+    {
+      "candidate_id": "gold-v8-arc-handoff",
+      "may_change": [
+        "one bounded handoff mask and its crossfades"
+      ],
+      "mechanism": "gold-v8 arc-production plus one deterministic evidence-selected mask from the qualified v7 interplay child",
+      "must_preserve": [
+        "arc intro",
+        "production-integrated core outside the one mask",
+        "arc tail",
+        "Frankie timing"
+      ],
+      "role": "second_descendant"
+    }
+  ],
+  "schema_version": 1,
+  "source_owner_signal": {
+    "album_acceptance": false,
+    "interpretation": "retain the gold-v7 arc intro and crescendo as a locked positive module; do not treat the whole candidate as accepted",
+    "issue_comment_id": 5275748340,
+    "statement": "All options were approximately acceptable; the longer option's quiet backing and crescendo were positively identified as musically interesting.",
+    "whole_candidate_promotion": false
+  },
+  "terminal_logic": {
+    "album_master_count": 0,
+    "full_song_permission": "closed",
+    "next_after_review": "lock the winning whole-arc and core mechanisms, then extend only one adjacent section at a time",
+    "recovery_open": false,
+    "system_reference_count": 0
+  },
+  "track_id": "A1-07"
+}

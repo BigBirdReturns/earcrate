@@ -1,0 +1,31 @@
+{
+  "provider_id": "ace-step-1.5",
+  "execution_host_provider_id": "portable-music-server",
+  "adapter": {
+    "kind": "http_json",
+    "base_url": "http://127.0.0.1:9150",
+    "health_endpoint": "/health",
+    "models_endpoint": "/api/models",
+    "require_model_installed": true,
+    "endpoint": "/api/music/{model_id}",
+    "model_id": "ace_step_v15",
+    "request_template": {
+      "prompt": "",
+      "duration": 30.0,
+      "output_format": "wav",
+      "skip_post_process": true,
+      "model_params": {
+        "task_type": "text2music"
+      }
+    },
+    "timeout_seconds": 7200
+  },
+  "model_assets": [
+    {
+      "name": "<exact-model-or-codec-file>",
+      "path": "<private-local-path>",
+      "sha256": "<64-hex-sha256>",
+      "bytes": 1
+    }
+  ]
+}

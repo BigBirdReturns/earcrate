@@ -1,0 +1,119 @@
+{
+  "catalog_id": "earcrate-open-generative-floor-v1",
+  "catalog_sha256": "28d0a19cc9883985849ffbeb4d074ccb9fc83a85d0d1862c9d330da4149fceda",
+  "cataloged_at": "2026-08-11",
+  "description": "Open and commodity generative music systems admitted as untrusted material producers under EarCrate authority.",
+  "kind": "earcrate_generation_provider_catalog",
+  "policy": {
+    "accepted_generated_material_must_enter_a_performance_score": true,
+    "commercial_comparators_never_receive_private_core_audio": true,
+    "exact_model_and_codec_assets_required_per_request": true,
+    "exact_repository_revision_required_per_request": true,
+    "generated_audio_never_implies_human_acceptance": true,
+    "private_source_paths_never_enter_portable_requests": true,
+    "provider_execution_never_implies_adoption": true
+  },
+  "providers": [
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["text_to_music", "lyrics_to_song", "cover", "remix", "repaint", "complete", "vocal_to_bgm", "lego", "extract", "separate", "reference_conditioned", "retake", "extend"],
+      "display_name": "ACE-Step 1.5",
+      "hardware": {"minimum_vram_gb_with_offload": 12, "preferred_estate_role": "rtx3090-heavy-generative", "recommended_vram_gb": 20},
+      "model_families": ["acestep-v15-xl-base", "acestep-v15-xl-sft", "acestep-v15-xl-turbo", "acestep-v15-base", "acestep-v15-sft", "acestep-v15-turbo"],
+      "notes": ["Base models expose Extract, Lego, and Complete; SFT and Turbo do not expose all material operations.", "Provider request must declare the exact task mode and checkpoint assets."],
+      "provider_class": "foundation_model",
+      "provider_id": "ace-step-1.5",
+      "repository": {"license": "MIT", "revision_policy": "exact git commit and exact Hugging Face asset hashes required per request", "url": "https://github.com/ace-step/ACE-Step-1.5"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["lyrics_to_song", "text_to_music", "reference_conditioned", "bgm_only", "vocal_only", "dual_track", "separate"],
+      "display_name": "Tencent SongGeneration 2 / LeVo",
+      "hardware": {"preferred_estate_role": "rtx3090-reference-conditioned", "prompt_audio_vram_gb_base_full": 18, "recommended_vram_gb": 24},
+      "model_families": ["SongGeneration-base-full", "SongGeneration-large", "SongGeneration-v2-large"],
+      "notes": ["Structured section labels and comma-separated description tags are native controls.", "Prompt-audio and text-description controls should not conflict."],
+      "provider_class": "foundation_model",
+      "provider_id": "songgeneration-2",
+      "repository": {"license": "repository and model-card terms must be audited locally", "revision_policy": "exact git commit and exact checkpoint/codec asset hashes required per request", "url": "https://github.com/tencent-ailab/SongGeneration"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["lyrics_to_song", "text_to_music", "segment_generation"],
+      "display_name": "HeartMuLa / HeartCodec / HeartTranscriptor / HeartCLAP",
+      "hardware": {"module_split_supported": true, "preferred_estate_role": "rtx3090-long-form-control", "recommended_vram_gb": 24},
+      "model_families": ["HeartMuLa-oss-3B-happy-new-year", "HeartMuLa-RL-oss-3B-20260123", "HeartCodec-oss-20260123"],
+      "notes": ["Reference-audio conditioning is not treated as available until the released interface supports it.", "HeartCLAP and HeartTranscriptor are catalogued as separate observation organs elsewhere in EarCrate."],
+      "provider_class": "foundation_model",
+      "provider_id": "heartmula",
+      "repository": {"license": "Apache-2.0 for repository and released model family; verify each asset card", "revision_policy": "exact git commit and exact HeartMuLa/HeartCodec asset hashes required per request", "url": "https://github.com/HeartMuLa/heartlib"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["lyrics_to_song", "continuation", "single_track_icl", "dual_track_icl", "reference_conditioned"],
+      "display_name": "YuE",
+      "hardware": {"full_song_multi_gpu_or_high_vram": true, "preferred_estate_role": "rtx3090-short-icl", "recommended_vram_gb_short_generation": 24},
+      "model_families": ["YuE-s1-7B-anneal-en-cot", "YuE-s1-7B-anneal-en-icl", "YuE-s2-1B-general"],
+      "notes": ["Short two-segment ICL is the first 24GB audition; full-song claims require separate receipts.", "Dual-track ICL receives vocal and instrumental references as distinct conditions."],
+      "provider_class": "foundation_model",
+      "provider_id": "yue",
+      "repository": {"license": "Apache-2.0; retain attribution and model-card conditions", "revision_policy": "exact git commit and exact stage-1/stage-2/codec asset hashes required per request", "url": "https://github.com/multimodal-art-projection/YuE"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["lyrics_to_song", "text_to_music", "reference_conditioned", "repaint", "continuation", "extend", "bgm_only"],
+      "display_name": "DiffRhythm",
+      "hardware": {"preferred_estate_role": "rtx4060-fast-edit-control", "recommended_vram_gb": 8},
+      "model_families": ["DiffRhythm-v1.2", "DiffRhythm-full"],
+      "notes": ["Use as fast diffusion and localized-edit control, not as universal long-range authority."],
+      "provider_class": "foundation_model",
+      "provider_id": "diffrhythm",
+      "repository": {"license": "Apache-2.0; verify checkpoint terms", "revision_policy": "exact git commit and exact model/codec asset hashes required per request", "url": "https://github.com/ASLP-lab/DiffRhythm"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["lyrics_to_song", "segment_generation", "continuation"],
+      "display_name": "Muse long-form song model",
+      "hardware": {"preferred_estate_role": "rtx3090-token-model-comparator", "recommended_vram_gb": 24},
+      "model_families": ["Muse-Qwen-MuCodec"],
+      "notes": ["Directly useful as a reproducible Suno-teacher-distilled architectural comparator."],
+      "provider_class": "foundation_model",
+      "provider_id": "muse",
+      "repository": {"license": "MIT repository; dataset/model-card terms must be audited separately", "revision_policy": "exact git commit and exact Qwen/MuCodec/model asset hashes required per request", "url": "https://github.com/yuhui1038/Muse"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["melody_conditioned_cover", "cover", "reference_conditioned"],
+      "display_name": "SongEcho melody-preserving cover model",
+      "hardware": {"preferred_estate_role": "rtx3090-cover-oracle", "recommended_vram_gb": 24},
+      "model_families": ["SongEcho"],
+      "notes": ["Treat Suno-derived training evidence as a provenance and licensing review item, not a reason to exclude the architecture from private audition."],
+      "provider_class": "specialist_model",
+      "provider_id": "songecho",
+      "repository": {"license": "audit repository, checkpoint, and training-data terms before use", "revision_policy": "exact git commit and exact ACE-Step-derived checkpoint hashes required per request", "url": "https://github.com/lsfhuihuiff/SongEcho_ICLR2026"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["vocal_to_bgm", "reference_conditioned", "segment_generation"],
+      "display_name": "MIDI-SAG singing-accompaniment pipeline",
+      "hardware": {"multi_component_pipeline": true, "preferred_estate_role": "rtx3090-compositional-accompaniment", "recommended_vram_gb": 24},
+      "model_families": ["Singing-Vocal-Beat-Tracking", "GAME", "AccoMontage2", "MuseControlLite", "Stable-Audio-Open-1.0"],
+      "notes": ["Detected mode chains vocal beat tracking, vocal-to-MIDI transcription, chord harmonization, and backing generation.", "Ground-truth mode accepts an explicit vocal MIDI authority; full-song mode supports section-specific prompts.", "Bundled third-party components retain separate licenses and exact asset requirements."],
+      "provider_class": "specialist_model",
+      "provider_id": "midi-sag",
+      "repository": {"license": "Apache-2.0 for the orchestration repository; audit every bundled third-party component and checkpoint separately", "revision_policy": "exact git commit and exact beat, transcription, harmonization, generator, and codec asset hashes required per request", "url": "https://github.com/fundwotsai2001/MIDI-SAG"}
+    },
+    {
+      "authority": {"canonical_musical_write": false, "human_acceptance": false, "provider_adoption": false, "publication_decision": false, "rights_decision": false},
+      "capabilities": ["text_to_music", "lyrics_to_song", "reference_conditioned", "continuation"],
+      "default_adapter": {"base_url": "http://127.0.0.1:9150", "download_endpoint": "/api/outputs/{output_id}/audio", "endpoint": "/api/music/{model_id}", "health_endpoint": "/health", "kind": "http_json"},
+      "display_name": "Portable Music Server commodity host",
+      "hardware": {"isolated_environments": true, "multi_gpu_workers": true, "preferred_estate_role": "windows-model-gateway"},
+      "model_families": ["ace_step_v15", "heartmula", "diffrhythm", "yue", "musicgen", "stable_audio", "riffusion"],
+      "notes": ["Commodity host is an execution surface, not model authority.", "EarCrate should harvest installation and worker orchestration where it survives real-estate tests."],
+      "provider_class": "commodity_host",
+      "provider_id": "portable-music-server",
+      "repository": {"license": "MIT host; each integrated model retains its own license", "revision_policy": "exact git commit, generated install manifest, worker environment identities, and model asset hashes required", "url": "https://github.com/aivrar/portable-music-server"}
+    }
+  ],
+  "schema_version": 1
+}

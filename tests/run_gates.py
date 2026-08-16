@@ -6,14 +6,15 @@ in-file ``if __name__ == '__main__'`` block can never make CI silently skip it.
 """
 from __future__ import annotations
 
+import argparse
 import importlib
 import inspect
 import os
 from pathlib import Path
-import argparse
 import sys
 import tempfile
 import traceback
+import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 TESTS = ROOT / "tests"
@@ -51,6 +52,31 @@ def _module_names() -> tuple[str, ...]:
 MODULES = _module_names()
 
 
+def _run_unittest_case(case_class: type[unittest.TestCase], method_name: str) -> None:
+    """Execute one unittest method while preserving its fixture lifecycle."""
+    result = unittest.TestResult()
+    case_class(method_name).run(result)
+    problems: list[str] = []
+    for test, detail in result.failures:
+        problems.append(f"failure in {test}:\n{detail}")
+    for test, detail in result.errors:
+        problems.append(f"error in {test}:\n{detail}")
+    for test, reason in result.skipped:
+        problems.append(f"skipped gate {test}: {reason}")
+    if problems or result.testsRun != 1:
+        if result.testsRun != 1:
+            problems.insert(0, f"expected one unittest gate, executed {result.testsRun}")
+        raise AssertionError("\n".join(problems))
+
+
+def _unittest_runner(case_class: type[unittest.TestCase], method_name: str):
+    def run() -> None:
+        _run_unittest_case(case_class, method_name)
+
+    run.__name__ = f"{case_class.__name__}.{method_name}"
+    return run
+
+
 def _cases():
     for module_name in MODULES:
         module = importlib.import_module(module_name)
@@ -59,6 +85,16 @@ def _cases():
             if name.startswith("test_") and callable(fn):
                 found += 1
                 yield module_name, name, fn
+        for class_name, case_class in sorted(vars(module).items()):
+            if not inspect.isclass(case_class):
+                continue
+            if case_class is unittest.TestCase or not issubclass(case_class, unittest.TestCase):
+                continue
+            if case_class.__module__ != module.__name__:
+                continue
+            for method_name in unittest.defaultTestLoader.getTestCaseNames(case_class):
+                found += 1
+                yield module_name, f"{class_name}.{method_name}", _unittest_runner(case_class, method_name)
         if not found:
             raise RuntimeError(f"gate module has no discovered tests: {module_name}")
 

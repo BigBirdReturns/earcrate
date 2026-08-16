@@ -1,0 +1,510 @@
+{
+  "kind": "earcrate_homelab_public_projection",
+  "payload": {
+    "audio_devices": {
+      "available": true,
+      "default_device": [
+        1,
+        3
+      ],
+      "devices": [
+        {
+          "default_samplerate": 44100.0,
+          "index": 0,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Microsoft Sound Mapper - Input"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 1,
+          "max_input_channels": 1,
+          "max_output_channels": 0,
+          "name": "Headset Microphone (Oculus Virt"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 2,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Microsoft Sound Mapper - Output"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 3,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "E13K1F-C8 (HD Audio Driver for "
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 4,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones (Oculus Virtual Audi"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 5,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones (Kids' Room Display)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 6,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Realtek Digital Output (Realtek"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 7,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "M27Q (NVIDIA High Definition Au"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 8,
+          "max_input_channels": 0,
+          "max_output_channels": 8,
+          "name": "Speakers (Realtek(R) Audio)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 9,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Primary Sound Capture Driver"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 10,
+          "max_input_channels": 1,
+          "max_output_channels": 0,
+          "name": "Headset Microphone (Oculus Virtual Audio Device)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 11,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Primary Sound Driver"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 12,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "E13K1F-C8 (HD Audio Driver for Display Audio)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 13,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones (Oculus Virtual Audio Device)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 14,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones (Kids' Room Display)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 15,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Realtek Digital Output (Realtek(R) Audio)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 16,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "M27Q (NVIDIA High Definition Audio)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 17,
+          "max_input_channels": 0,
+          "max_output_channels": 8,
+          "name": "Speakers (Realtek(R) Audio)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 18,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones (Oculus Virtual Audio Device)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 19,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "E13K1F-C8 (HD Audio Driver for Display Audio)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 20,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones (Kids' Room Display)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 21,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Realtek Digital Output (Realtek(R) Audio)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 22,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "M27Q (NVIDIA High Definition Audio)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 23,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Speakers (Realtek(R) Audio)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 24,
+          "max_input_channels": 1,
+          "max_output_channels": 0,
+          "name": "Headset Microphone (Oculus Virtual Audio Device)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 25,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Line in at rear panel (black) (Line in at rear panel (black))"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 26,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "SPDIF Out (Realtek HDA SPDIF Out)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 27,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Mic in at front panel (Pink) (Mic in at front panel (Pink))"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 28,
+          "max_input_channels": 0,
+          "max_output_channels": 8,
+          "name": "Speakers (Realtek HD Audio output)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 29,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Line in at rear panel (Blue) (Line in at rear panel (Blue))"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 30,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Mic in at rear panel (Pink) (Mic in at rear panel (Pink))"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 31,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Line in at rear panel (Orange) (Line in at rear panel (Orange))"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 32,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Stereo Mix (Realtek HD Audio Stereo input)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 33,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Output 1 (OCULUSVAD Wave Speaker Headphone)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 34,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Output 2 (OCULUSVAD Wave Speaker Headphone)"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 35,
+          "max_input_channels": 2,
+          "max_output_channels": 0,
+          "name": "Input (OCULUSVAD Wave Speaker Headphone)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 36,
+          "max_input_channels": 1,
+          "max_output_channels": 0,
+          "name": "Headset Microphone (OCULUSVAD Wave Microphone Headphone)"
+        },
+        {
+          "default_samplerate": 8000.0,
+          "index": 37,
+          "max_input_channels": 0,
+          "max_output_channels": 1,
+          "name": "Headset (@System32\\drivers\\bthhfenum.sys,#2;%1 Hands-Free%0\r\n;(OpenRun Pro 2 by Shokz))"
+        },
+        {
+          "default_samplerate": 8000.0,
+          "index": 38,
+          "max_input_channels": 1,
+          "max_output_channels": 0,
+          "name": "Headset (@System32\\drivers\\bthhfenum.sys,#2;%1 Hands-Free%0\r\n;(OpenRun Pro 2 by Shokz))"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 39,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Output (NVIDIA High Definition Audio)"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 40,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones ()"
+        },
+        {
+          "default_samplerate": 8000.0,
+          "index": 41,
+          "max_input_channels": 0,
+          "max_output_channels": 1,
+          "name": "Output (@System32\\drivers\\bthhfenum.sys,#4;%1 Hands-Free HF Audio%0\r\n;(Kids' Room Display))"
+        },
+        {
+          "default_samplerate": 8000.0,
+          "index": 42,
+          "max_input_channels": 1,
+          "max_output_channels": 0,
+          "name": "Input (@System32\\drivers\\bthhfenum.sys,#4;%1 Hands-Free HF Audio%0\r\n;(Kids' Room Display))"
+        },
+        {
+          "default_samplerate": 48000.0,
+          "index": 43,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones ()"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 44,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "Headphones ()"
+        },
+        {
+          "default_samplerate": 44100.0,
+          "index": 45,
+          "max_input_channels": 0,
+          "max_output_channels": 2,
+          "name": "E13K1F-C8 (ACX HD Audio Speaker)"
+        }
+      ],
+      "requested": true
+    },
+    "boundary": {
+      "capability_is_not_quality_acceptance": true,
+      "credential_values_recorded": "redacted",
+      "model_loaded": false,
+      "network_request_made": false,
+      "provider_process_executed": false,
+      "source_audio_decoded": false
+    },
+    "captured_at": "2026-08-09T00:34:17Z",
+    "catalog_sha256": "501cbd9b683d5e1c3da485fa5ccc446b9c7ef8b7ba60b4fa4d63ff4b4a77285a",
+    "credential_environment_names": [],
+    "executables": {
+      "ffmpeg": {
+        "available": true,
+        "bytes": 101897728,
+        "identity_status": "strong",
+        "mtime_ns": 1782606430000000000,
+        "name": "ffmpeg",
+        "path": "redacted:sha256:16588003b76efdfc5fea8f19098a48bd386cbffdc5cf411ea4aec7c74b34f96a",
+        "raw_sha256": "1326dde4c84ff1f96fe6b8916c5bed29e163e9b5dccf995f6f3db069d143ec5e",
+        "returncode": 0,
+        "timed_out": false,
+        "version": "ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers"
+      },
+      "ffprobe": {
+        "available": true,
+        "bytes": 101692928,
+        "identity_status": "strong",
+        "mtime_ns": 1782606430000000000,
+        "name": "ffprobe",
+        "path": "redacted:sha256:32d92573755dcadb6852b35fd8178bb24f8ea600c0d47d837a44b2f6a91ffd4a",
+        "raw_sha256": "b49ccc7c6547b141ad5a2f6ec69cc04323d7133d7704d70b331b904c63eecb07",
+        "returncode": 0,
+        "timed_out": false,
+        "version": "ffprobe version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+      },
+      "fpcalc": {
+        "available": false,
+        "bytes": null,
+        "identity_status": "unavailable",
+        "mtime_ns": null,
+        "name": "fpcalc",
+        "path": null,
+        "raw_sha256": null,
+        "returncode": null,
+        "timed_out": false,
+        "version": null
+      },
+      "git": {
+        "available": true,
+        "bytes": 46920,
+        "identity_status": "strong",
+        "mtime_ns": 1783720796000000000,
+        "name": "git",
+        "path": "redacted:sha256:057499a2e2344ada2b9009e3e04c9f62020c5fddd312466c0e4bf3f9d0b25718",
+        "raw_sha256": "7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364",
+        "returncode": 0,
+        "timed_out": false,
+        "version": "git version 2.55.0.windows.3"
+      },
+      "python": {
+        "available": true,
+        "bytes": 104952,
+        "identity_status": "strong",
+        "mtime_ns": 1744142256000000000,
+        "name": "python",
+        "path": "redacted:sha256:1f5eb3b40c49c6009d26abeb7b787d6598053b0753fb51bc1c3f4c504c1d7b71",
+        "raw_sha256": "4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+        "returncode": 0,
+        "timed_out": false,
+        "version": "Python 3.12.10"
+      },
+      "rubberband": {
+        "available": false,
+        "bytes": null,
+        "identity_status": "unavailable",
+        "mtime_ns": null,
+        "name": "rubberband",
+        "path": null,
+        "raw_sha256": null,
+        "returncode": null,
+        "timed_out": false,
+        "version": null
+      }
+    },
+    "host": {
+      "hostname_sha256": "382ec7192a6fb431c95f00fcd82bb78fdd470aa3749625669c88e0e0844e284c",
+      "logical_cpu_count": 20,
+      "machine": "",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "processor": "",
+      "python_executable": "redacted:sha256:7bf6236abd973193fac7526af7f3a16f3f1279a632ead3254203df0a8376af68",
+      "python_implementation": "CPython",
+      "python_version": "3.12.10",
+      "release": "11",
+      "system": "Windows",
+      "total_memory_bytes": 34106617856
+    },
+    "kind": "earcrate_homelab_node_receipt",
+    "node_id": "node_e7efc323a4b74f332e1cb8af",
+    "node_sha256": "e5d7150ec7a54c2b97b2da44d837277b8b2ed3d11f6df709920e726b4489f2ea",
+    "nvidia": {
+      "available": true,
+      "cuda": "13.1",
+      "driver": "591.86",
+      "gpus": [
+        {
+          "driver_version": "591.86",
+          "memory_total_mib": 8188,
+          "name": "NVIDIA GeForce RTX 4060",
+          "uuid": "GPU-e0b1541d-fc7d-38f5-d4c0-c15a3bd241a0"
+        }
+      ],
+      "path": "redacted:sha256:82dc56f934e4fee8fe0c3b1d67a6e113db3269b49ecbf31da7386c4941f31a4d",
+      "query_returncode": 0
+    },
+    "python_distributions": {
+      "basic-pitch": "0.4.0",
+      "demucs": "4.1.0",
+      "librosa": "0.11.0",
+      "mido": "1.3.3",
+      "numpy": "2.4.6",
+      "onnxruntime": "1.27.0",
+      "pyrubberband": "0.4.0",
+      "scipy": "1.18.0",
+      "sounddevice": "0.5.5",
+      "soundfile": "0.14.0",
+      "torch": "2.6.0+cu124",
+      "torchaudio": "2.6.0+cu124",
+      "transformers": "5.14.1"
+    },
+    "rig_sha256": "96945a7212868d95c97780b39791c1965fb21091309b48594f34393c8d6385bb",
+    "roots": [
+      {
+        "disk_free_bytes": 14844973416448,
+        "disk_total_bytes": 17985157660672,
+        "disk_used_bytes": 3140184244224,
+        "exists": true,
+        "path": "redacted:sha256:6d9ed635b12f88675be588a71a7ca739173fcee0a7da16c8b83cf36839fddef7"
+      },
+      {
+        "disk_free_bytes": 22860775424,
+        "disk_total_bytes": 256059109376,
+        "disk_used_bytes": 233198333952,
+        "exists": true,
+        "path": "redacted:sha256:cb35544f744b7461da37923ff74acee272901f474b3ab0fb930141335e2bbbff"
+      },
+      {
+        "disk_free_bytes": 22860775424,
+        "disk_total_bytes": 256059109376,
+        "disk_used_bytes": 233198333952,
+        "exists": true,
+        "path": "redacted:sha256:39506ad2a5a2254bc81bd28a2f2b078ac2c22212fbc8546de2652b5e54c09a8c"
+      },
+      {
+        "disk_free_bytes": 22860775424,
+        "disk_total_bytes": 256059109376,
+        "disk_used_bytes": 233198333952,
+        "exists": true,
+        "path": "redacted:sha256:08e98a69f8c14ba01ffaee0898ecbf72e61fc00c58912ac1921d90ca2a17be5f"
+      }
+    ],
+    "schema_version": 1
+  },
+  "projection_sha256": "7907de261145d425a24801ddb7a6e02ffeb3ce3d12c0f257bffc267299a522e8",
+  "redaction": {
+    "absolute_paths": 10,
+    "payload_is_original_authority": false,
+    "sensitive_fields": 1,
+    "source_object_required_for_authoritative_verification": true
+  },
+  "schema_version": 1,
+  "source_identity": "e5d7150ec7a54c2b97b2da44d837277b8b2ed3d11f6df709920e726b4489f2ea",
+  "source_kind": "earcrate_homelab_node_receipt"
+}

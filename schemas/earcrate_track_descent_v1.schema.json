@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schemas/earcrate_track_descent_v1.schema.json",
+  "title": "EarCrate Track Descent Contract v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "kind",
+    "album_id",
+    "track_id",
+    "descent_id",
+    "source_owner_signal",
+    "input_commitments",
+    "locked_invariants",
+    "rungs",
+    "render_policy",
+    "review_policy",
+    "machine_gate",
+    "terminal_logic",
+    "contract_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "earcrate_track_descent_contract"},
+    "track_id": {"const": "A1-07"},
+    "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "rungs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["candidate_id", "role", "mechanism", "may_change", "must_preserve"]
+      }
+    },
+    "input_commitments": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "review_policy": {
+      "type": "object",
+      "required": ["whole_arc_lane", "core_window_lane", "roles_withheld", "owner_diagnosis_required"]
+    }
+  }
+}

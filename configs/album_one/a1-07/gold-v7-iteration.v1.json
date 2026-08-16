@@ -1,0 +1,281 @@
+{
+  "album_id": "earcrate-album-one",
+  "children": [
+    {
+      "allowed_changes": [
+        "Wrap the exact gold-v6 render as a locked compound clip.",
+        "Add a source-led build before the locked core and, only if musically necessary, a bounded release after it.",
+        "Use the same-work section map and the same Frankie-led bar conduction law."
+      ],
+      "candidate_id": "gold-v7-arc",
+      "control_question": "Does a longer source-led build make the existing gold-v6 payoff feel earned without weakening the winning core?",
+      "duration_seconds": {
+        "maximum": 62.0,
+        "minimum": 38.0
+      },
+      "musical_gap": "Gold-v6 proved the conductor for one short passage but did not establish a complete dramatic reason for the payoff.",
+      "mutation_budget": {
+        "gold_v6_core_must_be_sample_identical": true,
+        "new_provider_families_max": 0,
+        "new_sections_max": 2
+      },
+      "prohibited_changes": [
+        "No modification of the gold-v6 compound clip.",
+        "No replacement lead vocal.",
+        "No new provider seed sweep.",
+        "No full-song render."
+      ],
+      "strategy": "arc_extension"
+    },
+    {
+      "allowed_changes": [
+        "Keep the gold-v6 core arrangement and Frankie timing locked.",
+        "Add at most two explicit ownership events using Four Seasons percussion, backing response, or a Måneskin fill already in custody.",
+        "Confine every addition or subtraction to declared masks with musical-function labels."
+      ],
+      "candidate_id": "gold-v7-interplay",
+      "control_question": "Do two deliberate handoffs make the records play off each other while preserving the coherence that beat literal co-play?",
+      "duration_seconds": {
+        "maximum": 30.0,
+        "minimum": 18.0
+      },
+      "musical_gap": "Gold-v6 established one-band coherence but the original commission also requires the two eras to answer and hand off parts.",
+      "mutation_budget": {
+        "handoff_events_max": 2,
+        "masked_seconds_total_max": 6.0,
+        "outside_mask_must_match_incumbent": true
+      },
+      "prohibited_changes": [
+        "No phrase chopping of Frankie.",
+        "No continuous extra drum bed.",
+        "No more than two handoff events.",
+        "No change outside declared masks."
+      ],
+      "strategy": "bounded_cross_era_handoffs"
+    },
+    {
+      "allowed_changes": [
+        "Keep every source clip, cue, duration map, pitch decision, and ownership decision identical to gold-v6.",
+        "Change only mix integration: dynamic spectral space around Frankie, low-end allocation, transient containment, shared room, and output gain.",
+        "Retain meaningful dynamic contrast rather than flattening the passage."
+      ],
+      "candidate_id": "gold-v7-production",
+      "control_question": "Does production integration make gold-v6 feel like one record without changing the musical arrangement that won?",
+      "duration_seconds": {
+        "must_equal_parent": true
+      },
+      "musical_gap": "Gold-v6 may still read as a source vocal placed above a donor band rather than one shared production.",
+      "mutation_budget": {
+        "arrangement_changes_max": 0,
+        "new_sources_max": 0,
+        "timing_changes_max_samples": 0
+      },
+      "prohibited_changes": [
+        "No clip movement.",
+        "No source substitution.",
+        "No new musical event.",
+        "No timing or pitch change."
+      ],
+      "strategy": "production_integration"
+    }
+  ],
+  "contract_sha256": "858d39452319e90e054c5a4994f07f7ccfcd5d38f011a46ed6834e7a766f1048",
+  "created_at": "2026-08-12T00:00:00Z",
+  "estate_execution_order": [
+    "Verify the exact gold-v6 owner-review receipt and freeze its score, render, bindings, and receipts under immutable custody.",
+    "Materialize gold-v7-production first because it changes no musical decision and can expose whether integration alone closes the remaining gap.",
+    "Materialize gold-v7-interplay second with at most two masked ownership events.",
+    "Materialize gold-v7-arc third by wrapping the exact gold-v6 render as a locked compound clip and extending only the dramatic arc.",
+    "Run machine admission and deduplication before preparing any owner files.",
+    "If at least two children qualify, prepare one blind frontier with gold-v6 and the qualified children; otherwise return a machine-failure ledger and no audition."
+  ],
+  "estate_return_contract": {
+    "private_material_must_remain_local": true,
+    "public_projection_must_be_source_free": true,
+    "required_fields": [
+      "exact_branch_head",
+      "parent_owner_review_receipt_sha256",
+      "parent_score_sha256",
+      "parent_pcm_sha256",
+      "child_score_sha256_by_candidate",
+      "child_pcm_sha256_by_candidate",
+      "reproduction_receipt_sha256_by_candidate",
+      "machine_gate_result_by_candidate",
+      "declared_masks_by_candidate",
+      "qualified_child_count",
+      "owner_frontier_created",
+      "review_public_path_or_null"
+    ]
+  },
+  "iteration_id": "a1-07-gold-v7",
+  "kind": "earcrate_track_iteration_contract",
+  "locked_invariants": [
+    {
+      "id": "frankie_is_clock",
+      "rule": "The exact Four Seasons lead-vocal performance remains continuous, unpitched, and unstretched through the inherited gold-v6 core."
+    },
+    {
+      "id": "same_work_occurrence",
+      "rule": "The donor material must come from the corresponding Beggin section occurrence; generic cross-song alignment is prohibited."
+    },
+    {
+      "id": "bar_scale_conduction",
+      "rule": "The Måneskin band follows Frankie's measured bar durations through bounded bar-scale transforms; a global click or global vocal warp is prohibited."
+    },
+    {
+      "id": "minimal_intervention",
+      "rule": "Every new cut, transform, overlay, or automation move must serve the declared child strategy; unrelated edits are refused."
+    },
+    {
+      "id": "no_generated_lead",
+      "rule": "No generated or leaked duplicate lead vocal may coexist with Frankie."
+    },
+    {
+      "id": "incumbent_preservation",
+      "rule": "Gold-v6 remains an unmodified audible control in the owner frontier and cannot be overwritten, relabeled as accepted, or replaced by a child."
+    }
+  ],
+  "machine_admission": {
+    "minimum_qualified_children": 2,
+    "owner_audition_prohibited_when_below_minimum": true,
+    "required_for_every_child": [
+      "All selected sources and transforms are accounted for in a PerformanceScore.",
+      "Two independent renders produce identical canonical PCM.",
+      "The exact gold-v6 owner-review receipt is verified before descent.",
+      "No source mutation, missing clip, silence, truncation, clipping, or undeclared fallback.",
+      "Frankie lead-vocal identity and authority are preserved.",
+      "Candidate audio is distinct from the incumbent and from the other admitted children."
+    ],
+    "strategy_specific": {
+      "gold-v7-arc": [
+        "The embedded gold-v6 core is sample-identical to the protected incumbent.",
+        "The extension uses no more than two new sections and remains below 62 seconds."
+      ],
+      "gold-v7-interplay": [
+        "No more than two handoff masks are present.",
+        "Decoded PCM outside the declared masks matches the incumbent exactly."
+      ],
+      "gold-v7-production": [
+        "The clip and transform graph is structurally identical to gold-v6.",
+        "Only declared mix and master fields differ."
+      ]
+    }
+  },
+  "organ_roles": {
+    "composition_validation": {
+      "duty": "Require every handoff or arc intervention to declare setup, response, release, ownership, and silence obligations.",
+      "organs": [
+        "A1-07 track conductor",
+        "PlayerPiano obligation validation"
+      ]
+    },
+    "event_map": {
+      "duty": "Locate and classify donor fills, attacks, and original-era percussion events used by the interplay child.",
+      "organs": [
+        "EarCrate onset baseline"
+      ]
+    },
+    "material_census": {
+      "duty": "Classify activity, bleed, silence, room, and usable musical roles before any source is admitted; do not rerun separation unless the current evidence is stale or defective.",
+      "organs": [
+        "private official and separated stems",
+        "Demucs and RoFormer evidence already in custody"
+      ]
+    },
+    "performance_clock": {
+      "duty": "Keep Frankie's native performance as temporal authority through the inherited core.",
+      "organs": [
+        "continuous Frankie lead-vocal waveform",
+        "accepted phrase and section correspondence"
+      ]
+    },
+    "pulse_witness": {
+      "duty": "Witness downbeats and bar boundaries for the donor band; it may not override Frankie's measured bar durations.",
+      "organs": [
+        "Beat This"
+      ]
+    },
+    "review": {
+      "duty": "Keep machine qualification separate from musical authority; only the owner can promote a child.",
+      "organs": [
+        "blind owner frontier"
+      ]
+    },
+    "score_and_render": {
+      "duty": "Account for every selected source and transform and reproduce each child twice to identical canonical PCM.",
+      "organs": [
+        "PerformanceScore",
+        "Reference Zero exact renderer"
+      ]
+    },
+    "taste_and_search": {
+      "duty": "Penalize unnecessary changes, retain strategy diversity, and preserve the incumbent rather than optimizing one metric.",
+      "organs": [
+        "gold-v6 owner preference",
+        "minimal-intervention TasteSpec",
+        "quality-diversity frontier"
+      ]
+    },
+    "time_transform": {
+      "duty": "Apply bounded bar-scale transforms to the band while leaving Frankie untransformed.",
+      "organs": [
+        "Rubber Band"
+      ]
+    },
+    "work_identity": {
+      "duty": "Maintain the accepted same-work cover relationship and prohibit generic cross-song alignment.",
+      "organs": [
+        "MusicBrainz work/cover relationship",
+        "Essentia cover-song similarity"
+      ]
+    }
+  },
+  "owner_frontier": {
+    "acceptance_semantics": {
+      "child_must_beat_gold_v6": true,
+      "gold_v6_remains_incumbent_if_no_child_wins": true,
+      "least_bad_does_not_pass": true,
+      "relative_preference_does_not_equal_album_acceptance": true
+    },
+    "challenger_limit": 3,
+    "choices": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "tie",
+      "reject_all",
+      "abstain"
+    ],
+    "duration_policy": "Each comparison is duration-matched to its relevant incumbent window; the arc child is reviewed first as a whole passage and then on the inherited core.",
+    "incumbent": "gold-v6",
+    "level_policy": {
+      "peak_ceiling_dbfs": -2.0,
+      "target_lufs": -14.0
+    },
+    "roles_withheld": true
+  },
+  "parent": {
+    "candidate_id": "gold-v6",
+    "controls": {
+      "literal_coplay": "beaten",
+      "reference_zero_v5": "rejected",
+      "reference_zero_v5_pcm_sha256": "bde6ab5ad2e054fb02bdc15323633c23350884fecb22d4f84d29df793b269031",
+      "reference_zero_v5_score_sha256": "4c36cf3a8bd86aa4d04b71a810da5effce0bc790944366ae92b61987cd35c812"
+    },
+    "human_acceptance": false,
+    "owner_review_receipt_sha256": "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3",
+    "owner_verdict": "preferred_over_literal_coplay",
+    "protected_incumbent": true
+  },
+  "schema_version": 1,
+  "terminal_logic": {
+    "album_master_count": 0,
+    "full_song_permission": "closed",
+    "no_child_beats_incumbent": "retain_gold_v6_and_iterate_from_machine_or_owner_defect_evidence",
+    "one_child_beats_incumbent": "promote_child_to_protected_incumbent_without_claiming_album_acceptance",
+    "owner_accepts_music": "create_manual_gold_receipt_and_open_withheld_answer_recovery",
+    "system_reference_count": 0
+  },
+  "track_id": "A1-07"
+}

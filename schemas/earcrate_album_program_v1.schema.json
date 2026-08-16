@@ -1,0 +1,230 @@
+{
+  "$id": "https://earcrate.local/schemas/earcrate_album_program_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "acceptance_authority": {
+      "type": "object"
+    },
+    "active_track_id": {
+      "pattern": "^A1-[0-9]{2}$",
+      "type": "string"
+    },
+    "album_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "answer_key_corpora": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artist": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^AK-[0-9]{3}$",
+            "type": "string"
+          },
+          "role": {
+            "const": "calibration_only"
+          },
+          "work": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "artist",
+          "work",
+          "role"
+        ],
+        "type": "object"
+      },
+      "maxItems": 8,
+      "minItems": 8,
+      "type": "array"
+    },
+    "commission_order_is_append_only": {
+      "const": true
+    },
+    "completed_album_master_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "completed_system_reference_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "completion_model": {
+      "type": "object"
+    },
+    "final_sequence_status": {
+      "enum": [
+        "unsequenced",
+        "provisional",
+        "locked"
+      ]
+    },
+    "kind": {
+      "const": "earcrate_album_program"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "program_status": {
+      "enum": [
+        "in_production",
+        "sequencing",
+        "mastering",
+        "complete",
+        "cancelled"
+      ]
+    },
+    "repository_contract": {
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "title": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "tracks": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artists": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "commission_order": {
+            "maximum": 7,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "control_question": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "musical_objective": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "next_gate": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "private_evidence_commitments": {
+            "type": "object"
+          },
+          "reference_class": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "repo_evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "source_requirements": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "status": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "album_master": {
+                "enum": [
+                  "unaccepted",
+                  "accepted"
+                ]
+              },
+              "evidence_state": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "human_acceptance": {
+                "type": "boolean"
+              },
+              "system_reference": {
+                "enum": [
+                  "incomplete",
+                  "complete"
+                ]
+              }
+            },
+            "required": [
+              "active",
+              "evidence_state",
+              "album_master",
+              "system_reference",
+              "human_acceptance"
+            ],
+            "type": "object"
+          },
+          "track_id": {
+            "pattern": "^A1-[0-9]{2}$",
+            "type": "string"
+          },
+          "working_title": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "track_id",
+          "commission_order",
+          "working_title",
+          "artists",
+          "reference_class",
+          "musical_objective",
+          "control_question",
+          "source_requirements",
+          "status",
+          "next_gate",
+          "repo_evidence"
+        ],
+        "type": "object"
+      },
+      "maxItems": 7,
+      "minItems": 7,
+      "type": "array"
+    }
+  },
+  "required": [
+    "kind",
+    "schema_version",
+    "album_id",
+    "title",
+    "program_status",
+    "commission_order_is_append_only",
+    "final_sequence_status",
+    "active_track_id",
+    "completed_album_master_count",
+    "completed_system_reference_count",
+    "acceptance_authority",
+    "completion_model",
+    "repository_contract",
+    "tracks",
+    "answer_key_corpora",
+    "manifest_sha256"
+  ],
+  "title": "EarCrate Album Program v1",
+  "type": "object"
+}

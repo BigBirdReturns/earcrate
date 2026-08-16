@@ -1,0 +1,82 @@
+{
+  "schema": "earcrate.beggin_factory_telemetry/v1",
+  "created_at": "2026-08-09T05:30:00Z",
+  "publication_boundary": {
+    "source_media_exported": false,
+    "derived_audio_exported": false,
+    "absolute_local_paths_exported": false,
+    "private_review_mapping_exported": false,
+    "model_weights_exported": false,
+    "credentials_exported": false,
+    "owner_human_verdict_recorded": false
+  },
+  "source_bindings": {
+    "four_seasons_vocal_container_sha256": "22902bb33e3d1fbcef89e4f16f84539ad5705cc3f34193b054034fe6649c4c91",
+    "maneskin_instrumental_container_sha256": "808000b7ffc8fa5a80c82b447e8ebd9e97939646fc996bba308613c0e3f67fb8",
+    "maneskin_timing_witness_container_sha256": "0dfa10dbfe5523e261bfb2cbf4219ec0e77692d555977e4107ff10a22b790d81"
+  },
+  "smoke_campaign": {
+    "campaign_sha256": "cc8bc09a3659817711a539aeb0f6e9a8eb6cf09a8d768803fefb28c8cad3c01e",
+    "provider_trials_selected": 4,
+    "tasks_ready": 6,
+    "ffmpeg_full_file_probe_completed": true,
+    "demucs_gpu": "RTX 4060",
+    "demucs_fixture_seconds": 30,
+    "demucs_observed_elapsed_seconds": 4,
+    "demucs_drum_artifact_sha256": "3efb85217021ec3e7159f4eb31eb61ff501ecf72b82e3767a0549de26db066bd",
+    "rough_collision_sha256": "16cefdaf841553f06777b097d9373acd4ef7e9c95b8c7e7c7599fb4e6500d8c6",
+    "claim": "source-to-binding-to-campaign-to-GPU-separation-to-render path executed",
+    "nonclaims": [
+      "timing alignment",
+      "musical quality",
+      "provider adoption",
+      "release eligibility"
+    ]
+  },
+  "timing_campaign": {
+    "assignment_sha256": "301b56a5eaeac5a3a584449522662ec4ace7a33aee70221d401c73caaff30d1a",
+    "private_authority_sha256": "833d415b668fb59e3da2f2f58c5800070204ade19bb79f98998468e5401e7ca5",
+    "candidate_duration_seconds": 20,
+    "candidate_count": 3,
+    "status": "signal_sane_human_review_pending",
+    "public_options": {
+      "A": "1b6c41e67a2044ea4908616522222b78018d033c01ee3cf63627cf069f62fcfb",
+      "B": "96a8642067bb4b2fd9e1a065e5f20d5ba83c54eb3fa5335f9f016249a799f659",
+      "C": "feedb75ff77d089dbaf4988347d53ba45fadfd3d18ee99afdb35b98a4de31885"
+    },
+    "integrated_loudness_lufs_approx": -14.05,
+    "signal_gates_passed": true,
+    "output_checksums_verified": "21/21",
+    "package_tests": "5/5",
+    "review_dimensions": [
+      "Frankie vocal authority",
+      "terminal phrase placement",
+      "percussion impact",
+      "groove continuity",
+      "separator residue",
+      "cymbal and room continuity",
+      "source recognizability",
+      "desire to hear the next phrase"
+    ],
+    "known_public_review_defect": "candidate file hashes could be correlated with candidate-specific signal evaluation",
+    "factory_fix": "candidate-specific signal metrics are private until the review submission is sealed",
+    "model_advisory_only": {
+      "choice": "A",
+      "authority": "review input only; not owner-authenticated human acceptance"
+    }
+  },
+  "local_defects_repaired": [
+    {
+      "defect": "Windows read-only fsync raised EBADF while verifying source-free intake",
+      "repair": "flush and fsync through the writable handle that created the checksum file",
+      "verification": "all six package tests passed in the corrected working copy"
+    }
+  ],
+  "factory_cutover": {
+    "provider_arcade_targets": 87,
+    "source_free_specimens": 3,
+    "execution_model": "typed provider graph plus bounded one-factor and pairwise recipe coverage",
+    "human_boundary": "quality-diversity frontier followed by private-mapping blind owner review",
+    "learning_boundary": "scoped ReviewPatch and selective child recomputation; no general taste-model claim"
+  }
+}

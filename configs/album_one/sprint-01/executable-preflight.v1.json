@@ -1,0 +1,147 @@
+{
+  "authority": "No Estate adapter command may execute unless this preflight proves a complete music-producing path for that lane.",
+  "base_campaign_sha256": "d6950f41246629762a717e66765a4b869afe4c500318cfccc46732c28bffcb2c",
+  "boundary": {
+    "estate_execution_default": "closed",
+    "owner_frontier_authority": false,
+    "private_paths_in_contract": false,
+    "source_audio_in_contract": false
+  },
+  "kind": "earcrate_album_sprint_executable_preflight",
+  "music_producing_path_requires": [
+    "adapter_entrypoint_exists",
+    "adapter_input_contract_complete",
+    "representative_invocation_proven",
+    "performance_realization_output",
+    "declared_full_form_floor_enforced",
+    "non_silent_audio_gate",
+    "reproduction_receipts_required",
+    "musical_delta_disclosed"
+  ],
+  "preflight_contract_sha256": "7e17d7ddc1657fe4d69cf0f04b491ad81fefcc520761f019898e398329458ba6",
+  "prohibited_authorization_inputs": [
+    "campaign_task_materialized",
+    "provider_process_completed",
+    "signal_sane",
+    "symbolic_report_ok",
+    "source_free_progress_allowed"
+  ],
+  "schema_version": 1,
+  "sprint_id": "album-one-sprint-01",
+  "state_vocabulary": [
+    "campaign_task_materialized",
+    "tool_contract_ready",
+    "symbolic_evidence_ready",
+    "performance_realization_ready",
+    "frontier_ready",
+    "blocked_exact_source",
+    "blocked_exact_artifact_pack",
+    "blocked_performance_realization",
+    "blocked_exact_credential",
+    "blocked_rights_or_custody",
+    "failed"
+  ],
+  "tracks": {
+    "A1-01": {
+      "adapter": "retained_candidate_fidelity",
+      "execution_class": "unimplemented_full_form",
+      "minimum_seconds": 60.0,
+      "repo_probe": "pretty_lights_release_candidate",
+      "required_bindings": [
+        "supplied_reference_audio",
+        "retained_candidate_audio"
+      ]
+    },
+    "A1-02": {
+      "adapter": "score_audio_convergence",
+      "convergence_bindings": [
+        "exact_reference_audio"
+      ],
+      "execution_class": "score_compiler_without_performance_renderer",
+      "minimum_seconds": 120.0,
+      "performance_bindings": [
+        "approved_rack_library"
+      ],
+      "repo_probe": "children_score_compiler",
+      "required_bindings": [
+        "score_pdf",
+        "score_extraction",
+        "score_reconstruction_midi",
+        "score_proof_receipt",
+        "mix_score",
+        "mix_execution_ledger",
+        "exact_reference_audio",
+        "approved_rack_library"
+      ],
+      "score_pack_bindings": [
+        "score_pdf",
+        "score_extraction",
+        "score_reconstruction_midi",
+        "score_proof_receipt",
+        "mix_score",
+        "mix_execution_ledger"
+      ]
+    },
+    "A1-03": {
+      "adapter": "community_symbolic_ensemble",
+      "execution_class": "symbolic_report_without_audio_renderer",
+      "minimum_seconds": 120.0,
+      "repo_probe": "flim_symbolic_report",
+      "required_bindings": [
+        "exact_bad_plus_performance_audio",
+        "approved_piano_bass_drum_racks"
+      ]
+    },
+    "A1-04": {
+      "adapter": "homelab_specimen_full_form",
+      "case_id": "animal-katseye-x-britney-toxic-handoff",
+      "execution_class": "provider_factory_without_album_form_enforcement",
+      "maximum_seconds": 90.0,
+      "minimum_seconds": 60.0,
+      "repo_probe": "homelab_factory",
+      "required_bindings": [
+        "katseye_animal_exact_edition",
+        "britney_toxic_exact_edition",
+        "homelab_catalog",
+        "homelab_audit"
+      ]
+    },
+    "A1-05": {
+      "adapter": "homelab_specimen_full_form",
+      "case_id": "sombr-my-body-isnt-ready-x-coldplay-yellow-handoff",
+      "execution_class": "provider_factory_without_album_form_enforcement",
+      "maximum_seconds": 90.0,
+      "minimum_seconds": 60.0,
+      "repo_probe": "homelab_factory",
+      "required_bindings": [
+        "sombr_my_body_isnt_ready_exact_edition",
+        "coldplay_yellow_exact_edition",
+        "homelab_catalog",
+        "homelab_audit"
+      ]
+    },
+    "A1-06": {
+      "adapter": "gesture_corpus_arrangement",
+      "execution_class": "unimplemented_full_form",
+      "maximum_seconds": 75.0,
+      "minimum_seconds": 45.0,
+      "repo_probe": "gesture_adapter",
+      "required_bindings": [
+        "pinkpantheress_stateside_exact_edition",
+        "curated_bhangra_comparison_corpus",
+        "non_bhangra_negative_control_corpus"
+      ]
+    },
+    "A1-07": {
+      "adapter": "timing_law_full_form",
+      "execution_class": "core_only_diagnostic",
+      "maximum_seconds": 120.0,
+      "minimum_seconds": 45.0,
+      "repo_probe": "gold_v9_contract",
+      "required_bindings": [
+        "a1_07_gold_v7_workspace",
+        "beggin_core_private_store"
+      ]
+    }
+  }
+}

@@ -1,0 +1,178 @@
+# Album One
+
+Album One is EarCrate's primary musical program. The repository exists to complete
+these seven commissioned works, assemble them into one coherent record, and turn
+the mechanisms that repeatedly succeed into the reusable EarCrate floor. Provider
+catalogs, GPU orchestration, schemas, receipts, score readers, stem systems, MIDI
+engines, generative models, and review machinery are subordinate to this program.
+
+The commission ledger is append-only. Its current order records when each work
+entered the project; it is not the final album sequence. Final sequencing begins
+only after the tracks exist as owner-accepted music.
+
+## Current ledger
+
+- Album masters accepted: **0/7**
+- System references completed: **0/7**
+- Active proving track: **A1-07, Beggin' × Beggin'**
+- Final album sequence: **unsequenced**
+- Acceptance authority: **the owner**
+- Release authority: **a separate rights decision**
+
+The machine-readable authority is
+[`configs/album_one/manifest.v1.json`](configs/album_one/manifest.v1.json).
+Its schema is
+[`schemas/earcrate_album_program_v1.schema.json`](schemas/earcrate_album_program_v1.schema.json).
+The manifest seal is
+`2fb1d363c5fa6a89f2a46483cf0b92a17ea6056725428da9606d329bbbdb854b`.
+
+## The seven commissioned tracks
+
+| ID | Working title | Reference class | Evidence now | Next musical gate |
+| --- | --- | --- | --- | --- |
+| **A1-01** | Pretty Lights, “Empire State of Mind” | Reference-fidelity reconstruction | Reproducible release-candidate fixture; signal sane; human acceptance pending | Put the strongest retained candidate and controls before the owner and require a musical verdict |
+| **A1-02** | Robert Miles, “Children” | Cross-modal score and audio reconstruction | Score, annotations, MIDI, MixScore, and score-side proof are bound; exact audio remains unbound | Bind the exact recording and make score, MIDI, racks, and audio converge on one performance |
+| **A1-03** | Aphex Twin / The Bad Plus, “Flim” | Performance-arrangement reconstruction | Community-symbolic witness and adjacent-move evidence are bound; blind audio remains unbound | Bind the exact performance and require symbolic and audio convergence before audition |
+| **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
+| **A1-05** | sombr “My Body Isn’t Ready” × Coldplay “Yellow” | Arrangement-ancestry handoff | Normalized specimen exists; exact private editions remain unbound | Test chorus width, drum lift, neutral alignment, and reverse modernization under blind review |
+| **A1-06** | PinkPantheress “Stateside” / bhangra gesture | Perceptual gesture to arrangement | Commissioned, but no canonical specimen or comparison corpus is materialized | Isolate the gesture and build a held-out retrieval and transformation audition with negative controls |
+| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | Deepest source, stem, score, provider, and failure lineage; reproducible v5 diagnostic was rejected | Author and accept one convincing gold performance before another recovery campaign can claim progress |
+
+The answer-key corpora in `earcrate/reference/` remain calibration and discovery
+graders. They are not additional album tracks and may not inflate the completion
+count.
+
+## Three different completion claims
+
+### 1. Album master
+
+A track has an accepted album master only when the owner accepts the music, every
+selected source and transform is accounted for, and the accepted render can be
+reproduced exactly from a portable score or equivalent execution object. A
+signal-sane file, a deterministic file, a green provider run, or the least-bad
+candidate does not satisfy this claim.
+
+### 2. System reference completion
+
+EarCrate completes a reference only after an accepted album master exists, the
+gold decisions are withheld, and an inferred candidate blindly beats the
+declared naive control. This is the autonomy claim. It is deliberately stricter
+than producing an album master.
+
+### 3. Release eligibility
+
+Musical acceptance and system completion do not confer rights. Publication,
+distribution, and commercial use require a separate rights decision. Source
+recordings, stems, private prompts, lyrics, model assets, credentials, local
+paths, and private option maps remain outside the repository.
+
+## Active focus: A1-07 Beggin
+
+Beggin is the current proving track because it contains the deepest accumulated
+evidence and exposes the central product failure most clearly. EarCrate has
+already proved custody, stem handling, cross-node GPU execution, deterministic
+rendering, provider execution, source-free circulation, and blind review. It has
+not yet produced a Beggin arrangement the owner accepts.
+
+The retained v5 `PerformanceScore` is useful precisely because it is honest. It
+accounts for all 17 selected clips, reproduces byte-identically, and records the
+exact score identity
+`4c36cf3a8bd86aa4d04b71a810da5effce0bc790944366ae92b61987cd35c812`.
+The two reproduced renders share canonical PCM identity
+`bde6ab5ad2e054fb02bdc15323633c23350884fecb22d4f84d29df793b269031`.
+The authority fields remain `human_acceptance=false` and
+`inference_success=false`. This is a reproducible diagnostic, not an album track.
+
+The private Beggin custody remains split across the CORE and ATTEMPTS archives.
+Only their identities are recorded here:
+
+- CORE:
+  `8efa0d0352d958ccfde4fe8d852b4f976be3e034a49ca99ec3545435e72a9291`
+- ATTEMPTS:
+  `977ffaf2b828f4e9d5abcdbf652640682c3a8180499fd04f397d2e89e84d9db9`
+
+The next Beggin work is therefore composition, not another provider census.
+The gold authoring pass must use the same-work identity, section correspondence,
+material census, phrase authority, minimal-intervention prior, accepted pulse and
+transform organs, and a serious naive co-play control. Generative systems may
+supply bounded material or propose alternatives. They may not replace the
+conductor, accept the music, or redefine the track.
+
+## Repository operating contract
+
+Every pull request must declare the following in its description:
+
+- `album_scope`: one of `A1-01` through `A1-07`, `album-wide`, or
+  `infrastructure-with-track-demand`;
+- `musical_gap`: the exact album failure being addressed;
+- `control_or_baseline`: the incumbent or naive mechanism the change must beat;
+- `owner_audition_effect`: what new or improved listening decision the owner will
+  receive;
+- `private_execution_required`: the exact local evidence, hardware, or media still
+  required.
+
+A generic provider campaign is non-landing work unless it is attached to a named
+track, a bounded hypothesis, and a downstream audition. Provider installation,
+execution, benchmark passage, and machine qualification remain lower-authority
+evidence. They do not become track acceptance.
+
+A new organ should enter the repository only when it closes a declared track gap
+or an album-wide bottleneck demonstrated by more than one track. The factory
+should compare type-correct combinations against a track contract, preserve the
+incumbent, and return a small, strategy-diverse frontier. It should not ask one
+tool to solve an entire song or construct a meaningless Cartesian product across
+providers.
+
+## The current pull-request stack
+
+The active stack now has a clear relationship to Album One:
+
+1. **PR #70, Homelab organ factory** is album-wide infrastructure. It schedules
+   and evaluates organs, but it does not define the music.
+2. **PR #71, Reference Zero** is the A1-07 performance-authority and recovery
+   protocol. It separates gold authoring, exact reproduction, and automatic
+   recovery.
+3. **PR #72, generative provider floor** supplies low-authority material organs
+   for A1-07 and later tracks. It cannot become the conductor or acceptance
+   authority.
+4. **Album One program authority** names the seven deliverables, their current
+   evidence, the active track, and the conditions under which infrastructure may
+   claim progress.
+
+Future stacks should begin from the album track and its failure, then select
+organs. They should not begin from a newly discovered model and search for a
+reason to use it.
+
+## Execution order
+
+The order of work is evidence-driven:
+
+1. Keep all seven source and intent contracts current in the manifest.
+2. Complete the Beggin gold performance, reproduce it exactly, then run the
+   withheld-answer recovery challenge.
+3. Return to A1-01 Pretty Lights, which has the strongest retained candidate and
+   release-gate lineage.
+4. Complete the score-led Children and community-symbolic Flim tracks, using the
+   cross-modal organs those references specifically demand.
+5. Execute the two cross-song transplant tracks, Animal × Toxic and My Body
+   Isn’t Ready × Yellow, using the factory only after exact source bindings and
+   controls exist.
+6. Materialize the Stateside gesture corpus and turn the perceptual observation
+   into an accountable arrangement hypothesis.
+7. Sequence the seven accepted masters, perform album-level continuity and
+   mastering review, then make the separate rights decisions.
+
+This order may change when evidence changes. The append-only commission identities
+may not.
+
+## Definition of Album One complete
+
+Album One is complete when seven owner-accepted, exactly reproducible masters
+exist, the sequence is locked, album-level transitions and mastering are accepted,
+and the release ledger states the rights position for every track. The system
+reference count is reported beside the album-master count rather than being
+silently conflated with it.
+
+The controlling question for repository work is: **which Album One track becomes
+more likely to reach an owner-accepted master because this change exists, and
+what listening control will prove it?**

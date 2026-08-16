@@ -1,0 +1,100 @@
+{
+  "schema": "earcrate.cloud_specimen_provider_role_policy.v1",
+  "policy_id": "earcrate-organ-transplant-core-v1",
+  "description": "Deterministic selection policy for a bounded first tournament, with a full-cabinet expansion mode.",
+  "profiles": {
+    "smoke": {
+      "role_caps": {
+        "custody": 1,
+        "fingerprint": 1,
+        "beat_grid": 1,
+        "tonality": 1,
+        "separation": 1,
+        "render_reconstruction": 1,
+        "signal_evaluation": 1
+      }
+    },
+    "core": {
+      "role_caps": {
+        "custody": 1,
+        "fingerprint": 1,
+        "beat_grid": 2,
+        "tonality": 2,
+        "separation": 2,
+        "drum_separation": 1,
+        "transcription": 2,
+        "structure": 1,
+        "stretch": 1,
+        "render_reconstruction": 1,
+        "signal_evaluation": 1,
+        "symbolic_ingest": 1,
+        "adjudication": 1
+      }
+    },
+    "full": {
+      "role_caps": {
+        "custody": 99,
+        "fingerprint": 99,
+        "beat_grid": 99,
+        "tonality": 99,
+        "separation": 99,
+        "drum_separation": 99,
+        "transcription": 99,
+        "structure": 99,
+        "stretch": 99,
+        "render_reconstruction": 99,
+        "signal_evaluation": 99,
+        "symbolic_ingest": 99,
+        "adjudication": 99,
+        "other": 99
+      }
+    }
+  },
+  "role_capability_terms": {
+    "custody": ["decode", "encode", "media_probe", "signal", "loudness", "audio_io"],
+    "fingerprint": ["fingerprint", "identification", "chromaprint", "acoustid"],
+    "beat_grid": ["beat", "downbeat", "tempo", "meter", "rhythm"],
+    "tonality": ["key", "tuning", "pitch", "f0", "chroma", "chord", "harmony"],
+    "separation": ["separation", "stems", "source_separation", "vocal_separation"],
+    "drum_separation": ["drum", "percussion", "substem", "separation"],
+    "transcription": ["transcription", "notes", "midi", "onset", "drum_events", "pitch"],
+    "structure": ["structure", "segmentation", "sections", "recurrence", "boundaries"],
+    "stretch": ["stretch", "resample", "pitch_shift", "time_scale", "key_lock"],
+    "render_reconstruction": ["render", "rack", "audio_io", "mix", "dsp"],
+    "signal_evaluation": ["evaluation", "loudness", "signal", "metrics", "quality"],
+    "symbolic_ingest": ["midi", "musicxml", "score", "symbolic"],
+    "adjudication": ["review", "evaluation", "tournament", "evidence"]
+  },
+  "provider_aliases": {
+    "ffmpeg": ["ffmpeg", "ffprobe", "ebur128", "astats"],
+    "chromaprint": ["chromaprint", "fpcalc", "acoustid"],
+    "beat_this": ["beat this", "beat_this", "beatthis"],
+    "beatnet": ["beatnet"],
+    "essentia": ["essentia", "rhythmextractor2013"],
+    "librosa": ["librosa"],
+    "aubio": ["aubio"],
+    "demucs": ["demucs", "htdemucs", "demucs-rs"],
+    "audio_separator": ["audio-separator", "audio separator", "bs-roformer", "bs roformer", "uvr"],
+    "larsnet": ["larsnet"],
+    "basic_pitch": ["basic pitch", "basic_pitch"],
+    "omnizart": ["omnizart"],
+    "msaf": ["msaf"],
+    "allin1": ["all-in-one", "allin1", "all in one"],
+    "vamp_chordino": ["vamp", "chordino"],
+    "crepe": ["crepe"],
+    "pesto": ["pesto"],
+    "rubber_band": ["rubber band", "rubberband"],
+    "soundfile": ["soundfile", "libsndfile"],
+    "scipy": ["scipy"],
+    "mido": ["mido"],
+    "earcrate": ["earcrate"]
+  },
+  "selection_rules": {
+    "require_audit_feasibility_ready": true,
+    "prefer_no_network_for_core": true,
+    "prefer_no_manual_probe_for_core": true,
+    "prefer_complementary_provider_families": true,
+    "never_convert_trial_success_into_adoption": true,
+    "human_review_remains_required_for_audio_affecting_outputs": true
+  }
+}

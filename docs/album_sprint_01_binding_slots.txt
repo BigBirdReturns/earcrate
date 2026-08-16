@@ -1,0 +1,11 @@
+Album One Sprint 01 private binding slots
+
+A1-01: supplied_reference_audio; retained_candidate_audio; serious_negative_control
+A1-02: exact_reference_audio; approved_rack_library
+A1-03: exact_bad_plus_performance_audio; approved_piano_bass_drum_racks
+A1-04: katseye_animal_exact_edition; britney_toxic_exact_edition
+A1-05: sombr_my_body_isnt_ready_exact_edition; coldplay_yellow_exact_edition
+A1-06: pinkpantheress_stateside_exact_edition; curated_bhangra_comparison_corpus; non_bhangra_negative_control_corpus
+A1-07: a1_07_gold_v7_workspace; beggin_core_private_store
+
+The executable runner creates the private JSON template locally. This file names slots only. It contains no private paths or media.

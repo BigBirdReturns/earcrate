@@ -1,0 +1,97 @@
+{
+  "album_id": "earcrate-album-one",
+  "construction": {
+    "derive_shared_band_slots_from_original_target_starts": true,
+    "identify_donor_band_by_non_frankie_tracks": true,
+    "preserve_frankie_tracks_byte_for_byte_at_score_object_level": true,
+    "preserve_source_intervals_pitch_gain_pan_and_fades": true,
+    "require_same_slot_set_across_donor_tracks": true,
+    "review_codec": "flac",
+    "review_peak_ceiling_dbfs": -2.0,
+    "review_scope": "gold-v6 core duration only",
+    "review_target_lufs": -14.0
+  },
+  "contract_sha256": "d2b5926f3bb3f460d2f98f0b46e2f0929c075e46456f14aa200a4cc743780711",
+  "created_at": "2026-08-13T17:35:00Z",
+  "descent_id": "a1-07-gold-v9-timing-laws",
+  "kind": "earcrate_track_descent_contract",
+  "locked_positive_material": {
+    "frankie_pitch_shift_semitones": 0.0,
+    "frankie_time_stretch_forbidden": true,
+    "quiet_intro_and_crescendo_shape_retained_for_reapplication": true,
+    "quiet_intro_pcm_locked_during_timing_test": false,
+    "same_work_section_correspondence_required": true,
+    "source_audio_private": true
+  },
+  "machine_gate": {
+    "all_review_candidates_must_equal_gold_v6_core_duration": true,
+    "candidate_pcm_must_be_distinct": true,
+    "each_candidate_must_render_twice_to_identical_canonical_pcm": true,
+    "frankie_clip_rows_must_match_parent_exactly": true,
+    "native_pocket_must_use_only_tempo_scale_1": true,
+    "no_owner_frontier_if_fewer_than_two_candidates_qualify": true,
+    "phrase_reset_must_use_no_more_than_one_tempo_scale_per_four_slot_phrase": true,
+    "single_speed_must_use_exactly_one_band_tempo_scale": true
+  },
+  "owner_signal": {
+    "interpretation": "v8 is non-discriminating because its descendants preserve the same bar-conduction timing law. Do not ask the owner to rank tiny mix or handoff deltas until the timing law itself changes.",
+    "statement": "All v8 cuts share the same dominant audible defect: the instrumental feels as if it begins at one tempo and is then dragged down to match the vocal.",
+    "v8_frontier_disposition": "non_discriminating_no_ranking_required"
+  },
+  "parent": {
+    "gold_v6_pcm_sha256": "0733d87869f34710cd0d2e06875ae876eb100b5065f4159e8199a2672ee863f8",
+    "gold_v6_score_sha256": "7fdb7873702e4cd7b43e6e01fefdad89786e4461842b8c3358a63565a464d6cf",
+    "gold_v7_arc_pcm_sha256": "a80ad01fe529aa4292beed2cc13b8bdc48afdcf7a75ab0a96b7ecf30caf5476c",
+    "gold_v7_arc_score_sha256": "796f40eacfe02e99f63d0cfee81d5f27eeeaa0384c6711cc25c51146e96aeba5",
+    "owner_review_receipt_sha256": "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3",
+    "source_workspace_kind": "a1_07_gold_v7_workspace"
+  },
+  "review_policy": {
+    "cut_notes_required": true,
+    "include_bar_conducted_v8_control": false,
+    "owner_diagnosis_required": false,
+    "positive_arc_reapplication_deferred": true,
+    "reason_arc_omitted": "The positive v7 quiet-to-crescendo shape is retained as a composition lesson, but its rendered PCM also inherits the rejected bar-conduction law. Timing must be isolated before the energy arc is rebuilt under the winning law.",
+    "reason_control_omitted": "The owner already identified the inherited bar-conduction signature as the dominant defect; replaying it adds burden without information.",
+    "relative_preference_does_not_equal_album_acceptance": true,
+    "review_scope": "core-only timing-law comparison",
+    "roles_withheld": false,
+    "semantic_filenames": true,
+    "transparent_deltas_required": true
+  },
+  "schema_version": 1,
+  "terminal_logic": {
+    "album_master_count": 0,
+    "full_song_permission": "closed",
+    "next_after_review": "lock the preferred timing law, then rebuild the quiet-to-crescendo arc shape and previously positive production/interplay modules under that law",
+    "recovery_open": false,
+    "system_reference_count": 0
+  },
+  "timing_laws": [
+    {
+      "candidate_id": "gold-v9-single-speed",
+      "label": "single-speed",
+      "mechanism": "replace all per-bar donor-band tempo scales with one constant passage-wide tempo scale chosen to preserve the original conducted core span; reflow donor-band clips continuously from the first cue",
+      "phase_rule": "no per-bar resets",
+      "tempo_rule": "one constant scale across the entire donor band",
+      "why": "tests the old-school single pitch-fader hypothesis: one tempo match, then let the band play"
+    },
+    {
+      "candidate_id": "gold-v9-native-pocket",
+      "label": "native-pocket",
+      "mechanism": "set donor-band tempo scale to 1.0 and reflow the band continuously from the first cue, preserving the native donor pocket and accepting natural drift",
+      "phase_rule": "no resets inside the core",
+      "tempo_rule": "native donor tempo throughout",
+      "why": "tests whether preserving the drummer's native feel beats synchronization"
+    },
+    {
+      "candidate_id": "gold-v9-phrase-reset",
+      "label": "phrase-reset",
+      "mechanism": "use one constant donor-band tempo scale per four-slot phrase, chosen to fit that phrase's original conducted span, and reset phase only at phrase boundaries",
+      "phase_rule": "re-cue only at four-slot phrase boundaries",
+      "tempo_rule": "one constant tempo scale per four-slot phrase",
+      "why": "tests DJ-style nudging: preserve a stable pocket inside each phrase and hide synchronization changes at phrase boundaries instead of dragging every bar"
+    }
+  ],
+  "track_id": "A1-07"
+}

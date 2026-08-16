@@ -1,0 +1,65 @@
+{
+  "$id": "https://earcrate.local/schemas/earcrate_album_sprint_campaign_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "album_id": {"const": "earcrate-album-one"},
+    "contract_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "kind": {"const": "earcrate_album_sprint_campaign"},
+    "owner_time_budget": {
+      "properties": {
+        "cuts_per_frontier_max": {"const": 4},
+        "frontiers_per_track_max": {"const": 1},
+        "musical_delta_disclosed": {"const": true},
+        "musical_operation_may_not_be_blinded": {"const": true},
+        "owner_diagnosis_required": {"const": false},
+        "shared_dominant_defect_invalidates_frontier": {"const": true}
+      },
+      "required": ["frontiers_per_track_max", "cuts_per_frontier_max", "musical_delta_disclosed", "musical_operation_may_not_be_blinded", "owner_diagnosis_required", "shared_dominant_defect_invalidates_frontier"],
+      "type": "object"
+    },
+    "program_truth": {
+      "properties": {
+        "accepted_album_masters": {"const": 0},
+        "active_workstreams": {
+          "maxItems": 7,
+          "minItems": 7,
+          "prefixItems": [{"const": "A1-01"}, {"const": "A1-02"}, {"const": "A1-03"}, {"const": "A1-04"}, {"const": "A1-05"}, {"const": "A1-06"}, {"const": "A1-07"}],
+          "type": "array"
+        },
+        "completed_system_references": {"const": 0},
+        "proving_track": {"const": "A1-07"},
+        "proving_track_is_not_album_mutex": {"const": true}
+      },
+      "required": ["accepted_album_masters", "completed_system_references", "proving_track", "active_workstreams", "proving_track_is_not_album_mutex"],
+      "type": "object"
+    },
+    "schema_version": {"const": 1},
+    "sprint_id": {"const": "album-one-sprint-01"},
+    "tracks": {
+      "items": {
+        "properties": {
+          "full_form": {
+            "properties": {
+              "maximum_seconds": {"exclusiveMinimum": 0, "type": "number"},
+              "minimum_seconds": {"exclusiveMinimum": 0, "type": "number"},
+              "required_functions": {"contains": {"const": "payoff_or_release"}, "type": "array"}
+            },
+            "required": ["minimum_seconds", "maximum_seconds", "required_functions"],
+            "type": "object"
+          },
+          "source_bindings": {"minItems": 1, "type": "array"},
+          "track_id": {"pattern": "^A1-0[1-7]$"}
+        },
+        "required": ["track_id", "working_title", "reference_class", "adapter", "repo_evidence", "source_bindings", "full_form", "control", "machine_steps", "owner_delta", "blocker_policy", "entrypoint"],
+        "type": "object"
+      },
+      "maxItems": 7,
+      "minItems": 7,
+      "type": "array"
+    }
+  },
+  "required": ["schema_version", "kind", "album_id", "sprint_id", "program_truth", "owner_time_budget", "estate_policy", "tracks", "contract_sha256"],
+  "title": "EarCrate Album Sprint Campaign v1",
+  "type": "object"
+}

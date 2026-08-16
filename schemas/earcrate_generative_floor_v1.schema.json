@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schemas/earcrate_generative_floor_v1.schema.json",
+  "title": "EarCrate Generative Provider Floor v1",
+  "type": "object",
+  "required": ["schema_version", "kind"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"enum": ["earcrate_generation_provider_catalog", "earcrate_generation_provider_probe", "earcrate_generation_request", "earcrate_generation_campaign", "earcrate_generation_run_receipt", "earcrate_generated_material", "earcrate_generation_frontier", "earcrate_generation_public_projection"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "earcrate_generation_request"}}},
+      "then": {
+        "required": ["request_sha256", "provider_id", "task_mode", "model", "seed", "rights_scope", "authority"],
+        "properties": {
+          "request_sha256": {"$ref": "#/$defs/sha256"},
+          "provider_id": {"type": "string", "minLength": 1},
+          "task_mode": {"type": "string", "minLength": 1},
+          "seed": {"type": "integer"},
+          "model": {"type": "object", "required": ["repository", "revision", "assets"], "properties": {"repository": {"type": "string", "minLength": 1}, "revision": {"type": "string", "minLength": 1}, "assets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/artifact"}}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "earcrate_generation_run_receipt"}}},
+      "then": {"required": ["receipt_sha256", "request_sha256", "provider_id", "outcome", "artifacts", "authority"], "properties": {"receipt_sha256": {"$ref": "#/$defs/sha256"}, "request_sha256": {"$ref": "#/$defs/sha256"}, "outcome": {"enum": ["observed", "failed", "refused"]}, "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "earcrate_generated_material"}}},
+      "then": {"required": ["material_sha256", "generation_receipt_sha256", "artifact", "status", "authority"], "properties": {"material_sha256": {"$ref": "#/$defs/sha256"}, "generation_receipt_sha256": {"$ref": "#/$defs/sha256"}, "artifact": {"$ref": "#/$defs/artifact"}, "status": {"const": "candidate_unreviewed"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact": {"type": "object", "required": ["name", "sha256", "bytes"], "properties": {"name": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}, "bytes": {"type": "integer", "minimum": 1}, "media_kind": {"type": "string"}}}
+  },
+  "additionalProperties": true
+}

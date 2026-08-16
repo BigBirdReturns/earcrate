@@ -3273,6 +3273,11 @@ class EarcrateCore:
             tuple(_args),
         ).fetchall()
         failed: List[Dict[str, str]] = []
+        # The denominator the crate stamp is judged against: every eligible row
+        # the selection produced, counted BEFORE source verification can drop any
+        # of them. A row lost to verification is an incomplete rebuild, not a
+        # smaller job.
+        selected_eligible = len(rows)
         verified_rows = []
         file_hashes: Dict[str, str] = {}
         invalidated_files: set[str] = set()
@@ -3310,6 +3315,10 @@ class EarcrateCore:
             preview_dir.mkdir(parents=True, exist_ok=True)
         inserted = 0; updated = 0; rejected = 0; adopted = 0
         counts: Dict[str, int] = {r: 0 for r in EAR_ROLE_ORDER}
+        # Loop ids that actually reached a written atom this run. inserted+updated
+        # double-counts nothing but says nothing about coverage either; the stamp
+        # needs to know the rebuild was COMPLETE, so count distinct rows landed.
+        processed_loop_ids: set = set()
         locked_ids = {row["atom_id"] for row in db.execute(
             "SELECT atom_id FROM atom_judgments WHERE taste_profile=? AND locked=1", (taste_profile,)).fetchall()}
 
@@ -3342,32 +3351,45 @@ class EarcrateCore:
                 updated += 1
             else:
                 inserted += 1
+            processed_loop_ids.add(lr["id"])
             if status == "approved":
                 counts[ear_role] = counts.get(ear_role, 0) + 1
 
         # ---- Phase A: ADOPT — metrics are persona-independent, so any other
         # resident's measurement of the same loop is reused verbatim. A second
         # resident auditions a big library in seconds, not hours. ----
+        #
+        # Adoption is an INCREMENTAL-build optimization only. force=True means
+        # re-measure in place, and a donor copy satisfies that request without
+        # measuring anything — so under force it is refused outright. This is not
+        # theoretical: girl_talk_v1, notorious_v1 and troubadour_v1 hold atoms on
+        # the same loops, so when all three are stale a forced rebuild of one
+        # could adopt another stale profile's metrics_json for essentially every
+        # row, run no DSP at all, and then stamp the target crate current. That
+        # is stale numbers laundered through a rebuild into a false-green crate.
         need_dsp: List[Any] = []
-        for idx, r in enumerate(rows):
-            donor = db.execute(
-                "SELECT metrics_json, ear_role, render_role, preview_path FROM ear_atoms WHERE loop_id=? AND taste_profile!=? LIMIT 1",
-                (r["id"], taste_profile)).fetchone()
-            metrics = None
-            if donor:
-                try:
-                    metrics = json.loads(donor["metrics_json"] or "{}") or None
-                except Exception:
-                    metrics = None
-            if metrics:
-                status = classify_atom_status(str(donor["ear_role"]), metrics)
-                _upsert_atom(r, metrics, str(donor["ear_role"]), str(donor["render_role"]), status, donor["preview_path"])
-                adopted += 1
-                if idx % 64 == 0:
-                    db.commit()
-                    self.set_status(f"TasteSpec: adopting measured atoms {idx+1}/{len(rows)}", (idx + 1) / max(1, len(rows)) * 0.2, True)
-            else:
-                need_dsp.append(r)
+        if force:
+            need_dsp = list(rows)
+        else:
+            for idx, r in enumerate(rows):
+                donor = db.execute(
+                    "SELECT metrics_json, ear_role, render_role, preview_path FROM ear_atoms WHERE loop_id=? AND taste_profile!=? LIMIT 1",
+                    (r["id"], taste_profile)).fetchone()
+                metrics = None
+                if donor:
+                    try:
+                        metrics = json.loads(donor["metrics_json"] or "{}") or None
+                    except Exception:
+                        metrics = None
+                if metrics:
+                    status = classify_atom_status(str(donor["ear_role"]), metrics)
+                    _upsert_atom(r, metrics, str(donor["ear_role"]), str(donor["render_role"]), status, donor["preview_path"])
+                    adopted += 1
+                    if idx % 64 == 0:
+                        db.commit()
+                        self.set_status(f"TasteSpec: adopting measured atoms {idx+1}/{len(rows)}", (idx + 1) / max(1, len(rows)) * 0.2, True)
+                else:
+                    need_dsp.append(r)
         db.commit()
 
         # ---- Phase B: MEASURE — decode each file once and fan the DSP across
@@ -3435,9 +3457,27 @@ class EarcrateCore:
         ).fetchone()["n"]
         # Stamp the crate with the engine/analyzer that just built it, so a later
         # version bump makes this profile's atoms detectably stale (crate_staleness).
-        self.stamp_crate_versions(taste_profile)
-        self.set_status(f"TasteSpec ear crate complete: {approved} approved atoms", 1.0, False)
-        return {"ok": True, "taste_profile": taste_profile, "scanned_loops": len(rows), "inserted": inserted, "updated": updated, "adopted": adopted, "parallel_files": len(jobs), "approved": int(approved), "role_counts": counts, "rejected": rejected, "failed": failed[:50]}
+        #
+        # The stamp is a claim that THIS profile was fully rebuilt by THIS engine.
+        # A partial rebuild must therefore stay stale: if any eligible row failed
+        # source verification or DSP, or simply never landed, the crate is not
+        # what the stamp would say it is. Stamping anyway is how a half-rebuilt
+        # crate reads current and silently drives coverage.
+        processed = len(processed_loop_ids)
+        complete = (not failed) and processed == selected_eligible
+        if complete:
+            self.stamp_crate_versions(taste_profile)
+        self.set_status(
+            f"TasteSpec ear crate complete: {approved} approved atoms" if complete
+            else f"TasteSpec ear crate INCOMPLETE: {processed}/{selected_eligible} rows, {len(failed)} failed — crate left stale",
+            1.0, False)
+        return {"ok": True, "taste_profile": taste_profile, "scanned_loops": len(rows),
+                "selected_eligible": selected_eligible, "processed": processed,
+                "stamped": complete, "forced_remeasure": bool(force),
+                "inserted": inserted, "updated": updated, "adopted": adopted,
+                "parallel_files": len(jobs), "approved": int(approved),
+                "role_counts": counts, "rejected": rejected,
+                "failed_count": len(failed), "failed": failed[:50]}
 
     def list_ear_atoms(self, status: str = "approved", taste_profile: str = "girl_talk_v1", limit: int = 500) -> Dict[str, Any]:
         status_filter = ""

@@ -1,5 +1,28 @@
 # EarCrate — CHANGELOG
 
+## v0.8.31 — force actually re-measures, and a partial rebuild stays stale
+- `build_ear_crate(force=True)` now bypasses cross-profile donor adoption. Force
+  has always been documented as "re-measure in place", but the adoption phase ran
+  regardless of the flag, and adoption satisfies a rebuild without measuring
+  anything. With `girl_talk_v1`, `notorious_v1` and `troubadour_v1` all holding
+  atoms on the same loops, a forced rebuild of one stale profile could copy
+  `metrics_json` from another stale profile for essentially every row, run no DSP
+  at all, and then stamp the target crate current. Stale numbers laundered
+  through a rebuild into a false-green crate. `force=False` keeps adoption: a
+  second resident still auditions a large library in seconds.
+- The crate stamp is now refused unless the rebuild was complete. Any source
+  verification failure, any DSP failure, or any eligible row that never landed
+  leaves the profile unstamped and therefore still stale. `build_ear_crate`
+  returns `stamped`, `selected_eligible` and `processed` so the denominator is
+  visible instead of implied, and the status line says INCOMPLETE rather than
+  reporting a clean finish.
+- ENGINE_VERSION: `earcrate_v0831` (was `earcrate_v0830`). This is a behavioral
+  correction to what building a crate *means*, so every crate built by the old
+  engine must read stale against the new one — which is exactly what the stamp
+  is for. ANALYZER_VERSION unchanged; no re-analysis is implied.
+- Note: ENGINE_DISPLAY_VERSION had drifted to v0.8.29 while the CHANGELOG was
+  already on v0.8.30. Both now read v0.8.31.
+
 ## v0.8.30 — the performance chapter + the GPU multi-tool seam + the treble fix
 - Rebuilds the perf campaign from the hot-path audit's verified findings (the
   original implementation died unpushed with its session container):

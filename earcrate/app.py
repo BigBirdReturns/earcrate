@@ -3504,6 +3504,293 @@ class EarcrateCore:
                 "role_counts": counts, "rejected": rejected,
                 "failed_count": len(failed), "failed": failed[:50]}
 
+    def _eligible_crate_rows(self, db: sqlite3.Connection, limit: int = 0) -> List[Any]:
+        """The current eligible loop denominator, profile-independent.
+
+        Same predicate build_ear_crate selects on: present source, full-scope
+        audio hash, and a loop whose recorded source identity still matches the
+        file's current generation.
+        """
+        return db.execute(
+            """SELECT * FROM (
+                 SELECT l.*, f.path, f.sha256 AS file_sha256, f.audio_generation,
+                        ft.bpm, ft.key_root, ft.vocal_likelihood, t.artist, t.title
+                 FROM loops l JOIN files f ON f.id=l.file_id
+                 LEFT JOIN features ft ON ft.file_id=f.id
+                 LEFT JOIN tracks t ON t.file_id=f.id
+                 WHERE l.status!='rejected'
+                   AND COALESCE(f.present,1)=1
+                   AND f.audio_sha256_scope='full' AND f.audio_sha256 IS NOT NULL
+                   AND COALESCE(l.source_audio_generation,0)=COALESCE(f.audio_generation,0)
+                   AND (l.source_audio_sha256=f.audio_sha256
+                        OR (l.source_audio_sha256 IS NULL AND COALESCE(f.audio_generation,0)=0))
+                 ORDER BY l.score DESC LIMIT ?
+               ) ORDER BY path""",
+            (limit if limit and limit > 0 else 1000000000,)).fetchall()
+
+    def verify_donor_profile(self, donor_profile: str, db: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
+        """Re-derive a donor's fitness NOW, rather than trusting a stamp it carries.
+
+        A stamp records that a profile was complete when it was written. It says
+        nothing about the profile's state at the moment another profile wants to
+        copy from it, and a donor mutated since stamping would launder exactly the
+        way the unrepaired force path did. Every field here is recomputed against
+        current rows.
+        """
+        db = db or self.conn()
+        eligible = self._eligible_crate_rows(db)
+        eligible_ids = {r["id"] for r in eligible}
+        staleness = self.crate_staleness(donor_profile, db=db)
+        stamp = staleness.get("crate_stamp") or {}
+        covered = {r["loop_id"] for r in db.execute(
+            "SELECT loop_id FROM ear_atoms WHERE taste_profile=?", (donor_profile,)).fetchall()}
+        missing = eligible_ids - covered
+        on_inactive = db.execute(
+            """SELECT COUNT(*) n FROM ear_atoms a JOIN files f ON f.id=a.file_id
+                WHERE a.taste_profile=? AND COALESCE(f.present,0)=0""",
+            (donor_profile,)).fetchone()["n"]
+        on_stale_gen = db.execute(
+            """SELECT COUNT(*) n FROM ear_atoms a JOIN loops l ON l.id=a.loop_id
+                      JOIN files f ON f.id=a.file_id
+                WHERE a.taste_profile=? AND l.source_audio_generation IS NOT NULL
+                  AND l.source_audio_generation != f.audio_generation""",
+            (donor_profile,)).fetchone()["n"]
+        digest = hashlib.sha256()
+        for row in db.execute(
+                """SELECT id, loop_id, ear_role, render_role, status, metrics_json
+                     FROM ear_atoms WHERE taste_profile=? ORDER BY id""", (donor_profile,)):
+            digest.update(("\x1f".join("" if v is None else str(v) for v in tuple(row)) + "\x1e").encode("utf-8"))
+
+        refusals: List[str] = []
+        if staleness["crate_stale"]:
+            refusals.append(f"donor crate is stale: {staleness['reason'][:160]}")
+        if str(stamp.get("engine_version") or "") != ENGINE_VERSION:
+            refusals.append(f"donor stamp engine {stamp.get('engine_version')!r} != running {ENGINE_VERSION}")
+        if str(stamp.get("analyzer_version") or "") != ANALYZER_VERSION:
+            refusals.append(f"donor stamp analyzer {stamp.get('analyzer_version')!r} != running {ANALYZER_VERSION}")
+        if missing:
+            refusals.append(f"donor covers {len(covered & eligible_ids)} of {len(eligible_ids)} eligible loops "
+                            f"({len(missing)} missing)")
+        if on_inactive:
+            refusals.append(f"donor holds {on_inactive} atoms on inactive sound")
+        if on_stale_gen:
+            refusals.append(f"donor holds {on_stale_gen} atoms on a stale source generation")
+        return {
+            "donor_profile": donor_profile,
+            "verified": not refusals,
+            "refusals": refusals,
+            "crate_stale": staleness["crate_stale"],
+            "crate_stamp": stamp,
+            "eligible_denominator": len(eligible_ids),
+            "donor_covered_eligible": len(covered & eligible_ids),
+            "donor_missing_eligible": len(missing),
+            "atoms_on_inactive_sound": on_inactive,
+            "atoms_on_stale_generation": on_stale_gen,
+            "donor_atom_digest": digest.hexdigest(),
+            "engine_version": ENGINE_VERSION,
+            "analyzer_version": ANALYZER_VERSION,
+        }
+
+    def _stratified_sample(self, rows: List[Any], metrics_by_loop: Dict[str, Dict[str, Any]],
+                           want: int) -> List[Any]:
+        """Spread a sample across source, duration, role, score band and generation.
+
+        A flat random sample can sit entirely inside one codec, one role, or one
+        score band and prove nothing about the rest. Stratifying first means a
+        divergence confined to one kind of material still has to show up.
+        """
+        def band(x: float, edges: Tuple[float, ...]) -> int:
+            return sum(1 for e in edges if x >= e)
+
+        buckets: Dict[tuple, List[Any]] = {}
+        for r in rows:
+            m = metrics_by_loop.get(r["id"]) or {}
+            key = (
+                str(r["role"] or "full"),
+                band(float(r["end_s"] or 0) - float(r["start_s"] or 0), (2.0, 4.0, 8.0, 16.0)),
+                band(float(m.get("score") or 0.0), (0.30, 0.46, 0.60, 0.80)),
+                int(r["audio_generation"] or 0),
+                Path(str(r["path"] or "")).suffix.lower(),
+            )
+            buckets.setdefault(key, []).append(r)
+        picked: List[Any] = []
+        keys = sorted(buckets, key=lambda k: (-len(buckets[k]), str(k)))
+        i = 0
+        while len(picked) < want and keys:
+            progressed = False
+            for k in list(keys):
+                if i < len(buckets[k]):
+                    picked.append(buckets[k][i])
+                    progressed = True
+                    if len(picked) >= want:
+                        break
+            if not progressed:
+                break
+            i += 1
+        return picked
+
+    def refresh_profile_from_verified_donor(
+        self, taste_profile: str, donor_profile: str = "girl_talk_v1",
+        strata_samples: int = 24, write_previews: bool = False,
+    ) -> Dict[str, Any]:
+        """Bring a stale profile current from a donor whose fitness is proved now.
+
+        EarCrate's own design says atom metrics are persona-independent: the
+        measurement is shared audio material and the persona applies downstream
+        through the TasteSpec, deck, graph thresholds and selection. So a stale
+        profile does not need its own full DSP pass -- it needs a donor that is
+        provably current and a proof that persona independence actually holds on
+        this data.
+
+        Two guards make this different from the adoption defect this branch
+        repaired. The donor is re-verified at refresh time rather than trusted for
+        a stamp it carries, and a stratified fresh-DSP comparison must reproduce
+        the donor's metrics byte for byte before any projection happens. Unlike
+        force=False this revisits the ENTIRE eligible denominator, including rows
+        the target already has, so existing stale rows are refreshed rather than
+        skipped.
+        """
+        if taste_profile == donor_profile:
+            return {"ok": False, "error": "a profile cannot be its own donor"}
+        c = self.ensure_config()
+        db = self.conn()
+        self.set_status(f"TasteSpec: verifying donor {donor_profile}", 0.0, True, None)
+
+        donor = self.verify_donor_profile(donor_profile, db=db)
+        if not donor["verified"]:
+            self.set_status(f"donor {donor_profile} refused", 1.0, False,
+                            "; ".join(donor["refusals"])[:200])
+            return {"ok": False, "error": "donor refused", "donor_verification": donor,
+                    "stamped": False}
+
+        rows = self._eligible_crate_rows(db)
+        selected_eligible = len(rows)
+        donor_rows = {r["loop_id"]: r for r in db.execute(
+            """SELECT loop_id, ear_role, render_role, preview_path, metrics_json
+                 FROM ear_atoms WHERE taste_profile=?""", (donor_profile,)).fetchall()}
+        metrics_by_loop: Dict[str, Dict[str, Any]] = {}
+        for lid, r in donor_rows.items():
+            try:
+                metrics_by_loop[lid] = json.loads(r["metrics_json"] or "{}") or {}
+            except Exception:
+                metrics_by_loop[lid] = {}
+
+        # ---- Stratified fresh-DSP comparison, before anything is written ----
+        sample = self._stratified_sample(rows, metrics_by_loop, max(1, int(strata_samples)))
+        sample_paths = {str(r["path"]) for r in sample}
+        sample_ids = {r["id"] for r in sample}
+        by_path: Dict[str, List[Any]] = {}
+        for r in rows:
+            p = str(r["path"])
+            if p in sample_paths:
+                by_path.setdefault(p, []).append(r)
+        preview_dir = c.working_root / "ear_crate" / "previews"
+        jobs = [{"path": path, "sample_rate": c.sample_rate, "write_previews": False,
+                 "preview_dir": str(preview_dir),
+                 "loops": [{"id": r["id"], "start_s": float(r["start_s"]), "end_s": float(r["end_s"]),
+                            "bars": int(r["bars"] or 1), "role": str(r["role"] or "full"),
+                            "vocal_likelihood": float(r["vocal_likelihood"] or 0.0),
+                            "artist": r["artist"], "title": r["title"]} for r in lst]}
+                for path, lst in by_path.items()]
+        compared = 0
+        divergences: List[Dict[str, str]] = []
+        for n, job in enumerate(jobs):
+            self.set_status(f"TasteSpec: donor comparison {n+1}/{len(jobs)}", (n + 1) / max(1, len(jobs)) * 0.15, True)
+            res = ear_crate_file_worker(job)
+            if res.get("error"):
+                divergences.append({"path": str(job["path"]), "error": str(res["error"])[:200]})
+                continue
+            for item in res.get("results") or []:
+                lid = item.get("loop_id")
+                if lid not in sample_ids:
+                    continue          # measured for identical conditions, compared only if sampled
+                if item.get("error"):
+                    divergences.append({"loop_id": str(lid), "error": str(item["error"])[:200]})
+                    continue
+                compared += 1
+                fresh = json.dumps(item.get("metrics") or {}, sort_keys=True, ensure_ascii=False)
+                held = json.dumps(metrics_by_loop.get(lid) or {}, sort_keys=True, ensure_ascii=False)
+                donor_row = donor_rows.get(lid)
+                if fresh != held:
+                    divergences.append({"loop_id": str(lid), "field": "metrics",
+                                        "fresh": fresh[:200], "donor": held[:200]})
+                elif donor_row is not None and (
+                        str(item.get("ear_role")) != str(donor_row["ear_role"])
+                        or str(item.get("render_role")) != str(donor_row["render_role"])):
+                    divergences.append({"loop_id": str(lid), "field": "role",
+                                        "fresh": f"{item.get('ear_role')}/{item.get('render_role')}",
+                                        "donor": f"{donor_row['ear_role']}/{donor_row['render_role']}"})
+        if divergences or compared == 0:
+            self.set_status("donor comparison failed; nothing written", 1.0, False,
+                            f"{len(divergences)} divergence(s)")
+            return {"ok": False, "error": "donor comparison failed", "stamped": False,
+                    "donor_verification": donor, "strata_compared": compared,
+                    "strata_requested": len(sample), "divergences": divergences[:20]}
+
+        # ---- Project the verified donor across the FULL denominator ----
+        locked_ids = {row["atom_id"] for row in db.execute(
+            "SELECT atom_id FROM atom_judgments WHERE taste_profile=? AND locked=1",
+            (taste_profile,)).fetchall()}
+        processed: set = set()
+        failed: List[Dict[str, str]] = []
+        inserted = updated = 0
+        counts: Dict[str, int] = {r: 0 for r in EAR_ROLE_ORDER}
+        for idx, lr in enumerate(rows):
+            src = donor_rows.get(lr["id"])
+            metrics = metrics_by_loop.get(lr["id"])
+            if not src or not metrics:
+                failed.append({"loop_id": str(lr["id"]), "error": "donor has no measurement for this loop"})
+                continue
+            ear_role, render_role = str(src["ear_role"]), str(src["render_role"])
+            status = classify_atom_status(ear_role, metrics)
+            existing = db.execute("SELECT id, ear_role, status FROM ear_atoms WHERE loop_id=? AND taste_profile=?",
+                                  (lr["id"], taste_profile)).fetchone()
+            aid = existing["id"] if existing else ("atm_" + sha256_text(f"{lr['id']}|{taste_profile}")[:20])
+            if existing and existing["id"] in locked_ids:
+                ear_role, status = existing["ear_role"], existing["status"]
+            db.execute(
+                """INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,bpm,key_root,score,hook_score,bed_score,floor_score,bass_score,spark_score,intelligibility,low_share,mid_share,high_share,loopability,transient_density,phrase_position,status,preview_path,metrics_json,created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(loop_id,taste_profile) DO UPDATE SET ear_role=excluded.ear_role,render_role=excluded.render_role,score=excluded.score,hook_score=excluded.hook_score,bed_score=excluded.bed_score,floor_score=excluded.floor_score,bass_score=excluded.bass_score,spark_score=excluded.spark_score,intelligibility=excluded.intelligibility,low_share=excluded.low_share,mid_share=excluded.mid_share,high_share=excluded.high_share,loopability=excluded.loopability,transient_density=excluded.transient_density,status=excluded.status,preview_path=excluded.preview_path,metrics_json=excluded.metrics_json,created_at=excluded.created_at""",
+                (aid, lr["id"], lr["file_id"], taste_profile, ear_role, render_role,
+                 float(lr["start_s"]), float(lr["end_s"]), int(lr["bars"] or 1),
+                 float(lr["bpm"] or 0.0), int(lr["key_root"] or 0),
+                 float(metrics.get("score") or 0.0), float(metrics.get("hook_score") or 0.0),
+                 float(metrics.get("bed_score") or 0.0), float(metrics.get("floor_score") or 0.0),
+                 float(metrics.get("bass_score") or 0.0), float(metrics.get("spark_score") or 0.0),
+                 float(metrics.get("intelligibility") or 0.0), float(metrics.get("low_share") or 0.0),
+                 float(metrics.get("mid_share") or 0.0), float(metrics.get("high_share") or 0.0),
+                 float(metrics.get("loopability") or 0.0), float(metrics.get("transient_density") or 0.0),
+                 "downbeat", status, src["preview_path"],
+                 json.dumps(metrics, ensure_ascii=False), now_utc()))
+            processed.add(lr["id"])
+            if existing:
+                updated += 1
+            else:
+                inserted += 1
+            if status == "approved":
+                counts[ear_role] = counts.get(ear_role, 0) + 1
+            if idx % 512 == 0:
+                db.commit()
+                self.set_status(f"TasteSpec: projecting verified donor {idx+1}/{selected_eligible}",
+                                0.15 + 0.8 * (idx + 1) / max(1, selected_eligible), True)
+        db.commit()
+
+        complete = (not failed) and len(processed) == selected_eligible
+        if complete:
+            self.stamp_crate_versions(taste_profile)
+        self.set_status(
+            f"TasteSpec donor refresh complete: {len(processed)} rows" if complete
+            else f"TasteSpec donor refresh INCOMPLETE: {len(processed)}/{selected_eligible} — crate left stale",
+            1.0, False)
+        return {"ok": True, "taste_profile": taste_profile, "donor_profile": donor_profile,
+                "donor_verification": donor,
+                "strata_requested": len(sample), "strata_compared": compared,
+                "strata_divergences": 0,
+                "selected_eligible": selected_eligible, "processed": len(processed),
+                "stamped": complete, "inserted": inserted, "updated": updated,
+                "role_counts": counts, "failed_count": len(failed), "failed": failed[:50]}
+
     def list_ear_atoms(self, status: str = "approved", taste_profile: str = "girl_talk_v1", limit: int = 500) -> Dict[str, Any]:
         status_filter = ""
         args: List[Any] = [taste_profile]

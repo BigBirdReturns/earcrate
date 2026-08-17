@@ -16,6 +16,21 @@
   returns `stamped`, `selected_eligible` and `processed` so the denominator is
   visible instead of implied, and the status line says INCOMPLETE rather than
   reporting a clean finish.
+- New `refresh_profile_from_verified_donor`: a stale profile can be brought
+  current from a donor whose fitness is proved at refresh time, instead of
+  repeating a full 66,149-loop DSP pass per profile. Atom metrics are
+  persona-independent by design (`classify_atom_status` reads only `ear_role`
+  and `score`), so the measurement is shared material — but "adopt from another
+  profile" is exactly the mechanism that produced the false-green crate above,
+  so the difference is mechanical. `verify_donor_profile` re-derives staleness,
+  stamp identity, coverage of the *current* eligible denominator, inactive-sound
+  and stale-generation counts, and an atom digest, all against current rows
+  rather than inheriting the donor's stamp. The refresh then requires a
+  stratified fresh-DSP comparison — sampled across role, duration, score band,
+  generation and container — to reproduce the donor's metrics and roles byte for
+  byte before projecting anything. Any divergence refuses the whole refresh with
+  nothing written and no stamp. Unlike `force=False` it revisits the entire
+  denominator, so existing stale rows are refreshed rather than skipped.
 - `build_compatibility_graph` now reconciles to the exact current edge set. It
   deleted only non-deterministic rows and upserted the qualifying set, so a
   deterministic `edg_` edge that qualified under an older measurement stayed

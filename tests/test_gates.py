@@ -4438,3 +4438,120 @@ def test_compatibility_graph_reconciles_to_the_exact_current_set():
     assert _graph_digest() == digest_a, "a second identical rebuild changed the graph"
     assert fourth["active_minus_desired"] == 0 and fourth["desired_minus_active"] == 0, fourth
     assert fourth["deleted_obsolete"] == 0 and fourth["retired_historical"] == 0, fourth
+
+
+def test_verified_donor_refresh():
+    """v0.8.31 gate: a stale profile may be refreshed from a donor only when that
+    donor is proved current NOW and persona independence is proved on this data.
+
+    Atom metrics are persona-independent by design, so a stale profile should not
+    need its own full DSP pass. But 'adopt from another profile' is precisely the
+    mechanism that produced the false-green crate this branch repaired. The
+    difference has to be mechanical: re-verify the donor at refresh time rather
+    than trusting a stamp it carries, and reproduce its measurements by fresh DSP
+    across strata before projecting anything.
+    """
+    import json, tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    from earcrate.core.deps import ANALYZER_VERSION
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(4):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    db = core.conn()
+
+    # --- an unverified donor is refused outright ---
+    refused = core.refresh_profile_from_verified_donor("notorious_v1", donor_profile="girl_talk_v1")
+    assert refused["ok"] is False and refused["stamped"] is False, refused
+    assert refused["donor_verification"]["verified"] is False
+    assert refused["donor_verification"]["refusals"], "an empty donor must produce a stated refusal"
+    assert db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='notorious_v1'"
+                      ).fetchone()["n"] == 0, "a refused refresh must write nothing"
+
+    # --- build a genuine donor ---
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        donor_build = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert donor_build["stamped"] is True and donor_build["selected_eligible"] > 0
+    v = core.verify_donor_profile("girl_talk_v1")
+    assert v["verified"] is True, v
+    assert v["donor_missing_eligible"] == 0 and v["eligible_denominator"] > 0
+    assert v["donor_atom_digest"], "donor verification must bind an atom digest"
+
+    # --- a self-donor is refused ---
+    assert core.refresh_profile_from_verified_donor("girl_talk_v1", donor_profile="girl_talk_v1")["ok"] is False
+
+    # --- the happy path: full denominator, stamped, identities preserved ---
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r = core.refresh_profile_from_verified_donor("notorious_v1", donor_profile="girl_talk_v1",
+                                                     strata_samples=8)
+    assert r["ok"] is True, r
+    assert r["stamped"] is True, r
+    assert r["processed"] == r["selected_eligible"] == donor_build["selected_eligible"], r
+    assert r["strata_compared"] > 0, "the comparison must actually measure something"
+    assert r["failed_count"] == 0, r["failed"]
+    assert core.crate_staleness("notorious_v1")["crate_stale"] is False
+
+    # metrics really are the donor's, and identity is deterministic per profile
+    donor_m = {x["loop_id"]: x["metrics_json"] for x in db.execute(
+        "SELECT loop_id, metrics_json FROM ear_atoms WHERE taste_profile='girl_talk_v1'")}
+    target = {x["loop_id"]: (x["id"], x["metrics_json"]) for x in db.execute(
+        "SELECT loop_id, id, metrics_json FROM ear_atoms WHERE taste_profile='notorious_v1'")}
+    assert set(target) == set(donor_m) and target
+    for lid, (aid, mj) in target.items():
+        assert mj == donor_m[lid], "projected metrics differ from the verified donor"
+        assert aid != lid and aid.startswith("atm_"), aid
+    assert len(set(a for a, _ in target.values())) == len(target), "atom identities collided"
+    assert not (set(a for a, _ in target.values())
+                & {x["id"] for x in db.execute(
+                    "SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1'")}), \
+        "target atoms must have their own identities, not the donor's"
+
+    # --- a locked human call survives a donor refresh ---
+    aid = next(iter(target.values()))[0]
+    core.set_atom_judgment(aid, "notorious_v1", "approved", relabel_role="VOX_SHOUT", locked=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.refresh_profile_from_verified_donor("notorious_v1", donor_profile="girl_talk_v1",
+                                                 strata_samples=4)
+    row = db.execute("SELECT ear_role, status FROM ear_atoms WHERE id=?", (aid,)).fetchone()
+    assert row["ear_role"] == "VOX_SHOUT" and row["status"] == "approved", \
+        "a locked judgment must survive a donor refresh"
+
+    # --- persona independence is PROVED, not assumed: a diverging DSP refuses ---
+    def _diverging(job):
+        out = _fast_crate_fixture(job)
+        for item in out["results"]:
+            item["metrics"] = dict(item["metrics"])
+            item["metrics"]["score"] = 0.123456
+        return out
+
+    stamp_before = core.kv_get_json("crate_stamp:troubadour_v1")
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_diverging):
+        bad = core.refresh_profile_from_verified_donor("troubadour_v1", donor_profile="girl_talk_v1",
+                                                       strata_samples=8)
+    assert bad["ok"] is False and bad["stamped"] is False, bad
+    assert bad["divergences"], "a metric divergence must be reported"
+    assert db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='troubadour_v1'"
+                      ).fetchone()["n"] == 0, "a refused refresh must write no atoms"
+    assert core.kv_get_json("crate_stamp:troubadour_v1") == stamp_before, \
+        "a refused refresh must not stamp the target"
+
+    # --- a donor that goes stale is refused on the NEXT refresh, not trusted ---
+    core.kv_set_json("crate_stamp:girl_talk_v1",
+                     {"engine_version": "earcrate_v0001", "analyzer_version": ANALYZER_VERSION,
+                      "stamped_at": "1970-01-01T00:00:00Z"})
+    after = core.refresh_profile_from_verified_donor("troubadour_v1", donor_profile="girl_talk_v1")
+    assert after["ok"] is False, "a donor whose stamp went stale must be re-refused at refresh time"
+    assert any("stale" in x or "stamp" in x for x in after["donor_verification"]["refusals"]), after

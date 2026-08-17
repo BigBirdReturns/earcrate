@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 from typing import Any, Mapping, Sequence
 
@@ -130,9 +131,43 @@ def base_result(track_id: str, adapter: str) -> dict[str, Any]:
         "track_id": track_id, "adapter": adapter, "state": "campaign_task_materialized",
         "tool_contract_ready": False, "binding_contract_ready": False,
         "representative_invocation_ready": False, "symbolic_evidence_ready": False,
+        # A lane can hold a valid adapter and a valid invocation and still not be a
+        # full-form lane, so the form obligation is tracked as its own claim rather
+        # than being folded into the invocation flag.
+        "full_form_adapter_ready": False,
         "performance_realization_ready": False, "music_producing_path_ready": False,
         "evidence_tier": None, "observations": {}, "blockers": [],
     }
+
+
+def current_git_head() -> str | None:
+    """The exact head an execution receipt must have been produced at."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=30, check=False)
+    except Exception:
+        return None
+    value = result.stdout.strip().lower()
+    return value if re.fullmatch(r"[0-9a-f]{40}", value) else None
+
+
+def worktree_is_clean() -> bool | None:
+    """Whether the checkout matches its head exactly.
+
+    A receipt that records a head but was produced from a dirty tree does not
+    describe reproducible work: the code that ran is not the code that head names.
+    Matching the SHA alone would accept exactly that.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=60, check=False)
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    return not [line for line in result.stdout.splitlines() if line.strip()]
 
 
 def powershell_switches(path: Path) -> set[str]:

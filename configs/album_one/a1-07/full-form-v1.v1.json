@@ -1,0 +1,288 @@
+{
+  "album_id": "earcrate-album-one",
+  "contract_sha256": "59f9b3599efad4bad268a81d8a72337d9162db55a4f54b3eeac361f7a954e740",
+  "created_at": "2026-08-17T00:00:00Z",
+  "descent_id": "a1-07-full-form-v1",
+  "evidence_package": {
+    "required": [
+      "adapter manifest and version",
+      "exact EarCrate Git head",
+      "exact source bindings and identities",
+      "score or phrase-map identity",
+      "complete command vector",
+      "filter graph and stage ordering",
+      "intermediate-stage PCM identities",
+      "final duration and signal metrics",
+      "two clean execution receipts",
+      "canonical PCM equality across executions",
+      "full-form structural declaration",
+      "private/public evidence projection"
+    ]
+  },
+  "form": {
+    "declared_total_seconds": 56.111,
+    "maximum_seconds": 120.0,
+    "minimum_seconds": 45.0,
+    "sections": [
+      {
+        "end_seconds": 19.2,
+        "musical_function": "sparse quiet-to-crescendo build: Frankie clock alone, then progressive harmonic, bass and drum entry",
+        "provenance": "retained verbatim from the gold-v7 arc build",
+        "retained_positive_arc": true,
+        "section_id": "setup",
+        "start_seconds": 0.0
+      },
+      {
+        "authored_once_invariant_across_candidates": true,
+        "end_seconds": 37.161,
+        "musical_function": "development: Frankie continues into the next contiguous phrase pair over a stable donor-band pocket at full level",
+        "provenance": "newly authored for full-form-v1",
+        "section_id": "body",
+        "start_seconds": 19.2
+      },
+      {
+        "end_seconds": 56.111,
+        "musical_function": "the incumbent payoff the owner already ranked highest",
+        "protected_sample_identical": true,
+        "provenance": "protected gold-v6 reviewed compound, sample-identical",
+        "section_id": "payoff",
+        "start_seconds": 37.161
+      }
+    ]
+  },
+  "headroom": {
+    "applies_to": "all non-protected elements; the protected payoff clip is never trimmed",
+    "policy": "one trim shared by every candidate, solved from the hottest",
+    "target_peak_dbfs": -1.0,
+    "why": "Summing four elements at the arc's setup levels drove the authored body past full scale. The resulting hard clipping differed per candidate (1,980 / 2,239 / 2,488 flat-topped samples) and the setup differed too (178 / 87 / 218), so the frontier would have varied in distortion as well as in timing law and could not have isolated the mechanism it exists to test. A per-candidate trim would have swapped that confound for a level confound, so the trim is shared."
+  },
+  "intent": {
+    "control_or_baseline": "the retained gold-v7 arc (38.15 s) and its protected gold-v6 payoff",
+    "musical_gap": "A1-07 has never produced an owner-reviewable performance long enough to show whether the groove survives setup, development and payoff. Every prior candidate is an 18.95 s core or a 38.15 s arc.",
+    "owner_audition_effect": "the owner hears a full-form 45-120 s performance and can judge whether the pocket holds across a real form, not a fragment",
+    "rejected_ancestry": "reference_zero_v5 is explicitly NOT a target output; the CORE ledger closed the existing automatic recipes. Its value here is timing and stage semantics only.",
+    "supersedes": "gold-v9 core-only timing-law diagnostics and all 18-to-20 s microdiagnostics"
+  },
+  "kind": "earcrate_track_descent_contract",
+  "known_inherited_defects": [
+    {
+      "affects": "nothing in this descent's rendered candidates",
+      "defect": "the gold-v7 arc file itself hard-clips: 382 flat-topped samples across 58 runs, all inside its build section",
+      "disclosure": "state in the cut notes that the reference, not the options, carries the ancestor's clipping, so the owner does not read it as an option defect",
+      "discriminating": false,
+      "how": "the shared headroom trim keeps the summed mix at -1.0 dBFS, so no full-form candidate carries a flat-topped sample; the INCUMBENT reference cut still carries the ancestor's own clipping because it IS the ancestor",
+      "inherited_from": "gold-v7 arc",
+      "status": "neutralized"
+    }
+  ],
+  "machine_gate": {
+    "band_tempo_bounds_rationale": "The retired phrase_local map reached atempo 0.334 and a raw ratio of 10.51. Uncapped scaling is the mechanical source of the owner's 'instrumental dragged down to the vocal' verdict. Every band slot in this descent stays inside the same duration-preservation cap the terminal calls already used.",
+    "band_tempo_scale_bounds": [
+      0.92,
+      1.08
+    ],
+    "body_rows_identical_across_candidates_except_band_timing": true,
+    "candidate_pcm_must_be_distinct": true,
+    "duration_within_form_window": true,
+    "each_candidate_renders_twice_to_identical_canonical_pcm": true,
+    "frankie_clip_rows_must_match_across_candidates": true,
+    "hard_clipping_is_a_frontier_validity_gate": "Flat-topped samples are irreversible and they differed per candidate, so they would have confounded the timing-law comparison. This is not a mastering preference; an unequal defect invalidates the frontier.",
+    "maximum_candidates": 3,
+    "native_pocket_must_use_only_tempo_scale_1": true,
+    "no_hard_clipped_samples_in_any_candidate": true,
+    "no_owner_frontier_if_fewer_than_two_candidates_qualify": true,
+    "payoff_region_must_be_sample_identical_to_gold_v6": true,
+    "phrase_reset_max_one_tempo_scale_per_four_slot_phrase": true,
+    "raw_render_true_peak_is_evidence_not_a_gate": true,
+    "review_cut_target_lufs": -14.0,
+    "review_cut_true_peak_ceiling_dbfs": -2.0,
+    "signal_floor_integrated_lufs": -24.0,
+    "single_speed_must_use_exactly_one_band_tempo_scale": true,
+    "why_raw_peak_is_not_gated": "The retained gold-v7 arc already true-peaks at +0.2 dBFS, so every descendant that keeps the arc verbatim inherits it. Gating the raw render would either fail the whole frontier for an ancestor's defect or invite quietly rescaling the protected material. The raw peak is therefore recorded as evidence, the ceiling is enforced on the level-matched owner cut, and the inherited clipping is disclosed in the cut notes."
+  },
+  "parent": {
+    "arc_pcm_sha256": "a80ad01fe529aa4292beed2cc13b8bdc48afdcf7a75ab0a96b7ecf30caf5476c",
+    "arc_score_sha256": "796f40eacfe02e99f63d0cfee81d5f27eeeaa0384c6711cc25c51146e96aeba5",
+    "gold_v6_pcm_sha256": "0733d87869f34710cd0d2e06875ae876eb100b5065f4159e8199a2672ee863f8",
+    "gold_v6_score_sha256": "7fdb7873702e4cd7b43e6e01fefdad89786e4461842b8c3358a63565a464d6cf",
+    "owner_review_receipt_sha256": "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3",
+    "source_workspace_kind": "a1_07_gold_v7_workspace"
+  },
+  "phrase_map": {
+    "band_gain_arc": {
+      "body": {
+        "maneskin_bass": -4.0,
+        "maneskin_drums": -3.0,
+        "maneskin_other": -9.0
+      },
+      "doctrine": "the retained v7 quiet-to-crescendo shape, extended to full level in the body",
+      "setup": {
+        "maneskin_bass": [
+          -7.0,
+          -4.0
+        ],
+        "maneskin_drums": [
+          -3.0
+        ],
+        "maneskin_other": [
+          -16.0,
+          -12.0,
+          -9.0
+        ]
+      }
+    },
+    "band_grid": {
+      "body_band_ends_before_payoff_seconds": 35.6835,
+      "body_slots": 9,
+      "body_source_end_seconds": 83.9995,
+      "body_source_start_seconds": 67.516,
+      "implied_bpm_4_4": 131.04,
+      "progressive_entry": "Band tracks legitimately occupy DIFFERENT subsets of the shared slot grid: harmonic material enters first, then bass, then drums. A timing law maps the GRID; each track follows its own slots. This is why gold-v9 derive_slots, which demands identical slot sets across donor tracks, cannot be reused unchanged.",
+      "setup_slots_inherited_from_arc": true,
+      "slot_seconds": 1.8315,
+      "vocal_only_lead_in_before_payoff": true,
+      "why_lead_in": "the arc already hands into its payoff on a vocal-only bar; the body repeats that gesture so the payoff entry reads as intentional"
+    },
+    "doctrine": "Explicit and inspectable. Every phrase declares its own source window, destination anchor, timing law, reset behaviour, gain and transition treatment. No global opaque warp is permitted anywhere in this descent.",
+    "vocal_invariants": {
+      "frankie_pitch_shift_semitones": 0.0,
+      "frankie_rows_identical_across_candidates": true,
+      "frankie_time_stretch_forbidden": true
+    },
+    "vocal_phrases": [
+      {
+        "destination_anchor_seconds": 0.0,
+        "frankie_timing_changed": false,
+        "gain_db": 4.0,
+        "phrase_id": "setup-frankie-clock",
+        "reset_behaviour": "none",
+        "section_id": "setup",
+        "source_id": "four_seasons_vocals",
+        "source_window_seconds": [
+          4.35,
+          23.3
+        ],
+        "tempo_scale": 1.0,
+        "timing_law": "native",
+        "transition_treatment": "hard start; the vocal is the clock the band enters against"
+      },
+      {
+        "destination_anchor_seconds": 19.2,
+        "frankie_timing_changed": false,
+        "gain_db": 4.0,
+        "measured_from": "activity-segment census of the CORE four_seasons vocals stem",
+        "phrase_id": "body-frankie-development",
+        "reset_behaviour": "none",
+        "section_id": "body",
+        "source_id": "four_seasons_vocals",
+        "source_window_seconds": [
+          30.894,
+          48.855
+        ],
+        "tempo_scale": 1.0,
+        "timing_law": "native",
+        "transition_treatment": "contiguous source span, so the internal breath at 41.645-42.005 s is preserved exactly rather than spliced out"
+      }
+    ]
+  },
+  "required_bindings": {
+    "a1_07_gold_v7_workspace": {
+      "role": "qualified_private_evidence_workspace",
+      "validator": "earcrate.a1_07_gold_v8.custody.verify_inputs"
+    },
+    "beggin_core_private_store": {
+      "container_sha256": "8efa0d0352d958ccfde4fe8d852b4f976be3e034a49ca99ec3545435e72a9291",
+      "role": "source_and_stem_custody"
+    }
+  },
+  "review_label_policy": {
+    "authority": "frontier/review/private/authority.json",
+    "labels_are_not_declared_here": true,
+    "reason": "A tracked candidate-to-letter table is not a blind: anyone holding the repository could decode the verdict. Labels are permuted per pack under a nonce that lives only in the private review authority."
+  },
+  "review_normalization": {
+    "applies_to": "owner review cuts only; never to the evidence renders or the protected payoff",
+    "peak_ceiling_dbfs": -2.0,
+    "target_lufs": -14.0
+  },
+  "review_policy": {
+    "choices": [
+      "A",
+      "B",
+      "C",
+      "tie",
+      "reject_all",
+      "abstain"
+    ],
+    "dimensions": [
+      "Frankie vocal authority",
+      "terminal phrase placement",
+      "percussion impact",
+      "groove continuity",
+      "separator residue",
+      "cymbal and room continuity",
+      "source recognizability",
+      "desire to hear the next phrase"
+    ],
+    "invariant_disclosure_required": true,
+    "reject_all_closes_family": true,
+    "relative_preference_does_not_equal_album_acceptance": true,
+    "review_scope": "full-form 45-120 second performance",
+    "roles_withheld": false,
+    "single_varying_mechanism": "donor-band timing law",
+    "transparent_deltas_required": true,
+    "why_single_variable": "the newly authored body is held byte-invariant across A, B and C so the frontier tests exactly one mechanism. A frontier that varied both the body and the timing law would be non-discriminating by construction."
+  },
+  "schema_version": 1,
+  "source_identities": {
+    "disambiguation": "maneskin_drums here is the FULL CORE stem ec5a6646..., NOT the 45-75 s window object 3efb8521... used by the retired 20 s timing-pass lineage.",
+    "four_seasons_vocals": "04ae45c6878639cede475b7de69bf30c297ac763cf8caa4a3e632c83f7d0e715",
+    "gold_v6_reviewed_compound": "d58e2b4e4ff73f84250a4c6f8384f762b3baf4adc2af09e1c5f0ed77c86a23ea",
+    "maneskin_bass": "ec0364fa54a3a78f15aba27d8eac08734ba5b1c93d44752d7ec98dd256b28372",
+    "maneskin_drums": "ec5a66463d2e1706ebea75cc98a07698253ac04b20ab520f76305dc60e8153b6",
+    "maneskin_other": "d2f36f402556a6d0017a0551a9608baf46b3f4ac8f87a057b5ad37f701584718"
+  },
+  "terminal_logic": {
+    "album_master_count": 0,
+    "human_acceptance_required_separately": true,
+    "machine_qualification_may_not_accept_music": true,
+    "machine_qualification_may_raise_counters": true,
+    "next_after_review": "promote a winner as the first owner frontier and rerun the production preflight, or on reject_all close the timing and arrangement family and change organs rather than generating another nearby timing specimen",
+    "system_reference_count": 0
+  },
+  "timeline": {
+    "channels": 2,
+    "codec": "pcm_s24le",
+    "sample_rate": 48000
+  },
+  "timing_laws": [
+    {
+      "candidate_id": "full-form-v1-single-speed",
+      "frontier_role": "best stable timing law under the retained positive arc",
+      "label": "single-speed",
+      "mechanism": "one constant tempo scale across the entire donor-band grid, chosen to preserve the grid's conducted span; slots reflow continuously from the first cue",
+      "phase_rule": "no resets",
+      "tempo_rule": "exactly one band tempo scale",
+      "why": "the best stable timing law carried forward from the gold-v9 investigation, now under the retained positive arc"
+    },
+    {
+      "candidate_id": "full-form-v1-native-pocket",
+      "frontier_role": "alternate surviving timing law under the same arc",
+      "label": "native-pocket",
+      "mechanism": "donor-band tempo scale fixed at 1.0; the band keeps its native pocket and natural drift is accepted",
+      "phase_rule": "no resets",
+      "tempo_rule": "tempo scale exactly 1.0",
+      "why": "the alternate surviving timing law under the same arc; tests whether preserving the drummer's native feel beats synchronization over a full form"
+    },
+    {
+      "candidate_id": "full-form-v1-phrase-reset",
+      "frontier_role": "explicit phrase-reset control on the same source and form",
+      "label": "phrase-reset",
+      "mechanism": "one constant tempo scale per four-slot phrase, re-cued only at phrase boundaries, so the pocket is stable inside each phrase and every synchronization change is hidden at a boundary",
+      "phase_rule": "re-cue only at four-slot phrase boundaries",
+      "tempo_rule": "one tempo scale per four-slot phrase",
+      "why": "the explicit phrase-reset control on the same source and form"
+    }
+  ],
+  "track_id": "A1-07"
+}

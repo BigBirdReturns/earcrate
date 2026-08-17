@@ -825,14 +825,18 @@ def create_recovery_challenge(
 def _measure_loudness(path: Path, ffmpeg: str = "ffmpeg") -> tuple[float, float]:
     result = _run([ffmpeg, "-nostdin", "-hide_banner", "-i", str(path), "-filter_complex", "ebur128=peak=true", "-f", "null", "-"], timeout=1800)
     text = result.stderr
-    summaries = re.findall(r"I:\s*(-?\d+(?:\.\d+)?)\s*LUFS.*?Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS", text, flags=re.S)
-    if summaries:
-        return float(summaries[-1][0]), float(summaries[-1][1])
-    integrated = re.findall(r"I:\s*(-?\d+(?:\.\d+)?)\s*LUFS", text)
-    peaks = re.findall(r"Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS", text)
+    # Read the trailing Summary block, never the per-frame trace. ebur128 prints a
+    # running `I:` on every frame, and a track that opens quietly reports the -70
+    # LUFS floor for its first frames. An unanchored `I: ... .*? Peak:` match pairs
+    # that floor with the summary's peak, so any quiet intro measured as near
+    # silence -- and _level_match below then clamps on peak, producing a cut that
+    # is peak-normalized rather than level-matched.
+    tail = text.rsplit("Summary:", 1)[-1] if "Summary:" in text else ""
+    integrated = re.search(r"Integrated loudness:\s*I:\s*(-?\d+(?:\.\d+)?)\s*LUFS", tail, flags=re.S)
+    peak = re.search(r"True peak:\s*Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS", tail, flags=re.S)
     if not integrated:
         raise ReferenceZeroError(f"could not parse loudness for {path}")
-    return float(integrated[-1]), float(peaks[-1]) if peaks else -99.0
+    return float(integrated.group(1)), float(peak.group(1)) if peak else -99.0
 
 
 def _level_match(source: Path, destination: Path, *, target_lufs: float, peak_ceiling_dbfs: float, ffmpeg: str) -> dict[str, Any]:

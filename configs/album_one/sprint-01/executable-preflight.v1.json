@@ -16,9 +16,10 @@
     "declared_full_form_floor_enforced",
     "non_silent_audio_gate",
     "reproduction_receipts_required",
-    "musical_delta_disclosed"
+    "musical_delta_disclosed",
+    "full_form_adapter_ready"
   ],
-  "preflight_contract_sha256": "7e17d7ddc1657fe4d69cf0f04b491ad81fefcc520761f019898e398329458ba6",
+  "preflight_contract_sha256": "0400171bdfcb09ccf4b69e4edec57ab627f64032aa2d52f9124695360c0e2e61",
   "prohibited_authorization_inputs": [
     "campaign_task_materialized",
     "provider_process_completed",
@@ -39,7 +40,8 @@
     "blocked_performance_realization",
     "blocked_exact_credential",
     "blocked_rights_or_custody",
-    "failed"
+    "failed",
+    "full_form_performance_realization_ready"
   ],
   "tracks": {
     "A1-01": {
@@ -133,14 +135,15 @@
       ]
     },
     "A1-07": {
-      "adapter": "timing_law_full_form",
-      "execution_class": "core_only_diagnostic",
+      "adapter": "full_form_v1",
+      "execution_class": "full_form_performance",
       "maximum_seconds": 120.0,
       "minimum_seconds": 45.0,
-      "repo_probe": "gold_v9_contract",
+      "repo_probe": "full_form_v1_contract",
       "required_bindings": [
         "a1_07_gold_v7_workspace",
-        "beggin_core_private_store"
+        "beggin_core_private_store",
+        "a1_07_full_form_execution_manifest"
       ]
     }
   }

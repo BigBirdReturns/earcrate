@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+import sys
 from typing import Any, Mapping
 
 from .common import (
     HOMELAB_FORBIDDEN_SWITCHES, HOMELAB_REQUIRED_SWITCHES, ROOT,
-    base_result, blocker, load, missing, powershell_switches, template_switches,
+    base_result, blocker, current_git_head, load, missing, powershell_switches,
+    require_seal, template_switches, worktree_is_clean,
 )
 
 
@@ -81,35 +84,176 @@ def gesture(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any])
 
 
 def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, Any]:
+    """Derive A1-07 readiness from the full-form adapter and its execution receipt.
+
+    This probe used to hardcode `representative_invocation_ready = False` and read
+    full-form readiness off the gold-v9 diagnostic's declared scope. Both were
+    statements about a contract rather than about anything that ran, so the lane
+    could never move no matter what was executed. Every flag below is now derived
+    from evidence: the adapter must exist and validate, the private bindings must
+    verify, and a sealed manifest must show a 45-120 s execution at THIS head that
+    reproduced deterministically and cleared the signal floor.
+    """
     result = base_result(track_id, str(spec["adapter"]))
-    runner = ROOT / "scripts/RUN_A1_07_GOLD_V9.ps1"
-    contract_path = ROOT / "configs/album_one/a1-07/gold-v9-timing-laws.v1.json"
-    v9 = load(contract_path)
-    construction, review = v9.get("construction") or {}, v9.get("review_policy") or {}
-    scope = str(construction.get("review_scope") or review.get("review_scope") or "")
-    arc_deferred = bool(review.get("positive_arc_reapplication_deferred"))
-    result["tool_contract_ready"] = runner.is_file() and contract_path.is_file()
-    absent = missing(bindings, list(spec.get("required_bindings") or []))
+    runner = ROOT / "scripts/RUN_A1_07_FULL_FORM_V1.ps1"
+    cli = ROOT / "scripts/earcrate_a1_07_full_form_v1.py"
+    package = ROOT / "earcrate/a1_07_full_form"
+    contract_path = ROOT / "configs/album_one/a1-07/full-form-v1.v1.json"
+    low = float(spec["minimum_seconds"])
+    high = float(spec["maximum_seconds"])
+
+    # --- tool contract: does the adapter exist, and does its contract validate? --
+    tool_errors: list[str] = []
+    for path in (runner, cli, contract_path):
+        if not path.is_file():
+            tool_errors.append(f"missing {path.name}")
+    if not (package / "build.py").is_file() or not (package / "score.py").is_file():
+        tool_errors.append("full-form adapter package is incomplete")
+    contract: dict[str, Any] = {}
+    form: dict[str, Any] = {}
+    if contract_path.is_file():
+        contract = load(contract_path)
+        try:
+            require_seal(contract, "contract_sha256")
+        except Exception as exc:
+            tool_errors.append(f"contract seal invalid: {exc}")
+        form = contract.get("form") or {}
+        if str(contract.get("descent_id") or "") != "a1-07-full-form-v1":
+            tool_errors.append("contract is not the full-form descent")
+    result["tool_contract_ready"] = not tool_errors
+
+    # --- binding contract: do the exact private objects exist and verify? -------
+    required = [b for b in (spec.get("required_bindings") or [])
+                if b != "a1_07_full_form_execution_manifest"]
+    absent = missing(bindings, required)
     result["binding_contract_ready"] = not absent
-    result["representative_invocation_ready"] = False
+
+    # --- full-form obligations declared by the contract ------------------------
+    sections = {str(row.get("section_id")): row for row in form.get("sections") or []}
+    declared = float(form.get("declared_total_seconds") or 0.0)
+    phrase_map = contract.get("phrase_map") or {}
+    form_ok = bool(
+        {"setup", "body", "payoff"} <= set(sections)
+        and low <= declared <= high
+        and phrase_map.get("vocal_phrases")
+        and (phrase_map.get("vocal_invariants") or {}).get("frankie_time_stretch_forbidden")
+    )
+
+    # --- representative invocation: what actually ran, at which head? ----------
+    manifest_row = bindings.get("a1_07_full_form_execution_manifest") or {}
+    manifest: dict[str, Any] = {}
+    invocation_errors: list[str] = []
+    if not manifest_row.get("available"):
+        invocation_errors.append("no full-form execution manifest is bound")
+    else:
+        try:
+            manifest = load(Path(str(manifest_row.get("artifact_path"))))
+            require_seal(manifest, "manifest_sha256")
+        except Exception as exc:
+            invocation_errors.append(f"manifest is unreadable or unsealed: {exc}")
+            manifest = {}
+
+    head = current_git_head()
+    clean = worktree_is_clean()
+    executed_head = str(manifest.get("earcrate_git_head") or "")
+
+    # Bind the receipt to the CODE that produced it, not to the commit counter. A
+    # later commit that cannot touch the audio -- a changelog line, a packaging
+    # fix, the sealed verdict itself -- must not invalidate a render, and an equal
+    # head SHA must not excuse a dirty checkout. See a1_07_full_form/provenance.py.
+    declared_tree = str((manifest.get("adapter_tree") or {}).get("digest") or "")
+    observed_tree = ""
+    try:
+        sys.path.insert(0, str(ROOT))
+        from earcrate.a1_07_full_form.provenance import adapter_tree_digest
+        observed_tree = str(adapter_tree_digest(ROOT)["digest"])
+    except Exception:
+        observed_tree = ""
+    gate = manifest.get("machine_gate") or {}
+    qualified_rows = [row for row in gate.get("per_candidate") or [] if row.get("qualified")]
+    durations = [float(row.get("duration_seconds") or 0.0) for row in manifest.get("candidates") or []]
+    in_window = bool(durations) and all(low <= value <= high for value in durations)
+    reproduced = bool(manifest.get("candidates")) and all(
+        bool(row.get("reproduced_identically")) for row in manifest.get("candidates") or [])
+    audible = all(bool(row.get("above_signal_floor")) for row in gate.get("per_candidate") or []) \
+        if gate.get("per_candidate") else False
+
+    if manifest:
+        if str(manifest.get("contract_sha256") or "") != str(contract.get("contract_sha256") or ""):
+            invocation_errors.append("manifest was produced against a different contract")
+        if not declared_tree:
+            invocation_errors.append("manifest records no adapter tree digest")
+        elif not observed_tree:
+            invocation_errors.append("cannot recompute the adapter tree digest")
+        elif declared_tree != observed_tree:
+            invocation_errors.append(
+                f"adapter code changed since the render: manifest {declared_tree[:12]}, "
+                f"working tree {observed_tree[:12]}")
+        if clean is False:
+            invocation_errors.append(
+                "the checkout is dirty, so the recorded provenance does not identify the code that ran")
+        if not in_window:
+            invocation_errors.append(f"executed durations are outside {low}-{high} s")
+        if not reproduced:
+            invocation_errors.append("a candidate did not reproduce to one canonical PCM identity")
+        if not audible:
+            invocation_errors.append("a candidate did not clear the signal floor")
+        if not gate.get("frontier_admissible"):
+            invocation_errors.append("the rendered frontier is not admissible")
+
+    result["representative_invocation_ready"] = bool(manifest and not invocation_errors)
+    result["full_form_adapter_ready"] = bool(
+        form_ok and result["tool_contract_ready"] and result["representative_invocation_ready"])
+    result["performance_realization_ready"] = result["full_form_adapter_ready"]
+
     result["observations"] = {
-        "review_scope": scope, "positive_arc_reapplication_deferred": arc_deferred,
-        "minimum_full_form_seconds": float(spec["minimum_seconds"]),
-        "representative_full_form_invocation_receipt_bound": False,
+        "adapter_id": manifest.get("adapter_id"),
+        "adapter_version": manifest.get("adapter_version"),
+        "descent_id": contract.get("descent_id"),
+        "contract_sha256": contract.get("contract_sha256"),
+        "manifest_sha256": manifest.get("manifest_sha256"),
+        "declared_form_seconds": declared,
+        "minimum_full_form_seconds": low,
+        "maximum_full_form_seconds": high,
+        "executed_durations_seconds": durations,
+        "executed_at_git_head": executed_head or None,
+        "repository_git_head": head,
+        "adapter_code_unchanged_since_render": bool(
+            declared_tree and observed_tree and declared_tree == observed_tree),
+        "adapter_tree_digest_declared": declared_tree or None,
+        "adapter_tree_digest_observed": observed_tree or None,
+        "exact_head_execution": bool(
+            declared_tree and declared_tree == observed_tree and clean),
+        "head_advanced_since_render": bool(head and executed_head and executed_head != head),
+        "worktree_clean": clean,
+        "qualified_candidate_count": len(qualified_rows),
+        "frontier_admissible": bool(gate.get("frontier_admissible")),
+        "deterministic_reproduction": reproduced,
+        "form_sections_declared": sorted(sections),
+        "phrase_map_declared": bool(phrase_map.get("vocal_phrases")),
+        "representative_full_form_invocation_receipt_bound": bool(manifest),
+        # Machine qualification never speaks for the owner.
+        "human_acceptance": bool((manifest.get("authority") or {}).get("human_acceptance", False)),
+        "accepted_album_master": False,
     }
+
+    if tool_errors:
+        result["blockers"].append(blocker(
+            "blocked_adapter_implementation", "adapter_contract", "; ".join(tool_errors)))
     if absent:
         result["blockers"].append(blocker(
             "blocked_exact_source", "binding_contract",
-            "The qualified private v7 workspace and Beggin CORE custody are not both bound.", missing_binding_ids=absent,
-        ))
-    result["blockers"].append(blocker(
-        "blocked_representative_invocation", "execution_evidence",
-        "No exact-head receipt proves a 45–120 second stable-pocket Beggin arc."
-    ))
-    if "core" in scope.casefold() or arc_deferred:
+            "The qualified private v7 workspace and Beggin CORE custody are not both bound.",
+            missing_binding_ids=absent))
+    if invocation_errors:
+        result["blockers"].append(blocker(
+            "blocked_representative_invocation", "execution_evidence",
+            "; ".join(invocation_errors)))
+    if not form_ok:
         result["blockers"].append(blocker(
             "blocked_full_form_adapter", "output_contract",
-            "Gold v9 is explicitly a core-only timing-law diagnostic and cannot authorize a 45–120 second Album lane.",
-            review_scope=scope, positive_arc_reapplication_deferred=arc_deferred,
-        ))
+            "The bound contract does not declare a complete setup/body/payoff form with an "
+            "explicit phrase map inside the album full-form window.",
+            declared_form_seconds=declared,
+            minimum_duration_seconds=low, maximum_duration_seconds=high))
     return result

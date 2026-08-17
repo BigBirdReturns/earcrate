@@ -1,5 +1,126 @@
 # EarCrate — CHANGELOG
 
+## unversioned — provenance binds to code, not to a commit counter
+
+- **The exact-head check was too coarse in one direction and too weak in the
+  other.** Requiring an identical head SHA meant any later commit that could not
+  possibly touch the audio — a changelog line, a packaging fix, the sealed owner
+  verdict itself — invalidated a render and demanded a re-render to re-prove
+  something never in doubt. An equal SHA also said nothing about whether the
+  checkout was dirty when the render ran. The manifest now records a digest over
+  exactly the file set that can change a rendered candidate (`a1_07_full_form`,
+  `a1_07_gold_v8`, `reference_zero.py`, the descent contract and the two entry
+  points), and the preflight recomputes and compares it. The head SHA is retained
+  as context. A gate asserts the digest covers what can change audio and excludes
+  what cannot.
+- `MANIFEST.sha256` and `REVIEW.txt` in the blind bundle are now written as UTF-8
+  **without a BOM**. Windows PowerShell's `-Encoding utf8` emits one, and a BOM
+  ahead of the first digest makes a generic `sha256sum -c` warn on line 1 — which
+  reads as a failed verification of the very first file in the bundle.
+  `sha256sum -c` now exits 0 cleanly. The already-reviewed bundle keeps its
+  original bytes, because the sealed verdict is bound to that digest.
+
+## unversioned — A1-07 gets a form, and the preflight stops asserting its own answer
+
+> `ENGINE_VERSION` deliberately stays `earcrate_v0834`. Nothing here touches the
+> scan, analysis, measurement or crate-projection path, and a bump would mark all
+> three current resident stamps stale over 66,149 loops for no cause. Crate
+> currency is a claim about measurement, not a release counter.
+
+### The lane
+
+- **`a1-07-full-form-v1`**: the first A1-07 descent that reaches the album
+  full-form window. Every prior artifact was an 18.95 s core or the 38.15 s
+  gold-v7 arc, so no owner review could ever show whether the groove survives a
+  real form — the material simply stopped first. The descent keeps the arc's
+  quiet-to-crescendo build as its setup, keeps the protected gold-v6 compound as
+  its payoff, and authors one body between them, landing at 56.111 s.
+- The phrase map is **explicit and inspectable**. Every vocal phrase declares its
+  source window, destination anchor, timing law, reset behaviour, gain and
+  transition treatment; no global opaque warp exists anywhere in the descent. The
+  body vocal is one contiguous source span, so the singer's own breath is
+  preserved rather than spliced out.
+- The timing law maps a shared band **grid**, not an identical slot set per track.
+  `gold-v9.derive_slots` requires every donor track to occupy the same slots,
+  which is exactly what the retained positive arc violates: harmonic material
+  enters first, then bass, then drums. Reusing it would have forced a choice
+  between the arc and the law.
+- Every band slot is bounded by a **duration-preservation cap** of `[0.92, 1.08]`.
+  The retired `phrase_local` map reached `atempo` 0.334 and a raw ratio of 10.51,
+  and that uncapped scaling is the mechanical source of the owner's "instrumental
+  dragged down to the vocal" verdict. A phrase that cannot fit its span inside the
+  cap takes the cap and re-cues at the next phrase boundary, which is what
+  phrase-reset means, instead of stretching the band to hit a mark.
+- Bindings are resolved by **container identity, never by rewriting a path**. The
+  gold-v7 bindings still name the pre-migration `S:\Temp\...` prefix; the volume
+  migration moved those exact bytes without changing them. Content-addressed
+  rebinding makes the historical evidence executable again and fails closed if any
+  byte actually differs.
+
+### The preflight
+
+- **The A1-07 preflight now derives its verdict from evidence.** It previously
+  hardcoded `representative_invocation_ready = false` and read full-form readiness
+  off the gold-v9 diagnostic's declared *scope* — both statements about a contract
+  rather than about anything that ran, so the lane could not move no matter what
+  was executed. It now requires a sealed adapter manifest recording a 45–120 s
+  execution at the exact current head, from a **clean** checkout, that reproduced
+  deterministically and cleared a signal floor. Matching the head SHA alone would
+  accept a receipt produced from a dirty tree, where the recorded head does not
+  identify the code that ran.
+- `full_form_adapter_ready` is tracked separately from
+  `performance_realization_ready`, so a rejected diagnostic recipe cannot satisfy
+  the full-form obligation merely by emitting 57 seconds of audio. Machine
+  qualification may raise the producing and realization counters; it never sets
+  human acceptance, and `accepted_album_masters` stays 0.
+
+### Signal integrity — three defects found and fixed
+
+- **A loudness bug silently degraded every affected owner review.**
+  `measure_loudness` matched `I: … .*? Peak:` across the whole ebur128 output,
+  which pairs the *first frame's* running loudness with the *summary's* peak. Any
+  track opening quietly reported the −70 LUFS floor — and every A1-07 arc opens
+  quietly. `level_match` then computed a ~56 dB gain, clamped it on peak, and
+  produced cuts that were peak-normalized rather than level-matched, so the
+  "listen level matched" instruction on prior review packs was not true. The
+  summary block is now read directly. **The identical defect in
+  `reference_zero._measure_loudness` is fixed too**; it feeds
+  `prepare_candidate_control_review`, so leaving it would have repeated the error.
+  Five prior review events carry the fingerprint and are recorded as
+  `superseded_invalid_review_preparation`. The gold-v6 owner review is **not**
+  among them: it was prepared by `beggin_timing_pass`, which measures through
+  `loudnorm … print_format=json` and never reads the frame trace.
+- **The first rendered frontier varied in distortion and was invalid.** Summing four
+  elements at the arc's setup levels drove the mix to **+8.39 dBFS** — 8.4 dB past
+  full scale. The authored body hard-clipped, and the flat-topped sample counts
+  differed per candidate (body 1,980 / 2,239 / 2,488; setup 178 / 87 / 218,
+  because the timing law re-times the setup band too). A frontier that varies in
+  irreversible distortion as well as in timing law cannot isolate the mechanism it
+  exists to test: an owner could have preferred the option that clipped least.
+  Earlier notes called this condition inherited and common-mode. It was neither —
+  the parent arc contributes 382 flat-topped samples, all in its setup, and the
+  authored body contributed five to six times that.
+- A two-pass **headroom solve** now fixes it. One probe render at a known trim
+  measures what the sum actually wants, the trim is solved in closed form, and the
+  final render is a single deterministic pass rather than a search. The trim is
+  applied only to non-protected elements, so the protected payoff still renders
+  sample-identical to gold-v6, and **one trim is shared by every candidate** —
+  a per-candidate trim would have swapped a distortion confound for a level one.
+  All three candidates now carry zero flat-topped samples.
+- Hard clipping is a **frontier validity gate**, not a mastering preference. The
+  three peak conditions are measured and reported separately, because they imply
+  different remedies: sample peak, oversampled true peak, and the flat-top census.
+  A true peak above 0 dBTP with no flat-topped run is an intersample overshoot that
+  deterministic attenuation can fix without touching the arrangement; flat-topped
+  samples are already destroyed and attenuation cannot restore them.
+- **Review labels are permuted per pack under a private nonce.** The first
+  implementation seeded the permutation from the contract seal and also carried a
+  `review_label` in tracked configuration and in the manifest. Both were wrong: a
+  tracked table is not a blind, and worse, the tracked table had gone **stale**, so
+  the manifest and the pack disagreed about which candidate was "A" — a verdict
+  would have decoded to the wrong timing law. The nonce now lives only in the
+  private review authority, and a gate refuses any tracked candidate-to-letter map.
+
 ## v0.8.34 — a stamp may not outlive the object it identifies
 - `crate_staleness` now compares **every** identity the stamp stores. v0.8.33
   recorded the eligible-loop, measurement and projection counts and digests but

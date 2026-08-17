@@ -27,7 +27,9 @@ def test_preflight_contract_is_sealed_and_bound_to_campaign() -> None:
     campaign, preflight = module.campaign_and_contract(CAMPAIGN, PREFLIGHT)
     assert campaign["contract_sha256"] == "d6950f41246629762a717e66765a4b869afe4c500318cfccc46732c28bffcb2c"
     assert preflight["base_campaign_sha256"] == campaign["contract_sha256"]
-    assert preflight["preflight_contract_sha256"] == "7e17d7ddc1657fe4d69cf0f04b491ad81fefcc520761f019898e398329458ba6"
+    # Re-sealed when A1-07 moved from the gold-v9 core-only diagnostic probe to the
+    # full-form adapter probe. The base campaign seal is deliberately unchanged.
+    assert preflight["preflight_contract_sha256"] == "0400171bdfcb09ccf4b69e4edec57ab627f64032aa2d52f9124695360c0e2e61"
     assert preflight["boundary"]["estate_execution_default"] == "closed"
     assert "machine_work_ready" not in campaign["terminal_states"]
     assert all((track.get("entrypoint") or {}).get("template") is None for track in campaign["tracks"])
@@ -77,9 +79,22 @@ def test_repo_only_retry_refuses_all_seven_lanes_for_exact_reasons() -> None:
         assert any(item["kind"] == "blocked_adapter_implementation" for item in row["blockers"])
 
     assert any(row["kind"] == "blocked_adapter_implementation" for row in tracks["A1-06"]["blockers"])
-    assert any(row["kind"] == "blocked_full_form_adapter" for row in tracks["A1-07"]["blockers"])
-    assert any(row["kind"] == "blocked_representative_invocation" for row in tracks["A1-07"]["blockers"])
-    assert tracks["A1-07"]["observations"]["positive_arc_reapplication_deferred"] is True
+
+    # A1-07 now owns a real full-form adapter, so with NO bindings it refuses for
+    # missing evidence rather than for a missing adapter. The contract itself is a
+    # complete setup/body/payoff form, so `blocked_full_form_adapter` must NOT fire
+    # here; what is absent is the execution manifest and the private custody.
+    a107 = tracks["A1-07"]
+    assert a107["tool_contract_ready"] is True
+    assert a107["representative_invocation_ready"] is False
+    assert a107["full_form_adapter_ready"] is False
+    assert a107["music_producing_path_ready"] is False
+    assert any(row["kind"] == "blocked_exact_source" for row in a107["blockers"])
+    assert any(row["kind"] == "blocked_representative_invocation" for row in a107["blockers"])
+    assert not any(row["kind"] == "blocked_full_form_adapter" for row in a107["blockers"])
+    assert a107["observations"]["declared_form_seconds"] >= 45.0
+    assert a107["observations"]["representative_full_form_invocation_receipt_bound"] is False
+    assert a107["observations"]["accepted_album_master"] is False
 
 
 def test_complete_verified_fake_bindings_do_not_launder_missing_music_adapters() -> None:

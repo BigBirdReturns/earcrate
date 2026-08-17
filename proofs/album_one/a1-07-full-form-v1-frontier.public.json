@@ -1,0 +1,131 @@
+{
+  "boundary": {
+    "complete_private_authority_included": false,
+    "local_session_coordinates_included": false,
+    "note": "Identity and decision only. The private receipts, the reviewed audio, the label authority and the source custody all remain outside Git.",
+    "private_paths_included": false,
+    "source_audio_exported": false,
+    "stems_included": false
+  },
+  "descent": "a1-07-full-form-v1",
+  "form": {
+    "declared_total_seconds": 56.111,
+    "sections": [
+      {
+        "end_seconds": 19.2,
+        "provenance": "retained verbatim from the gold-v7 arc build",
+        "section_id": "setup",
+        "start_seconds": 0.0
+      },
+      {
+        "end_seconds": 37.161,
+        "provenance": "newly authored for full-form-v1",
+        "section_id": "body",
+        "start_seconds": 19.2
+      },
+      {
+        "end_seconds": 56.111,
+        "provenance": "protected gold-v6 reviewed compound, sample-identical",
+        "section_id": "payoff",
+        "start_seconds": 37.161
+      }
+    ]
+  },
+  "kind": "earcrate_album_one_public_frontier_receipt",
+  "musical_result": {
+    "consequence": "For this source pairing the donor band is the clock, and the lead is placed against it. Bar conduction, phrase-local warping, phrase resets and constant global scaling are retained as negative evidence and diagnostic controls, not as production descendants.",
+    "detail": "The winning law applies no donor-band retiming at all: one tempo scale of 1.0, zero phase resets, natural drift accepted. It beat a constant global scale, an explicit phrase-reset control, and the retained arc incumbent.",
+    "headline": "The first full-form A1-07 comparison falsified the assumption that the donor band should be retimed to the lead vocal.",
+    "scope_limit": "This retires the fit-the-band-to-the-vocal premise for A1-07 only. It is not a universal rule for future EarCrate tracks."
+  },
+  "next_decision": "Monitoring-room ratification of the native-pocket production render. That pass is not blind and does not reopen the timing-law decision. Gain, EQ, limiting or delivery-format changes do not invalidate this verdict; changes to phrase placement, arrangement, source windows or donor timing do.",
+  "private_receipts": {
+    "adapter_manifest_sha256": "f5efcee851748f4247bae126ad91a2b8ed4ccfe1611900643852358ad53591be",
+    "m2_position_receipt_sha256": "dc7ff403cf8c8aab8f5f03e94c977efe1160df1ab2aa68f2d29ba8297c7b57c0",
+    "note": "Identities only; the receipts themselves are not in Git.",
+    "owner_frontier_promotion_sha256": "9cbaaae65e2881660ca9aa9ef8a331a7d8333545936def4d8b0c6e19f99678f2",
+    "owner_verdict_sha256": "944f7ccd8adebc5f675dddacca723e901ec5ea927a868008aa275cfa47549071"
+  },
+  "provenance": {
+    "adapter_id": "a1-07-full-form-v1",
+    "adapter_version": "1.0.0",
+    "canonical_pcm_equality_across_executions": true,
+    "contract_sha256": "59f9b3599efad4bad268a81d8a72337d9162db55a4f54b3eeac361f7a954e740",
+    "deterministic_executions": 2,
+    "independent_reproductions_observed": 4,
+    "phrase_map_sha256": "99649eb02b310d3c31234bffeca8b524244f90f3ec0f6f2de4c90fc734ebea07",
+    "render_provenance_digest": "f70c90365b6d0ba7d204052816d83218e14818cf7a0de65a0774d20448d6ceb9",
+    "render_provenance_member_count": 19,
+    "render_provenance_paths": [
+      "earcrate/a1_07_full_form",
+      "earcrate/a1_07_gold_v8",
+      "earcrate/reference_zero.py",
+      "configs/album_one/a1-07/full-form-v1.v1.json",
+      "scripts/earcrate_a1_07_full_form_v1.py",
+      "scripts/RUN_A1_07_FULL_FORM_V1.ps1"
+    ]
+  },
+  "receipt_sha256": "d9e82c8638377840be0e5762cc76a81f6ea14b8e342a757bd950de1716036c76",
+  "result": {
+    "canonical_pcm_sha256": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58",
+    "donor_band_retiming": "none",
+    "duration_seconds": 56.111,
+    "phrase_resets": 0,
+    "score_sha256": "8cbec0b72cd417d656fc1e085ae9e426b0c91e3360ea050c5afd14f655260b7c",
+    "tempo_scales": [
+      1.0
+    ],
+    "winning_timing_law": "native-pocket"
+  },
+  "review": {
+    "admissible_choices": [
+      "A",
+      "B",
+      "C",
+      "tie",
+      "reject_all",
+      "abstain"
+    ],
+    "blind_scope": "which letter carried which timing law; every mechanism was disclosed",
+    "dimensions": [
+      "Frankie vocal authority",
+      "terminal phrase placement",
+      "percussion impact",
+      "groove continuity",
+      "separator residue",
+      "cymbal and room continuity",
+      "source recognizability",
+      "desire to hear the next phrase"
+    ],
+    "mapping_revealed_after_seal": true,
+    "owner_review_completed": true,
+    "review_bundle_sha256": "db0dd9de1a9ee4a2fb7e3b42109afe8199c4023724e53f95801b1a3a1127bfd3",
+    "reviewed_label": "A",
+    "verdict_seal_sha256": "944f7ccd8adebc5f675dddacca723e901ec5ea927a868008aa275cfa47549071"
+  },
+  "schema_version": 1,
+  "signal": {
+    "flat_top_runs": 0,
+    "flat_top_sample_count": 0,
+    "hard_clipped": false,
+    "measured_on": "the production render, not the level-matched review cut",
+    "sample_peak_dbfs": -3.61,
+    "true_peak_dbtp": -3.5
+  },
+  "state": {
+    "accepted_album_master": false,
+    "accepted_album_masters": 0,
+    "music_producing_lane": true,
+    "owner_frontier_selected": true,
+    "owner_review_completed": true,
+    "performance_realization_ready": true
+  },
+  "superseded_review_preparation": {
+    "cause": "the loudness parser paired a running frame near the quiet opening with the summary peak, so packs were peak-normalized while claiming to be level-matched",
+    "classification": "superseded_invalid_review_preparation",
+    "count": 5,
+    "excluded": "the gold-v6 owner review, which was prepared through a different and correct loudness path"
+  },
+  "track_id": "A1-07",
+  "visibility": "public"
+}

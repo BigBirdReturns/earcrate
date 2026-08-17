@@ -1541,6 +1541,7 @@ class EarcrateCore:
         self.migrate_ear_atoms_per_profile()
         self.migrate_loops_segment_identity()
         self.migrate_loops_locked()
+        self.migrate_edges_edge_state()
 
     def conn(self) -> sqlite3.Connection:
         if self.db is None:
@@ -1663,6 +1664,29 @@ class EarcrateCore:
             db.execute("ALTER TABLE loops ADD COLUMN locked INTEGER DEFAULT 0")
             db.commit()
 
+    def migrate_edges_edge_state(self) -> None:
+        """A compatibility edge must be able to stop being current without being
+        erased.
+
+        The graph builder only ever upserted deterministic `edg_%` rows, so an
+        edge that qualified under an older measurement set stayed active forever
+        even after a rebuild recomputed the pool. Measured on the live library
+        after the girl_talk_v1 force remeasure: 1,912 active edges against a
+        desired set of 360 — 1,552 of them stale.
+
+        Deleting them is not universally safe either: pair_judgments references
+        the edge id ON DELETE CASCADE, so deleting a judged edge would erase a
+        human call. Give the edge a state instead: 'active' means it is in the
+        graph derived from the current atoms; 'historical' means it no longer
+        qualifies but carries a human judgment worth keeping.
+
+        Additive and idempotent."""
+        db = self.db
+        cols = {r["name"] for r in db.execute("PRAGMA table_info(compatibility_edges)").fetchall()}
+        if "edge_state" not in cols:
+            db.execute("ALTER TABLE compatibility_edges ADD COLUMN edge_state TEXT NOT NULL DEFAULT 'active'")
+            db.commit()
+
     def create_schema(self) -> None:
         db = self.conn()
         db.executescript(
@@ -1768,6 +1792,7 @@ class EarcrateCore:
               score REAL NOT NULL,
               reasons_json TEXT NOT NULL DEFAULT '{}',
               created_at TEXT NOT NULL,
+              edge_state TEXT NOT NULL DEFAULT 'active',
               UNIQUE(taste_profile,left_atom_id,right_atom_id,relation)
             );
             CREATE TABLE IF NOT EXISTS atom_judgments(
@@ -3668,7 +3693,13 @@ class EarcrateCore:
         # delete-all + random ids erased judgments on rebuild — the exact
         # "automated rescoring erasing judgments" the constitution forbids.
         db.execute("DELETE FROM compatibility_edges WHERE taste_profile=? AND id NOT LIKE 'edg_%'", (taste_profile,))
-        made = 0
+
+        # Compute the EXACT desired edge set for the current atoms first, then
+        # reconcile the stored graph to it. Upserting alone made the active graph
+        # the union of every set that ever qualified: an edge that passed under an
+        # older measurement stayed active forever, so a "current" crate stamp could
+        # sit on top of a graph that was mostly historical.
+        desired: Dict[str, tuple] = {}
         for relation, lefts, rights in [("vocal_over_bed", foreground, beds), ("bass_over_drums", basses, beds), ("spark_into_phrase", sparks, beds+foreground[:40])]:
             scored = []
             for a in lefts:
@@ -3681,13 +3712,49 @@ class EarcrateCore:
             scored.sort(reverse=True, key=lambda x: x[0])
             for sc, a, b, reasons in scored[:max(80, int(target_seconds))]:
                 eid = "edg_" + sha256_text(f"{taste_profile}|{a.get('atom_id')}|{b.get('atom_id')}|{relation}")[:20]
-                db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,relation,score,reasons_json,created_at)
-                              VALUES(?,?,?,?,?,?,?,?)
-                              ON CONFLICT(id) DO UPDATE SET score=excluded.score, reasons_json=excluded.reasons_json, created_at=excluded.created_at""",
-                           (eid, taste_profile, a.get("atom_id"), b.get("atom_id"), relation, float(sc), json.dumps(reasons, ensure_ascii=False), now_utc()))
-                made += 1
+                desired[eid] = (eid, taste_profile, a.get("atom_id"), b.get("atom_id"), relation,
+                                float(sc), json.dumps(reasons, ensure_ascii=False))
+
+        stamp = now_utc()
+        for eid, (_, tp, la, ra, relation, sc, reasons_json) in desired.items():
+            # created_at is when the edge was FIRST derived; a rebuild that
+            # reaffirms it must not restamp it, or an unchanged graph would never
+            # be byte-idempotent across runs.
+            db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,relation,score,reasons_json,created_at,edge_state)
+                          VALUES(?,?,?,?,?,?,?,?,'active')
+                          ON CONFLICT(id) DO UPDATE SET score=excluded.score, reasons_json=excluded.reasons_json, edge_state='active'""",
+                       (eid, tp, la, ra, relation, sc, reasons_json, stamp))
+
+        # Retire everything active that the current atoms no longer support. An
+        # edge carrying a human pair judgment becomes historical rather than being
+        # deleted: pair_judgments cascades on delete, and erasing a human call to
+        # tidy up derived state is exactly what the constitution forbids.
+        active_ids = {r["id"] for r in db.execute(
+            "SELECT id FROM compatibility_edges WHERE taste_profile=? AND edge_state='active'",
+            (taste_profile,)).fetchall()}
+        judged_ids = {r["edge_id"] for r in db.execute(
+            "SELECT edge_id FROM pair_judgments WHERE taste_profile=?", (taste_profile,)).fetchall()}
+        obsolete = active_ids - set(desired)
+        retired_historical = sorted(obsolete & judged_ids)
+        deleted = sorted(obsolete - judged_ids)
+        for eid in retired_historical:
+            db.execute("UPDATE compatibility_edges SET edge_state='historical' WHERE id=?", (eid,))
+        for chunk in (deleted[i:i+500] for i in range(0, len(deleted), 500)):
+            db.execute(f"DELETE FROM compatibility_edges WHERE id IN ({','.join('?' * len(chunk))})", chunk)
         db.commit()
-        return {"ok": True, "taste_profile": taste_profile, "edges": made, "render_bpm": render_bpm, "target_key": target_key, "foreground": len(foreground), "beds": len(beds), "basses": len(basses), "sparks": len(sparks), "feasibility": deck.get("diagnostics")}
+
+        final_active = {r["id"] for r in db.execute(
+            "SELECT id FROM compatibility_edges WHERE taste_profile=? AND edge_state='active'",
+            (taste_profile,)).fetchall()}
+        return {"ok": True, "taste_profile": taste_profile, "edges": len(desired),
+                "desired_edge_ids": len(desired), "active_edge_ids": len(final_active),
+                "active_minus_desired": len(final_active - set(desired)),
+                "desired_minus_active": len(set(desired) - final_active),
+                "retired_historical": len(retired_historical), "deleted_obsolete": len(deleted),
+                "pair_judgments_preserved": len(judged_ids),
+                "render_bpm": render_bpm, "target_key": target_key,
+                "foreground": len(foreground), "beds": len(beds), "basses": len(basses),
+                "sparks": len(sparks), "feasibility": deck.get("diagnostics")}
 
     def taste_feasible_pool(self, pool: List[Dict[str, Any]], render_bpm: float, target_key: int, params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Filter the crate to atoms that can actually be played at the chosen deck.
@@ -6786,7 +6853,8 @@ class EarcrateCore:
         for r in db.execute(
                 "SELECT la.file_id lf, ra.file_id rf FROM compatibility_edges e "
                 "JOIN ear_atoms la ON la.id=e.left_atom_id "
-                "JOIN ear_atoms ra ON ra.id=e.right_atom_id WHERE e.taste_profile=?",
+                "JOIN ear_atoms ra ON ra.id=e.right_atom_id "
+                "WHERE e.taste_profile=? AND e.edge_state='active'",
                 (taste_profile,)):
             ka, kb = fkey.get(str(r["lf"])), fkey.get(str(r["rf"]))
             if ka and kb and ka != kb:
@@ -6899,7 +6967,8 @@ class EarcrateCore:
                  JOIN ear_atoms ra ON ra.id=e.right_atom_id JOIN loops rl ON rl.id=ra.loop_id
                  JOIN files rf ON rf.id=rl.file_id LEFT JOIN tracks rt ON rt.file_id=rf.id
                  LEFT JOIN pair_judgments pj ON pj.edge_id=e.id AND pj.taste_profile=e.taste_profile
-                 WHERE e.taste_profile=? AND (e.left_atom_id=? OR e.right_atom_id=?)
+                 WHERE e.taste_profile=? AND e.edge_state='active'
+                   AND (e.left_atom_id=? OR e.right_atom_id=?)
                    AND COALESCE(lf.present,1)=1
                    AND lf.audio_sha256_scope='full' AND lf.audio_sha256 IS NOT NULL
                    AND COALESCE(ll.source_audio_generation,0)=COALESCE(lf.audio_generation,0)

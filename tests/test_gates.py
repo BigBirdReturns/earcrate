@@ -4335,3 +4335,106 @@ def test_force_remeasure_integrity():
         core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
     for p, snapshot in before_other.items():
         assert _profile_digest(p) == snapshot, f"{p} rows changed during a girl_talk_v1 rebuild"
+
+
+def test_compatibility_graph_reconciles_to_the_exact_current_set():
+    """v0.8.31 gate: the active graph must be exactly the graph derived from the
+    CURRENT atoms.
+
+    The builder only ever upserted deterministic edg_% rows, so an edge that
+    qualified under an older measurement set stayed active forever. Measured on
+    the live library after the girl_talk_v1 force remeasure: 1,912 active edges
+    against a desired set of 360 -- 1,552 stale. A current crate stamp sat on top
+    of a graph that was 81% historical.
+    """
+    import hashlib, tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(4):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    db = core.conn()
+
+    first = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    if not first.get("ok"):
+        import pytest
+        pytest.skip(f"fixture produced no graph: {first.get('error')}")
+    assert first["desired_edge_ids"] > 0, "fixture produced an empty desired set"
+
+    def _active():
+        return {r["id"] for r in db.execute(
+            "SELECT id FROM compatibility_edges WHERE taste_profile='girl_talk_v1' "
+            "AND edge_state='active'")}
+
+    def _graph_digest():
+        rows = db.execute(
+            "SELECT id, left_atom_id, right_atom_id, relation, score, reasons_json, "
+            "created_at, edge_state FROM compatibility_edges "
+            "WHERE taste_profile='girl_talk_v1' ORDER BY id").fetchall()
+        return hashlib.sha256(
+            "\x1e".join("\x1f".join(str(v) for v in tuple(r)) for r in rows).encode()).hexdigest()
+
+    assert first["active_minus_desired"] == 0, first
+    assert first["desired_minus_active"] == 0, first
+
+    # Plant a stale edge that no current atom pair supports, exactly as the old
+    # upsert-only builder would have left behind.
+    atoms = [r["id"] for r in db.execute(
+        "SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 2")]
+    assert len(atoms) == 2
+    db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,
+                    relation,score,reasons_json,created_at,edge_state)
+                  VALUES('edg_stale_unjudged','girl_talk_v1',?,?,'vocal_over_bed',0.99,'{}',
+                         '2020-01-01T00:00:00Z','active')""", (atoms[0], atoms[1]))
+    db.commit()
+    assert "edg_stale_unjudged" in _active()
+
+    second = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    assert "edg_stale_unjudged" not in _active(), "a stale unjudged edge stayed active"
+    assert second["deleted_obsolete"] >= 1, second
+    assert second["active_minus_desired"] == 0 and second["desired_minus_active"] == 0, second
+    assert db.execute("SELECT COUNT(*) n FROM compatibility_edges "
+                      "WHERE id='edg_stale_unjudged'").fetchone()["n"] == 0, \
+        "an unjudged obsolete edge should be removed, not left as a historical row"
+
+    # A JUDGED edge that no longer qualifies must survive as history, never be
+    # cascaded away: pair_judgments references the edge id ON DELETE CASCADE.
+    db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,
+                    relation,score,reasons_json,created_at,edge_state)
+                  VALUES('edg_stale_judged','girl_talk_v1',?,?,'bass_over_drums',0.99,'{}',
+                         '2020-01-01T00:00:00Z','active')""", (atoms[0], atoms[1]))
+    db.commit()
+    core.set_pair_judgment("edg_stale_judged", "girl_talk_v1", "approved", reason="human call")
+    judged_before = db.execute("SELECT COUNT(*) n FROM pair_judgments").fetchone()["n"]
+    assert judged_before >= 1
+
+    third = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    assert "edg_stale_judged" not in _active(), "a non-qualifying edge must not stay active"
+    row = db.execute("SELECT edge_state FROM compatibility_edges WHERE id='edg_stale_judged'").fetchone()
+    assert row is not None and row["edge_state"] == "historical", \
+        "a judged edge that no longer qualifies must become historical, not vanish"
+    assert db.execute("SELECT COUNT(*) n FROM pair_judgments").fetchone()["n"] == judged_before, \
+        "a human pair judgment was destroyed by a graph rebuild"
+    assert third["active_minus_desired"] == 0 and third["desired_minus_active"] == 0, third
+
+    # Idempotence: an unchanged estate must reproduce the graph byte for byte.
+    digest_a = _graph_digest()
+    fourth = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    assert _graph_digest() == digest_a, "a second identical rebuild changed the graph"
+    assert fourth["active_minus_desired"] == 0 and fourth["desired_minus_active"] == 0, fourth
+    assert fourth["deleted_obsolete"] == 0 and fourth["retired_historical"] == 0, fourth

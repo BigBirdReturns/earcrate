@@ -16,6 +16,19 @@
   returns `stamped`, `selected_eligible` and `processed` so the denominator is
   visible instead of implied, and the status line says INCOMPLETE rather than
   reporting a clean finish.
+- `build_compatibility_graph` now reconciles to the exact current edge set. It
+  deleted only non-deterministic rows and upserted the qualifying set, so a
+  deterministic `edg_` edge that qualified under an older measurement stayed
+  active forever: the active graph was the union of every set that ever
+  qualified. Nothing in `crate_staleness` looks at edges, so a current crate
+  stamp could sit on a mostly historical graph. Measured on the live library
+  right after the girl_talk_v1 force remeasure: 1,912 active edges against a
+  desired set of 360 — 1,552 stale, 81% of the graph. The builder now computes
+  the desired set first, upserts it, and retires everything active that is not
+  in it. Retirement has a policy rather than a cascade: an unjudged obsolete
+  edge is deleted, while a judged one becomes `edge_state='historical'` so the
+  row and its `pair_judgment` both survive. `created_at` is no longer restamped
+  on conflict, so an unchanged graph is byte-idempotent across rebuilds.
 - ENGINE_VERSION: `earcrate_v0831` (was `earcrate_v0830`). This is a behavioral
   correction to what building a crate *means*, so every crate built by the old
   engine must read stale against the new one — which is exactly what the stamp

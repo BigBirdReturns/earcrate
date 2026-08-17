@@ -226,6 +226,34 @@ def test_adapter_tree_digest_covers_everything_that_can_change_the_audio():
     assert first["digest"] == adapter_tree_digest(ROOT)["digest"], "digest must be stable"
 
 
+def test_adapter_tree_digest_survives_line_ending_normalization():
+    """The digest must not change when the same commit is merely checked out again.
+
+    This checkout runs core.autocrlf=true, so Git rewrites LF to CRLF on checkout.
+    An earlier implementation hashed working-tree bytes, so the identical commit
+    produced a different digest after a checkout and the lane dropped to zero --
+    exactly the false alarm the digest exists to prevent. Identity therefore comes
+    from Git blob hashes, which no line-ending policy can move.
+    """
+    import subprocess
+    from earcrate.a1_07_full_form import provenance
+
+    source = Path(provenance.__file__).read_text(encoding="utf-8")
+    assert "ls-files" in source, "provenance must read identity from Git, not from disk bytes"
+    assert "read_bytes()" not in source, \
+        "hashing on-disk bytes reintroduces the normalization bug"
+
+    # Same content under both line-ending conventions must hash identically,
+    # because the blob identity is what is being digested.
+    result = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-s", "--",
+                             "earcrate/a1_07_full_form"],
+                            capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0 and result.stdout.strip(), "adapter files must be tracked"
+    digest = provenance.adapter_tree_digest(ROOT)
+    assert digest["identity_source"].startswith("git blob"), digest["identity_source"]
+    assert digest["member_count"] >= len(provenance.ADAPTER_PATHS)
+
+
 def test_full_form_adapter_surface_exists():
     for relative in ("scripts/RUN_A1_07_FULL_FORM_V1.ps1",
                      "scripts/earcrate_a1_07_full_form_v1.py",

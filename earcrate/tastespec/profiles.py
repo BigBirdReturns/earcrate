@@ -67,6 +67,14 @@ def flat_profile(profile: Dict[str, Any]) -> Dict[str, Any]:
         "max_source_share": float(turn.get("foreground_max_share") or 0.20),
         "min_recycle_gap_s": float(endl.get("min_recycle_gap_s") or 900.0),
         "objective_weights": dict(profile.get("objective_weights") or {}),
+        # permitted_roles and role_salience are REQUIRED by tastespec.schema.json,
+        # but this bridge dropped both, so every resident judged atoms through one
+        # hardcoded threshold table and the declared per-persona salience was dead
+        # configuration. They govern atom-level approval; the engine cannot apply
+        # what the projection does not carry.
+        "permitted_roles": list(profile.get("permitted_roles") or []),
+        "role_salience": {str(k): dict(v or {}) for k, v in
+                          (profile.get("role_salience") or {}).items()},
         "tastespec_id": profile.get("id"),
         "tastespec_version": profile.get("version"),
         "tastespec_hash": profile.get("hash"),

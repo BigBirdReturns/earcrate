@@ -55,13 +55,26 @@ def test_atom_and_pair_judgments_are_profile_scoped(tmp_path):
 
 
 def _seed_stale_crate_fixture(core, analyzer_version: str):
-    """One approved atom whose features row was produced by `analyzer_version`."""
+    """One approved atom whose features row was produced by `analyzer_version`.
+
+    The file carries a full-scope audio identity and the loop records the same
+    generation, so this atom sits INSIDE the current eligible denominator. That
+    used not to matter, because a crate stamp recorded versions only. Since
+    v0.8.33 a stamp also binds the denominator it covered and refuses to be
+    written while any atom sits outside it, so a fixture with no coherent audio
+    identity would be refused for a reason unrelated to version staleness --
+    which is what this witness is actually about.
+    """
     db = core.conn()
-    db.execute("INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at) VALUES(?,?,?,?,?,?)",
-               ("fs", "/tmp/stale.wav", "master", 1, 1, "now"))
+    db.execute("""INSERT INTO files(id,path,root,size_bytes,mtime_ns,scanned_at,
+                    present,sha256,audio_sha256,audio_sha256_scope,audio_generation)
+                  VALUES(?,?,?,?,?,?,1,?,?,'full',0)""",
+               ("fs", "/tmp/stale.wav", "master", 1, 1, "now", "f" * 64, "a" * 64))
     db.execute("INSERT INTO tracks(id,file_id,artist,title) VALUES(?,?,?,?)", ("ts", "fs", "S", "Stale"))
-    db.execute("INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at) VALUES(?,?,?,?,?,?,?,?)",
-               ("ls", "fs", 0, 4, 2, "vocal", 0.9, "now"))
+    db.execute("""INSERT INTO loops(id,file_id,start_s,end_s,bars,role,score,created_at,
+                    status,source_audio_sha256,source_audio_generation)
+                  VALUES(?,?,?,?,?,?,?,?,'approved',?,0)""",
+               ("ls", "fs", 0, 4, 2, "vocal", 0.9, "now", "a" * 64))
     db.execute("INSERT INTO ear_atoms(id,loop_id,file_id,taste_profile,ear_role,render_role,start_s,end_s,bars,score,status,metrics_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                ("as", "ls", "fs", "girl_talk_v1", "VOX_HOOK", "vocal", 0, 4, 2, 0.9, "approved", "{}", "now"))
     db.execute("INSERT INTO features(file_id,analyzer_version,analyzed_at) VALUES(?,?,?)",

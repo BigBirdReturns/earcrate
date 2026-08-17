@@ -1,5 +1,168 @@
 # EarCrate — CHANGELOG
 
+## v0.8.34 — a stamp may not outlive the object it identifies
+- `crate_staleness` now compares **every** identity the stamp stores. v0.8.33
+  recorded the eligible-loop, measurement and projection counts and digests but
+  compared only the eligible digest and the missing/extra atom counts, so a
+  same-version force rebuild, donor refresh or reprojection could commit new atom
+  metrics, roles or statuses, fail before restamping, leave the denominator
+  untouched — and the superseded stamp still read current over a measurement and
+  a resident judgment that had already moved. The stored measurement and
+  projection digests were recorded evidence, not an enforced predicate.
+- A **missing** stamp is now stale for any materialized profile. A profile
+  holding atoms with no stamp at all could return `crate_stale: false` while
+  carrying no engine, analyzer, policy, TasteSpec, denominator, measurement or
+  projection authority whatsoever — the same failure as an outlived stamp,
+  reached by omission.
+- The measurement digest is now keyed on the **canonical** `metrics_json`
+  (parsed, sorted keys, fixed separators), not the stored text. Every writer
+  serializes with no key-order guarantee, so hashing bytes gave one measurement
+  two identities and a harmless respelling could report a false change. The stamp
+  also carries a `measurement_text_digest`, which is never a currency criterion:
+  it lets the continuously-polled staleness check prove the bytes are unmoved
+  without re-parsing every metrics object in the library (~20x cheaper at 66k
+  loops), and any byte change falls through to the canonical comparison.
+- The projection digest binds what the resident actually decided: taste profile,
+  **atom id**, loop id, effective ear role, status, locked flag, and the
+  judgment's own status and relabel role. Keyed on loop, role, status and a
+  locked flag alone, an atom rewritten to a different identity under the same
+  loop moved nothing, and a locked human judgment could be re-statused or
+  re-labelled while the digest claiming to identify that decision stood still.
+- An authorized atom judgment on an otherwise-current crate now **renews** the
+  stamp. The projection identity includes human-authorized state, so a judgment
+  genuinely moves what the stamp describes; renewing keeps the enforcement exact
+  without letting the review surface brick rendering. A judgment on an
+  already-stale crate renews nothing — staleness there has a cause the judgment
+  did not fix.
+- One definition of the measurement digest, shared by the stamp, reprojection and
+  donor verification. Three private copies could verify a donor under one identity
+  and stamp it under another.
+- ENGINE_VERSION: `earcrate_v0834`, stamp schema `crate_stamp_v3_full_identity`.
+  The v0833 stamps are stale by construction: they do not enforce the measurement
+  and projection identities they store. The profiles are re-stamped by fast
+  reprojection and verified-donor refresh; no second DSP pass is required, and the
+  v0833 qualification stands as valid evidence that the live denominator,
+  measurements, projections and graphs were coherent at that point.
+
+## v0.8.33 — a crate is current only over the denominator it covered
+- Crate stamps now bind the eligible-loop, shared-measurement and
+  resident-projection identities (counts and digests) under a new
+  `crate_stamp_v2_denominator_bound` schema, and `crate_staleness` **re-derives**
+  the eligible digest rather than remembering it. The previous stamp recorded
+  engine, analyzer, policy and contract but never *which loops* it described, so
+  a later scan could add an eligible loop, retire one, or change a source
+  generation while every version field stayed identical — and the crate would
+  still read current over a library that had moved underneath it.
+- Coverage is checked in both directions. `verify_donor_profile` and
+  `reproject_profile` only ever proved that no eligible loop was *missing*, so a
+  profile still holding atoms for loops the library had since retired read as
+  complete. Stamping now refuses while either `missing_atom_count` or
+  `extra_atom_count` is nonzero.
+- Unknown and malformed TasteSpecs fail closed. Resolving a profile to `{}` failed
+  open in the worst way: an empty `permitted_roles` disabled the role gate and
+  absent salience fell through to the generic table, so an unregistered contract
+  received ordinary-looking classifications. `profile_contract` now requires a
+  registered profile with nonempty permitted roles, a well-formed `role_salience`,
+  and complete TasteSpec identity; classification, building, reprojection, donor
+  refresh and stamping all refuse without it, and no stamp may carry a null
+  TasteSpec identity.
+- The compatibility-graph rebuild no longer cascades a judged legacy edge away.
+  It cleared every pre-`edg_` row *before* computing the judged set, so a human
+  judgment attached to an edge older than the content-addressed id scheme was
+  destroyed through `ON DELETE CASCADE` — the exact loss `edge_state` was added to
+  prevent, left open on the only edges old enough to have been judged first.
+  Legacy rows are now classified before deletion: judged ones become
+  `historical`, unjudged ones are deleted.
+- ENGINE_VERSION: `earcrate_v0833`. The v0832 stamps carry no denominator
+  identity and are stale by construction under the new law; the profiles are
+  re-stamped by fast reprojection and donor refresh, with no second DSP pass.
+
+## v0.8.32 — approval belongs to the resident, measurement belongs to the sound
+- Atom approval is now decided through the target profile's own TasteSpec.
+  `tastespec.schema.json` has always **required** `permitted_roles` and
+  `role_salience`, and the three shipped residents declare materially different
+  thresholds — girl_talk admits a vocal hook at intelligibility `0.45`, notorious
+  demands `0.60` while separately admitting a verse at `min_score 0.45`, and
+  troubadour relaxes the drum and bass floors to `0.40` for its minimal-layer
+  medley. None of it had any effect: `flat_profile` dropped both fields and
+  `classify_atom_status` took no profile at all, so one hardcoded table judged
+  every resident and the declared salience was dead configuration.
+- The split is now explicit. Shared across residents: `metrics_json`, `ear_role`,
+  `render_role`, source and loop identity. Resident-specific: approval status,
+  role-salience eligibility, graph, coverage and arrangement behaviour.
+  `ear_role` stays shared on purpose — it describes what the fragment *is*; the
+  profile decides whether that fragment is *useful*.
+- `ear_crate_file_worker` no longer classifies. It returns measured facts only,
+  and the caller classifies once it knows which resident it is writing. Preview
+  writing now gates on the `0.30` audibility floor rather than a resident's
+  approval, since a preview is a measured artifact.
+- The verified-donor refresh copies measurement authority only. A donor's
+  `status` is its own judgment under its own contract, so it is never copied and
+  never enters the measurement digest — which is now keyed on `loop_id` over
+  `(ear_role, render_role, metrics_json)`.
+- Crate stamps bind `classification_policy_version`, `tastespec_id`,
+  `tastespec_version` and `tastespec_hash`, and staleness checks all four. A
+  stamp predating the policy carries no such field and correctly reads stale:
+  keeping `v0831` after changing what approval means would have left the existing
+  crate looking current under semantics that never produced it.
+- New `reproject_profile`: reclassify a profile in place from its own existing
+  measurements when the law or a contract changes. It still re-proves those
+  measurements by stratified fresh DSP before writing any judgment, so the
+  54-minute full-library pass stays valid evidence for the measurement layer and
+  is not repeated to change a judgment.
+- ENGINE_VERSION: `earcrate_v0832`.
+
+## v0.8.31 — force actually re-measures, and a partial rebuild stays stale
+- `build_ear_crate(force=True)` now bypasses cross-profile donor adoption. Force
+  has always been documented as "re-measure in place", but the adoption phase ran
+  regardless of the flag, and adoption satisfies a rebuild without measuring
+  anything. With `girl_talk_v1`, `notorious_v1` and `troubadour_v1` all holding
+  atoms on the same loops, a forced rebuild of one stale profile could copy
+  `metrics_json` from another stale profile for essentially every row, run no DSP
+  at all, and then stamp the target crate current. Stale numbers laundered
+  through a rebuild into a false-green crate. `force=False` keeps adoption: a
+  second resident still auditions a large library in seconds.
+- The crate stamp is now refused unless the rebuild was complete. Any source
+  verification failure, any DSP failure, or any eligible row that never landed
+  leaves the profile unstamped and therefore still stale. `build_ear_crate`
+  returns `stamped`, `selected_eligible` and `processed` so the denominator is
+  visible instead of implied, and the status line says INCOMPLETE rather than
+  reporting a clean finish.
+- New `refresh_profile_from_verified_donor`: a stale profile can be brought
+  current from a donor whose fitness is proved at refresh time, instead of
+  repeating a full 66,149-loop DSP pass per profile. Atom metrics are
+  persona-independent by design (`classify_atom_status` reads only `ear_role`
+  and `score`), so the measurement is shared material — but "adopt from another
+  profile" is exactly the mechanism that produced the false-green crate above,
+  so the difference is mechanical. `verify_donor_profile` re-derives staleness,
+  stamp identity, coverage of the *current* eligible denominator, inactive-sound
+  and stale-generation counts, and an atom digest, all against current rows
+  rather than inheriting the donor's stamp. The refresh then requires a
+  stratified fresh-DSP comparison — sampled across role, duration, score band,
+  generation and container — to reproduce the donor's metrics and roles byte for
+  byte before projecting anything. Any divergence refuses the whole refresh with
+  nothing written and no stamp. Unlike `force=False` it revisits the entire
+  denominator, so existing stale rows are refreshed rather than skipped.
+- `build_compatibility_graph` now reconciles to the exact current edge set. It
+  deleted only non-deterministic rows and upserted the qualifying set, so a
+  deterministic `edg_` edge that qualified under an older measurement stayed
+  active forever: the active graph was the union of every set that ever
+  qualified. Nothing in `crate_staleness` looks at edges, so a current crate
+  stamp could sit on a mostly historical graph. Measured on the live library
+  right after the girl_talk_v1 force remeasure: 1,912 active edges against a
+  desired set of 360 — 1,552 stale, 81% of the graph. The builder now computes
+  the desired set first, upserts it, and retires everything active that is not
+  in it. Retirement has a policy rather than a cascade: an unjudged obsolete
+  edge is deleted, while a judged one becomes `edge_state='historical'` so the
+  row and its `pair_judgment` both survive. `created_at` is no longer restamped
+  on conflict, so an unchanged graph is byte-idempotent across rebuilds.
+- ENGINE_VERSION: `earcrate_v0831` (was `earcrate_v0830`). This is a behavioral
+  correction to what building a crate *means*, so every crate built by the old
+  engine must read stale against the new one — which is exactly what the stamp
+  is for. ANALYZER_VERSION unchanged; no re-analysis is implied.
+- Note: ENGINE_DISPLAY_VERSION had drifted to v0.8.29 while the CHANGELOG was
+  already on v0.8.30. Both now read v0.8.31.
+
 ## v0.8.30 — the performance chapter + the GPU multi-tool seam + the treble fix
 - Rebuilds the perf campaign from the hot-path audit's verified findings (the
   original implementation died unpushed with its session container):

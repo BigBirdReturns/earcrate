@@ -4198,3 +4198,882 @@ def test_loop_contract_requires_real_periodicity_and_middle_cycle_crop():
     loop_score = core.score_arrangement({"params": {"loop_cycle_bars": 8}, "sections": repeated_sections})
     for field in ("source_diversity", "max_source_reuse", "layer_events", "duration_bars"):
         assert loop_score[field] == logical_score[field], (field, logical_score, loop_score)
+
+
+def test_force_remeasure_integrity():
+    """v0.8.31 gate: force=True must MEASURE, and a partial rebuild must stay stale.
+
+    force has always been documented as "re-measure in place", but the
+    cross-profile adoption phase ran regardless of the flag. Because every
+    resident holds atoms on the same loops, a forced rebuild of one stale
+    profile could copy another stale profile's metrics_json for every row, run
+    no DSP at all, and then stamp the target crate current.
+    """
+    import json, tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    from earcrate.core.deps import ENGINE_VERSION
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(3):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    db = core.conn()
+
+    # A donor resident, then poison its metrics so any adoption is detectable.
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        seed = core.build_ear_crate(taste_profile="notorious_v1", force=True)
+    # Guard the whole gate against vacuity: every claim below is worthless if
+    # the fixture selected nothing (an empty selection satisfies "processed ==
+    # selected" and "adopted == 0" for free).
+    assert seed["selected_eligible"] > 0, "fixture produced no eligible loops"
+    assert seed["stamped"] is True and seed["processed"] == seed["selected_eligible"]
+    db.execute("UPDATE ear_atoms SET metrics_json=? WHERE taste_profile='notorious_v1'",
+               (json.dumps({"score": 0.123, "stale_donor": True}),))
+    db.commit()
+
+    def _tracking(calls):
+        def _inner(job):
+            calls.append(job["path"])
+            return _fast_crate_fixture(job)
+        return _inner
+
+    # --- force=True + stale donor present -> no adoption, DSP executes ---
+    calls = []
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_tracking(calls)):
+        r = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert r["selected_eligible"] > 0, "force build selected nothing"
+    assert r["adopted"] == 0, "force must never adopt a donor's metrics"
+    assert calls, "force must route every selected loop through the DSP path"
+    assert r["stamped"] is True and r["processed"] == r["selected_eligible"]
+    landed = [row["metrics_json"] for row in
+              db.execute("SELECT metrics_json FROM ear_atoms WHERE taste_profile='girl_talk_v1'")]
+    assert landed and not any("stale_donor" in (m or "") for m in landed), \
+        "a stale donor's metrics were laundered into the force-rebuilt profile"
+
+    # --- existing deterministic atom identity is preserved across remeasure ---
+    ids_before = {row["id"] for row in
+                  db.execute("SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1'")}
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    ids_after = {row["id"] for row in
+                 db.execute("SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1'")}
+    assert ids_before == ids_after and ids_before, "force remeasure must not change atom identity"
+
+    # --- force=False + eligible donor -> the adoption optimization remains ---
+    r_adopt = core.build_ear_crate(taste_profile="troubadour_v1")
+    assert r_adopt["adopted"] > 0, "incremental builds must still adopt"
+    assert r_adopt["adopted"] == r_adopt["inserted"], "adoption must cover the new resident"
+
+    # --- a DSP failure must not stamp the crate ---
+    sentinel = {"engine_version": "sentinel_engine", "analyzer_version": "sentinel_analyzer",
+                "stamped_at": "1970-01-01T00:00:00Z"}
+    core.kv_set_json("crate_stamp:girl_talk_v1", dict(sentinel))
+
+    def _failing(job):
+        return {"path": job["path"], "error": "synthetic DSP failure", "results": []}
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_failing):
+        r_fail = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert r_fail["stamped"] is False, "a failed rebuild must not stamp the crate"
+    assert r_fail["failed_count"] > 0
+    assert r_fail["processed"] < r_fail["selected_eligible"], "the incomplete denominator must be reported"
+    assert core.kv_get_json("crate_stamp:girl_talk_v1") == sentinel, \
+        "the crate stamp was written despite a failed rebuild"
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is True, \
+        "a partially rebuilt crate must remain stale"
+
+    # --- a source-verification failure must not stamp the crate either ---
+    victim = db.execute("SELECT id FROM files LIMIT 1").fetchone()["id"]
+    db.execute("UPDATE files SET sha256=? WHERE id=?", ("0" * 64, victim))
+    db.commit()
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r_verify = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert r_verify["stamped"] is False, "a source-verification failure must not stamp the crate"
+    assert r_verify["failed_count"] > 0
+    assert core.kv_get_json("crate_stamp:girl_talk_v1") == sentinel
+
+    # --- a complete successful force rebuild stamps, and covers its denominator ---
+    db.execute("UPDATE files SET audio_sha256_scope='full' WHERE audio_sha256_scope='stale_full'")
+    db.commit()
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r_ok = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert r_ok["stamped"] is True, r_ok["failed"]
+    assert r_ok["failed_count"] == 0
+    assert r_ok["processed"] == r_ok["selected_eligible"] and r_ok["processed"] > 0
+    stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    assert stamp and stamp["engine_version"] == ENGINE_VERSION, stamp
+
+    # --- a locked human call survives force remeasurement ---
+    aid = db.execute("SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 1").fetchone()["id"]
+    core.set_atom_judgment(aid, "girl_talk_v1", "approved", relabel_role="VOX_SHOUT", locked=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    locked_row = db.execute("SELECT ear_role, status FROM ear_atoms WHERE id=?", (aid,)).fetchone()
+    assert locked_row["ear_role"] == "VOX_SHOUT" and locked_row["status"] == "approved", \
+        "a locked judgment must survive force remeasurement"
+
+    # --- non-target profile rows are untouched ---
+    def _profile_digest(profile):
+        return [tuple(r) for r in db.execute(
+            "SELECT id, ear_role, status, metrics_json FROM ear_atoms "
+            "WHERE taste_profile=? ORDER BY id", (profile,)).fetchall()]
+
+    before_other = {p: _profile_digest(p) for p in ("notorious_v1", "troubadour_v1")}
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    for p, snapshot in before_other.items():
+        assert _profile_digest(p) == snapshot, f"{p} rows changed during a girl_talk_v1 rebuild"
+
+
+def test_compatibility_graph_reconciles_to_the_exact_current_set():
+    """v0.8.31 gate: the active graph must be exactly the graph derived from the
+    CURRENT atoms.
+
+    The builder only ever upserted deterministic edg_% rows, so an edge that
+    qualified under an older measurement set stayed active forever. Measured on
+    the live library after the girl_talk_v1 force remeasure: 1,912 active edges
+    against a desired set of 360 -- 1,552 stale. A current crate stamp sat on top
+    of a graph that was 81% historical.
+    """
+    import hashlib, tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(4):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    db = core.conn()
+
+    first = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    if not first.get("ok"):
+        import pytest
+        pytest.skip(f"fixture produced no graph: {first.get('error')}")
+    assert first["desired_edge_ids"] > 0, "fixture produced an empty desired set"
+
+    def _active():
+        return {r["id"] for r in db.execute(
+            "SELECT id FROM compatibility_edges WHERE taste_profile='girl_talk_v1' "
+            "AND edge_state='active'")}
+
+    def _graph_digest():
+        rows = db.execute(
+            "SELECT id, left_atom_id, right_atom_id, relation, score, reasons_json, "
+            "created_at, edge_state FROM compatibility_edges "
+            "WHERE taste_profile='girl_talk_v1' ORDER BY id").fetchall()
+        return hashlib.sha256(
+            "\x1e".join("\x1f".join(str(v) for v in tuple(r)) for r in rows).encode()).hexdigest()
+
+    assert first["active_minus_desired"] == 0, first
+    assert first["desired_minus_active"] == 0, first
+
+    # Plant a stale edge that no current atom pair supports, exactly as the old
+    # upsert-only builder would have left behind.
+    atoms = [r["id"] for r in db.execute(
+        "SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 2")]
+    assert len(atoms) == 2
+    db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,
+                    relation,score,reasons_json,created_at,edge_state)
+                  VALUES('edg_stale_unjudged','girl_talk_v1',?,?,'vocal_over_bed',0.99,'{}',
+                         '2020-01-01T00:00:00Z','active')""", (atoms[0], atoms[1]))
+    db.commit()
+    assert "edg_stale_unjudged" in _active()
+
+    second = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    assert "edg_stale_unjudged" not in _active(), "a stale unjudged edge stayed active"
+    assert second["deleted_obsolete"] >= 1, second
+    assert second["active_minus_desired"] == 0 and second["desired_minus_active"] == 0, second
+    assert db.execute("SELECT COUNT(*) n FROM compatibility_edges "
+                      "WHERE id='edg_stale_unjudged'").fetchone()["n"] == 0, \
+        "an unjudged obsolete edge should be removed, not left as a historical row"
+
+    # A JUDGED edge that no longer qualifies must survive as history, never be
+    # cascaded away: pair_judgments references the edge id ON DELETE CASCADE.
+    db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,
+                    relation,score,reasons_json,created_at,edge_state)
+                  VALUES('edg_stale_judged','girl_talk_v1',?,?,'bass_over_drums',0.99,'{}',
+                         '2020-01-01T00:00:00Z','active')""", (atoms[0], atoms[1]))
+    db.commit()
+    core.set_pair_judgment("edg_stale_judged", "girl_talk_v1", "approved", reason="human call")
+    judged_before = db.execute("SELECT COUNT(*) n FROM pair_judgments").fetchone()["n"]
+    assert judged_before >= 1
+
+    third = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    assert "edg_stale_judged" not in _active(), "a non-qualifying edge must not stay active"
+    row = db.execute("SELECT edge_state FROM compatibility_edges WHERE id='edg_stale_judged'").fetchone()
+    assert row is not None and row["edge_state"] == "historical", \
+        "a judged edge that no longer qualifies must become historical, not vanish"
+    assert db.execute("SELECT COUNT(*) n FROM pair_judgments").fetchone()["n"] == judged_before, \
+        "a human pair judgment was destroyed by a graph rebuild"
+    assert third["active_minus_desired"] == 0 and third["desired_minus_active"] == 0, third
+
+    # Idempotence: an unchanged estate must reproduce the graph byte for byte.
+    digest_a = _graph_digest()
+    fourth = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+    assert _graph_digest() == digest_a, "a second identical rebuild changed the graph"
+    assert fourth["active_minus_desired"] == 0 and fourth["desired_minus_active"] == 0, fourth
+    assert fourth["deleted_obsolete"] == 0 and fourth["retired_historical"] == 0, fourth
+
+
+def test_verified_donor_refresh():
+    """v0.8.31 gate: a stale profile may be refreshed from a donor only when that
+    donor is proved current NOW and persona independence is proved on this data.
+
+    Atom metrics are persona-independent by design, so a stale profile should not
+    need its own full DSP pass. But 'adopt from another profile' is precisely the
+    mechanism that produced the false-green crate this branch repaired. The
+    difference has to be mechanical: re-verify the donor at refresh time rather
+    than trusting a stamp it carries, and reproduce its measurements by fresh DSP
+    across strata before projecting anything.
+    """
+    import json, tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    from earcrate.core.deps import ANALYZER_VERSION
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(4):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    db = core.conn()
+
+    # --- an unverified donor is refused outright ---
+    refused = core.refresh_profile_from_verified_donor("notorious_v1", donor_profile="girl_talk_v1")
+    assert refused["ok"] is False and refused["stamped"] is False, refused
+    assert refused["donor_verification"]["verified"] is False
+    assert refused["donor_verification"]["refusals"], "an empty donor must produce a stated refusal"
+    assert db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='notorious_v1'"
+                      ).fetchone()["n"] == 0, "a refused refresh must write nothing"
+
+    # --- build a genuine donor ---
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        donor_build = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert donor_build["stamped"] is True and donor_build["selected_eligible"] > 0
+    v = core.verify_donor_profile("girl_talk_v1")
+    assert v["verified"] is True, v
+    assert v["donor_missing_eligible"] == 0 and v["eligible_denominator"] > 0
+    assert v["donor_atom_digest"], "donor verification must bind an atom digest"
+
+    # --- a self-donor is refused ---
+    assert core.refresh_profile_from_verified_donor("girl_talk_v1", donor_profile="girl_talk_v1")["ok"] is False
+
+    # --- the happy path: full denominator, stamped, identities preserved ---
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r = core.refresh_profile_from_verified_donor("notorious_v1", donor_profile="girl_talk_v1",
+                                                     strata_samples=8)
+    assert r["ok"] is True, r
+    assert r["stamped"] is True, r
+    assert r["processed"] == r["selected_eligible"] == donor_build["selected_eligible"], r
+    assert r["strata_compared"] > 0, "the comparison must actually measure something"
+    assert r["failed_count"] == 0, r["failed"]
+    assert core.crate_staleness("notorious_v1")["crate_stale"] is False
+
+    # metrics really are the donor's, and identity is deterministic per profile
+    donor_m = {x["loop_id"]: x["metrics_json"] for x in db.execute(
+        "SELECT loop_id, metrics_json FROM ear_atoms WHERE taste_profile='girl_talk_v1'")}
+    target = {x["loop_id"]: (x["id"], x["metrics_json"]) for x in db.execute(
+        "SELECT loop_id, id, metrics_json FROM ear_atoms WHERE taste_profile='notorious_v1'")}
+    assert set(target) == set(donor_m) and target
+    for lid, (aid, mj) in target.items():
+        assert mj == donor_m[lid], "projected metrics differ from the verified donor"
+        assert aid != lid and aid.startswith("atm_"), aid
+    assert len(set(a for a, _ in target.values())) == len(target), "atom identities collided"
+    assert not (set(a for a, _ in target.values())
+                & {x["id"] for x in db.execute(
+                    "SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1'")}), \
+        "target atoms must have their own identities, not the donor's"
+
+    # --- a locked human call survives a donor refresh ---
+    aid = next(iter(target.values()))[0]
+    core.set_atom_judgment(aid, "notorious_v1", "approved", relabel_role="VOX_SHOUT", locked=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.refresh_profile_from_verified_donor("notorious_v1", donor_profile="girl_talk_v1",
+                                                 strata_samples=4)
+    row = db.execute("SELECT ear_role, status FROM ear_atoms WHERE id=?", (aid,)).fetchone()
+    assert row["ear_role"] == "VOX_SHOUT" and row["status"] == "approved", \
+        "a locked judgment must survive a donor refresh"
+
+    # --- persona independence is PROVED, not assumed: a diverging DSP refuses ---
+    def _diverging(job):
+        out = _fast_crate_fixture(job)
+        for item in out["results"]:
+            item["metrics"] = dict(item["metrics"])
+            item["metrics"]["score"] = 0.123456
+        return out
+
+    stamp_before = core.kv_get_json("crate_stamp:troubadour_v1")
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_diverging):
+        bad = core.refresh_profile_from_verified_donor("troubadour_v1", donor_profile="girl_talk_v1",
+                                                       strata_samples=8)
+    assert bad["ok"] is False and bad["stamped"] is False, bad
+    assert bad["divergences"], "a metric divergence must be reported"
+    assert db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='troubadour_v1'"
+                      ).fetchone()["n"] == 0, "a refused refresh must write no atoms"
+    assert core.kv_get_json("crate_stamp:troubadour_v1") == stamp_before, \
+        "a refused refresh must not stamp the target"
+
+    # --- a donor that goes stale is refused on the NEXT refresh, not trusted ---
+    core.kv_set_json("crate_stamp:girl_talk_v1",
+                     {"engine_version": "earcrate_v0001", "analyzer_version": ANALYZER_VERSION,
+                      "stamped_at": "1970-01-01T00:00:00Z"})
+    after = core.refresh_profile_from_verified_donor("troubadour_v1", donor_profile="girl_talk_v1")
+    assert after["ok"] is False, "a donor whose stamp went stale must be re-refused at refresh time"
+    assert any("stale" in x or "stamp" in x for x in after["donor_verification"]["refusals"]), after
+
+
+def test_atom_approval_is_profile_aware():
+    """v0.8.32 gate: approval is decided through the target's own TasteSpec.
+
+    tastespec.schema.json has always REQUIRED permitted_roles and role_salience,
+    and the three shipped residents declare materially different vocal
+    intelligibility and floor/bass thresholds. But flat_profile dropped both
+    fields and classify_atom_status took no profile, so one hardcoded table judged
+    every resident and the declared salience was dead configuration. These are the
+    exact fragments on which the three contracts disagree.
+    """
+    from earcrate.app import classify_atom_status, TASTE_PROFILES
+
+    for p in ("girl_talk_v1", "notorious_v1", "troubadour_v1"):
+        prof = TASTE_PROFILES.get(p) or {}
+        assert prof.get("permitted_roles"), f"{p} lost permitted_roles in projection"
+        assert prof.get("role_salience"), f"{p} lost role_salience in projection"
+
+    def m(**kw):
+        base = {"score": 0.0, "intelligibility": 0.0, "floor_score": 0.0,
+                "bass_score": 0.0, "bed_score": 0.0}
+        base.update(kw)
+        return base
+
+    # girl_talk permits a vocal hook at intelligibility 0.45; notorious needs
+    # 0.60 and troubadour 0.55.
+    hook = m(score=0.55, intelligibility=0.50)
+    assert classify_atom_status("girl_talk_v1", "VOX_HOOK", hook) == "approved"
+    assert classify_atom_status("notorious_v1", "VOX_HOOK", hook) == "candidate"
+    assert classify_atom_status("troubadour_v1", "VOX_HOOK", hook) == "candidate"
+
+    # notorious deliberately admits verse-length foreground at min_score 0.45;
+    # the others fall back to 0.50 and decline it.
+    verse = m(score=0.47, intelligibility=0.65)
+    assert classify_atom_status("notorious_v1", "VOX_VERSE", verse) == "approved"
+    assert classify_atom_status("girl_talk_v1", "VOX_VERSE", verse) == "candidate"
+    assert classify_atom_status("troubadour_v1", "VOX_VERSE", verse) == "candidate"
+
+    # troubadour relaxes the drum floor to 0.40 for its minimal-layer medley.
+    drum = m(score=0.50, floor_score=0.44)
+    assert classify_atom_status("troubadour_v1", "DRUM_BREAK", drum) == "approved"
+    assert classify_atom_status("girl_talk_v1", "DRUM_BREAK", drum) == "candidate"
+    assert classify_atom_status("notorious_v1", "DRUM_BREAK", drum) == "candidate"
+
+    # A role outside permitted_roles is rejected outright, not merely unpreferred.
+    assert classify_atom_status("girl_talk_v1", "NOT_A_ROLE", m(score=0.99)) == "rejected"
+    # Unusable material stays rejected for everyone.
+    for p in ("girl_talk_v1", "notorious_v1", "troubadour_v1"):
+        assert classify_atom_status(p, "TEXTURE", m(score=0.29)) == "rejected"
+    # Rejection and insufficient salience remain distinct.
+    assert classify_atom_status("notorious_v1", "VOX_HOOK", m(score=0.55, intelligibility=0.10)) == "candidate"
+
+
+def test_crate_stamp_binds_classification_policy_and_tastespec():
+    """A crate is current only under the law and contract that produced it."""
+    import tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    from earcrate.app import CLASSIFICATION_POLICY_VERSION, TASTE_PROFILES
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(3):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+
+    stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    assert stamp["classification_policy_version"] == CLASSIFICATION_POLICY_VERSION, stamp
+    assert stamp["tastespec_hash"] == TASTE_PROFILES["girl_talk_v1"]["tastespec_hash"], stamp
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # A stamp predating the policy carries no such field, and must read stale.
+    core.kv_set_json("crate_stamp:girl_talk_v1", {
+        "engine_version": stamp["engine_version"], "analyzer_version": stamp["analyzer_version"],
+        "stamped_at": stamp["stamped_at"]})
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a pre-policy stamp must not read current"
+    assert "policy" in st["reason"], st["reason"]
+
+    # A changed TasteSpec hash makes its crate stale even at the same engine.
+    core.kv_set_json("crate_stamp:girl_talk_v1", dict(stamp, tastespec_hash="deadbeef"))
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True and "TasteSpec" in st["reason"], st["reason"]
+
+
+def test_reprojection_reclassifies_without_repeating_the_dsp():
+    """Changing the judgment must not require repeating the measurement."""
+    import tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(3):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    db = core.conn()
+
+    def _atom_measurements():
+        return [tuple(r) for r in db.execute(
+            "SELECT loop_id, ear_role, render_role, metrics_json FROM ear_atoms "
+            "WHERE taste_profile='girl_talk_v1' ORDER BY loop_id")]
+
+    before = _atom_measurements()
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r = core.reproject_profile("girl_talk_v1", strata_samples=6)
+    assert r["ok"] is True and r["stamped"] is True, r
+    assert r["processed"] == r["selected_eligible"] > 0, r
+    assert r["strata_compared"] > 0, "reprojection must re-prove the measurements it reuses"
+    assert _atom_measurements() == before, "reprojection changed a MEASUREMENT"
+
+    # Idempotent: a second reprojection changes no judgment.
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        again = core.reproject_profile("girl_talk_v1", strata_samples=6)
+    assert again["status_changes"] == 0, again
+    assert _atom_measurements() == before
+
+    # A measurement that no longer re-proves refuses the whole reprojection.
+    def _diverging(job):
+        out = _fast_crate_fixture(job)
+        for item in out["results"]:
+            item["metrics"] = dict(item["metrics"]); item["metrics"]["score"] = 0.111
+        return out
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_diverging):
+        bad = core.reproject_profile("girl_talk_v1", strata_samples=6)
+    assert bad["ok"] is False and bad["stamped"] is False and bad["divergences"], bad
+    assert _atom_measurements() == before
+
+
+def _projection_fixture(tmp_root, files=3):
+    """A scanned, analyzed, looped, crated workspace on girl_talk_v1."""
+    import numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    tmp = Path(tmp_root)
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir(exist_ok=True)
+    sr = 44100
+    for i in range(files):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    return core, tmp
+
+
+def test_unknown_profile_fails_closed():
+    """v0.8.33 gate: a resident that cannot state its contract may not judge.
+
+    Resolving an unknown profile to {} failed OPEN: an empty permitted_roles
+    disabled the role gate and absent salience fell through to the generic table,
+    so an unregistered or malformed TasteSpec received ordinary classifications
+    instead of a refusal.
+    """
+    import json, tempfile
+    from unittest.mock import patch
+    from earcrate.app import classify_atom_status, UnknownProfileError, TASTE_PROFILES
+    core, tmp = _projection_fixture(tempfile.mkdtemp())
+    db = core.conn()
+    metrics = {"score": 0.9, "intelligibility": 0.9, "floor_score": 0.9,
+               "bass_score": 0.9, "bed_score": 0.9}
+
+    for bad_name in ("no_such_profile_v1", "", "girl_talk_v99"):
+        try:
+            classify_atom_status(bad_name, "VOX_HOOK", metrics)
+            assert False, f"{bad_name!r} must be refused, not classified"
+        except UnknownProfileError:
+            pass
+
+    before_atoms = db.execute("SELECT COUNT(*) n FROM ear_atoms").fetchone()["n"]
+    before_stamps = db.execute("SELECT COUNT(*) n FROM kv WHERE key LIKE 'crate_stamp:%'").fetchone()["n"]
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r = core.build_ear_crate(taste_profile="no_such_profile_v1", force=True)
+    assert r["ok"] is False and r["stamped"] is False, r
+    assert core.reproject_profile("no_such_profile_v1")["ok"] is False
+    assert core.refresh_profile_from_verified_donor("no_such_profile_v1",
+                                                    donor_profile="girl_talk_v1")["ok"] is False
+    assert core.refresh_profile_from_verified_donor("notorious_v1",
+                                                    donor_profile="no_such_profile_v1")["ok"] is False
+    assert core.verify_donor_profile("no_such_profile_v1")["verified"] is False
+    assert db.execute("SELECT COUNT(*) n FROM ear_atoms").fetchone()["n"] == before_atoms, \
+        "a refused profile wrote atoms"
+    assert db.execute("SELECT COUNT(*) n FROM kv WHERE key LIKE 'crate_stamp:%'"
+                      ).fetchone()["n"] == before_stamps, "a refused profile wrote a stamp"
+
+    # A registered but unusable contract is refused just as hard.
+    saved = dict(TASTE_PROFILES["troubadour_v1"])
+    try:
+        TASTE_PROFILES["troubadour_v1"] = dict(saved, permitted_roles=[])
+        try:
+            classify_atom_status("troubadour_v1", "VOX_HOOK", metrics)
+            assert False, "empty permitted_roles must be refused"
+        except UnknownProfileError:
+            pass
+        TASTE_PROFILES["troubadour_v1"] = dict(saved, role_salience={"VOX_HOOK": "not-a-mapping"})
+        try:
+            classify_atom_status("troubadour_v1", "VOX_HOOK", metrics)
+            assert False, "malformed role_salience must be refused"
+        except UnknownProfileError:
+            pass
+        TASTE_PROFILES["troubadour_v1"] = dict(saved, tastespec_hash=None)
+        try:
+            classify_atom_status("troubadour_v1", "VOX_HOOK", metrics)
+            assert False, "missing TasteSpec identity must be refused"
+        except UnknownProfileError:
+            pass
+    finally:
+        TASTE_PROFILES["troubadour_v1"] = saved
+
+    # No stamp may carry a null TasteSpec identity.
+    for row in db.execute("SELECT key, value FROM kv WHERE key LIKE 'crate_stamp:%'"):
+        stamp = json.loads(row["value"])
+        for f in ("tastespec_id", "tastespec_version", "tastespec_hash"):
+            assert stamp.get(f), f"{row['key']} has null {f}"
+
+
+def test_crate_stamp_binds_the_eligible_denominator():
+    """v0.8.33 gate: a crate is current only over the denominator it covered.
+
+    The v1 stamp recorded engine, analyzer, policy and contract but not WHICH
+    loops it described, so a later scan could add or retire an eligible loop and
+    leave the crate reading current over a library that had moved underneath it.
+    """
+    import tempfile
+    from unittest.mock import patch
+    core, tmp = _projection_fixture(tempfile.mkdtemp())
+    db = core.conn()
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.reproject_profile("girl_talk_v1", strata_samples=4)
+    stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    for f in ("eligible_loop_count", "eligible_loop_digest", "measurement_digest",
+              "profile_projection_digest", "crate_stamp_schema_version"):
+        assert stamp.get(f), f"stamp is missing {f}"
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    ident = core.crate_projection_identity("girl_talk_v1")
+    assert ident["missing_atom_count"] == 0 and ident["extra_atom_count"] == 0, ident
+
+    # A status-only change moves the projection digest and NOT the measurement.
+    victim = db.execute("SELECT id, status FROM ear_atoms WHERE taste_profile='girl_talk_v1' "
+                        "LIMIT 1").fetchone()
+    flipped = "candidate" if victim["status"] != "candidate" else "approved"
+    db.execute("UPDATE ear_atoms SET status=? WHERE id=?", (flipped, victim["id"]))
+    db.commit()
+    after = core.crate_projection_identity("girl_talk_v1")
+    assert after["measurement_digest"] == ident["measurement_digest"], \
+        "a status change moved the MEASUREMENT digest"
+    assert after["profile_projection_digest"] != ident["profile_projection_digest"], \
+        "a status change did not move the projection digest"
+    db.execute("UPDATE ear_atoms SET status=? WHERE id=?", (victim["status"], victim["id"]))
+    db.commit()
+
+    # An eligible loop REMOVED after stamping makes the crate stale.
+    gone = db.execute("SELECT id FROM loops WHERE status!='rejected' LIMIT 1").fetchone()["id"]
+    db.execute("UPDATE loops SET status='rejected' WHERE id=?", (gone,))
+    db.commit()
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a shrunken denominator must make the crate stale"
+    assert "denominator" in st["reason"] or "outside" in st["reason"], st["reason"]
+
+    # ...and an atom outside the denominator refuses the stamp outright.
+    try:
+        core.stamp_crate_versions("girl_talk_v1")
+        assert False, "stamping must refuse while atoms sit outside the denominator"
+    except ValueError as exc:
+        assert "outside" in str(exc) or "unprojected" in str(exc), str(exc)
+    db.execute("UPDATE loops SET status='approved' WHERE id=?", (gone,))
+    db.commit()
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False, "restoring must clear staleness"
+
+    # An eligible loop ADDED after stamping makes the crate stale.
+    src = db.execute("SELECT * FROM loops LIMIT 1").fetchone()
+    db.execute("""INSERT INTO loops(id,file_id,start_s,end_s,bars,role,role_confidence,score,
+                    status,stem,created_at,segment_id,locked,source_audio_sha256,source_audio_generation)
+                  SELECT 'seg_added_after_stamp', file_id, start_s, end_s, bars, role,
+                         role_confidence, score, status, stem, created_at,
+                         'seg_added_after_stamp', 0, source_audio_sha256, source_audio_generation
+                    FROM loops WHERE id=?""", (src["id"],))
+    db.commit()
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a grown denominator must make the crate stale"
+
+
+def test_crate_stamp_enforces_every_stored_identity():
+    """v0.8.34 gate: a stamp may not outlive the object it identifies.
+
+    v0.8.33 STORED the eligible-loop, measurement and projection identities and
+    then compared only the eligible one. So a same-version force rebuild, donor
+    refresh or reprojection could commit new atom metrics, roles or statuses and
+    fail before restamping, leave the denominator untouched, and the superseded
+    stamp still read current over a measurement and a resident judgment that had
+    already moved -- currency outliving the object it describes, which is the
+    exact defect class the stamp exists to refuse.
+
+    The projection identity also bound too little: keyed on loop, role, status and
+    a locked flag, an atom rewritten to a different identity under the same loop
+    moved nothing, and a locked human judgment could be re-statused or re-labelled
+    without moving the digest that claims to identify this resident's decision.
+    """
+    import json, tempfile
+    from unittest.mock import patch
+    core, tmp = _projection_fixture(tempfile.mkdtemp())
+    db = core.conn()
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.reproject_profile("girl_talk_v1", strata_samples=4)
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+    base = core.crate_projection_identity("girl_talk_v1")
+    stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    assert stamp["crate_stamp_schema_version"] == "crate_stamp_v3_full_identity", stamp
+    for field in ("measurement_count", "measurement_digest", "measurement_text_digest",
+                  "profile_projection_count", "profile_projection_digest"):
+        assert stamp[field] == base[field], f"stamp did not record {field} as derived"
+
+    # The UI polls staleness continuously over the whole library, so an unmoved
+    # measurement set must be proved unmoved by its bytes, not re-parsed row by row.
+    with patch("earcrate.app.canonical_metrics_json",
+               side_effect=AssertionError("re-parsed a provably unmoved measurement set")):
+        assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- a MISSING stamp is stale for any materialized profile ----------------
+    db.execute("DELETE FROM kv WHERE key='crate_stamp:girl_talk_v1'"); db.commit()
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a materialized profile with no stamp read current"
+    assert "no crate stamp" in st["reason"], st["reason"]
+    assert core.taste_readiness("girl_talk_v1")["crate_stale"] is True
+    core.kv_set_json("crate_stamp:girl_talk_v1", stamp)
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    victim = db.execute("SELECT id, loop_id, status, metrics_json FROM ear_atoms "
+                        "WHERE taste_profile='girl_talk_v1' ORDER BY loop_id LIMIT 1").fetchone()
+
+    # --- a METRICS-only mutation moves the measurement identity --------------
+    bumped = json.loads(victim["metrics_json"])
+    bumped["score"] = float(bumped.get("score") or 0.0) + 0.01
+    db.execute("UPDATE ear_atoms SET metrics_json=? WHERE id=?",
+               (json.dumps(bumped, ensure_ascii=False), victim["id"])); db.commit()
+    moved = core.crate_projection_identity("girl_talk_v1")
+    assert moved["measurement_digest"] != base["measurement_digest"]
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a changed MEASUREMENT left the stamp reading current"
+    assert "measurement" in st["reason"], st["reason"]
+    db.execute("UPDATE ear_atoms SET metrics_json=? WHERE id=?",
+               (victim["metrics_json"], victim["id"])); db.commit()
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False, \
+        "restoring the measurement must restore currentness"
+
+    # --- a STATUS-only mutation moves the projection and NOT the measurement --
+    flipped = "candidate" if victim["status"] != "candidate" else "approved"
+    db.execute("UPDATE ear_atoms SET status=? WHERE id=?", (flipped, victim["id"])); db.commit()
+    moved = core.crate_projection_identity("girl_talk_v1")
+    assert moved["measurement_digest"] == base["measurement_digest"], \
+        "a status change moved the MEASUREMENT digest"
+    assert moved["profile_projection_digest"] != base["profile_projection_digest"]
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a changed resident PROJECTION left the stamp reading current"
+    assert "projection" in st["reason"], st["reason"]
+    db.execute("UPDATE ear_atoms SET status=? WHERE id=?", (victim["status"], victim["id"])); db.commit()
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- an ATOM-ID substitution under the same loop, role and status ---------
+    db.execute("UPDATE ear_atoms SET id='atm_substituted_identity' WHERE id=?", (victim["id"],))
+    db.commit()
+    swapped = core.crate_projection_identity("girl_talk_v1")
+    assert swapped["measurement_digest"] == base["measurement_digest"], \
+        "an id substitution moved the MEASUREMENT digest"
+    assert swapped["profile_projection_digest"] != base["profile_projection_digest"], \
+        "an atom rewritten to a different identity moved no projection digest"
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is True
+    db.execute("UPDATE ear_atoms SET id=? WHERE id='atm_substituted_identity'", (victim["id"],))
+    db.commit()
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- a LOCKED human judgment is part of the resident projection -----------
+    # An authorized judgment on an otherwise-current crate renews the claim...
+    r = core.set_atom_judgment(victim["id"], "girl_talk_v1", "approved", "VOX_HOOK",
+                               False, True, "human call")
+    assert r["ok"] and r["crate_restamped"] is True, r
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False, \
+        "an authorized judgment on a current crate must renew, not brick, the claim"
+    judged = core.crate_projection_identity("girl_talk_v1")
+    assert judged["profile_projection_digest"] != base["profile_projection_digest"]
+
+    # ...but the judgment moving behind the runtime's back is stale.
+    for column, value in (("status", "rejected"), ("relabel_role", "VOX_VERSE"), ("locked", 0)):
+        held = db.execute("SELECT status, relabel_role, locked FROM atom_judgments "
+                          "WHERE atom_id=? AND taste_profile='girl_talk_v1'",
+                          (victim["id"],)).fetchone()[column]
+        db.execute(f"UPDATE atom_judgments SET {column}=? WHERE atom_id=? AND taste_profile=?",
+                   (value, victim["id"], "girl_talk_v1")); db.commit()
+        after = core.crate_projection_identity("girl_talk_v1")
+        assert after["profile_projection_digest"] != judged["profile_projection_digest"], \
+            f"a locked judgment {column} change moved no projection digest"
+        assert after["measurement_digest"] == judged["measurement_digest"], \
+            f"a judgment {column} change moved the MEASUREMENT digest"
+        assert core.crate_staleness("girl_talk_v1")["crate_stale"] is True, \
+            f"a locked judgment {column} change left the crate current"
+        db.execute(f"UPDATE atom_judgments SET {column}=? WHERE atom_id=? AND taste_profile=?",
+                   (held, victim["id"], "girl_talk_v1")); db.commit()
+        assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- a KEY-ORDER / WHITESPACE-only rewrite is not a measurement change ----
+    current = core.crate_projection_identity("girl_talk_v1")
+    row = db.execute("SELECT id, metrics_json FROM ear_atoms WHERE taste_profile='girl_talk_v1' "
+                     "ORDER BY loop_id LIMIT 1").fetchone()
+    parsed = json.loads(row["metrics_json"])
+    rewritten = json.dumps({k: parsed[k] for k in reversed(list(parsed))}, indent=4)
+    assert rewritten != row["metrics_json"], "the rewrite must differ as TEXT to prove anything"
+    db.execute("UPDATE ear_atoms SET metrics_json=? WHERE id=?", (rewritten, row["id"])); db.commit()
+    respelled = core.crate_projection_identity("girl_talk_v1")
+    assert respelled["measurement_digest"] == current["measurement_digest"], \
+        "the same measurement acquired a second identity"
+    assert respelled["measurement_text_digest"] != current["measurement_text_digest"], \
+        "the byte digest must see the rewrite, or it proves nothing when it matches"
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False, \
+        "re-spelling metrics_json made a current crate stale"
+
+    # --- a same-version PARTIAL rebuild that fails cannot stay current --------
+    before_stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    seen: list = []
+
+    def _one_file_then_fail(job):
+        seen.append(job["path"])
+        if len(seen) > 1:
+            return {"path": job["path"], "error": "simulated mid-rebuild failure", "results": []}
+        out = _fast_crate_fixture(job)
+        for item in out["results"]:
+            item["metrics"] = dict(item["metrics"]); item["metrics"]["score"] = 0.61
+        return out
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_one_file_then_fail):
+        partial = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert partial["stamped"] is False and partial["failed_count"] > 0, partial
+    assert core.kv_get_json("crate_stamp:girl_talk_v1") == before_stamp, \
+        "a failed rebuild rewrote the stamp"
+    assert db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='girl_talk_v1' "
+                      "AND metrics_json LIKE '%0.61%'").fetchone()["n"] > 0, \
+        "the partial rebuild committed no atom, so it witnesses nothing"
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, \
+        "a stamp survived a partial rebuild that changed the measurement it identifies"
+    assert "measurement" in st["reason"], st["reason"]
+
+
+def test_graph_rebuild_preserves_a_judged_legacy_edge():
+    """v0.8.33 gate: the pre-edg_ delete must not cascade a human judgment away.
+
+    The reconciliation clears legacy nondeterministic rows because they can never
+    appear in the desired set -- but it cleared them BLINDLY, before computing the
+    judged set, so a judgment attached to an edge older than the content-addressed
+    id scheme was destroyed by foreign-key cascade. Exactly the loss edge_state
+    exists to prevent, left open on the only edges old enough to be affected.
+    """
+    import tempfile
+    from unittest.mock import patch
+    core, tmp = _projection_fixture(tempfile.mkdtemp())
+    db = core.conn()
+    core.build_compatibility_graph(taste_profile="girl_talk_v1")
+
+    atoms = [r["id"] for r in db.execute(
+        "SELECT id FROM ear_atoms WHERE taste_profile='girl_talk_v1' LIMIT 2")]
+    assert len(atoms) == 2
+    for eid, relation in (("legacy_judged_001", "vocal_over_bed"),
+                          ("legacy_unjudged_002", "bass_over_drums")):
+        db.execute("""INSERT INTO compatibility_edges(id,taste_profile,left_atom_id,right_atom_id,
+                        relation,score,reasons_json,created_at,edge_state)
+                      VALUES(?,'girl_talk_v1',?,?,?,0.91,'{}','2019-01-01T00:00:00Z','active')""",
+                   (eid, atoms[0], atoms[1], relation))
+    db.commit()
+    core.set_pair_judgment("legacy_judged_001", "girl_talk_v1", "approved", reason="human call")
+    judged_before = db.execute("SELECT COUNT(*) n FROM pair_judgments").fetchone()["n"]
+    assert judged_before >= 1
+
+    r = core.build_compatibility_graph(taste_profile="girl_talk_v1")
+
+    judged_row = db.execute("SELECT edge_state FROM compatibility_edges WHERE id='legacy_judged_001'").fetchone()
+    assert judged_row is not None, "a JUDGED legacy edge was cascaded away by the rebuild"
+    assert judged_row["edge_state"] == "historical", judged_row["edge_state"]
+    assert db.execute("SELECT COUNT(*) n FROM pair_judgments").fetchone()["n"] == judged_before, \
+        "a human pair judgment was destroyed by the legacy delete"
+    assert db.execute("SELECT COUNT(*) n FROM compatibility_edges WHERE id='legacy_unjudged_002'"
+                      ).fetchone()["n"] == 0, "an unjudged legacy edge should be deleted"
+    assert r["legacy_retired_historical"] == 1 and r["legacy_deleted"] == 1, r
+    active = {x["id"] for x in db.execute(
+        "SELECT id FROM compatibility_edges WHERE taste_profile='girl_talk_v1' AND edge_state='active'")}
+    assert "legacy_judged_001" not in active, "a historical edge must not stay in the active graph"

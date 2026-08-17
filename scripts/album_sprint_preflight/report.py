@@ -20,7 +20,7 @@ def inspect_track(track_id: str, spec: Mapping[str, Any], campaign_track: Mappin
         result = homelab(track_id, spec, campaign_track, bindings)
     elif probe == "gesture_adapter":
         result = gesture(track_id, spec, bindings)
-    elif probe == "gold_v9_contract":
+    elif probe == "full_form_v1_contract":
         result = beggin(track_id, spec, bindings)
     else:
         result = base_result(track_id, str(spec.get("adapter") or ""))
@@ -34,7 +34,12 @@ def inspect_track(track_id: str, spec: Mapping[str, Any], campaign_track: Mappin
         and result["performance_realization_ready"] and not result["blockers"]
     )
     if result["performance_realization_ready"]:
-        result["state"] = "performance_realization_ready"
+        # A lane that realizes a performance still has to be a FULL-FORM lane. A
+        # rejected diagnostic recipe that happened to emit 57 seconds of audio must
+        # not reach this state on duration alone.
+        result["state"] = ("full_form_performance_realization_ready"
+                           if result["full_form_adapter_ready"]
+                           else "performance_realization_ready")
     elif result["symbolic_evidence_ready"]:
         result["state"] = "symbolic_evidence_ready"
     elif result["tool_contract_ready"]:
@@ -71,6 +76,9 @@ def build_report(
         "bindings_bytes_verified": bool(bindings_bytes_verified),
         "music_producing_lane_count": lane_count,
         "performance_realization_ready_count": sum(bool(row["performance_realization_ready"]) for row in tracks.values()),
+        "full_form_adapter_ready_count": sum(bool(row["full_form_adapter_ready"]) for row in tracks.values()),
+        # Machine qualification may move the counters above. It may not accept music.
+        "accepted_album_masters": 0,
         "estate_execution_authorized": lane_count > 0 and bool(bindings_bytes_verified),
         "authorized_track_ids": [track_id for track_id, row in tracks.items() if row["music_producing_path_ready"]],
         "private_paths_included": False, "source_audio_exported": False,

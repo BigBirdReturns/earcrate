@@ -1,5 +1,38 @@
 # EarCrate — CHANGELOG
 
+## v0.8.33 — a crate is current only over the denominator it covered
+- Crate stamps now bind the eligible-loop, shared-measurement and
+  resident-projection identities (counts and digests) under a new
+  `crate_stamp_v2_denominator_bound` schema, and `crate_staleness` **re-derives**
+  the eligible digest rather than remembering it. The previous stamp recorded
+  engine, analyzer, policy and contract but never *which loops* it described, so
+  a later scan could add an eligible loop, retire one, or change a source
+  generation while every version field stayed identical — and the crate would
+  still read current over a library that had moved underneath it.
+- Coverage is checked in both directions. `verify_donor_profile` and
+  `reproject_profile` only ever proved that no eligible loop was *missing*, so a
+  profile still holding atoms for loops the library had since retired read as
+  complete. Stamping now refuses while either `missing_atom_count` or
+  `extra_atom_count` is nonzero.
+- Unknown and malformed TasteSpecs fail closed. Resolving a profile to `{}` failed
+  open in the worst way: an empty `permitted_roles` disabled the role gate and
+  absent salience fell through to the generic table, so an unregistered contract
+  received ordinary-looking classifications. `profile_contract` now requires a
+  registered profile with nonempty permitted roles, a well-formed `role_salience`,
+  and complete TasteSpec identity; classification, building, reprojection, donor
+  refresh and stamping all refuse without it, and no stamp may carry a null
+  TasteSpec identity.
+- The compatibility-graph rebuild no longer cascades a judged legacy edge away.
+  It cleared every pre-`edg_` row *before* computing the judged set, so a human
+  judgment attached to an edge older than the content-addressed id scheme was
+  destroyed through `ON DELETE CASCADE` — the exact loss `edge_state` was added to
+  prevent, left open on the only edges old enough to have been judged first.
+  Legacy rows are now classified before deletion: judged ones become
+  `historical`, unjudged ones are deleted.
+- ENGINE_VERSION: `earcrate_v0833`. The v0832 stamps carry no denominator
+  identity and are stale by construction under the new law; the profiles are
+  re-stamped by fast reprojection and donor refresh, with no second DSP pass.
+
 ## v0.8.32 — approval belongs to the resident, measurement belongs to the sound
 - Atom approval is now decided through the target profile's own TasteSpec.
   `tastespec.schema.json` has always **required** `permitted_roles` and

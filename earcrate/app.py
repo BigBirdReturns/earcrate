@@ -112,6 +112,12 @@ def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
 # produced it, not just the engine that ran it.
 CLASSIFICATION_POLICY_VERSION = "atom_status_v2_profile_aware"
 
+# Bumping this makes every stamp written under the previous stamp law read stale,
+# independently of the engine. The v1 stamps recorded versions but not the
+# DENOMINATOR they covered, so they could not detect a library that had moved
+# underneath them.
+CRATE_STAMP_SCHEMA_VERSION = "crate_stamp_v2_denominator_bound"
+
 # The fallback minima the single hardcoded table used, kept verbatim so a profile
 # that declares no salience for a role still lands exactly where it used to.
 _FALLBACK_MIN_SCORE = {
@@ -125,6 +131,44 @@ _SALIENCE_METRIC = {
     "min_bass_score": "bass_score",
     "min_bed_score": "bed_score",
 }
+
+
+class UnknownProfileError(ValueError):
+    """A resident's contract is missing, unregistered, or unusable."""
+
+
+def profile_contract(taste_profile: str) -> Dict[str, Any]:
+    """The registered contract for a resident, or a refusal.
+
+    Resolving an unknown profile to `{}` fails OPEN in the worst possible way:
+    an empty `permitted_roles` disables the role gate entirely and absent
+    salience falls through to the generic table, so an unregistered or malformed
+    TasteSpec receives ordinary-looking classifications instead of being refused.
+    A resident that cannot state its contract has no authority to judge.
+    """
+    profile = TASTE_PROFILES.get(taste_profile)
+    if not isinstance(profile, dict) or not profile:
+        raise UnknownProfileError(f"unregistered TasteSpec profile {taste_profile!r}")
+    roles = profile.get("permitted_roles")
+    if not isinstance(roles, list) or not roles or not all(isinstance(r, str) and r for r in roles):
+        raise UnknownProfileError(f"{taste_profile!r} declares no usable permitted_roles")
+    salience = profile.get("role_salience")
+    if not isinstance(salience, dict):
+        raise UnknownProfileError(f"{taste_profile!r} has a malformed role_salience")
+    for role, spec in salience.items():
+        if not isinstance(role, str) or not isinstance(spec, dict):
+            raise UnknownProfileError(f"{taste_profile!r} role_salience[{role!r}] is malformed")
+        for key, value in spec.items():
+            if key in _SALIENCE_METRIC:
+                try:
+                    float(value)
+                except (TypeError, ValueError):
+                    raise UnknownProfileError(
+                        f"{taste_profile!r} role_salience[{role!r}][{key!r}] is not a number")
+    for field in ("tastespec_id", "tastespec_version", "tastespec_hash"):
+        if not profile.get(field):
+            raise UnknownProfileError(f"{taste_profile!r} is missing {field}")
+    return profile
 
 
 def classify_atom_status(taste_profile: str, ear_role: str, metrics: Dict[str, float]) -> str:
@@ -143,9 +187,8 @@ def classify_atom_status(taste_profile: str, ear_role: str, metrics: Dict[str, f
     fragment that simply does not suit this resident is a `candidate`, not bad
     material -- another resident may want it, and a later contract change may.
     """
-    profile = TASTE_PROFILES.get(taste_profile) or {}
-    permitted = profile.get("permitted_roles") or []
-    if permitted and ear_role not in permitted:
+    profile = profile_contract(taste_profile)
+    if ear_role not in profile["permitted_roles"]:
         return "rejected"
     if float(metrics.get("score") or 0.0) < 0.30:
         return "rejected"
@@ -1971,8 +2014,15 @@ class EarcrateCore:
         bumps ENGINE_VERSION/ANALYZER_VERSION becomes detectable: the stored
         stamp no longer matches the running constants and the crate reads stale.
         """
-        profile = TASTE_PROFILES.get(taste_profile) or {}
+        profile = profile_contract(taste_profile)
+        identity = self.crate_projection_identity(taste_profile)
+        if identity["missing_atom_count"] or identity["extra_atom_count"]:
+            raise ValueError(
+                f"refusing to stamp {taste_profile}: "
+                f"{identity['missing_atom_count']} eligible loops unprojected, "
+                f"{identity['extra_atom_count']} atoms outside the eligible denominator")
         self.kv_set_json(self._crate_stamp_key(taste_profile), {
+            "crate_stamp_schema_version": CRATE_STAMP_SCHEMA_VERSION,
             "engine_version": ENGINE_VERSION,
             "analyzer_version": ANALYZER_VERSION,
             # A crate is current only under the CLASSIFICATION LAW and the exact
@@ -1984,8 +2034,76 @@ class EarcrateCore:
             "tastespec_id": profile.get("tastespec_id"),
             "tastespec_version": profile.get("tastespec_version"),
             "tastespec_hash": profile.get("tastespec_hash"),
+            # ...and only over the DENOMINATOR it actually covered. Without these
+            # a later scan could add, retire or re-generation an eligible loop and
+            # leave every version field untouched, so the crate would still read
+            # current over a library it no longer describes.
+            "eligible_loop_count": identity["eligible_loop_count"],
+            "eligible_loop_digest": identity["eligible_loop_digest"],
+            "measurement_count": identity["measurement_count"],
+            "measurement_digest": identity["measurement_digest"],
+            "profile_projection_count": identity["profile_projection_count"],
+            "profile_projection_digest": identity["profile_projection_digest"],
             "stamped_at": now_utc(),
         })
+
+    def crate_projection_identity(self, taste_profile: str,
+                                  db: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
+        """Re-derive what this crate covers, right now.
+
+        Three separate identities, because they answer three different questions.
+        The eligible digest says which loops the library currently offers; the
+        measurement digest says what the shared DSP found; the projection digest
+        says what THIS resident decided about it. A status-only change moves the
+        projection digest and leaves the measurement digest alone, which is what
+        makes "the judgment changed but the sound did not" a checkable claim.
+        """
+        db = db or self.conn()
+
+        def digest(sql: str, params: tuple = ()) -> tuple:
+            h = hashlib.sha256()
+            n = 0
+            for row in db.execute(sql, params):
+                h.update(("\x1f".join("" if v is None else str(v) for v in tuple(row))
+                          + "\x1e").encode("utf-8"))
+                n += 1
+            return h.hexdigest(), n
+
+        eligible_digest, eligible_count = digest(
+            """SELECT l.id, l.file_id, l.source_audio_sha256, l.source_audio_generation,
+                      f.audio_sha256, f.audio_generation
+                 FROM loops l JOIN files f ON f.id=l.file_id
+                WHERE l.status!='rejected' AND COALESCE(f.present,1)=1
+                  AND f.audio_sha256_scope='full' AND f.audio_sha256 IS NOT NULL
+                  AND COALESCE(l.source_audio_generation,0)=COALESCE(f.audio_generation,0)
+                  AND (l.source_audio_sha256=f.audio_sha256
+                       OR (l.source_audio_sha256 IS NULL AND COALESCE(f.audio_generation,0)=0))
+                ORDER BY l.id""")
+        measurement_digest, measurement_count = digest(
+            """SELECT loop_id, ear_role, render_role, metrics_json FROM ear_atoms
+                WHERE taste_profile=? ORDER BY loop_id""", (taste_profile,))
+        projection_digest, projection_count = digest(
+            """SELECT a.loop_id, a.status, a.ear_role, COALESCE(j.locked,0)
+                 FROM ear_atoms a
+                 LEFT JOIN atom_judgments j ON j.atom_id=a.id AND j.taste_profile=a.taste_profile
+                WHERE a.taste_profile=? ORDER BY a.loop_id""", (taste_profile,))
+
+        eligible_ids = {r["id"] for r in self._eligible_crate_rows(db)}
+        resident_ids = {r["loop_id"] for r in db.execute(
+            "SELECT loop_id FROM ear_atoms WHERE taste_profile=?", (taste_profile,)).fetchall()}
+        return {
+            "eligible_loop_count": eligible_count,
+            "eligible_loop_digest": eligible_digest,
+            "measurement_count": measurement_count,
+            "measurement_digest": measurement_digest,
+            "profile_projection_count": projection_count,
+            "profile_projection_digest": projection_digest,
+            # Both directions. Coverage was only ever checked one way, so a
+            # profile holding atoms OUTSIDE the current denominator still read
+            # complete.
+            "missing_atom_count": len(eligible_ids - resident_ids),
+            "extra_atom_count": len(resident_ids - eligible_ids),
+        }
 
     def crate_staleness(self, taste_profile: str = "girl_talk_v1",
                         db: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
@@ -2018,7 +2136,11 @@ class EarcrateCore:
                 reasons.append(
                     f"ear crate classified by policy {sp or '(none recorded)'} "
                     f"(running {CLASSIFICATION_POLICY_VERSION})")
-            profile = TASTE_PROFILES.get(taste_profile) or {}
+            try:
+                profile = profile_contract(taste_profile)
+            except UnknownProfileError as exc:
+                reasons.append(f"TasteSpec unusable: {exc}")
+                profile = {}
             for field, label in (("tastespec_id", "id"), ("tastespec_version", "version"),
                                  ("tastespec_hash", "hash")):
                 want = profile.get(field)
@@ -2026,6 +2148,24 @@ class EarcrateCore:
                 if want and got != want:
                     reasons.append(f"ear crate built against TasteSpec {label} "
                                    f"{got or '(none recorded)'} (running {want})")
+            # The denominator is re-derived, not remembered. A scan that adds,
+            # retires or re-generations an eligible loop changes nothing about the
+            # engine, analyzer, policy or contract, so without this the crate would
+            # keep reading current over a library it no longer describes.
+            if str(stamp.get("crate_stamp_schema_version") or "") != CRATE_STAMP_SCHEMA_VERSION:
+                reasons.append(
+                    f"crate stamp schema {stamp.get('crate_stamp_schema_version') or '(none recorded)'} "
+                    f"(running {CRATE_STAMP_SCHEMA_VERSION})")
+            else:
+                identity = self.crate_projection_identity(taste_profile, db=db)
+                if stamp.get("eligible_loop_digest") != identity["eligible_loop_digest"]:
+                    reasons.append(
+                        f"eligible loop denominator changed since stamping "
+                        f"({stamp.get('eligible_loop_count')} -> {identity['eligible_loop_count']} loops)")
+                if identity["missing_atom_count"]:
+                    reasons.append(f"{identity['missing_atom_count']} eligible loops are unprojected")
+                if identity["extra_atom_count"]:
+                    reasons.append(f"{identity['extra_atom_count']} atoms sit outside the eligible denominator")
         try:
             row = db.execute(
                 """SELECT COUNT(*) n, MIN(ft.analyzer_version) av FROM ear_atoms a
@@ -3349,6 +3489,12 @@ class EarcrateCore:
         """
         c = self.ensure_config()
         db = self.conn()
+        try:
+            profile_contract(taste_profile)
+        except UnknownProfileError as exc:
+            self.set_status("ear crate refused", 1.0, False, str(exc))
+            return {"ok": False, "error": str(exc), "stamped": False,
+                    "selected_eligible": 0, "processed": 0}
         self.set_status("TasteSpec: building ear crate", 0.0, True, None)
         _t_crate = time.perf_counter()
         # force now means RE-MEASURE IN PLACE, never delete: atom identity is
@@ -3618,6 +3764,11 @@ class EarcrateCore:
         current rows.
         """
         db = db or self.conn()
+        try:
+            profile_contract(donor_profile)
+        except UnknownProfileError as exc:
+            return {"donor_profile": donor_profile, "verified": False,
+                    "refusals": [str(exc)], "donor_atom_digest": None}
         eligible = self._eligible_crate_rows(db)
         eligible_ids = {r["id"] for r in eligible}
         staleness = self.crate_staleness(donor_profile, db=db)
@@ -3625,6 +3776,7 @@ class EarcrateCore:
         covered = {r["loop_id"] for r in db.execute(
             "SELECT loop_id FROM ear_atoms WHERE taste_profile=?", (donor_profile,)).fetchall()}
         missing = eligible_ids - covered
+        extra = covered - eligible_ids
         on_inactive = db.execute(
             """SELECT COUNT(*) n FROM ear_atoms a JOIN files f ON f.id=a.file_id
                 WHERE a.taste_profile=? AND COALESCE(f.present,0)=0""",
@@ -3655,6 +3807,10 @@ class EarcrateCore:
         if missing:
             refusals.append(f"donor covers {len(covered & eligible_ids)} of {len(eligible_ids)} eligible loops "
                             f"({len(missing)} missing)")
+        if extra:
+            # Coverage was only ever checked one way, so a donor still holding
+            # atoms for loops the library has since retired read as complete.
+            refusals.append(f"donor holds {len(extra)} atoms outside the eligible denominator")
         if on_inactive:
             refusals.append(f"donor holds {on_inactive} atoms on inactive sound")
         if on_stale_gen:
@@ -3668,6 +3824,7 @@ class EarcrateCore:
             "eligible_denominator": len(eligible_ids),
             "donor_covered_eligible": len(covered & eligible_ids),
             "donor_missing_eligible": len(missing),
+            "donor_extra_atoms": len(extra),
             "atoms_on_inactive_sound": on_inactive,
             "atoms_on_stale_generation": on_stale_gen,
             "donor_atom_digest": digest.hexdigest(),
@@ -3737,6 +3894,12 @@ class EarcrateCore:
         if taste_profile == donor_profile:
             return {"ok": False, "error": "a profile cannot be its own donor; "
                                           "use reproject_profile to reclassify in place"}
+        try:
+            profile_contract(taste_profile)
+            profile_contract(donor_profile)
+        except UnknownProfileError as exc:
+            return {"ok": False, "error": str(exc), "stamped": False,
+                    "donor_verification": {"verified": False, "refusals": [str(exc)]}}
         c = self.ensure_config()
         db = self.conn()
         self.set_status(f"TasteSpec: verifying donor {donor_profile}", 0.0, True, None)
@@ -3892,6 +4055,10 @@ class EarcrateCore:
         same stratified fresh-DSP comparison the donor path uses, before writing
         any new judgment.
         """
+        try:
+            profile_contract(taste_profile)
+        except UnknownProfileError as exc:
+            return {"ok": False, "error": str(exc), "stamped": False}
         c = self.ensure_config()
         db = self.conn()
         self.set_status(f"TasteSpec: reprojecting {taste_profile}", 0.0, True, None)
@@ -4187,7 +4354,23 @@ class EarcrateCore:
         # (keyed by edge id, ON DELETE CASCADE) survive every regraph. The old
         # delete-all + random ids erased judgments on rebuild — the exact
         # "automated rescoring erasing judgments" the constitution forbids.
-        db.execute("DELETE FROM compatibility_edges WHERE taste_profile=? AND id NOT LIKE 'edg_%'", (taste_profile,))
+        # Legacy nondeterministic rows predate the content-addressed edge id, so
+        # they can never appear in the desired set and are cleared here. Clearing
+        # them BLINDLY cascaded away any human pair judgment attached to one --
+        # the precise loss edge_state exists to prevent, left open on the only
+        # class of edge old enough to have been judged before the scheme existed.
+        # Classify first: judged legacy edges become historical, the rest go.
+        judged_now = {r["edge_id"] for r in db.execute(
+            "SELECT edge_id FROM pair_judgments WHERE taste_profile=?", (taste_profile,)).fetchall()}
+        legacy = [r["id"] for r in db.execute(
+            "SELECT id FROM compatibility_edges WHERE taste_profile=? AND id NOT LIKE 'edg_%'",
+            (taste_profile,)).fetchall()]
+        legacy_historical = sorted(set(legacy) & judged_now)
+        legacy_deleted = sorted(set(legacy) - judged_now)
+        for eid in legacy_historical:
+            db.execute("UPDATE compatibility_edges SET edge_state='historical' WHERE id=?", (eid,))
+        for chunk in (legacy_deleted[i:i+500] for i in range(0, len(legacy_deleted), 500)):
+            db.execute(f"DELETE FROM compatibility_edges WHERE id IN ({','.join('?' * len(chunk))})", chunk)
 
         # Compute the EXACT desired edge set for the current atoms first, then
         # reconcile the stored graph to it. Upserting alone made the active graph
@@ -4245,7 +4428,10 @@ class EarcrateCore:
                 "desired_edge_ids": len(desired), "active_edge_ids": len(final_active),
                 "active_minus_desired": len(final_active - set(desired)),
                 "desired_minus_active": len(set(desired) - final_active),
-                "retired_historical": len(retired_historical), "deleted_obsolete": len(deleted),
+                "retired_historical": len(retired_historical) + len(legacy_historical),
+                "deleted_obsolete": len(deleted) + len(legacy_deleted),
+                "legacy_retired_historical": len(legacy_historical),
+                "legacy_deleted": len(legacy_deleted),
                 "pair_judgments_preserved": len(judged_ids),
                 "render_bpm": render_bpm, "target_key": target_key,
                 "foreground": len(foreground), "beds": len(beds), "basses": len(basses),

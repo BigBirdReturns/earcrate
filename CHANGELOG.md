@@ -1,5 +1,40 @@
 # EarCrate — CHANGELOG
 
+## v0.8.32 — approval belongs to the resident, measurement belongs to the sound
+- Atom approval is now decided through the target profile's own TasteSpec.
+  `tastespec.schema.json` has always **required** `permitted_roles` and
+  `role_salience`, and the three shipped residents declare materially different
+  thresholds — girl_talk admits a vocal hook at intelligibility `0.45`, notorious
+  demands `0.60` while separately admitting a verse at `min_score 0.45`, and
+  troubadour relaxes the drum and bass floors to `0.40` for its minimal-layer
+  medley. None of it had any effect: `flat_profile` dropped both fields and
+  `classify_atom_status` took no profile at all, so one hardcoded table judged
+  every resident and the declared salience was dead configuration.
+- The split is now explicit. Shared across residents: `metrics_json`, `ear_role`,
+  `render_role`, source and loop identity. Resident-specific: approval status,
+  role-salience eligibility, graph, coverage and arrangement behaviour.
+  `ear_role` stays shared on purpose — it describes what the fragment *is*; the
+  profile decides whether that fragment is *useful*.
+- `ear_crate_file_worker` no longer classifies. It returns measured facts only,
+  and the caller classifies once it knows which resident it is writing. Preview
+  writing now gates on the `0.30` audibility floor rather than a resident's
+  approval, since a preview is a measured artifact.
+- The verified-donor refresh copies measurement authority only. A donor's
+  `status` is its own judgment under its own contract, so it is never copied and
+  never enters the measurement digest — which is now keyed on `loop_id` over
+  `(ear_role, render_role, metrics_json)`.
+- Crate stamps bind `classification_policy_version`, `tastespec_id`,
+  `tastespec_version` and `tastespec_hash`, and staleness checks all four. A
+  stamp predating the policy carries no such field and correctly reads stale:
+  keeping `v0831` after changing what approval means would have left the existing
+  crate looking current under semantics that never produced it.
+- New `reproject_profile`: reclassify a profile in place from its own existing
+  measurements when the law or a contract changes. It still re-proves those
+  measurements by stratified fresh DSP before writing any judgment, so the
+  54-minute full-library pass stays valid evidence for the measurement layer and
+  is not repeated to change a judgment.
+- ENGINE_VERSION: `earcrate_v0832`.
+
 ## v0.8.31 — force actually re-measures, and a partial rebuild stays stale
 - `build_ear_crate(force=True)` now bypasses cross-profile donor adoption. Force
   has always been documented as "re-measure in place", but the adoption phase ran

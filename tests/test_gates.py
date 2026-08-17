@@ -4555,3 +4555,156 @@ def test_verified_donor_refresh():
     after = core.refresh_profile_from_verified_donor("troubadour_v1", donor_profile="girl_talk_v1")
     assert after["ok"] is False, "a donor whose stamp went stale must be re-refused at refresh time"
     assert any("stale" in x or "stamp" in x for x in after["donor_verification"]["refusals"]), after
+
+
+def test_atom_approval_is_profile_aware():
+    """v0.8.32 gate: approval is decided through the target's own TasteSpec.
+
+    tastespec.schema.json has always REQUIRED permitted_roles and role_salience,
+    and the three shipped residents declare materially different vocal
+    intelligibility and floor/bass thresholds. But flat_profile dropped both
+    fields and classify_atom_status took no profile, so one hardcoded table judged
+    every resident and the declared salience was dead configuration. These are the
+    exact fragments on which the three contracts disagree.
+    """
+    from earcrate.app import classify_atom_status, TASTE_PROFILES
+
+    for p in ("girl_talk_v1", "notorious_v1", "troubadour_v1"):
+        prof = TASTE_PROFILES.get(p) or {}
+        assert prof.get("permitted_roles"), f"{p} lost permitted_roles in projection"
+        assert prof.get("role_salience"), f"{p} lost role_salience in projection"
+
+    def m(**kw):
+        base = {"score": 0.0, "intelligibility": 0.0, "floor_score": 0.0,
+                "bass_score": 0.0, "bed_score": 0.0}
+        base.update(kw)
+        return base
+
+    # girl_talk permits a vocal hook at intelligibility 0.45; notorious needs
+    # 0.60 and troubadour 0.55.
+    hook = m(score=0.55, intelligibility=0.50)
+    assert classify_atom_status("girl_talk_v1", "VOX_HOOK", hook) == "approved"
+    assert classify_atom_status("notorious_v1", "VOX_HOOK", hook) == "candidate"
+    assert classify_atom_status("troubadour_v1", "VOX_HOOK", hook) == "candidate"
+
+    # notorious deliberately admits verse-length foreground at min_score 0.45;
+    # the others fall back to 0.50 and decline it.
+    verse = m(score=0.47, intelligibility=0.65)
+    assert classify_atom_status("notorious_v1", "VOX_VERSE", verse) == "approved"
+    assert classify_atom_status("girl_talk_v1", "VOX_VERSE", verse) == "candidate"
+    assert classify_atom_status("troubadour_v1", "VOX_VERSE", verse) == "candidate"
+
+    # troubadour relaxes the drum floor to 0.40 for its minimal-layer medley.
+    drum = m(score=0.50, floor_score=0.44)
+    assert classify_atom_status("troubadour_v1", "DRUM_BREAK", drum) == "approved"
+    assert classify_atom_status("girl_talk_v1", "DRUM_BREAK", drum) == "candidate"
+    assert classify_atom_status("notorious_v1", "DRUM_BREAK", drum) == "candidate"
+
+    # A role outside permitted_roles is rejected outright, not merely unpreferred.
+    assert classify_atom_status("girl_talk_v1", "NOT_A_ROLE", m(score=0.99)) == "rejected"
+    # Unusable material stays rejected for everyone.
+    for p in ("girl_talk_v1", "notorious_v1", "troubadour_v1"):
+        assert classify_atom_status(p, "TEXTURE", m(score=0.29)) == "rejected"
+    # Rejection and insufficient salience remain distinct.
+    assert classify_atom_status("notorious_v1", "VOX_HOOK", m(score=0.55, intelligibility=0.10)) == "candidate"
+
+
+def test_crate_stamp_binds_classification_policy_and_tastespec():
+    """A crate is current only under the law and contract that produced it."""
+    import tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    from earcrate.app import CLASSIFICATION_POLICY_VERSION, TASTE_PROFILES
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(3):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+
+    stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    assert stamp["classification_policy_version"] == CLASSIFICATION_POLICY_VERSION, stamp
+    assert stamp["tastespec_hash"] == TASTE_PROFILES["girl_talk_v1"]["tastespec_hash"], stamp
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # A stamp predating the policy carries no such field, and must read stale.
+    core.kv_set_json("crate_stamp:girl_talk_v1", {
+        "engine_version": stamp["engine_version"], "analyzer_version": stamp["analyzer_version"],
+        "stamped_at": stamp["stamped_at"]})
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a pre-policy stamp must not read current"
+    assert "policy" in st["reason"], st["reason"]
+
+    # A changed TasteSpec hash makes its crate stale even at the same engine.
+    core.kv_set_json("crate_stamp:girl_talk_v1", dict(stamp, tastespec_hash="deadbeef"))
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True and "TasteSpec" in st["reason"], st["reason"]
+
+
+def test_reprojection_reclassifies_without_repeating_the_dsp():
+    """Changing the judgment must not require repeating the measurement."""
+    import tempfile, numpy as np, soundfile as sf
+    from unittest.mock import patch
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    for d in ("music", "work", "agent"):
+        (tmp / d).mkdir()
+    sr = 44100
+    for i in range(3):
+        t = np.arange(sr * 8) / sr
+        sf.write(str(tmp / "music" / f"s{i}.wav"),
+                 (0.3 * np.sin(2 * np.pi * (130 * (i + 2)) * t)).astype(np.float32), sr)
+    core = EarcrateCore()
+    core.configure({"master_root": str(tmp / "music"), "working_root": str(tmp / "work"),
+                    "agent_root": str(tmp / "agent"), "workers": 1, "analysis_seconds": 10})
+    core.scan()
+    with patch("earcrate.app.analyze_file_worker", side_effect=_fast_analysis_fixture):
+        core.analyze(force=True)
+    with patch.object(EarcrateCore, "score_loop", return_value=(0.8, "texture", 0.9)):
+        core.extract_loops(auto_approve=True, force=True)
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    db = core.conn()
+
+    def _atom_measurements():
+        return [tuple(r) for r in db.execute(
+            "SELECT loop_id, ear_role, render_role, metrics_json FROM ear_atoms "
+            "WHERE taste_profile='girl_talk_v1' ORDER BY loop_id")]
+
+    before = _atom_measurements()
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        r = core.reproject_profile("girl_talk_v1", strata_samples=6)
+    assert r["ok"] is True and r["stamped"] is True, r
+    assert r["processed"] == r["selected_eligible"] > 0, r
+    assert r["strata_compared"] > 0, "reprojection must re-prove the measurements it reuses"
+    assert _atom_measurements() == before, "reprojection changed a MEASUREMENT"
+
+    # Idempotent: a second reprojection changes no judgment.
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        again = core.reproject_profile("girl_talk_v1", strata_samples=6)
+    assert again["status_changes"] == 0, again
+    assert _atom_measurements() == before
+
+    # A measurement that no longer re-proves refuses the whole reprojection.
+    def _diverging(job):
+        out = _fast_crate_fixture(job)
+        for item in out["results"]:
+            item["metrics"] = dict(item["metrics"]); item["metrics"]["score"] = 0.111
+        return out
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_diverging):
+        bad = core.reproject_profile("girl_talk_v1", strata_samples=6)
+    assert bad["ok"] is False and bad["stamped"] is False and bad["divergences"], bad
+    assert _atom_measurements() == before

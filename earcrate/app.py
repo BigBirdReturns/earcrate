@@ -57,8 +57,14 @@ def album_readme_markdown(made: List[Dict[str, Any]], skipped: List[Dict[str, An
 
 def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
     """Measure every loop of ONE file (decode once, DSP per segment) in a worker
-    process. Metrics are persona-independent; classification uses the same
-    thresholds the serial path used. DB writes stay in the parent."""
+    process.
+
+    The worker returns MEASURED FACTS only: metrics, the semantic ear_role and
+    render_role, a preview path, and per-loop success or failure. It deliberately
+    does not classify. Approval is a resident's judgment made through that
+    resident's TasteSpec, and a worker that has no profile cannot make it -- the
+    caller does, once it knows which profile it is writing. DB writes stay in the
+    parent."""
     out: Dict[str, Any] = {"path": job["path"], "results": [], "error": None}
     sr = int(job["sample_rate"])
     try:
@@ -81,9 +87,12 @@ def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
             metrics = EarcrateCore.ear_atom_metrics(None, seg, sr, int(lp["bars"] or 1), float(lp["vocal_likelihood"] or 0.0), str(lp["role"] or "full"), recurrence)
             ear_role = EarcrateCore.ear_role_from_metrics(None, str(lp["role"] or "full"), int(lp["bars"] or 1), metrics)
             render_role = EAR_TO_RENDER_ROLE.get(ear_role, str(lp["role"] or "full"))
-            status = classify_atom_status(ear_role, metrics)
             preview_path = None
-            if job.get("write_previews") and status != "rejected" and seg.size > 512:
+            # A preview is a measured artifact, so it cannot depend on any one
+            # resident's approval. Gate it on the same floor that means "this is
+            # not usable material at all" rather than on a profile's taste.
+            audible = float(metrics.get("score") or 0.0) >= 0.30
+            if job.get("write_previews") and audible and seg.size > 512:
                 preview = apply_edge_fades(normalize_layer_rms(seg.copy(), render_role), sr, True, True, 20)
                 preview = integrated_lufs_normalize(preview, sr, -16.0)
                 fname = f"{safe_name(str(lp.get('artist') or 'unknown'))}-{safe_name(str(lp.get('title') or 'track'))}-{ear_role}-{str(lp['id'])[:8]}.wav"
@@ -91,23 +100,64 @@ def ear_crate_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
                 sf.write(str(pp), preview[:min(preview.size, sr * 12)], sr, subtype="PCM_16")
                 preview_path = str(pp)
             out["results"].append({"loop_id": lp["id"], "metrics": metrics, "ear_role": ear_role,
-                                   "render_role": render_role, "status": status, "preview_path": preview_path})
+                                   "render_role": render_role, "preview_path": preview_path})
         except Exception as exc:
             out["results"].append({"loop_id": lp["id"], "error": str(exc)[:300]})
     return out
 
 
-def classify_atom_status(ear_role: str, metrics: Dict[str, float]) -> str:
-    """Persona-facing approval thresholds (unchanged values from the serial pass)."""
-    min_score = 0.46
-    if ear_role in {"VOX_HOOK", "VOX_VERSE"}:
-        min_score = 0.50
-    elif ear_role in {"DRUM_BREAK", "BASS_RIFF", "BED_CHORD", "RIFF_ID"}:
-        min_score = 0.48
-    sc = float(metrics.get("score") or 0.0)
-    if sc < 0.30:
+# Bumping this makes every crate built under the previous classification law read
+# stale, independently of ENGINE_VERSION. What a "current" crate means changed
+# when approval became profile-aware, so the stamp has to carry the policy that
+# produced it, not just the engine that ran it.
+CLASSIFICATION_POLICY_VERSION = "atom_status_v2_profile_aware"
+
+# The fallback minima the single hardcoded table used, kept verbatim so a profile
+# that declares no salience for a role still lands exactly where it used to.
+_FALLBACK_MIN_SCORE = {
+    "VOX_HOOK": 0.50, "VOX_VERSE": 0.50,
+    "DRUM_BREAK": 0.48, "BASS_RIFF": 0.48, "BED_CHORD": 0.48, "RIFF_ID": 0.48,
+}
+_SALIENCE_METRIC = {
+    "min_score": "score",
+    "min_intelligibility": "intelligibility",
+    "min_floor_score": "floor_score",
+    "min_bass_score": "bass_score",
+    "min_bed_score": "bed_score",
+}
+
+
+def classify_atom_status(taste_profile: str, ear_role: str, metrics: Dict[str, float]) -> str:
+    """Decide whether THIS resident finds this fragment useful.
+
+    Measurement is persona-independent -- the metrics and the semantic ear_role
+    describe what the audio IS, and every resident shares them. Whether the
+    fragment is worth having is the resident's own call, and tastespec.schema.json
+    has always REQUIRED `permitted_roles` and `role_salience` for exactly that.
+    Until now neither reached the engine: this function took no profile at all and
+    applied one hardcoded table to everyone, so three residents declaring
+    materially different vocal intelligibility and floor/bass thresholds produced
+    byte-identical approval states.
+
+    Rejection and insufficient salience stay distinct. A permitted, audible
+    fragment that simply does not suit this resident is a `candidate`, not bad
+    material -- another resident may want it, and a later contract change may.
+    """
+    profile = TASTE_PROFILES.get(taste_profile) or {}
+    permitted = profile.get("permitted_roles") or []
+    if permitted and ear_role not in permitted:
         return "rejected"
-    return "approved" if sc >= min_score else "candidate"
+    if float(metrics.get("score") or 0.0) < 0.30:
+        return "rejected"
+    salience = (profile.get("role_salience") or {}).get(ear_role) or {}
+    thresholds = {"score": _FALLBACK_MIN_SCORE.get(ear_role, 0.46)}
+    for key, metric in _SALIENCE_METRIC.items():
+        if key in salience:
+            thresholds[metric] = float(salience[key])
+    for metric, minimum in thresholds.items():
+        if float(metrics.get(metric) or 0.0) < float(minimum):
+            return "candidate"
+    return "approved"
 
 
 class PlanRejectedError(RuntimeError):
@@ -1921,9 +1971,19 @@ class EarcrateCore:
         bumps ENGINE_VERSION/ANALYZER_VERSION becomes detectable: the stored
         stamp no longer matches the running constants and the crate reads stale.
         """
+        profile = TASTE_PROFILES.get(taste_profile) or {}
         self.kv_set_json(self._crate_stamp_key(taste_profile), {
             "engine_version": ENGINE_VERSION,
             "analyzer_version": ANALYZER_VERSION,
+            # A crate is current only under the CLASSIFICATION LAW and the exact
+            # TasteSpec that produced it. Approval became profile-aware, so an
+            # engine version alone can no longer say what a stamp means: a crate
+            # built under the old single-table law would otherwise read current
+            # under semantics that never produced it.
+            "classification_policy_version": CLASSIFICATION_POLICY_VERSION,
+            "tastespec_id": profile.get("tastespec_id"),
+            "tastespec_version": profile.get("tastespec_version"),
+            "tastespec_hash": profile.get("tastespec_hash"),
             "stamped_at": now_utc(),
         })
 
@@ -1950,6 +2010,22 @@ class EarcrateCore:
                 reasons.append(f"ear crate built by engine {se} (running {ENGINE_VERSION})")
             if sa and sa != ANALYZER_VERSION:
                 reasons.append(f"ear crate built by analyzer {sa} (running {ANALYZER_VERSION})")
+            # Approval is profile-aware, so a crate is only current under the
+            # classification law and the exact TasteSpec that produced it. A stamp
+            # predating the policy carries no field at all, which is itself stale.
+            sp = str(stamp.get("classification_policy_version") or "")
+            if sp != CLASSIFICATION_POLICY_VERSION:
+                reasons.append(
+                    f"ear crate classified by policy {sp or '(none recorded)'} "
+                    f"(running {CLASSIFICATION_POLICY_VERSION})")
+            profile = TASTE_PROFILES.get(taste_profile) or {}
+            for field, label in (("tastespec_id", "id"), ("tastespec_version", "version"),
+                                 ("tastespec_hash", "hash")):
+                want = profile.get(field)
+                got = stamp.get(field)
+                if want and got != want:
+                    reasons.append(f"ear crate built against TasteSpec {label} "
+                                   f"{got or '(none recorded)'} (running {want})")
         try:
             row = db.execute(
                 """SELECT COUNT(*) n, MIN(ft.analyzer_version) av FROM ear_atoms a
@@ -3407,7 +3483,8 @@ class EarcrateCore:
                     except Exception:
                         metrics = None
                 if metrics:
-                    status = classify_atom_status(str(donor["ear_role"]), metrics)
+                    # Measurement is shared; the judgment is this profile's own.
+                    status = classify_atom_status(taste_profile, str(donor["ear_role"]), metrics)
                     _upsert_atom(r, metrics, str(donor["ear_role"]), str(donor["render_role"]), status, donor["preview_path"])
                     adopted += 1
                     if idx % 64 == 0:
@@ -3446,7 +3523,10 @@ class EarcrateCore:
                 if item.get("error"):
                     failed.append({"loop_id": str(item.get("loop_id")), "error": str(item["error"])[:300]})
                     continue
-                _upsert_atom(lr, item["metrics"], item["ear_role"], item["render_role"], item["status"], item.get("preview_path"))
+                # The worker measured; this profile classifies.
+                _upsert_atom(lr, item["metrics"], item["ear_role"], item["render_role"],
+                             classify_atom_status(taste_profile, str(item["ear_role"]), item["metrics"]),
+                             item.get("preview_path"))
             db.commit()
             _left = (time.perf_counter() - _t_dsp) / max(1, done_files) * (len(jobs) - done_files)
             self.set_status(f"TasteSpec: ear-crating file {done_files}/{len(jobs)} \u00d7{workers} cores \u00b7 ~{int(_left // 60)}m{int(_left % 60):02d}s left",
@@ -3555,10 +3635,14 @@ class EarcrateCore:
                 WHERE a.taste_profile=? AND l.source_audio_generation IS NOT NULL
                   AND l.source_audio_generation != f.audio_generation""",
             (donor_profile,)).fetchone()["n"]
+        # MEASUREMENT authority only. `status` is the donor's judgment under the
+        # donor's TasteSpec, not a measured property of the sound, so it is
+        # excluded: a donor re-classified under a changed contract must not look
+        # like a different measurement, and a target must never inherit it.
         digest = hashlib.sha256()
         for row in db.execute(
-                """SELECT id, loop_id, ear_role, render_role, status, metrics_json
-                     FROM ear_atoms WHERE taste_profile=? ORDER BY id""", (donor_profile,)):
+                """SELECT loop_id, ear_role, render_role, metrics_json
+                     FROM ear_atoms WHERE taste_profile=? ORDER BY loop_id""", (donor_profile,)):
             digest.update(("\x1f".join("" if v is None else str(v) for v in tuple(row)) + "\x1e").encode("utf-8"))
 
         refusals: List[str] = []
@@ -3651,7 +3735,8 @@ class EarcrateCore:
         skipped.
         """
         if taste_profile == donor_profile:
-            return {"ok": False, "error": "a profile cannot be its own donor"}
+            return {"ok": False, "error": "a profile cannot be its own donor; "
+                                          "use reproject_profile to reclassify in place"}
         c = self.ensure_config()
         db = self.conn()
         self.set_status(f"TasteSpec: verifying donor {donor_profile}", 0.0, True, None)
@@ -3741,8 +3826,11 @@ class EarcrateCore:
             if not src or not metrics:
                 failed.append({"loop_id": str(lr["id"]), "error": "donor has no measurement for this loop"})
                 continue
+            # Only profile-neutral measurement authority comes from the donor.
+            # The donor's own status is a judgment made under the DONOR's
+            # TasteSpec and must never be copied; the target judges for itself.
             ear_role, render_role = str(src["ear_role"]), str(src["render_role"])
-            status = classify_atom_status(ear_role, metrics)
+            status = classify_atom_status(taste_profile, ear_role, metrics)
             existing = db.execute("SELECT id, ear_role, status FROM ear_atoms WHERE loop_id=? AND taste_profile=?",
                                   (lr["id"], taste_profile)).fetchone()
             aid = existing["id"] if existing else ("atm_" + sha256_text(f"{lr['id']}|{taste_profile}")[:20])
@@ -3790,6 +3878,126 @@ class EarcrateCore:
                 "selected_eligible": selected_eligible, "processed": len(processed),
                 "stamped": complete, "inserted": inserted, "updated": updated,
                 "role_counts": counts, "failed_count": len(failed), "failed": failed[:50]}
+
+    def reproject_profile(self, taste_profile: str, strata_samples: int = 24) -> Dict[str, Any]:
+        """Reclassify a profile in place under its own current TasteSpec.
+
+        When the classification law or a TasteSpec changes, the MEASUREMENTS are
+        still good -- the audio did not move. Only the judgment made about them is
+        out of date. This reprojects a profile's own existing measurements rather
+        than repeating the DSP: the 54-minute pass that produced them stays valid
+        evidence for the measurement layer.
+
+        It still proves the measurements are the ones it thinks they are, with the
+        same stratified fresh-DSP comparison the donor path uses, before writing
+        any new judgment.
+        """
+        c = self.ensure_config()
+        db = self.conn()
+        self.set_status(f"TasteSpec: reprojecting {taste_profile}", 0.0, True, None)
+
+        rows = self._eligible_crate_rows(db)
+        selected_eligible = len(rows)
+        held = {r["loop_id"]: r for r in db.execute(
+            """SELECT loop_id, id, ear_role, render_role, preview_path, metrics_json
+                 FROM ear_atoms WHERE taste_profile=?""", (taste_profile,)).fetchall()}
+        metrics_by_loop: Dict[str, Dict[str, Any]] = {}
+        for lid, r in held.items():
+            try:
+                metrics_by_loop[lid] = json.loads(r["metrics_json"] or "{}") or {}
+            except Exception:
+                metrics_by_loop[lid] = {}
+        missing = [r["id"] for r in rows if r["id"] not in held]
+        if missing:
+            self.set_status("reprojection refused: incomplete measurement set", 1.0, False)
+            return {"ok": False, "error": "profile does not cover the eligible denominator",
+                    "stamped": False, "selected_eligible": selected_eligible,
+                    "missing_measurements": len(missing)}
+
+        measurement_digest = hashlib.sha256()
+        for row in db.execute(
+                """SELECT loop_id, ear_role, render_role, metrics_json
+                     FROM ear_atoms WHERE taste_profile=? ORDER BY loop_id""", (taste_profile,)):
+            measurement_digest.update(
+                ("\x1f".join("" if v is None else str(v) for v in tuple(row)) + "\x1e").encode("utf-8"))
+
+        sample = self._stratified_sample(rows, metrics_by_loop, max(1, int(strata_samples)))
+        sample_ids = {r["id"] for r in sample}
+        sample_paths = {str(r["path"]) for r in sample}
+        by_path: Dict[str, List[Any]] = {}
+        for r in rows:
+            p = str(r["path"])
+            if p in sample_paths:
+                by_path.setdefault(p, []).append(r)
+        compared = 0
+        divergences: List[Dict[str, str]] = []
+        for n, (path, lst) in enumerate(by_path.items()):
+            self.set_status(f"TasteSpec: measurement re-proof {n+1}/{len(by_path)}",
+                            (n + 1) / max(1, len(by_path)) * 0.15, True)
+            res = ear_crate_file_worker({
+                "path": path, "sample_rate": c.sample_rate, "write_previews": False,
+                "preview_dir": str(c.working_root / "ear_crate" / "previews"),
+                "loops": [{"id": r["id"], "start_s": float(r["start_s"]), "end_s": float(r["end_s"]),
+                           "bars": int(r["bars"] or 1), "role": str(r["role"] or "full"),
+                           "vocal_likelihood": float(r["vocal_likelihood"] or 0.0),
+                           "artist": r["artist"], "title": r["title"]} for r in lst]})
+            if res.get("error"):
+                divergences.append({"path": path, "error": str(res["error"])[:200]})
+                continue
+            for item in res.get("results") or []:
+                lid = item.get("loop_id")
+                if lid not in sample_ids or item.get("error"):
+                    if lid in sample_ids:
+                        divergences.append({"loop_id": str(lid), "error": str(item.get("error"))[:200]})
+                    continue
+                compared += 1
+                fresh = json.dumps(item.get("metrics") or {}, sort_keys=True, ensure_ascii=False)
+                stored = json.dumps(metrics_by_loop.get(lid) or {}, sort_keys=True, ensure_ascii=False)
+                if fresh != stored:
+                    divergences.append({"loop_id": str(lid), "field": "metrics",
+                                        "fresh": fresh[:200], "stored": stored[:200]})
+        if divergences or compared == 0:
+            self.set_status("reprojection refused: measurements did not re-prove", 1.0, False)
+            return {"ok": False, "error": "measurement re-proof failed", "stamped": False,
+                    "strata_compared": compared, "divergences": divergences[:20]}
+
+        locked_ids = {row["atom_id"] for row in db.execute(
+            "SELECT atom_id FROM atom_judgments WHERE taste_profile=? AND locked=1",
+            (taste_profile,)).fetchall()}
+        changed = 0
+        processed: set = set()
+        for idx, lr in enumerate(rows):
+            src = held[lr["id"]]
+            metrics = metrics_by_loop.get(lr["id"]) or {}
+            ear_role = str(src["ear_role"])
+            status = classify_atom_status(taste_profile, ear_role, metrics)
+            if src["id"] in locked_ids:
+                processed.add(lr["id"])
+                continue
+            cur = db.execute("SELECT status FROM ear_atoms WHERE id=?", (src["id"],)).fetchone()
+            if cur is not None and str(cur["status"]) != status:
+                db.execute("UPDATE ear_atoms SET status=? WHERE id=?", (status, src["id"]))
+                changed += 1
+            processed.add(lr["id"])
+            if idx % 2048 == 0:
+                db.commit()
+                self.set_status(f"TasteSpec: reclassifying {idx+1}/{selected_eligible}",
+                                0.15 + 0.8 * (idx + 1) / max(1, selected_eligible), True)
+        db.commit()
+
+        complete = len(processed) == selected_eligible
+        if complete:
+            self.stamp_crate_versions(taste_profile)
+        self.set_status(f"TasteSpec reprojection complete: {changed} status changes", 1.0, False)
+        by_status = {r["status"]: r["n"] for r in db.execute(
+            "SELECT status, COUNT(*) n FROM ear_atoms WHERE taste_profile=? GROUP BY status",
+            (taste_profile,)).fetchall()}
+        return {"ok": True, "taste_profile": taste_profile,
+                "selected_eligible": selected_eligible, "processed": len(processed),
+                "status_changes": changed, "status_counts": by_status,
+                "measurement_digest": measurement_digest.hexdigest(),
+                "strata_requested": len(sample), "strata_compared": compared,
+                "locked_preserved": len(locked_ids), "stamped": complete}
 
     def list_ear_atoms(self, status: str = "approved", taste_profile: str = "girl_talk_v1", limit: int = 500) -> Dict[str, Any]:
         status_filter = ""

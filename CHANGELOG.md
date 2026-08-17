@@ -1,5 +1,49 @@
 # EarCrate — CHANGELOG
 
+## v0.8.34 — a stamp may not outlive the object it identifies
+- `crate_staleness` now compares **every** identity the stamp stores. v0.8.33
+  recorded the eligible-loop, measurement and projection counts and digests but
+  compared only the eligible digest and the missing/extra atom counts, so a
+  same-version force rebuild, donor refresh or reprojection could commit new atom
+  metrics, roles or statuses, fail before restamping, leave the denominator
+  untouched — and the superseded stamp still read current over a measurement and
+  a resident judgment that had already moved. The stored measurement and
+  projection digests were recorded evidence, not an enforced predicate.
+- A **missing** stamp is now stale for any materialized profile. A profile
+  holding atoms with no stamp at all could return `crate_stale: false` while
+  carrying no engine, analyzer, policy, TasteSpec, denominator, measurement or
+  projection authority whatsoever — the same failure as an outlived stamp,
+  reached by omission.
+- The measurement digest is now keyed on the **canonical** `metrics_json`
+  (parsed, sorted keys, fixed separators), not the stored text. Every writer
+  serializes with no key-order guarantee, so hashing bytes gave one measurement
+  two identities and a harmless respelling could report a false change. The stamp
+  also carries a `measurement_text_digest`, which is never a currency criterion:
+  it lets the continuously-polled staleness check prove the bytes are unmoved
+  without re-parsing every metrics object in the library (~20x cheaper at 66k
+  loops), and any byte change falls through to the canonical comparison.
+- The projection digest binds what the resident actually decided: taste profile,
+  **atom id**, loop id, effective ear role, status, locked flag, and the
+  judgment's own status and relabel role. Keyed on loop, role, status and a
+  locked flag alone, an atom rewritten to a different identity under the same
+  loop moved nothing, and a locked human judgment could be re-statused or
+  re-labelled while the digest claiming to identify that decision stood still.
+- An authorized atom judgment on an otherwise-current crate now **renews** the
+  stamp. The projection identity includes human-authorized state, so a judgment
+  genuinely moves what the stamp describes; renewing keeps the enforcement exact
+  without letting the review surface brick rendering. A judgment on an
+  already-stale crate renews nothing — staleness there has a cause the judgment
+  did not fix.
+- One definition of the measurement digest, shared by the stamp, reprojection and
+  donor verification. Three private copies could verify a donor under one identity
+  and stamp it under another.
+- ENGINE_VERSION: `earcrate_v0834`, stamp schema `crate_stamp_v3_full_identity`.
+  The v0833 stamps are stale by construction: they do not enforce the measurement
+  and projection identities they store. The profiles are re-stamped by fast
+  reprojection and verified-donor refresh; no second DSP pass is required, and the
+  v0833 qualification stands as valid evidence that the live denominator,
+  measurements, projections and graphs were coherent at that point.
+
 ## v0.8.33 — a crate is current only over the denominator it covered
 - Crate stamps now bind the eligible-loop, shared-measurement and
   resident-projection identities (counts and digests) under a new

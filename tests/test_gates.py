@@ -4874,6 +4874,167 @@ def test_crate_stamp_binds_the_eligible_denominator():
     assert st["crate_stale"] is True, "a grown denominator must make the crate stale"
 
 
+def test_crate_stamp_enforces_every_stored_identity():
+    """v0.8.34 gate: a stamp may not outlive the object it identifies.
+
+    v0.8.33 STORED the eligible-loop, measurement and projection identities and
+    then compared only the eligible one. So a same-version force rebuild, donor
+    refresh or reprojection could commit new atom metrics, roles or statuses and
+    fail before restamping, leave the denominator untouched, and the superseded
+    stamp still read current over a measurement and a resident judgment that had
+    already moved -- currency outliving the object it describes, which is the
+    exact defect class the stamp exists to refuse.
+
+    The projection identity also bound too little: keyed on loop, role, status and
+    a locked flag, an atom rewritten to a different identity under the same loop
+    moved nothing, and a locked human judgment could be re-statused or re-labelled
+    without moving the digest that claims to identify this resident's decision.
+    """
+    import json, tempfile
+    from unittest.mock import patch
+    core, tmp = _projection_fixture(tempfile.mkdtemp())
+    db = core.conn()
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_fast_crate_fixture):
+        core.reproject_profile("girl_talk_v1", strata_samples=4)
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+    base = core.crate_projection_identity("girl_talk_v1")
+    stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    assert stamp["crate_stamp_schema_version"] == "crate_stamp_v3_full_identity", stamp
+    for field in ("measurement_count", "measurement_digest", "measurement_text_digest",
+                  "profile_projection_count", "profile_projection_digest"):
+        assert stamp[field] == base[field], f"stamp did not record {field} as derived"
+
+    # The UI polls staleness continuously over the whole library, so an unmoved
+    # measurement set must be proved unmoved by its bytes, not re-parsed row by row.
+    with patch("earcrate.app.canonical_metrics_json",
+               side_effect=AssertionError("re-parsed a provably unmoved measurement set")):
+        assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- a MISSING stamp is stale for any materialized profile ----------------
+    db.execute("DELETE FROM kv WHERE key='crate_stamp:girl_talk_v1'"); db.commit()
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a materialized profile with no stamp read current"
+    assert "no crate stamp" in st["reason"], st["reason"]
+    assert core.taste_readiness("girl_talk_v1")["crate_stale"] is True
+    core.kv_set_json("crate_stamp:girl_talk_v1", stamp)
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    victim = db.execute("SELECT id, loop_id, status, metrics_json FROM ear_atoms "
+                        "WHERE taste_profile='girl_talk_v1' ORDER BY loop_id LIMIT 1").fetchone()
+
+    # --- a METRICS-only mutation moves the measurement identity --------------
+    bumped = json.loads(victim["metrics_json"])
+    bumped["score"] = float(bumped.get("score") or 0.0) + 0.01
+    db.execute("UPDATE ear_atoms SET metrics_json=? WHERE id=?",
+               (json.dumps(bumped, ensure_ascii=False), victim["id"])); db.commit()
+    moved = core.crate_projection_identity("girl_talk_v1")
+    assert moved["measurement_digest"] != base["measurement_digest"]
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a changed MEASUREMENT left the stamp reading current"
+    assert "measurement" in st["reason"], st["reason"]
+    db.execute("UPDATE ear_atoms SET metrics_json=? WHERE id=?",
+               (victim["metrics_json"], victim["id"])); db.commit()
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False, \
+        "restoring the measurement must restore currentness"
+
+    # --- a STATUS-only mutation moves the projection and NOT the measurement --
+    flipped = "candidate" if victim["status"] != "candidate" else "approved"
+    db.execute("UPDATE ear_atoms SET status=? WHERE id=?", (flipped, victim["id"])); db.commit()
+    moved = core.crate_projection_identity("girl_talk_v1")
+    assert moved["measurement_digest"] == base["measurement_digest"], \
+        "a status change moved the MEASUREMENT digest"
+    assert moved["profile_projection_digest"] != base["profile_projection_digest"]
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, "a changed resident PROJECTION left the stamp reading current"
+    assert "projection" in st["reason"], st["reason"]
+    db.execute("UPDATE ear_atoms SET status=? WHERE id=?", (victim["status"], victim["id"])); db.commit()
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- an ATOM-ID substitution under the same loop, role and status ---------
+    db.execute("UPDATE ear_atoms SET id='atm_substituted_identity' WHERE id=?", (victim["id"],))
+    db.commit()
+    swapped = core.crate_projection_identity("girl_talk_v1")
+    assert swapped["measurement_digest"] == base["measurement_digest"], \
+        "an id substitution moved the MEASUREMENT digest"
+    assert swapped["profile_projection_digest"] != base["profile_projection_digest"], \
+        "an atom rewritten to a different identity moved no projection digest"
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is True
+    db.execute("UPDATE ear_atoms SET id=? WHERE id='atm_substituted_identity'", (victim["id"],))
+    db.commit()
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- a LOCKED human judgment is part of the resident projection -----------
+    # An authorized judgment on an otherwise-current crate renews the claim...
+    r = core.set_atom_judgment(victim["id"], "girl_talk_v1", "approved", "VOX_HOOK",
+                               False, True, "human call")
+    assert r["ok"] and r["crate_restamped"] is True, r
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False, \
+        "an authorized judgment on a current crate must renew, not brick, the claim"
+    judged = core.crate_projection_identity("girl_talk_v1")
+    assert judged["profile_projection_digest"] != base["profile_projection_digest"]
+
+    # ...but the judgment moving behind the runtime's back is stale.
+    for column, value in (("status", "rejected"), ("relabel_role", "VOX_VERSE"), ("locked", 0)):
+        held = db.execute("SELECT status, relabel_role, locked FROM atom_judgments "
+                          "WHERE atom_id=? AND taste_profile='girl_talk_v1'",
+                          (victim["id"],)).fetchone()[column]
+        db.execute(f"UPDATE atom_judgments SET {column}=? WHERE atom_id=? AND taste_profile=?",
+                   (value, victim["id"], "girl_talk_v1")); db.commit()
+        after = core.crate_projection_identity("girl_talk_v1")
+        assert after["profile_projection_digest"] != judged["profile_projection_digest"], \
+            f"a locked judgment {column} change moved no projection digest"
+        assert after["measurement_digest"] == judged["measurement_digest"], \
+            f"a judgment {column} change moved the MEASUREMENT digest"
+        assert core.crate_staleness("girl_talk_v1")["crate_stale"] is True, \
+            f"a locked judgment {column} change left the crate current"
+        db.execute(f"UPDATE atom_judgments SET {column}=? WHERE atom_id=? AND taste_profile=?",
+                   (held, victim["id"], "girl_talk_v1")); db.commit()
+        assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False
+
+    # --- a KEY-ORDER / WHITESPACE-only rewrite is not a measurement change ----
+    current = core.crate_projection_identity("girl_talk_v1")
+    row = db.execute("SELECT id, metrics_json FROM ear_atoms WHERE taste_profile='girl_talk_v1' "
+                     "ORDER BY loop_id LIMIT 1").fetchone()
+    parsed = json.loads(row["metrics_json"])
+    rewritten = json.dumps({k: parsed[k] for k in reversed(list(parsed))}, indent=4)
+    assert rewritten != row["metrics_json"], "the rewrite must differ as TEXT to prove anything"
+    db.execute("UPDATE ear_atoms SET metrics_json=? WHERE id=?", (rewritten, row["id"])); db.commit()
+    respelled = core.crate_projection_identity("girl_talk_v1")
+    assert respelled["measurement_digest"] == current["measurement_digest"], \
+        "the same measurement acquired a second identity"
+    assert respelled["measurement_text_digest"] != current["measurement_text_digest"], \
+        "the byte digest must see the rewrite, or it proves nothing when it matches"
+    assert core.crate_staleness("girl_talk_v1")["crate_stale"] is False, \
+        "re-spelling metrics_json made a current crate stale"
+
+    # --- a same-version PARTIAL rebuild that fails cannot stay current --------
+    before_stamp = core.kv_get_json("crate_stamp:girl_talk_v1")
+    seen: list = []
+
+    def _one_file_then_fail(job):
+        seen.append(job["path"])
+        if len(seen) > 1:
+            return {"path": job["path"], "error": "simulated mid-rebuild failure", "results": []}
+        out = _fast_crate_fixture(job)
+        for item in out["results"]:
+            item["metrics"] = dict(item["metrics"]); item["metrics"]["score"] = 0.61
+        return out
+
+    with patch("earcrate.app.ear_crate_file_worker", side_effect=_one_file_then_fail):
+        partial = core.build_ear_crate(taste_profile="girl_talk_v1", force=True)
+    assert partial["stamped"] is False and partial["failed_count"] > 0, partial
+    assert core.kv_get_json("crate_stamp:girl_talk_v1") == before_stamp, \
+        "a failed rebuild rewrote the stamp"
+    assert db.execute("SELECT COUNT(*) n FROM ear_atoms WHERE taste_profile='girl_talk_v1' "
+                      "AND metrics_json LIKE '%0.61%'").fetchone()["n"] > 0, \
+        "the partial rebuild committed no atom, so it witnesses nothing"
+    st = core.crate_staleness("girl_talk_v1")
+    assert st["crate_stale"] is True, \
+        "a stamp survived a partial rebuild that changed the measurement it identifies"
+    assert "measurement" in st["reason"], st["reason"]
+
+
 def test_graph_rebuild_preserves_a_judged_legacy_edge():
     """v0.8.33 gate: the pre-edg_ delete must not cascade a human judgment away.
 

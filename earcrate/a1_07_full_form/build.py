@@ -21,6 +21,7 @@ from ..a1_07_gold_v8.review import measure_loudness
 from .bindings import index_custody, materialize_from_archive, rebind
 from .contract import FullFormError, law
 from .peaks import peak_conditions
+from .provenance import adapter_tree_digest
 from .score import build_full_form_score, clip_duration
 
 ADAPTER_ID = "a1-07-full-form-v1"
@@ -348,6 +349,8 @@ def build(
         "descent_id": contract["descent_id"],
         "contract_sha256": contract["contract_sha256"],
         "earcrate_git_head": c.current_git_head(repo_root),
+        # The head is context; this digest is the predicate. See provenance.py.
+        "adapter_tree": adapter_tree_digest(repo_root),
         "renderer_identity": renderer_identity,
         "timeline": {"sample_rate": rate, "channels": channels},
         "form": contract["form"],

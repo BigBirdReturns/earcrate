@@ -1,5 +1,25 @@
 # EarCrate — CHANGELOG
 
+## unversioned — provenance binds to code, not to a commit counter
+
+- **The exact-head check was too coarse in one direction and too weak in the
+  other.** Requiring an identical head SHA meant any later commit that could not
+  possibly touch the audio — a changelog line, a packaging fix, the sealed owner
+  verdict itself — invalidated a render and demanded a re-render to re-prove
+  something never in doubt. An equal SHA also said nothing about whether the
+  checkout was dirty when the render ran. The manifest now records a digest over
+  exactly the file set that can change a rendered candidate (`a1_07_full_form`,
+  `a1_07_gold_v8`, `reference_zero.py`, the descent contract and the two entry
+  points), and the preflight recomputes and compares it. The head SHA is retained
+  as context. A gate asserts the digest covers what can change audio and excludes
+  what cannot.
+- `MANIFEST.sha256` and `REVIEW.txt` in the blind bundle are now written as UTF-8
+  **without a BOM**. Windows PowerShell's `-Encoding utf8` emits one, and a BOM
+  ahead of the first digest makes a generic `sha256sum -c` warn on line 1 — which
+  reads as a failed verification of the very first file in the bundle.
+  `sha256sum -c` now exits 0 cleanly. The already-reviewed bundle keeps its
+  original bytes, because the sealed verdict is bound to that digest.
+
 ## unversioned — A1-07 gets a form, and the preflight stops asserting its own answer
 
 > `ENGINE_VERSION` deliberately stays `earcrate_v0834`. Nothing here touches the

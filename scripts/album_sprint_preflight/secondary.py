@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 from typing import Any, Mapping
 
 from .common import (
@@ -155,6 +156,19 @@ def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) 
     head = current_git_head()
     clean = worktree_is_clean()
     executed_head = str(manifest.get("earcrate_git_head") or "")
+
+    # Bind the receipt to the CODE that produced it, not to the commit counter. A
+    # later commit that cannot touch the audio -- a changelog line, a packaging
+    # fix, the sealed verdict itself -- must not invalidate a render, and an equal
+    # head SHA must not excuse a dirty checkout. See a1_07_full_form/provenance.py.
+    declared_tree = str((manifest.get("adapter_tree") or {}).get("digest") or "")
+    observed_tree = ""
+    try:
+        sys.path.insert(0, str(ROOT))
+        from earcrate.a1_07_full_form.provenance import adapter_tree_digest
+        observed_tree = str(adapter_tree_digest(ROOT)["digest"])
+    except Exception:
+        observed_tree = ""
     gate = manifest.get("machine_gate") or {}
     qualified_rows = [row for row in gate.get("per_candidate") or [] if row.get("qualified")]
     durations = [float(row.get("duration_seconds") or 0.0) for row in manifest.get("candidates") or []]
@@ -167,12 +181,17 @@ def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) 
     if manifest:
         if str(manifest.get("contract_sha256") or "") != str(contract.get("contract_sha256") or ""):
             invocation_errors.append("manifest was produced against a different contract")
-        if head and executed_head != head:
+        if not declared_tree:
+            invocation_errors.append("manifest records no adapter tree digest")
+        elif not observed_tree:
+            invocation_errors.append("cannot recompute the adapter tree digest")
+        elif declared_tree != observed_tree:
             invocation_errors.append(
-                f"manifest records head {executed_head[:12] or '<none>'}, repository is at {head[:12]}")
-        elif clean is False:
+                f"adapter code changed since the render: manifest {declared_tree[:12]}, "
+                f"working tree {observed_tree[:12]}")
+        if clean is False:
             invocation_errors.append(
-                "the checkout is dirty, so the recorded head does not identify the code that ran")
+                "the checkout is dirty, so the recorded provenance does not identify the code that ran")
         if not in_window:
             invocation_errors.append(f"executed durations are outside {low}-{high} s")
         if not reproduced:
@@ -199,7 +218,13 @@ def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) 
         "executed_durations_seconds": durations,
         "executed_at_git_head": executed_head or None,
         "repository_git_head": head,
-        "exact_head_execution": bool(head and executed_head == head and clean),
+        "adapter_code_unchanged_since_render": bool(
+            declared_tree and observed_tree and declared_tree == observed_tree),
+        "adapter_tree_digest_declared": declared_tree or None,
+        "adapter_tree_digest_observed": observed_tree or None,
+        "exact_head_execution": bool(
+            declared_tree and declared_tree == observed_tree and clean),
+        "head_advanced_since_render": bool(head and executed_head and executed_head != head),
         "worktree_clean": clean,
         "qualified_candidate_count": len(qualified_rows),
         "frontier_admissible": bool(gate.get("frontier_admissible")),

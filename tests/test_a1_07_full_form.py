@@ -207,6 +207,25 @@ def test_review_labels_are_permuted_under_a_private_nonce():
     assert first != second, "a different nonce must yield a different permutation"
 
 
+def test_adapter_tree_digest_covers_everything_that_can_change_the_audio():
+    """Provenance must bind to the render-affecting code, not to a commit counter."""
+    from earcrate.a1_07_full_form.provenance import ADAPTER_PATHS, adapter_tree_digest
+
+    for entry in ("earcrate/a1_07_full_form", "earcrate/a1_07_gold_v8",
+                  "earcrate/reference_zero.py",
+                  "configs/album_one/a1-07/full-form-v1.v1.json"):
+        assert entry in ADAPTER_PATHS, f"{entry} can change a render but is not covered"
+    # A file that cannot change the audio must NOT be covered, or every unrelated
+    # edit would force a re-render to re-prove something it could not have touched.
+    for entry in ("CHANGELOG.md", "scripts/BUILD_A1_07_BLIND_BUNDLE.ps1",
+                  "scripts/album_sprint_preflight/secondary.py"):
+        assert entry not in ADAPTER_PATHS, f"{entry} cannot change a render; do not gate on it"
+
+    first = adapter_tree_digest(ROOT)
+    assert first["member_count"] > 0
+    assert first["digest"] == adapter_tree_digest(ROOT)["digest"], "digest must be stable"
+
+
 def test_full_form_adapter_surface_exists():
     for relative in ("scripts/RUN_A1_07_FULL_FORM_V1.ps1",
                      "scripts/earcrate_a1_07_full_form_v1.py",

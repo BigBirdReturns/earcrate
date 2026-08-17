@@ -65,13 +65,22 @@ $lines += @(
     'A tie is a real answer, and reject_all closes this timing family rather than',
     'inviting another nearby specimen.'
 )
-$lines | Set-Content -LiteralPath (Join-Path $Output 'REVIEW.txt') -Encoding utf8
+[System.IO.File]::WriteAllText(
+    (Join-Path $Output 'REVIEW.txt'),
+    (($lines -join "`n") + "`n"),
+    (New-Object System.Text.UTF8Encoding($false)))
 
 # MANIFEST.sha256 over exactly what ships.
 $manifest = Get-ChildItem -LiteralPath $Output -File | Sort-Object Name | ForEach-Object {
     "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower()) *$($_.Name)"
 }
-$manifest | Set-Content -LiteralPath (Join-Path $Output 'MANIFEST.sha256') -Encoding utf8
+# ASCII, LF, no BOM. Windows PowerShell's `-Encoding utf8` writes a BOM, and a BOM
+# ahead of the first digest makes a generic `sha256sum -c` warn on line 1 -- which
+# looks like a failed verification on the very first file in the bundle.
+[System.IO.File]::WriteAllText(
+    (Join-Path $Output 'MANIFEST.sha256'),
+    (($manifest -join "`n") + "`n"),
+    (New-Object System.Text.UTF8Encoding($false)))
 
 # Refuse to ship anything that could decode the blind.
 $allowed = @('A.flac', 'B.flac', 'C.flac', 'INCUMBENT.flac', 'REVIEW.txt', 'CUT_NOTES.txt', 'MANIFEST.sha256')

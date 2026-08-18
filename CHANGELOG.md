@@ -1,5 +1,57 @@
 # EarCrate — CHANGELOG
 
+## unversioned — the evidence spine comes out; the musical abstractions stay in
+
+> Additive only. No landed receipt, no ledger value, and neither A1-07 provenance
+> digest changed: `c14de5fc…` for the render and `24ae7578…` for the master are
+> both byte-identical to what the accepted lineage carries.
+
+### LedgerTransition
+
+- **Album authority now has one supported path.** `scripts/earcrate_album.py`
+  exposes `verify`, `plan` and `transition`. Counters are **outputs** — derived from
+  track rows, never accepted as inputs — so a counter cannot disagree with the states
+  it summarizes.
+- **The migration proof:** replaying A1-07's landed acceptance through the tool
+  writes **zero bytes** and derives the identical manifest seal. The hand-built state
+  is exactly what the tool would have produced, which is what makes the migration a
+  fact rather than a hope.
+- Every transition needs a landed, sealed, body-free receipt of the right kind, for
+  the right track, naming the same object the previous state named. States advance in
+  order: a system reference cannot precede an accepted master, an accepted master
+  cannot precede a qualified one, a qualified master cannot precede a selected
+  frontier. Nothing is written until the whole graph validates, and the result is
+  re-read and re-validated afterwards.
+- **Document projection** rewrites only the numbers and the quoted seal across all
+  six front-door surfaces, leaving every sentence a human wrote intact — and refuses
+  the transition outright if a projection pattern no longer matches, because a
+  projection that silently fails to match is the defect this replaces.
+
+### The spine
+
+- `earcrate/evidence/` holds identity, seals, receipt loading and the body-free
+  check. `earcrate/album/` holds the transitions. Each piece was extracted because it
+  had **already survived more than one concrete use** — the seal was written twice,
+  the body-free receipt four times, the bound verdict twice, the ledger transition
+  three times.
+- The seal algorithm is re-implemented rather than moved: `a1_07_gold_v8.common` sits
+  inside the render provenance path set, so editing it would move the digest that
+  identifies the code which produced the accepted render. A gate asserts the two
+  implementations agree byte for byte, exactly as the two provenance digests do.
+
+### The boundary that is not crossed
+
+- `docs/EXTRACTION_BOUNDARY.md` records why `ArrangementGraph`,
+  `PerformanceRealizer` and `FrontierBuilder` are **not** shared types yet, and gates
+  enforce it: no shared module may name them, and no shared module may branch on a
+  track id. Extracting them from one implementation would freeze recorded-clip
+  placement, phrase-map form, timing-law frontiers and protected PCM regions into the
+  framework — and A1-02, which starts from symbolic performance data, has none of
+  those things.
+- The threshold is written down: two materially different implementations, invariants
+  found by comparison, no track-id branching, no source-modality assumption.
+
+
 ## unversioned — Album One has its first accepted master, and three states to prove it
 
 > The ledger moves to **1/7 accepted album masters**. It does *not* move on system

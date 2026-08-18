@@ -1,0 +1,143 @@
+{
+  "album_authority": {
+    "accepted_album_masters_unchanged": true,
+    "audio_answer_key_status": "unbound",
+    "changed": false,
+    "note": "No album authority changed. This measures a control candidate."
+  },
+  "analyzed_on": "2026-08-18",
+  "arrangement_family_hypothesis": {
+    "evidence": [
+      "stable pulse at 136.0 bpm with inter-beat sd well under one hundredth of a second",
+      "a macro boundary at 28.4 s, 16.09 bars, read as a 16-bar production pre-roll",
+      "F-minor tonal profile matching the score's four flats",
+      "complete terminal fade rather than an edit truncation"
+    ],
+    "note": "Family, not identity. A different intro, delivery or mastering remains a control candidate under the commission.",
+    "supported": true
+  },
+  "boundary": {
+    "beat_arrays_included": false,
+    "embedded_source_metadata_included": false,
+    "note": "Beat times, frame features, local paths, embedded metadata and diagnostic arrays stay in private session evidence.",
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "candidate": {
+    "canonical_pcm_sha256": "8b56d21119934dd336d4e9f90583e604bb6d34a493a387a8b43470e511c21119",
+    "channels": 2,
+    "codec": "mp3",
+    "container_sha256": "deebc44de395d193147c29395849c6801a3633fd7a02ef4fbfe2f4e8f4443b47",
+    "custody_location_included": false,
+    "decoded_duration_seconds": 452.975,
+    "leading_silence_seconds": 0.4121,
+    "provenance_class": "third_party_stream_derived_delivery",
+    "sample_rate": 48000,
+    "trailing_silence_seconds": 1.1007
+  },
+  "classification": {
+    "admissible_as_album_source": false,
+    "admissible_as_structural_control": true,
+    "audio_answer_key": "unbound",
+    "comparator": "pending",
+    "delivery_fit": "NONFIT",
+    "reason": "a 7:33 MP3 with third-party or stream-derived provenance rather than the commissioned 7:06 Bandcamp lossless delivery",
+    "reference_audio_used_by_score_branch": false,
+    "reference_audio_used_to_generate_performance": false,
+    "rights_eligibility": "not_established",
+    "structural_status": "CONTROL_CANDIDATE_MEASURED"
+  },
+  "kind": "earcrate_album_one_public_control_candidate_analysis",
+  "macro_boundaries_seconds": [
+    0.0,
+    3.9,
+    28.4,
+    56.01,
+    108.76,
+    121.12,
+    210.4,
+    251.87,
+    280.78,
+    364.48,
+    392.81,
+    449.0
+  ],
+  "measurement": {
+    "bar_seconds": 1.764706,
+    "bars_in_file": 256.69,
+    "beats_tracked": 983,
+    "estimator_agreement": true,
+    "estimators": {
+      "beat_track_tempo_bpm": 135.999,
+      "inter_beat_interval_tempo_bpm": 135.999,
+      "median_frame_tempo_bpm": 135.999,
+      "static_tempo_bpm": 135.999
+    },
+    "inter_beat_interval_sd_seconds": 0.00929,
+    "median_inter_beat_interval_seconds": 0.44118,
+    "pulse_bpm": 136.0
+  },
+  "pre_roll": {
+    "core_after_boundary_seconds": 424.577,
+    "core_minus_declared_seconds": -1.423,
+    "declared_edition_seconds": 426,
+    "difference_seconds": 0.1627,
+    "observed_boundary_seconds": 28.398,
+    "predicted_16_bar_boundary_seconds": 28.2353,
+    "within_one_beat": true
+  },
+  "receipt_sha256": "4e49ee90c3912ae0b7fb72431b52cd531b4920b1cc6cdf6ce89581f01eab8d35",
+  "schema_version": 1,
+  "score_side_relation": {
+    "caution": "This is the duration envelope only. It is NOT matched score coverage. How much thematic and formal material actually corresponds is what the twelve-anchor comparator has to determine.",
+    "core_over_score_ratio": 2.291,
+    "score_duration_at_measured_pulse_seconds": 185.294118,
+    "score_over_core_fraction": 0.436,
+    "score_performed_measures": 105
+  },
+  "terminal_fade": {
+    "complete_fade": true,
+    "final_20s_rms_end": 0.0,
+    "final_20s_rms_start": 0.173488
+  },
+  "tonal_profile": {
+    "derived_independently_of_the_score": true,
+    "reading": "F minor, consistent with the score's four flats",
+    "strongest_pitch_classes": [
+      {
+        "mean_chroma": 0.8446,
+        "pitch_class": "F"
+      },
+      {
+        "mean_chroma": 0.6949,
+        "pitch_class": "C"
+      },
+      {
+        "mean_chroma": 0.5502,
+        "pitch_class": "C#"
+      },
+      {
+        "mean_chroma": 0.5391,
+        "pitch_class": "A#"
+      },
+      {
+        "mean_chroma": 0.5345,
+        "pitch_class": "G#"
+      }
+    ]
+  },
+  "tooling": {
+    "analysis_sample_rate": 22050,
+    "hop_length": 512,
+    "librosa": "0.11.0",
+    "numpy": "2.5.2",
+    "onset_aggregate": "median",
+    "python": "3.13.15",
+    "scipy": "1.18.0",
+    "segment_count": 12,
+    "segment_features": "chroma_cqt + 13 mfcc + rms, each L2-normalized per axis",
+    "segment_method": "librosa.segment.agglomerative"
+  },
+  "track_id": "A1-02",
+  "visibility": "public"
+}

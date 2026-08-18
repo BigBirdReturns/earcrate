@@ -130,8 +130,7 @@ def build_manifest(
     return c.seal(manifest, "master_manifest_sha256")
 
 
-def build_public_projection(manifest: Mapping[str, Any], *,
-                            corrects: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def build_public_projection(manifest: Mapping[str, Any]) -> dict[str, Any]:
     """Mechanism and identity only. No paths, no media, no private custody."""
     plan = manifest["plan"]
     verification = manifest["verification"]
@@ -237,6 +236,4 @@ def build_public_projection(manifest: Mapping[str, Any], *,
             "stems_included": False,
         },
     }
-    if corrects:
-        projection["corrects"] = dict(corrects)
     return c.seal(projection, "receipt_sha256")

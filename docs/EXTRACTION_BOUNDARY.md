@@ -71,6 +71,37 @@ The extraction happens after A1-02 exists concretely, by comparing two real
 implementations. Until then, a shared arrangement abstraction would be invention
 wearing the costume of extraction.
 
+## Authority is not the event
+
+A manifest answers two questions and they need two digests:
+
+```text
+authority_sha256   what was rendered, from which stable inputs and code identities
+event_sha256       authority_sha256 plus when, where and at which head it happened
+```
+
+Acceptance binds **authority**. The event digest is audit context and is explicitly
+not the predicate, so a commit, checkout, timestamp, hostname or execution id cannot
+invalidate a decision about audio it could not have touched.
+
+Fields are classified explicitly rather than by excluding the volatile names we
+happen to know about — that approach fails the next time somebody adds a hostname.
+Authority and context are declared blocks, a context-shaped name anywhere inside
+authority is refused at any depth, and an unrecognized top-level key is refused
+rather than silently assigned to either side.
+
+Some environment facts are authority, not context: an encoder build identity or a
+model checkpoint identity can change the output. The filesystem path to that binary
+cannot, so it is context — or, better, not recorded at all.
+
+**A1-07 stays on the legacy schema plus an explicit migration receipt, permanently.**
+Its master writer lives inside the audio-affecting file set, so changing it to emit v2
+would move the digest that identifies the code which produced the accepted master.
+The historical manifest keeps its seal as evidence of the original event; the
+migration receipt is what resolves it to a durable authority identity. New lanes are
+built on v2 directly, and the shared loader refuses a bare legacy manifest rather than
+inferring the mapping.
+
 ## Mastering is a contract, not a policy
 
 `MasteringPlan` is extracted, but A1-07's linear-gain policy is not the universal

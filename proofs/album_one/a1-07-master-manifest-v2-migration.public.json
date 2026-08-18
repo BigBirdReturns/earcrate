@@ -1,0 +1,35 @@
+{
+  "audit_only": "event_sha256",
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "descent": "a1-07-full-form-v1",
+  "durable_predicate": "authority_sha256",
+  "history": "The historical manifest keeps its seal as evidence of the original event. Nothing was rewritten and no audio was recut.",
+  "kind": "earcrate_album_one_public_manifest_migration_receipt",
+  "legacy": {
+    "defect": "the only identity sealed execution context, so it moved with the repository head",
+    "schema_version": 1,
+    "seal": "4ed8e22aaf858341f2dc134ffdb2944e1d462d1c3b8a48464a72036fe4a96cce",
+    "seal_field": "master_manifest_sha256"
+  },
+  "master_id": "a1-07-master-v1",
+  "migrated": {
+    "authority_sha256": "a0aee1d452abb9ee93e11e24eb8a0a80b9b5f62a12eafd02de0cc9bc7d96b40d",
+    "event_sha256": "e285853ebaac196e34ad83cae30858fdc67b9d5740d732f8a2c391af61b3c3c9",
+    "schema_version": 2
+  },
+  "reason": "The legacy manifest sealed volatile execution context -- earcrate_git_head -- into its only identity, so a commit that could not touch the audio changed the digest a public acceptance receipt cites. Authority and event are now separate identities.",
+  "receipt_sha256": "d6f30c96587c62ca853a5610769bd1ff820eb74b6257ac1dc21cdc4b707ec0e6",
+  "schema_version": 1,
+  "track_id": "A1-07",
+  "unchanged": {
+    "audio_affecting_tree_digest": "24ae757819930273bb8a7e79f549a20c35ff36c8769f68b8917e0af996be17a6",
+    "audio_recut": false,
+    "canonical_pcm_sha256": "b467e224808285c6e0f6e1e90c8b8b3908322ffa6471472e8e01f1415ea0b785",
+    "container_sha256": "f821ce65c9e406a014f56aedd50c53d67e6539cd61af5a18d0f0bf42eea0312d",
+    "source_canonical_pcm_sha256": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58"
+  },
+  "visibility": "public"
+}

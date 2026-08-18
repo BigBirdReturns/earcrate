@@ -1,0 +1,309 @@
+"""Gates for the A1-07 delivery master.
+
+These protect the three properties the monitoring verdict actually bought: that the
+transfer stays linear so the macro-dynamics survive exactly, that the master
+reproduces bit for bit, and that the two ways of quietly reintroducing a limiter --
+a clipped source and an unreachable loudness target -- refuse instead of proceeding.
+
+They also protect the provenance boundary. The mastering stage must never enter the
+digest that identifies the code which produced the accepted render.
+"""
+
+from __future__ import annotations
+
+from array import array
+import json
+import math
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from earcrate.a1_07_gold_v8 import common as c  # noqa: E402
+from earcrate.a1_07_master import chain  # noqa: E402
+from earcrate.a1_07_master import provenance as mp  # noqa: E402
+from earcrate.a1_07_master.receipt import (  # noqa: E402
+    MasterReceiptError, build_public_projection, load_monitoring_verdict)
+
+pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
+                                reason="the mastering chain is measured through ffmpeg")
+
+RATE = 48000
+CHANNELS = 2
+FULL_SCALE = 2 ** 31 - 1
+# Three sections at deliberately different levels, so a stage that is not a pure
+# gain shows up as section drift rather than as an average that happens to match.
+SECTION_DBFS = (-20.0, -12.0, -6.0)
+SECTION_SECONDS = 4.0
+SECTIONS = {
+    "setup": (0.0, 4.0),
+    "body": (4.0, 8.0),
+    "payoff": (8.0, 12.0),
+}
+
+
+def _write_tone(path: Path, levels=SECTION_DBFS, *, clip: bool = False) -> Path:
+    """A deterministic three-level tone, written without touching any private media."""
+    values = array("i")
+    for dbfs in levels:
+        amplitude = (10.0 ** (dbfs / 20.0)) * FULL_SCALE
+        if clip:
+            amplitude *= 10.0  # drive well past full scale so the clamp leaves flat tops
+        for n in range(int(RATE * SECTION_SECONDS)):
+            raw = amplitude * math.sin(2.0 * math.pi * 440.0 * n / RATE)
+            sample = max(-FULL_SCALE, min(FULL_SCALE, int(raw)))
+            values.append(sample)
+            values.append(sample)
+    c.write_s32_wav(path, c.samples_to_bytes(values), sample_rate=RATE, channels=CHANNELS)
+    return path
+
+
+@pytest.fixture(scope="module")
+def source(tmp_path_factory) -> Path:
+    return _write_tone(tmp_path_factory.mktemp("a1-07-master") / "source.wav")
+
+
+def test_the_chain_is_one_linear_gain_and_nothing_else():
+    good = ["ffmpeg", "-i", "in.wav", "-af", "volume=2.5dB", "-c:a", "pcm_s24le", "out.wav"]
+    chain.assert_linear_chain(good)
+
+    for argv in (
+        ["ffmpeg", "-af", "volume=2.5dB,alimiter=limit=0.9", "out.wav"],
+        ["ffmpeg", "-af", "equalizer=f=3000:width_type=o:width=1:g=2", "out.wav"],
+        ["ffmpeg", "-af", "volume=2.5dB", "-af", "volume=1dB", "out.wav"],
+        ["ffmpeg", "-af", "loudnorm=I=-14", "out.wav"],
+        ["ffmpeg", "-af", "volume=2.5dB", "-dither_method", "triangular", "out.wav"],
+        ["ffmpeg", "-c:a", "pcm_s24le", "out.wav"],
+    ):
+        with pytest.raises(chain.MasteringError):
+            chain.assert_linear_chain(argv)
+
+
+def test_a_loudness_target_that_needs_limiting_is_refused(source):
+    plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
+    assert plan["limiting_required"] is False, "a peak-solved plan never needs limiting"
+    headroom = float(plan["solved_gain_db"])
+
+    reachable = chain.solve_gain(
+        source, ceiling_dbtp=-1.0,
+        target_lufs=plan["source_integrated_lufs"] + headroom - 0.5, ffmpeg="ffmpeg")
+    assert reachable["limiting_required"] is False
+    chain.refuse_if_limiting(reachable)
+    assert reachable["solved_gain_db"] == plan["solved_gain_db"], \
+        "a loudness target must never change the applied gain, only qualify it"
+
+    # The real case: the streaming-normalization ask that overruns the ceiling by a
+    # fraction of a dB. That fraction is where a limiter gets added by accident.
+    unreachable = chain.solve_gain(
+        source, ceiling_dbtp=-1.0,
+        target_lufs=plan["source_integrated_lufs"] + headroom + 0.3, ffmpeg="ffmpeg")
+    assert unreachable["limiting_required"] is True
+    assert unreachable["loudness_shortfall_db"] == pytest.approx(0.3, abs=0.02)
+    with pytest.raises(chain.MasteringError, match="requires limiting"):
+        chain.refuse_if_limiting(unreachable)
+
+
+def test_a_hard_clipped_source_is_refused_before_any_master_is_written(tmp_path):
+    clipped = _write_tone(tmp_path / "clipped.wav", clip=True)
+    with pytest.raises(chain.MasteringError, match="hard-clipped"):
+        chain.refuse_if_source_is_clipped(clipped, sample_rate=RATE, channels=CHANNELS)
+
+    clean = _write_tone(tmp_path / "clean.wav")
+    conditions = chain.refuse_if_source_is_clipped(clean, sample_rate=RATE, channels=CHANNELS)
+    assert conditions["hard_clipped"] is False
+
+
+def test_the_master_reproduces_bit_for_bit_across_two_executions(source, tmp_path):
+    plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
+    rendered = chain.render_master_pair(
+        source, tmp_path / "pair", gain_db=float(plan["solved_gain_db"]),
+        sample_rate=RATE, channels=CHANNELS)
+
+    assert rendered["deterministic_executions"] == 2
+    assert rendered["canonical_pcm_equality_across_executions"] is True
+    # The containers must match too, which is only possible without dither.
+    assert rendered["container_equality_across_executions"] is True
+    first, second = rendered["executions"]
+    assert first["container_sha256"] == second["container_sha256"]
+    assert Path(first["path"]).read_bytes() == Path(second["path"]).read_bytes()
+
+
+def test_render_master_refuses_to_overwrite_an_existing_master(source, tmp_path):
+    destination = tmp_path / "master.wav"
+    chain.render_master(source, destination, gain_db=1.0)
+    with pytest.raises(chain.MasteringError, match="refusing to overwrite"):
+        chain.render_master(source, destination, gain_db=1.0)
+
+
+def test_section_gain_invariance_holds_for_a_linear_gain(source, tmp_path):
+    plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
+    gain = float(plan["solved_gain_db"])
+    master = tmp_path / "linear.wav"
+    chain.render_master(source, master, gain_db=gain)
+
+    report = chain.verify_master(master, source, plan, SECTIONS,
+                                 sample_rate=RATE, channels=CHANNELS)
+    assert report["true_peak_within_ceiling"] is True
+    assert report["hard_clipped"] is False
+    for name, row in report["sections"].items():
+        assert row["delta_db"] == pytest.approx(gain, abs=0.2), \
+            f"{name} moved by {row['delta_db']} dB, not by the applied {gain} dB"
+    assert report["max_section_gain_drift_db"] <= 0.35
+    assert report["macro_dynamics_preserved"] is True
+    assert report["macro_span_lu_master"] == pytest.approx(report["macro_span_lu_source"], abs=0.2)
+
+
+def test_a_non_linear_stage_is_caught_by_the_section_invariance_check(source, tmp_path):
+    """The invariance check must have teeth, or the macro-dynamics claim is decoration.
+
+    A limiter set between the quiet and loud section levels attenuates one section
+    and leaves another alone. That is exactly the failure the check exists to catch,
+    so it is built here on purpose and must be rejected.
+    """
+    plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
+    limited = tmp_path / "limited.wav"
+    result = subprocess.run(
+        ["ffmpeg", "-nostdin", "-hide_banner", "-v", "error", "-y", "-i", str(source),
+         "-map", "0:a:0", "-af", f"volume={plan['solved_gain_db']:.6g}dB,alimiter=limit=0.25",
+         "-c:a", "pcm_s24le", "-map_metadata", "-1", str(limited)],
+        capture_output=True, text=True, timeout=600, check=False)
+    assert result.returncode == 0 and limited.is_file(), result.stderr[-800:]
+
+    report = chain.verify_master(limited, source, plan, SECTIONS,
+                                 sample_rate=RATE, channels=CHANNELS)
+    assert report["macro_dynamics_preserved"] is False, \
+        "a limiter changed the section relationships and the check did not notice"
+    assert report["max_section_gain_drift_db"] > 0.35
+    assert report["macro_span_lu_master"] < report["macro_span_lu_source"], \
+        "limiting must show up as a compressed macro span"
+
+
+def test_the_master_stage_stays_outside_the_render_provenance_digest():
+    """Mastering cannot change a sample of the render, so it must not move its digest.
+
+    If it did, adding this package would contradict the manifest the accepted render
+    carries and drop the lane to representative_invocation_ready = False, forcing a
+    re-render to re-prove something the change could not have touched.
+    """
+    from earcrate.a1_07_full_form.provenance import ADAPTER_PATHS
+
+    for entry in ADAPTER_PATHS:
+        assert not entry.startswith("earcrate/a1_07_master"), \
+            f"the mastering stage is inside the render digest via {entry}"
+    for entry in mp.MASTER_PATHS:
+        assert not entry.startswith(("earcrate/a1_07_full_form", "earcrate/a1_07_gold_v8")), \
+            f"the master digest covers render code via {entry}"
+
+    tracked = {path for path, _ in mp.tracked_blobs(ROOT, mp.MASTER_PATHS)}
+    assert tracked, "the mastering stage must be tracked before it can be identified"
+    assert not any(path.startswith("earcrate/a1_07_full_form/") for path in tracked)
+
+
+def test_both_provenance_implementations_agree_on_identical_inputs():
+    """The algorithm is duplicated across two stages; it must not drift."""
+    from earcrate.a1_07_full_form.provenance import ADAPTER_PATHS, adapter_tree_digest
+
+    assert mp.tree_digest(ROOT, ADAPTER_PATHS)["digest"] == adapter_tree_digest(ROOT)["digest"]
+    digest = mp.master_tree_digest(ROOT)
+    assert digest["identity_source"].startswith("git blob")
+    assert digest["digest"] == mp.master_tree_digest(ROOT)["digest"], "digest must be stable"
+
+
+def _verdict(pcm: str) -> dict:
+    return c.seal({
+        "kind": "earcrate_a1_07_monitoring_ratification",
+        "schema_version": 1,
+        "track_id": "A1-07",
+        "descent_id": "a1-07-full-form-v1",
+        "reviewed": {"canonical_pcm_sha256": pcm},
+        "authority": {"human_review": True, "blind": False, "reopens_timing_law": False},
+        "constraints": ["preserve the macro-dynamics"],
+        "ceiling_dbtp": -1.0,
+    }, "verdict_sha256")
+
+
+def test_the_monitoring_verdict_must_ratify_the_render_being_mastered(tmp_path):
+    pcm = "a" * 64
+    path = tmp_path / "verdict.json"
+    c.atomic_write_json(path, _verdict(pcm))
+    assert load_monitoring_verdict(path, accepted_pcm_sha256=pcm)["ceiling_dbtp"] == -1.0
+
+    # The blind frontier verdict warned that the reviewed cut was a level-matched
+    # projection, so a ratification naming any other object is about another object.
+    with pytest.raises(MasterReceiptError, match="ratified"):
+        load_monitoring_verdict(path, accepted_pcm_sha256="b" * 64)
+
+    broken = tmp_path / "broken.json"
+    value = _verdict(pcm)
+    value["ceiling_dbtp"] = -0.1  # mutate after sealing
+    c.atomic_write_json(broken, value)
+    with pytest.raises(c.DescentError, match="verdict_sha256"):
+        load_monitoring_verdict(broken, accepted_pcm_sha256=pcm)
+
+    reopening = tmp_path / "reopening.json"
+    value = dict(_verdict(pcm))
+    value["authority"] = {"human_review": True, "blind": False, "reopens_timing_law": True}
+    c.atomic_write_json(reopening, c.seal(value, "verdict_sha256"))
+    with pytest.raises(MasterReceiptError, match="reopen"):
+        load_monitoring_verdict(reopening, accepted_pcm_sha256=pcm)
+
+
+def test_the_public_master_receipt_carries_no_paths_or_media():
+    manifest = {
+        "master_manifest_sha256": "0" * 64,
+        "master_tree": {"digest": "1" * 64, "member_count": 4, "declared_paths": ["x"]},
+        "source": {"canonical_pcm_sha256": "2" * 64,
+                   "artifact_path": r"D:\private\render-a.wav"},
+        "authorizing_decisions": {
+            "frontier_manifest_sha256": "3" * 64,
+            "frontier_contract_sha256": "4" * 64,
+            "render_provenance_digest": "5" * 64,
+            "monitoring_verdict_sha256": "6" * 64,
+            "monitoring_constraints": ["preserve the macro-dynamics"],
+        },
+        "plan": {"solved_gain_db": 2.5, "ceiling_dbtp": -1.0, "source_integrated_lufs": -16.8,
+                 "source_true_peak_dbtp": -3.5},
+        "master": {"canonical_pcm_sha256": "7" * 64, "container_sha256": "8" * 64,
+                   "deterministic_executions": 2,
+                   "canonical_pcm_equality_across_executions": True,
+                   "container_equality_across_executions": True,
+                   "executions": [{"path": r"D:\private\master-a.wav"}]},
+        "verification": {"integrated_lufs": -14.3, "true_peak_dbtp": -1.0,
+                         "sample_peak_dbfs": -1.11, "flat_top_run_count": 0,
+                         "flat_top_sample_count": 0, "hard_clipped": False,
+                         "true_peak_within_ceiling": True,
+                         "sections": {"setup": {"delta_db": 2.5}},
+                         "macro_span_lu_source": 8.5, "macro_span_lu_master": 8.5,
+                         "max_section_gain_drift_db": 0.0,
+                         "macro_dynamics_preserved": True},
+    }
+    public = build_public_projection(manifest)
+
+    # Walk keys and string values rather than grepping the serialized blob: the
+    # prose legitimately contains words like "executions", and a substring match
+    # over prose is a leak test that fails for the wrong reason.
+    def walk(node, path=""):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                assert key not in ("artifact_path", "executions", "path"),                     f"the public receipt carries a private field at {path}/{key}"
+                walk(value, f"{path}/{key}")
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{path}[{index}]")
+        elif isinstance(node, str):
+            for leak in ("D:\\", "C:\\", ".wav", "private-custody", "sessions/"):
+                assert leak not in node, f"the public receipt leaks {leak!r} at {path}"
+
+    walk(public)
+    assert public["boundary"]["private_paths_included"] is False
+    assert public["boundary"]["master_audio_exported"] is False
+    assert public["state"]["accepted_album_master"] is True
+    assert public["state"]["system_reference_complete"] is False, \
+        "an accepted master is not a completed system reference"
+    assert c.validate_seal(public, "receipt_sha256") == public["receipt_sha256"]

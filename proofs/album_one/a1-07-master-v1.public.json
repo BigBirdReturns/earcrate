@@ -46,7 +46,7 @@
   "next_decision": "A narrow post-master audition of the mastered PCM against the already accepted production render. Admissible outcomes are ACCEPT_MASTER and MASTER_REVISION_REQUIRED. No timing, arrangement or mix frontier is reopened.",
   "private_receipts": {
     "frontier_manifest_sha256": "fd650805e53fbf508935cae9f2b3102daf4b37a23c085a93b4ff67345c14497b",
-    "master_manifest_sha256": "c63f3584a9c7affbda840f81d7715b0c1712c841844da9afbd08a600f318edbc",
+    "master_manifest_sha256": "50ef5439fee8461933f1ea90940ed8c79cf7883d3954ce6b5e4adc3f6d3cbfcb",
     "monitoring_verdict_sha256": "6ea671e831412b2475cf3714a3316953c7e575a595a57ef428777076866973a9",
     "note": "Identities only; the receipts themselves are not in Git."
   },
@@ -57,16 +57,17 @@
     "frontier_contract_sha256": "59f9b3599efad4bad268a81d8a72337d9162db55a4f54b3eeac361f7a954e740",
     "master_canonical_pcm_sha256": "b467e224808285c6e0f6e1e90c8b8b3908322ffa6471472e8e01f1415ea0b785",
     "master_container_sha256": "f821ce65c9e406a014f56aedd50c53d67e6539cd61af5a18d0f0bf42eea0312d",
-    "master_provenance_digest": "b8aba0a243cf0a4dc431f27acfd537d6259605fe906e115ffd710b81a627804c",
-    "master_provenance_member_count": 6,
+    "master_provenance_digest": "24ae757819930273bb8a7e79f549a20c35ff36c8769f68b8917e0af996be17a6",
+    "master_provenance_member_count": 3,
     "master_provenance_paths": [
-      "earcrate/a1_07_master",
+      "earcrate/a1_07_master/chain.py",
+      "earcrate/a1_07_master/cli.py",
       "scripts/earcrate_a1_07_master_v1.py"
     ],
     "render_provenance_digest": "c14de5fc93a6c02e29c85d77b9dbee868bfe280a7d215f46477793c96247dfdd",
     "source_canonical_pcm_sha256": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58"
   },
-  "receipt_sha256": "b7bee11448e885a217afba72c2398bc95250c575c8b225ff4d3f926096fe28ea",
+  "receipt_sha256": "4d60bfa686fc5398a837ddd6231a31ca7ac430e3c14a6e020eb691717fc8a713",
   "review": {
     "blind": false,
     "constraints": [

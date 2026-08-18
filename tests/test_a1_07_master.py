@@ -218,6 +218,29 @@ def test_the_master_stage_stays_outside_the_render_provenance_digest():
     assert not any(path.startswith("earcrate/a1_07_full_form/") for path in tracked)
 
 
+def test_the_master_digest_covers_audio_and_excludes_everything_else():
+    """The digest identifies what can change the master, not what lives beside it.
+
+    Listing the package directory made adding `acceptance.py` -- which only runs
+    after a master exists -- invalidate the digest of a master it could not have
+    touched. A receipt that goes stale for reasons unrelated to its object teaches
+    people to ignore it.
+    """
+    tracked = {path for path, _ in mp.tracked_blobs(ROOT, mp.MASTER_PATHS)}
+    assert "earcrate/a1_07_master/chain.py" in tracked, "the chain can change the audio"
+    assert "scripts/earcrate_a1_07_master_v1.py" in tracked
+
+    for excluded in mp.MASTER_PATHS_EXCLUDED:
+        assert excluded not in tracked, f"{excluded} cannot change audio; do not gate on it"
+        assert Path(ROOT / excluded).is_file(), f"{excluded} is named but does not exist"
+
+    # The exclusions must be exhaustive: every tracked file in the package is either
+    # audio-affecting or explicitly excluded, so a new module cannot slip in unclassified.
+    package = {path for path, _ in mp.tracked_blobs(ROOT, ("earcrate/a1_07_master",))}
+    unclassified = package - tracked - set(mp.MASTER_PATHS_EXCLUDED)
+    assert not unclassified, f"unclassified mastering files: {sorted(unclassified)}"
+
+
 def test_both_provenance_implementations_agree_on_identical_inputs():
     """The algorithm is duplicated across two stages; it must not drift."""
     from earcrate.a1_07_full_form.provenance import ADAPTER_PATHS, adapter_tree_digest

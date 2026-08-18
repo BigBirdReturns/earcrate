@@ -22,12 +22,31 @@ import re
 import subprocess
 from pathlib import Path
 
-# Everything that can alter a delivery master: the chain, its entry points, and
-# the receipt writer. The full-form package is NOT listed -- it produced the
-# source render, which is bound separately by canonical PCM identity.
+# Everything that can alter the delivered master audio: the chain and the two entry
+# points that drive it. Nothing else belongs here, and the exclusions are the whole
+# point of the file set.
+#
+# The full-form package is absent because it produced the source render, which is
+# bound separately by canonical PCM identity. `receipt.py`, `acceptance.py` and this
+# module are absent for the same reason one level down: they shape manifests,
+# verdicts and digests, and cannot move a sample. Listing the package directory
+# instead of its audio-affecting files made adding `acceptance.py` -- a module that
+# only ever runs after the master exists -- silently invalidate the digest of a
+# master it could not have touched. That is exactly the false alarm the render-side
+# digest was narrowed to avoid.
 MASTER_PATHS: tuple[str, ...] = (
-    "earcrate/a1_07_master",
+    "earcrate/a1_07_master/chain.py",
+    "earcrate/a1_07_master/cli.py",
     "scripts/earcrate_a1_07_master_v1.py",
+)
+
+# Files inside the package that must never enter the digest, because a change to any
+# of them cannot alter one sample of a delivered master.
+MASTER_PATHS_EXCLUDED: tuple[str, ...] = (
+    "earcrate/a1_07_master/__init__.py",
+    "earcrate/a1_07_master/acceptance.py",
+    "earcrate/a1_07_master/provenance.py",
+    "earcrate/a1_07_master/receipt.py",
 )
 
 

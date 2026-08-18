@@ -126,6 +126,16 @@ def test_a_qualified_master_is_not_an_accepted_one() -> None:
         if not qualification:
             continue
         assert qualification["master_state"] in states
+
+        # The ledger's pointer at its qualification receipt must resolve. A sealed
+        # identity that names nothing is how a document stops describing its object,
+        # and this lane has already been bitten by exactly that.
+        landed_receipts = {
+            json.loads((ROOT / relative).read_text(encoding="utf-8")).get("receipt_sha256")
+            for relative in row["repo_evidence"] if relative.endswith(".public.json")}
+        assert qualification["receipt_sha256"] in landed_receipts, (
+            f"{row['track_id']} names a qualification receipt that no landed file carries")
+
         if qualification["master_state"] != "master_accepted":
             assert qualification["owner_master_acceptance"] is False
             assert row["status"]["album_master"] == "unaccepted", (

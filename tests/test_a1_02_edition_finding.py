@@ -50,16 +50,61 @@ def test_a1_02_declares_four_typed_binding_requirements():
         assert modality in bd.MODALITIES, f"{modality} must be expressible as a binding"
 
 
-def test_the_audio_answer_key_is_blocking_and_carries_an_edition_constraint():
-    """A title is not an edition, and a plausible edition is not an answer key."""
+PRE_BOUND_STATES = ("unbound", "edition_declared_pending_acquisition")
+
+
+def test_the_audio_answer_key_is_blocking_and_not_yet_bound():
+    """A declaration is not an acquisition, and an acquisition is not an answer key."""
     requirement = next(row for row in _row()["binding_requirements"]
                        if row["role"] == "audio_answer_key")
-    assert requirement["status"] == "unbound"
     assert requirement["blocking"] is True
+    assert requirement["status"] in PRE_BOUND_STATES, \
+        "the answer key may not read as bound before acquisition and structural fit"
+    assert not requirement.get("identities"), \
+        "no identities can exist before the file does"
+
     constraint = requirement["edition_constraint"]
-    for term in ("catalog number", "territory", "release date", "mix or version title"):
+    for term in ("Dream Version", "full-length", "Dreamland", "track 1",
+                 "control candidate, not the answer key"):
         assert term in constraint, f"the edition constraint omits {term!r}"
-    assert "control candidate, not the answer key" in constraint
+    for excluded in ("Radio Edit", "Message Version", "Guitar Mix", "streaming captures"):
+        assert excluded in constraint, f"the constraint does not exclude {excluded!r}"
+    assert requirement["acquisition_capture"], "acquisition must state what it captures"
+
+
+def test_the_declaration_is_a_commission_choice_not_a_lineage_claim():
+    """The distinction the whole finding rests on, kept explicit in the ledger."""
+    declaration = _row()["edition_declaration"]
+    assert declaration["edition_decision"] == "commissioned"
+    assert declaration["declared_by"] == "owner"
+    assert declaration["selected_version"].startswith("Children (Dream Version)")
+    assert declaration["track_number"] == 1
+    assert declaration["medium"] == "digital lossless download"
+    assert declaration["catalog_number"].startswith("not_assigned"), \
+        "borrowing a catalog number from a physically different release would be a lie"
+    assert "derived from no recording at all" in declaration["not_a_lineage_claim"]
+    assert "takes no part in version selection" in \
+        declaration["sheet_tempo_excluded_from_selection"]
+
+    excluded = declaration["excluded_versions"]
+    for variant in ("Dream Radio Edit", "Radio Edit", "Eat Me Edit", "Message Version",
+                    "Original Version / Original Mix", "Guitar Mix", "Dream Club Version",
+                    "streaming captures", "user edits", "shortened compilations"):
+        assert variant in excluded, f"{variant!r} must be excluded by name"
+
+
+def test_structural_fit_is_required_and_nonfit_is_not_a_search():
+    criteria = _row()["structural_fit_criteria"]
+    for needle in ("full-length Dream Version identity",
+                   "repeat expansion compatible with 69 printed measures becoming 105 "
+                   "performed",
+                   "complete ending and coda present",
+                   "tempo-map compatibility"):
+        assert needle in criteria["criteria"], f"the fit criteria omit {needle!r}"
+    assert criteria["outcomes"]["FIT"].startswith("bind this exact downloaded object")
+    assert "control candidate" in criteria["outcomes"]["NONFIT"]
+    assert "do not silently select another version" in criteria["outcomes"]["NONFIT"]
+    assert "aligns most prettily" in criteria["why_nonfit_is_not_a_search"]
 
 
 def test_the_edition_finding_still_matches_the_sealed_proof_it_came_from():
@@ -94,11 +139,18 @@ def test_the_printed_tempo_is_a_page_reading_not_a_measurement():
         "would let a sheet marking pick a commercial edition"
 
 
-def test_the_specimen_still_reports_the_audio_branch_unbound():
+def test_the_specimen_and_the_ledger_agree_that_audio_is_still_pending():
+    """Two documents describing one state must not drift apart."""
     metadata = json.loads(SPECIMEN.read_text(encoding="utf-8"))["metadata"]
-    assert metadata["audio_answer_status"] == "unbound"
     assert metadata["cross_modal_gate_status"] == "pending_audio"
     assert metadata["score_answer_key_status"] == "bound"
+    assert metadata["audio_answer_status"] == \
+        "edition_declared_pending_acquisition_and_structural_fit"
+
+    finding = _row()["edition_finding"]["state_until_then"]
+    assert finding["answer_key_status"] == metadata["audio_answer_status"]
+    assert finding["cross_modal_gate_status"] == metadata["cross_modal_gate_status"]
+    assert metadata["selected_version"] == _row()["edition_declaration"]["selected_version"]
 
 
 def test_an_unestablished_edition_cannot_pass_as_a_binding():

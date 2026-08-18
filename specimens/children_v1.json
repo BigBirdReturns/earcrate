@@ -130,10 +130,13 @@
   },
   "kind": "earcrate_specimen_manifest",
   "metadata": {
-    "audio_answer_status": "unbound",
+    "audio_answer_status": "edition_declared_pending_acquisition_and_structural_fit",
     "cross_modal_gate_status": "pending_audio",
+    "edition_decision": "commissioned",
     "score_adapter": "children_vector_score_adapter_v1",
-    "score_answer_key_status": "bound"
+    "score_answer_key_status": "bound",
+    "selected_release_surface": "official Robert Miles Bandcamp Dreamland download, track 1",
+    "selected_version": "Children (Dream Version), full-length"
   },
   "rights": {
     "note": "Music rights remain separate from EarCrate software rights. Repository data carries identities, schemas, annotations, policies, and receipts, not the score PDF or commercial recording.",

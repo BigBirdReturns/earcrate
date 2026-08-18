@@ -25,7 +25,7 @@ The machine-readable authority is
 Its schema is
 [`schemas/earcrate_album_program_v1.schema.json`](schemas/earcrate_album_program_v1.schema.json).
 The manifest seal is
-`101f51b27be059cbd474b054787cb616b656acb264a804a16c23e5a0349bf44a`.
+`82148d0bb659aca9a4807891d5a41dd71e0e2de87ba8767e48de3dd2902ca608`.
 
 ## The seven commissioned tracks
 
@@ -177,24 +177,62 @@ Future stacks should begin from the album track and its failure, then select
 organs. They should not begin from a newly discovered model and search for a
 reason to use it.
 
+## What each track is for
+
+Seven accepted masters is not the objective. Seven masters that each exercise a
+*different* section of the architecture is. A1-07 closed one vertical slice —
+custody, deterministic rendering, blind review, mastering, acceptance — and it
+proved exactly that slice. Repeating its shape six more times would produce a
+record and teach the system nothing.
+
+| Track | Capability it must prove | Status |
+| --- | --- | --- |
+| **A1-07** | donor-recording arrangement, blind review, mastering, acceptance | proved; system reference open |
+| **A1-02** | score to performance: symbolic authority realized as a played object | next vertical |
+| **A1-01** | reference editing, release governance, the rights boundary | retained candidate is an edit of the reference, so it cannot prove synthesis |
+| **A1-03** | performed-arrangement recovery from symbolic and blind-audio witnesses | unbound; capability fixed by its commission |
+| **A1-04** | exact-edition binding and production-grammar transplant | sources unbound |
+| **A1-05** | arrangement-ancestry transplant under blind review | sources unbound |
+| **A1-06** | perceptual gesture to arrangement; potentially generative | unmaterialized |
+
+A1-03, A1-05 and A1-06 keep the capabilities their commissions already name. They
+are not reassigned here, because a capability map written ahead of the evidence is
+a plan, not a ledger.
+
 ## Execution order
 
-The order of work is evidence-driven:
+Revised after A1-07 was accepted. The previous order sent the next vertical to
+A1-01; that is wrong for the capability question, and the change is recorded rather
+than quietly dropped.
 
 1. Keep all seven source and intent contracts current in the manifest.
-2. Complete the Beggin gold performance, reproduce it exactly, then run the
-   withheld-answer recovery challenge.
-3. Return to A1-01 Pretty Lights, which has the strongest retained candidate and
-   release-gate lineage.
-4. Complete the score-led Children and community-symbolic Flim tracks, using the
-   cross-modal organs those references specifically demand.
-5. Execute the two cross-song transplant tracks, Animal × Toxic and My Body
-   Isn’t Ready × Yellow, using the factory only after exact source bindings and
-   controls exist.
-6. Materialize the Stateside gesture corpus and turn the perceptual observation
-   into an accountable arrangement hypothesis.
-7. Sequence the seven accepted masters, perform album-level continuity and
-   mastering review, then make the separate rights decisions.
+2. Extract the reusable lane machinery from A1-07, so a new track describes music
+   instead of rebuilding workflow infrastructure.
+3. Bind the exact *Children* reference edition, through both container and decoded
+   audio identity. Stop at `edition_candidate` if the commission does not already
+   name the edition unambiguously — an answer key cannot be authoritative if the
+   edition was chosen after acquisition.
+4. Build the A1-02 score-to-performance realization: measure and voice model, tempo
+   map and rubato, note timing, dynamics, pedalling, articulation, rack selection,
+   mix-event realization, then comparison against the bound recording. The goal is
+   not sample-identical reconstruction. It is to find out whether the score and the
+   recording encode the same performed object, and where the symbolic path loses
+   the performance.
+5. Run A1-07's withheld-answer recovery challenge. Until it passes, A1-07 is an
+   accepted master and a valuable specimen, but not proof that a fresh operator or
+   environment can reconstruct the lane without privileged knowledge.
+6. Execute the remaining reference-bound tracks in the order their custody allows,
+   each against the capability its commission names.
+7. Sequence the accepted masters, perform album-level continuity and mastering
+   review, then make the separate rights decisions.
+
+A1-01 remains commissioned and is not deprioritized as music. It is reclassified:
+its lane is editing, custody and release governance, not the proof that EarCrate can
+realize a performance.
+
+Language-directed original arrangement is a real objective and is **not** in this
+list, because it is not one of these seven commissions. It belongs to a separate
+append-only commission whose input is direction rather than a target recording.
 
 This order may change when evidence changes. The append-only commission identities
 may not.

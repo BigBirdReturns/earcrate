@@ -78,12 +78,17 @@ def test_a_commission_projects_the_ledger_without_replacing_it():
 
 
 def test_prose_requirements_project_as_untyped_rather_than_being_invented():
-    """The ledger carries prose today; a projection must not pretend otherwise."""
-    commission = cm.from_ledger(_ledger(), "A1-02")
-    assert commission.required_bindings
-    assert all(not row.typed for row in commission.required_bindings)
-    assert commission.typed_bindings == ()
-    assert all(row.modality == "unspecified" for row in commission.required_bindings)
+    """Most commissions carry prose today; a projection must not pretend otherwise."""
+    manifest = _ledger()
+    untyped = [row["track_id"] for row in manifest["tracks"]
+               if not row.get("binding_requirements")]
+    assert untyped, "this gate is only meaningful while some commission is still prose"
+
+    for track_id in untyped:
+        commission = cm.from_ledger(manifest, track_id)
+        assert all(not row.typed for row in commission.required_bindings), track_id
+        assert commission.typed_bindings == (), track_id
+        assert all(row.modality == "unspecified" for row in commission.required_bindings)
 
 
 def test_typed_requirements_are_used_when_a_commission_declares_them():

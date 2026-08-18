@@ -12,9 +12,10 @@ only after the tracks exist as owner-accepted music.
 
 ## Current ledger
 
-- Album masters accepted: **0/7**
+- Album masters accepted: **1/7**
 - System references completed: **0/7**
-- Active proving track: **A1-07, Beggin' × Beggin'**
+- Active proving track: **A1-07, Beggin' × Beggin'** (master accepted; system
+  reference open)
 - Final album sequence: **unsequenced**
 - Acceptance authority: **the owner**
 - Release authority: **a separate rights decision**
@@ -24,7 +25,7 @@ The machine-readable authority is
 Its schema is
 [`schemas/earcrate_album_program_v1.schema.json`](schemas/earcrate_album_program_v1.schema.json).
 The manifest seal is
-`2fb1d363c5fa6a89f2a46483cf0b92a17ea6056725428da9606d329bbbdb854b`.
+`8618889e37717b88f8d21f195dc315cedfe4944e0b3e000f67da4e1ba11e2f0b`.
 
 ## The seven commissioned tracks
 
@@ -36,7 +37,7 @@ The manifest seal is
 | **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
 | **A1-05** | sombr “My Body Isn’t Ready” × Coldplay “Yellow” | Arrangement-ancestry handoff | Normalized specimen exists; exact private editions remain unbound | Test chorus width, drum lift, neutral alignment, and reverse modernization under blind review |
 | **A1-06** | PinkPantheress “Stateside” / bhangra gesture | Perceptual gesture to arrangement | Commissioned, but no canonical specimen or comparison corpus is materialized | Isolate the gesture and build a held-out retrieval and transformation audition with negative controls |
-| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | Deepest source, stem, score, provider, and failure lineage; reproducible v5 diagnostic was rejected | Author and accept one convincing gold performance before another recovery campaign can claim progress |
+| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | **Accepted album master**: native-pocket full form, owner-ratified and exactly reproducible | Run the withheld-answer recovery challenge; the album claim is closed, the autonomy claim is not |
 
 The answer-key corpora in `earcrate/reference/` remain calibration and discovery
 graders. They are not additional album tracks and may not inflate the completion
@@ -68,11 +69,25 @@ paths, and private option maps remain outside the repository.
 
 ## Active focus: A1-07 Beggin
 
-Beggin is the current proving track because it contains the deepest accumulated
-evidence and exposes the central product failure most clearly. EarCrate has
-already proved custody, stem handling, cross-node GPU execution, deterministic
-rendering, provider execution, source-free circulation, and blind review. It has
-not yet produced a Beggin arrangement the owner accepts.
+Beggin is the first track to reach an accepted album master. The accepted object
+is the native-pocket full form: 56.111 s of setup, body and payoff, selected by
+the owner from a blind frontier whose verdict was sealed before the letter map was
+revealed, ratified in the monitoring room, then mastered with a single solved
+linear gain of +2.5 dB to a -1.0 dBTP ceiling. No limiter, no EQ, no multiband, no
+resampling and no dither, so the 8.5 LU macro span survives exactly and two
+executions agree on canonical PCM and on container bytes. The public receipt is
+[`proofs/album_one/a1-07-master-v1.public.json`](proofs/album_one/a1-07-master-v1.public.json).
+
+What that closes is one album master, not the autonomy claim. The withheld-answer
+recovery challenge has not run, so A1-07 remains the active track with
+`system_reference: incomplete`. It also proves a specific and bounded set of
+mechanisms — private source custody, deterministic rendering, blind owner review,
+and linear mastering. It does not prove arrangement synthesis: both A1-07 sources
+are recordings, and the accepted render places donor material rather than
+realizing a performance from symbolic authority.
+
+Everything below this paragraph describes how the track got here, and is retained
+because the rejected work is the reason the accepted work is trustworthy.
 
 The retained v5 `PerformanceScore` is useful precisely because it is honest. It
 accounts for all 17 selected clips, reproduces byte-identically, and records the
@@ -91,7 +106,7 @@ Only their identities are recorded here:
 - ATTEMPTS:
   `977ffaf2b828f4e9d5abcdbf652640682c3a8180499fd04f397d2e89e84d9db9`
 
-The next Beggin work is therefore composition, not another provider census.
+The Beggin work that followed was composition, not another provider census.
 The gold authoring pass must use the same-work identity, section correspondence,
 material census, phrase authority, minimal-intervention prior, accepted pulse and
 transform organs, and a serious naive co-play control. Generative systems may

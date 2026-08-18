@@ -4,8 +4,9 @@ The control question for every milestone is: **which Album One track becomes mor
 likely to reach an owner-accepted master, and what listening control proves that
 change?**
 
-The honest starting point is **0/7 accepted album masters** and **0/7 completed
-system references**. Beggin is the active proving track because it has the deepest
+The starting point was **0/7 accepted album masters** and **0/7 completed system
+references**. The ledger now stands at **1/7 accepted album masters** and **0/7
+completed system references**. Beggin is the active proving track because it has the deepest
 retained evidence and the clearest musical failure.
 
 ## 0. Make Album One the repository authority

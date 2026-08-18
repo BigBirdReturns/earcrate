@@ -73,8 +73,9 @@ exactly reproducible. A system reference is complete only when the accepted gold
 decisions are withheld and an inferred candidate blindly beats the declared
 naive control. Rights and release remain a third, separate decision.
 
-The honest current ledger is **0/7 accepted album masters** and **0/7 completed
-system references**. `A1-07` is the active track.
+The honest current ledger is **1/7 accepted album masters** and **0/7 completed
+system references**. `A1-07` is the active track: its master is accepted, and its
+withheld-answer system reference is still open.
 
 ## Product direction
 

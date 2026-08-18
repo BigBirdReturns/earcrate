@@ -1,5 +1,63 @@
 # EarCrate — CHANGELOG
 
+## unversioned — Album One has its first accepted master
+
+> The ledger moves from **0/7** to **1/7 accepted album masters**. It does *not*
+> move on system references, which stay at **0/7**: an accepted master is the
+> album claim, and the withheld-answer recovery challenge is the separate autonomy
+> claim. A1-07 therefore stays the active track.
+
+### The master
+
+- **A1-07 is mastered and accepted.** The owner-selected native-pocket production
+  render — not the level-matched review cut the blind verdict warned about — was
+  ratified in the monitoring room and mastered with a single solved linear gain of
+  **+2.5 dB to a -1.0 dBTP ceiling**. Measured, not chosen: the source sat at
+  -3.5 dBTP, so the ceiling implied the gain exactly.
+- **The chain is one filter.** No limiter, no EQ, no multiband, no resampling. A
+  linear gain is order-preserving, so the macro span across setup, body and payoff
+  survived at **8.5 LU** with **0.0 dB** of section drift — every section moved by
+  the applied 2.5 dB and nothing else changed. `assert_linear_chain` enforces this
+  at render time rather than in a comment.
+- **Dither is deliberately absent.** Dither is stochastic and would break the
+  canonical PCM equality that makes the master verifiable. Both required
+  executions agree on canonical PCM *and* on container bytes, which is only
+  possible without it.
+- **Two refusals, both real.** A hard-clipped source raises, because attenuation
+  cannot restore samples destroyed upstream. A loudness target that outruns the
+  ceiling raises: asking this master for -14 LUFS needs +2.8 dB against +2.5 dB of
+  headroom, and that 0.3 dB shortfall is exactly where a limiter gets introduced by
+  accident. Both were exercised against the real object before the master was cut.
+
+### Why mastering is its own package
+
+- `a1_07_full_form.provenance` digests every tracked file under the full-form
+  package, because any of them can change a rendered candidate. Mastering runs
+  after the render and cannot. Adding it inside that package would have moved the
+  adapter digest, contradicted the manifest the accepted render carries, and
+  dropped the lane to `representative_invocation_ready = False` — forcing a
+  re-render to re-prove something the change could not have touched, which is the
+  false alarm the digest exists to prevent. `earcrate/a1_07_master` therefore
+  carries its own digest over its own files, and gates assert the two path sets
+  stay disjoint while both digest implementations still agree.
+
+### Ledger integrity
+
+- The completion gate no longer asserts the counters are zero. That assertion was
+  unfalsifiable and would have failed on the first real acceptance without ever
+  checking that an acceptance was evidenced. The counters are now **derived** from
+  the track rows, an accepted track must name a landed public receipt whose seal
+  and master identity match the ledger, and a completed system reference cannot
+  exist without an accepted master.
+- Every landed `proofs/album_one/*.public.json` is now checked to still validate
+  its own seal, and `ALBUM_ONE.md` must quote the current manifest seal — the
+  quoted seal had already gone stale.
+- **`a1-07-full-form-v1-frontier-provenance-addendum.public.json`**: two pointers
+  sealed into the frontier receipt stopped resolving when the provenance
+  implementation was replaced and the manifest rebuilt an hour later. The winner,
+  the verdict and every content-addressed identity are unaffected; the addendum
+  records the drift rather than rewriting a sealed record of a completed audition.
+
 ## unversioned — provenance binds to code, not to a commit counter
 
 - **The exact-head check was too coarse in one direction and too weak in the

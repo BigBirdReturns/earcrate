@@ -15,7 +15,6 @@ from array import array
 import json
 import math
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 
@@ -31,8 +30,8 @@ from earcrate.a1_07_master import provenance as mp  # noqa: E402
 from earcrate.a1_07_master.receipt import (  # noqa: E402
     MasterReceiptError, build_public_projection, load_monitoring_verdict)
 
-pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
-                                reason="the mastering chain is measured through ffmpeg")
+# ffmpeg is a declared requirement of this gate suite, as it is for the gold-v8
+# gates: every measurement here is an ebur128 or ffprobe reading.
 
 RATE = 48000
 CHANNELS = 2
@@ -48,10 +47,16 @@ SECTIONS = {
 }
 
 
-def _write_tone(path: Path, levels=SECTION_DBFS, *, clip: bool = False) -> Path:
-    """A deterministic three-level tone, written without touching any private media."""
+_PCM_CACHE: dict[bool, bytes] = {}
+
+
+def _tone_pcm(clip: bool) -> bytes:
+    """A deterministic three-level tone, synthesized without any private media."""
+    cached = _PCM_CACHE.get(clip)
+    if cached is not None:
+        return cached
     values = array("i")
-    for dbfs in levels:
+    for dbfs in SECTION_DBFS:
         amplitude = (10.0 ** (dbfs / 20.0)) * FULL_SCALE
         if clip:
             amplitude *= 10.0  # drive well past full scale so the clamp leaves flat tops
@@ -60,13 +65,14 @@ def _write_tone(path: Path, levels=SECTION_DBFS, *, clip: bool = False) -> Path:
             sample = max(-FULL_SCALE, min(FULL_SCALE, int(raw)))
             values.append(sample)
             values.append(sample)
-    c.write_s32_wav(path, c.samples_to_bytes(values), sample_rate=RATE, channels=CHANNELS)
+    pcm = c.samples_to_bytes(values)
+    _PCM_CACHE[clip] = pcm
+    return pcm
+
+
+def _write_tone(path: Path, *, clip: bool = False) -> Path:
+    c.write_s32_wav(path, _tone_pcm(clip), sample_rate=RATE, channels=CHANNELS)
     return path
-
-
-@pytest.fixture(scope="module")
-def source(tmp_path_factory) -> Path:
-    return _write_tone(tmp_path_factory.mktemp("a1-07-master") / "source.wav")
 
 
 def test_the_chain_is_one_linear_gain_and_nothing_else():
@@ -85,7 +91,8 @@ def test_the_chain_is_one_linear_gain_and_nothing_else():
             chain.assert_linear_chain(argv)
 
 
-def test_a_loudness_target_that_needs_limiting_is_refused(source):
+def test_a_loudness_target_that_needs_limiting_is_refused(tmp_path):
+    source = _write_tone(tmp_path / "source.wav")
     plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
     assert plan["limiting_required"] is False, "a peak-solved plan never needs limiting"
     headroom = float(plan["solved_gain_db"])
@@ -119,7 +126,8 @@ def test_a_hard_clipped_source_is_refused_before_any_master_is_written(tmp_path)
     assert conditions["hard_clipped"] is False
 
 
-def test_the_master_reproduces_bit_for_bit_across_two_executions(source, tmp_path):
+def test_the_master_reproduces_bit_for_bit_across_two_executions(tmp_path):
+    source = _write_tone(tmp_path / "source.wav")
     plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
     rendered = chain.render_master_pair(
         source, tmp_path / "pair", gain_db=float(plan["solved_gain_db"]),
@@ -134,14 +142,16 @@ def test_the_master_reproduces_bit_for_bit_across_two_executions(source, tmp_pat
     assert Path(first["path"]).read_bytes() == Path(second["path"]).read_bytes()
 
 
-def test_render_master_refuses_to_overwrite_an_existing_master(source, tmp_path):
+def test_render_master_refuses_to_overwrite_an_existing_master(tmp_path):
+    source = _write_tone(tmp_path / "source.wav")
     destination = tmp_path / "master.wav"
     chain.render_master(source, destination, gain_db=1.0)
     with pytest.raises(chain.MasteringError, match="refusing to overwrite"):
         chain.render_master(source, destination, gain_db=1.0)
 
 
-def test_section_gain_invariance_holds_for_a_linear_gain(source, tmp_path):
+def test_section_gain_invariance_holds_for_a_linear_gain(tmp_path):
+    source = _write_tone(tmp_path / "source.wav")
     plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
     gain = float(plan["solved_gain_db"])
     master = tmp_path / "linear.wav"
@@ -159,13 +169,14 @@ def test_section_gain_invariance_holds_for_a_linear_gain(source, tmp_path):
     assert report["macro_span_lu_master"] == pytest.approx(report["macro_span_lu_source"], abs=0.2)
 
 
-def test_a_non_linear_stage_is_caught_by_the_section_invariance_check(source, tmp_path):
+def test_a_non_linear_stage_is_caught_by_the_section_invariance_check(tmp_path):
     """The invariance check must have teeth, or the macro-dynamics claim is decoration.
 
     A limiter set between the quiet and loud section levels attenuates one section
     and leaves another alone. That is exactly the failure the check exists to catch,
     so it is built here on purpose and must be rejected.
     """
+    source = _write_tone(tmp_path / "source.wav")
     plan = chain.solve_gain(source, ceiling_dbtp=-1.0, ffmpeg="ffmpeg")
     limited = tmp_path / "limited.wav"
     result = subprocess.run(

@@ -1,0 +1,86 @@
+{
+  "anti_tuning_note": "The comparator was written and adversarially tested before the commissioned delivery exists, which is what let it fail honestly. A frozen instrument that could not discriminate would have been worse than no instrument.",
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "comparator_id": "a1-02-audio-comparator-v1",
+  "frozen": false,
+  "headline": "Harmonic template matching cannot localize form in this recording, so the comparator was not frozen.",
+  "implementation": {
+    "digest": "2470f5b8cc259a3c86459d615cef44b71f03505645a32cdb3103ccc609b11a9b",
+    "members": [
+      {
+        "file": "earcrate/a1_02/audio_compare/align.py",
+        "sha256": "786a6fb51efb1215c0ce73184680a5f8a7f49876e54c99260978bd9670aa5c17"
+      },
+      {
+        "file": "earcrate/a1_02/audio_compare/anchors.py",
+        "sha256": "fb7fc91c1c7e7bf2c44cd8e3025510b80847255e6e2a58d70b1b419b9b6b30ab"
+      },
+      {
+        "file": "earcrate/a1_02/audio_compare/features.py",
+        "sha256": "e63db5c266d5f2b825d200155a397a226184d2f15b922258bb35c4d6385dca8d"
+      },
+      {
+        "file": "earcrate/a1_02/score_timeline.py",
+        "sha256": "0b44bdff1768e1913c2a975e0487b1bd245047a86b2baa89071e1a5ff10d4d20"
+      }
+    ]
+  },
+  "kind": "earcrate_a1_02_public_comparator_qualification",
+  "receipt_sha256": "55770d40d59f5fc069561800c4a7b60dcc10890611e44f64cfe93339950d288c",
+  "schema_version": 1,
+  "state": {
+    "album_authority_changed": false,
+    "audio_answer_key": "unbound",
+    "comparator_executed_as_authority": false,
+    "comparator_frozen": false,
+    "control_candidate_status": "CONTROL_CANDIDATE_MEASURED"
+  },
+  "track_id": "A1-02",
+  "verdict": "NOT_QUALIFIED_FOR_THIS_WORK",
+  "visibility": "public",
+  "what_the_adverse_controls_caught_first": [
+    {
+      "defect": "absolute similarity threshold",
+      "detail": "0.70 sliced through a legitimate range of 0.62 to 0.80, so every adverse variant and the untouched control failed identically -- the controls were indistinguishable from the real thing, which is the signature of a threshold measuring nothing.",
+      "repair": "contrast against the file's own window-score distribution"
+    },
+    {
+      "defect": "transposition false positive",
+      "detail": "any nonzero best rotation was read as transposition, and a sparse template prefers some rotation by a hair almost everywhere.",
+      "repair": "a rotation must beat rotation zero by a margin to count"
+    },
+    {
+      "defect": "empty frontier passed a criterion",
+      "detail": "the two-semitone shift matched nothing, so there was no rotation evidence to object with, and tonal correspondence reported PASS for a transposed object.",
+      "repair": "no criterion may pass when nothing was placed"
+    }
+  ],
+  "what_the_instrument_needs": {
+    "blocking_artifact": "children_score_reconstruction.mid, together with the score extraction and MixScore, are path hints in the specimen and exist outside this checkout.",
+    "candidate_redesign": [
+      "self-similarity structure on the audio side, matched against the score's repeat and D.S. pattern",
+      "texture, register and onset-density features, which is where this record's sections actually differ",
+      "score-side note density from the 1,257-note reconstruction MIDI, which is an external artifact not present in this checkout"
+    ],
+    "diagnosis": "The score's structural claim is about recurrence -- bars 5-8 repeat, 10-17 repeat, the D.S. returns to 34-52 -- not about harmonic content. The audio side should therefore be matched on its own recurrence structure rather than on chord identity."
+  },
+  "why": {
+    "consequence": "Any threshold that made these anchors match would be fitting noise. Freezing it would have produced authoritative-looking verdicts from a statistic with no discriminative power.",
+    "finding": "Children is a four-chord loop. Its harmony is close to constant for seven minutes, so a harmonic template cannot tell one part of the record from another.",
+    "measured_on_the_control_candidate": {
+      "bar_versus_global_chroma_cosine_mean": 0.9443,
+      "bar_versus_global_chroma_cosine_sd": 0.0729,
+      "distant_bar_pair_chroma_cosine_mean": 0.887,
+      "distant_bar_pair_chroma_cosine_p90": 0.9979,
+      "note": "Two unrelated bars chosen at random are already 0.887 similar. A best-window score of 0.79 is therefore below the background, not above it."
+    },
+    "measured_on_the_score_side": {
+      "distinct_chroma_templates_across_105_bars": 11,
+      "note": "The sheet declares eleven distinct harmonies for the whole form.",
+      "printed_chord_symbols": 36
+    }
+  }
+}

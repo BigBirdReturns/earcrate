@@ -25,7 +25,7 @@ The machine-readable authority is
 Its schema is
 [`schemas/earcrate_album_program_v1.schema.json`](schemas/earcrate_album_program_v1.schema.json).
 The manifest seal is
-`82148d0bb659aca9a4807891d5a41dd71e0e2de87ba8767e48de3dd2902ca608`.
+`477b2b11c8454abfab9369c0d577ed4484ee3ae560c1212a7b7467ffa0a9e7ac`.
 
 ## The seven commissioned tracks
 

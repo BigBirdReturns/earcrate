@@ -183,6 +183,33 @@ def test_every_album_track_has_a_musical_contract_and_next_control() -> None:
         assert row["status"]["system_reference"] in {"incomplete", "complete"}
 
 
+def test_every_track_proves_a_different_thing_and_the_order_says_so() -> None:
+    """Seven masters of one shape would be a record, not a system.
+
+    A1-07 closed one vertical slice and proved exactly that slice. The ledger has to
+    hold each remaining track to a capability the others do not cover, and the
+    machine-readable order has to agree with the document that explains it -- the
+    previous order sent the next vertical to A1-01, whose retained candidate is an
+    edit of the supplied reference and so cannot prove performance realization.
+    """
+    manifest = _load()
+    roles = [row["capability_role"] for row in manifest["tracks"]]
+    assert all(role.strip() for role in roles), "every track must name what it proves"
+    assert len(set(roles)) == len(roles), "two tracks would prove the same thing"
+
+    order = manifest["execution_order"]
+    assert order and all(step.strip() for step in order)
+    assert manifest["execution_order_note"].strip()
+
+    text = (ROOT / "ALBUM_ONE.md").read_text(encoding="utf-8")
+    section = text.split("## Execution order", 1)[1].split("## Definition", 1)[0]
+    for fragment in ("reusable lane machinery", "Children", "score-to-performance",
+                     "withheld-answer"):
+        assert fragment in section, f"the documented order omits {fragment!r}"
+    assert "Return to A1-01 Pretty Lights, which has the strongest retained" not in text, (
+        "the superseded order still stands in the document")
+
+
 def test_answer_keys_remain_calibration_and_do_not_inflate_the_album() -> None:
     manifest = _load()
     album_ids = {row["track_id"] for row in manifest["tracks"]}

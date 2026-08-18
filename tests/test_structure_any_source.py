@@ -85,18 +85,24 @@ def test_exact_recurrence_finds_the_largest_repeated_unit():
     assert nested["bars"] == 40
 
 
-@pytest.mark.parametrize("tracks", [1, 2, 5, 24, 200])
-def test_form_is_read_the_same_whatever_the_part_count(tracks):
-    """Two parts or two hundred: parts are summed into the bar before anything looks."""
-    ledger = _midi_ledger("ABACAB", tracks=tracks)
-    fingerprints = sc.from_midi_ledger(ledger)
-    assert fingerprints.shape[1] == stx.FINGERPRINT_WIDTH
+def test_form_is_read_the_same_whatever_the_part_count():
+    """Two parts or two hundred: parts are summed into the bar before anything looks.
 
-    signature = stx.signature_from_fingerprints(fingerprints)
-    assert signature["bars"] >= 40
-    assert signature["distinct_sections"] >= 1, f"{tracks} parts produced no form"
-    # The reading must not degenerate as parts pile up.
-    assert signature["repetition_fraction"] > 0.2
+    Written as a loop rather than a parametrize because this repository's gate runner
+    invokes test functions directly and accepts no fixture beyond a lone `tmp_path`.
+    A parametrized case passes under pytest and fails under `run_gates.py`, which is
+    how it slipped through the first time.
+    """
+    for tracks in (1, 2, 5, 24, 200):
+        ledger = _midi_ledger("ABACAB", tracks=tracks)
+        fingerprints = sc.from_midi_ledger(ledger)
+        assert fingerprints.shape[1] == stx.FINGERPRINT_WIDTH
+
+        signature = stx.signature_from_fingerprints(fingerprints)
+        assert signature["bars"] >= 40, tracks
+        assert signature["distinct_sections"] >= 1, f"{tracks} parts produced no form"
+        # The reading must not degenerate as parts pile up.
+        assert signature["repetition_fraction"] > 0.2, tracks
 
 
 def test_a_two_part_and_a_twenty_four_part_rendering_agree():

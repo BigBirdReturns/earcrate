@@ -1,9 +1,17 @@
 """Command line for the A1-07 delivery master.
 
-`plan` measures and solves without writing audio, so the refusal paths can be
-exercised before anything is rendered. `master` runs the whole close-out: refuse a
-clipped source, solve the gain, render twice, verify the ceiling and the section
-invariance, then seal a private manifest and a body-free public receipt.
+Four commands, matching the four things that can actually happen to a master:
+
+* `plan` measures and solves without writing audio, so the refusal paths can be
+  exercised before anything is rendered;
+* `master` refuses a clipped source, solves the gain, renders twice, verifies the
+  ceiling and the section invariance, and seals the qualification receipts;
+* `requalify` re-seals an existing master against a corrected verdict without
+  recutting it, after proving the files on disk are still the object the manifest
+  names. The audio is not a function of the verdict text;
+* `accept` binds a post-master audition verdict to the mastered PCM. It is the only
+  command that can move the accepted-album-master counter, and it moves it only on
+  ACCEPT_MASTER.
 """
 
 from __future__ import annotations
@@ -17,9 +25,10 @@ from typing import Any, Sequence
 from ..a1_07_full_form.contract import contract_path, load_contract
 from ..a1_07_gold_v8 import common as c
 from . import chain
+from .acceptance import AcceptanceError, build_acceptance_receipt, load_master_verdict
 from .provenance import master_tree_digest
 from .receipt import MasterReceiptError, build_manifest, build_public_projection, \
-    load_monitoring_verdict
+    load_monitoring_verdict, rebind_manifest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACCEPTED_CANDIDATE_ID = "full-form-v1-native-pocket"
@@ -63,13 +72,29 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--target-lufs", type=float, default=None)
     run.add_argument("--ffmpeg", default="ffmpeg")
     run.add_argument("--ffprobe", default="ffprobe")
+
+    again = sub.add_parser(
+        "requalify", help="re-seal an existing master against a corrected verdict")
+    again.add_argument("--master-workspace", type=Path, required=True)
+    again.add_argument("--verdict", type=Path, required=True)
+    again.add_argument("--public-out", type=Path, default=None)
+    again.add_argument("--ffmpeg", default="ffmpeg")
+
+    accept = sub.add_parser(
+        "accept", help="bind a post-master audition verdict to the mastered PCM")
+    accept.add_argument("--master-workspace", type=Path, required=True)
+    accept.add_argument("--verdict", type=Path, required=True,
+                        help="the sealed post-master acceptance verdict")
+    accept.add_argument("--public-out", type=Path, default=None)
     return ap
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(list(argv) if argv is not None else None)
     try:
-        source = args.source.expanduser().absolute()
+        # Only the two commands that touch audio take a source; the two that
+        # re-seal work from the manifest the master already carries.
+        source = args.source.expanduser().absolute() if hasattr(args, "source") else None
 
         if args.command == "plan":
             # Probe rather than assume: a plan run may be pointed at any candidate.
@@ -83,6 +108,69 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps({"plan": plan, "source_peak_conditions": conditions},
                              indent=2, sort_keys=True))
             return 0
+
+        if args.command in ("requalify", "accept"):
+            workspace = args.master_workspace.expanduser().absolute()
+            manifest = c.load_json(workspace / "MASTER_MANIFEST.json")
+            c.validate_seal(manifest, "master_manifest_sha256")
+            master = manifest["master"]
+            rate = int(manifest["timeline"]["sample_rate"])
+            channels = int(manifest["timeline"]["channels"])
+
+        if args.command == "requalify":
+            # Prove the audio on disk is still the object the manifest names, so that a
+            # re-seal cannot quietly re-point a receipt at some other master.
+            for execution in master["executions"]:
+                path = Path(execution["path"])
+                if not path.is_file():
+                    raise MasterReceiptError(f"the mastered file is missing: {path.name}")
+                if c.sha256_file(path) != execution["container_sha256"]:
+                    raise MasterReceiptError(
+                        f"{path.name} no longer matches its container digest")
+                observed = c.canonical_pcm_sha256(path, sample_rate=rate, channels=channels,
+                                                  ffmpeg=args.ffmpeg)
+                if observed != master["canonical_pcm_sha256"]:
+                    raise MasterReceiptError(f"{path.name} no longer decodes to the sealed PCM")
+
+            verdict_path = args.verdict.expanduser().absolute()
+            verdict = load_monitoring_verdict(
+                verdict_path, accepted_pcm_sha256=manifest["source"]["canonical_pcm_sha256"])
+            resealed = rebind_manifest(manifest, verdict=verdict, verdict_path=verdict_path,
+                                       master_tree=master_tree_digest(REPO_ROOT),
+                                       repo_root=REPO_ROOT)
+            c.atomic_write_json(workspace / "MASTER_MANIFEST.json", resealed, exclusive=False)
+            public = build_public_projection(resealed)
+            c.atomic_write_json(workspace / "PUBLIC_MASTER_RECEIPT.json", public,
+                                exclusive=False)
+            if args.public_out is not None:
+                c.atomic_write_json(args.public_out.expanduser().absolute(), public,
+                                    exclusive=False)
+            print(json.dumps({
+                "master_manifest_sha256": resealed["master_manifest_sha256"],
+                "receipt_sha256": public["receipt_sha256"],
+                "master_state": public["state"]["master_state"],
+                "accepted_album_masters": public["state"]["accepted_album_masters"],
+                "audio_recut": False,
+            }, indent=2, sort_keys=True))
+            return 0
+
+        if args.command == "accept":
+            verdict = load_master_verdict(
+                args.verdict.expanduser().absolute(),
+                master_pcm_sha256=master["canonical_pcm_sha256"],
+                master_container_sha256=master["container_sha256"])
+            receipt = build_acceptance_receipt(manifest, verdict)
+            c.atomic_write_json(workspace / "MASTER_ACCEPTANCE.json", receipt, exclusive=False)
+            if args.public_out is not None:
+                c.atomic_write_json(args.public_out.expanduser().absolute(), receipt,
+                                    exclusive=False)
+            print(json.dumps({
+                "verdict": receipt["verdict"],
+                "master_state": receipt["master_state"],
+                "receipt_sha256": receipt["receipt_sha256"],
+                "accepted_album_masters": receipt["state"]["accepted_album_masters"],
+            }, indent=2, sort_keys=True))
+            return 0 if receipt["verdict"] == "ACCEPT_MASTER" else 3
 
         contract = load_contract(args.contract)
         output = args.output.expanduser().absolute()
@@ -175,7 +263,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "verification": verification,
         }, indent=2, sort_keys=True))
         return 0
-    except (chain.MasteringError, MasterReceiptError, c.DescentError) as exc:
+    except (chain.MasteringError, MasterReceiptError, AcceptanceError,
+            c.DescentError) as exc:
         print(json.dumps({"ok": False, "error": str(exc), "type": type(exc).__name__}),
               file=sys.stderr)
         return 1

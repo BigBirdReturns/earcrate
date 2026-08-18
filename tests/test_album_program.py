@@ -62,9 +62,9 @@ def test_album_one_completion_ledger_cannot_claim_music_we_rejected() -> None:
     This gate used to assert both counters were zero. That was true and useless at
     the same time: it would fail the moment a real master was accepted, and it never
     checked that an acceptance was evidenced by anything. What actually needs
-    protecting is that no track can claim acceptance without a public receipt that
-    says so and names the same master, and that the autonomy claim never runs ahead
-    of the album claim.
+    protecting is that no track can claim acceptance without an owner verdict that
+    names the same mastered object, and that the autonomy claim never runs ahead of
+    the album claim.
     """
     manifest = _load()
     tracks = manifest["tracks"]
@@ -76,25 +76,73 @@ def test_album_one_completion_ledger_cannot_claim_music_we_rejected() -> None:
 
     for row in tracks:
         if row["status"]["album_master"] != "accepted":
-            assert row["status"]["human_acceptance"] is False,                 f"{row['track_id']} reports human acceptance without an accepted master"
-            assert "accepted_master" not in row,                 f"{row['track_id']} carries an accepted master it has not accepted"
+            assert row["status"]["human_acceptance"] is False, (
+                f"{row['track_id']} reports human acceptance without an accepted master")
+            assert "accepted_master" not in row, (
+                f"{row['track_id']} carries an accepted master it has not accepted")
             continue
 
-        assert row["status"]["human_acceptance"] is True,             f"{row['track_id']} is accepted but records no human acceptance"
+        assert row["status"]["human_acceptance"] is True, (
+            f"{row['track_id']} is accepted but records no human acceptance")
         master = row["accepted_master"]
         landed = [json.loads((ROOT / relative).read_text(encoding="utf-8"))
                   for relative in row["repo_evidence"] if relative.endswith(".public.json")]
+        # Only an acceptance receipt can support the claim. A qualification receipt
+        # describes machine evidence and can never carry an owner verdict.
         receipts = [value for value in landed
-                    if value.get("receipt_sha256") == master["receipt_sha256"]]
-        assert receipts, f"{row['track_id']} claims acceptance with no landed receipt"
+                    if str(value.get("kind", "")).endswith("master_acceptance_receipt")
+                    and value.get("receipt_sha256") == master["acceptance_receipt_sha256"]]
+        assert receipts, (
+            f"{row['track_id']} claims acceptance with no landed acceptance receipt")
         receipt = receipts[0]
+        assert receipt["verdict"] == "ACCEPT_MASTER"
         assert receipt["state"]["accepted_album_master"] is True
-        assert receipt["provenance"]["master_canonical_pcm_sha256"] ==             master["canonical_pcm_sha256"], "the ledger and the receipt name different masters"
+        assert receipt["audited_object"]["canonical_pcm_sha256"] == (
+            master["canonical_pcm_sha256"]), (
+            "the ledger and the acceptance receipt name different masters")
         assert receipt["state"]["system_reference_complete"] is (
             row["status"]["system_reference"] == "complete")
 
     for row in complete:
-        assert row["status"]["album_master"] == "accepted",             f"{row['track_id']} completes a system reference with no accepted master"
+        assert row["status"]["album_master"] == "accepted", (
+            f"{row['track_id']} completes a system reference with no accepted master")
+
+
+def test_a_qualified_master_is_not_an_accepted_one() -> None:
+    """The distinction this ledger exists to hold.
+
+    A deterministic, compliant, exactly reproducible master is machine evidence. It
+    says nothing about whether anyone has heard it. The tempting shortcut is that a
+    linear gain of a known size makes the mastered object a transparent function of
+    an already accepted render -- but that replaces a listening decision with an
+    inference, so `master_qualified` may never imply `master_accepted`.
+    """
+    manifest = _load()
+    states = manifest["completion_model"]["master_states"]
+    assert states == ["frontier_selected", "master_qualified", "master_accepted"]
+
+    for row in manifest["tracks"]:
+        qualification = row.get("master_qualification")
+        if not qualification:
+            continue
+        assert qualification["master_state"] in states
+        if qualification["master_state"] != "master_accepted":
+            assert qualification["owner_master_acceptance"] is False
+            assert row["status"]["album_master"] == "unaccepted", (
+                f"{row['track_id']} is accepted on a master that was never auditioned")
+            assert row["status"]["human_acceptance"] is False
+
+        # A qualification receipt must not claim anywhere that it accepted anything.
+        landed = [json.loads((ROOT / relative).read_text(encoding="utf-8"))
+                  for relative in row["repo_evidence"] if relative.endswith(".public.json")]
+        for value in landed:
+            if not str(value.get("kind", "")).endswith("public_master_receipt"):
+                continue
+            assert value["state"]["accepted_album_master"] is False, (
+                "a qualification receipt claimed an owner acceptance")
+            assert value["state"]["accepted_album_masters"] == 0
+            assert value["state"]["owner_master_acceptance"] is False
+            assert value["review"]["post_master_audition_complete"] is False
 
 
 def test_every_landed_album_receipt_still_validates_its_own_seal() -> None:

@@ -27,8 +27,10 @@ if str(ROOT) not in sys.path:
 from earcrate.a1_07_gold_v8 import common as c  # noqa: E402
 from earcrate.a1_07_master import chain  # noqa: E402
 from earcrate.a1_07_master import provenance as mp  # noqa: E402
+from earcrate.a1_07_master import acceptance as acc  # noqa: E402
 from earcrate.a1_07_master.receipt import (  # noqa: E402
-    MasterReceiptError, build_public_projection, load_monitoring_verdict)
+    MASTER_QUALIFIED, MasterReceiptError, build_public_projection,
+    load_monitoring_verdict)
 
 # ffmpeg is a declared requirement of this gate suite, as it is for the gold-v8
 # gates: every measurement here is an ebur128 or ffprobe reading.
@@ -226,17 +228,74 @@ def test_both_provenance_implementations_agree_on_identical_inputs():
     assert digest["digest"] == mp.master_tree_digest(ROOT)["digest"], "digest must be stable"
 
 
-def _verdict(pcm: str) -> dict:
-    return c.seal({
+def _verdict(pcm: str, **overrides) -> dict:
+    value = {
         "kind": "earcrate_a1_07_monitoring_ratification",
         "schema_version": 1,
         "track_id": "A1-07",
         "descent_id": "a1-07-full-form-v1",
+        "verdict": "ACCEPT_FOR_MASTERING",
         "reviewed": {"canonical_pcm_sha256": pcm},
         "authority": {"human_review": True, "blind": False, "reopens_timing_law": False},
-        "constraints": ["preserve the macro-dynamics"],
+        "constraints": ["preserve macro-dynamics"],
         "ceiling_dbtp": -1.0,
-    }, "verdict_sha256")
+        "disposition": {"accepts_production_render": True, "authorizes_mastering": True,
+                        "accepts_mastered_object": False},
+    }
+    value.update(overrides)
+    return c.seal(value, "verdict_sha256")
+
+
+def _manifest(pcm: str = "7" * 64, container: str = "8" * 64,
+              master_state: str = MASTER_QUALIFIED) -> dict:
+    """A synthetic master manifest, so the acceptance layer is testable without audio."""
+    return {
+        "master_manifest_sha256": "0" * 64,
+        "master_tree": {"digest": "1" * 64, "member_count": 4, "declared_paths": ["x"]},
+        "timeline": {"sample_rate": 48000, "channels": 2},
+        "source": {"canonical_pcm_sha256": "2" * 64,
+                   "artifact_path": r"D:\private\render-a.wav"},
+        "authorizing_decisions": {
+            "frontier_manifest_sha256": "3" * 64,
+            "frontier_contract_sha256": "4" * 64,
+            "render_provenance_digest": "5" * 64,
+            "monitoring_verdict_sha256": "6" * 64,
+            "monitoring_verdict": "ACCEPT_FOR_MASTERING",
+            "monitoring_constraints": ["preserve macro-dynamics"],
+        },
+        "plan": {"solved_gain_db": 2.5, "ceiling_dbtp": -1.0, "source_integrated_lufs": -16.8,
+                 "source_true_peak_dbtp": -3.5},
+        "master": {"canonical_pcm_sha256": pcm, "container_sha256": container,
+                   "deterministic_executions": 2,
+                   "canonical_pcm_equality_across_executions": True,
+                   "container_equality_across_executions": True,
+                   "executions": [{"path": r"D:\private\master-a.wav"}]},
+        "verification": {"integrated_lufs": -14.3, "true_peak_dbtp": -1.0,
+                         "sample_peak_dbfs": -1.11, "flat_top_run_count": 0,
+                         "flat_top_sample_count": 0, "hard_clipped": False,
+                         "true_peak_within_ceiling": True,
+                         "sections": {"setup": {"delta_db": 2.5}},
+                         "macro_span_lu_source": 8.5, "macro_span_lu_master": 8.5,
+                         "max_section_gain_drift_db": 0.0,
+                         "macro_dynamics_preserved": True},
+        "authority": {"master_state": master_state, "album_master_accepted": False},
+    }
+
+
+def _master_verdict(pcm: str, container: str, verdict: str = acc.ACCEPT, **overrides) -> dict:
+    value = {
+        "kind": "earcrate_a1_07_master_acceptance_verdict",
+        "schema_version": 1,
+        "track_id": "A1-07",
+        "descent_id": "a1-07-full-form-v1",
+        "verdict": verdict,
+        "audited": {"canonical_pcm_sha256": pcm, "container_sha256": container},
+        "authority": {"human_review": True, "blind": False, "reopens_timing_law": False,
+                      "reopens_arrangement": False, "reopens_mix": False},
+        "findings": "the master is the accepted render, 2.5 dB louder",
+    }
+    value.update(overrides)
+    return c.seal(value, "verdict_sha256")
 
 
 def test_the_monitoring_verdict_must_ratify_the_render_being_mastered(tmp_path):
@@ -256,6 +315,15 @@ def test_the_monitoring_verdict_must_ratify_the_render_being_mastered(tmp_path):
     c.atomic_write_json(broken, value)
     with pytest.raises(c.DescentError, match="verdict_sha256"):
         load_monitoring_verdict(broken, accepted_pcm_sha256=pcm)
+
+    for name, mutation in (
+        ("wrong-verdict", {"verdict": "ACCEPT"}),
+        ("overreaching", {"disposition": {"accepts_mastered_object": True}}),
+    ):
+        path_ = tmp_path / f"{name}.json"
+        c.atomic_write_json(path_, _verdict(pcm, **mutation))
+        with pytest.raises(MasterReceiptError):
+            load_monitoring_verdict(path_, accepted_pcm_sha256=pcm)
 
     reopening = tmp_path / "reopening.json"
     value = dict(_verdict(pcm))
@@ -314,7 +382,91 @@ def test_the_public_master_receipt_carries_no_paths_or_media():
     walk(public)
     assert public["boundary"]["private_paths_included"] is False
     assert public["boundary"]["master_audio_exported"] is False
-    assert public["state"]["accepted_album_master"] is True
-    assert public["state"]["system_reference_complete"] is False, \
-        "an accepted master is not a completed system reference"
+    # A qualification receipt reports machine evidence. It may never report that
+    # anybody accepted anything, however transparent the transform was.
+    assert public["state"]["master_state"] == MASTER_QUALIFIED
+    assert public["state"]["mastering_chain_qualified"] is True
+    assert public["state"]["deterministic_master_pair"] is True
+    assert public["state"]["owner_master_acceptance"] is False
+    assert public["state"]["accepted_album_master"] is False
+    assert public["state"]["accepted_album_masters"] == 0
+    assert public["state"]["system_reference_complete"] is False
+    assert public["review"]["post_master_audition_complete"] is False
     assert c.validate_seal(public, "receipt_sha256") == public["receipt_sha256"]
+
+
+def test_only_a_verdict_naming_the_mastered_object_can_accept_it(tmp_path):
+    """Acceptance binds to the mastered PCM, not to the render it came from.
+
+    The monitoring verdict accepted the production render. If acceptance could be
+    satisfied by a verdict naming that render, the mastered object would inherit an
+    acceptance nobody gave it -- which is exactly the collapse this layer prevents.
+    """
+    pcm, container = "7" * 64, "8" * 64
+    manifest = _manifest(pcm, container)
+
+    good = tmp_path / "accept.json"
+    c.atomic_write_json(good, _master_verdict(pcm, container))
+    verdict = acc.load_master_verdict(good, master_pcm_sha256=pcm,
+                                      master_container_sha256=container)
+    receipt = acc.build_acceptance_receipt(manifest, verdict)
+    assert receipt["verdict"] == acc.ACCEPT
+    assert receipt["state"]["accepted_album_master"] is True
+    assert receipt["state"]["accepted_album_masters"] == 1
+    assert receipt["state"]["system_reference_complete"] is False, \
+        "accepting a master must never complete the system reference"
+    assert receipt["audited_object"]["canonical_pcm_sha256"] == pcm
+    assert c.validate_seal(receipt, "receipt_sha256") == receipt["receipt_sha256"]
+
+    # The render's identity, an unsealed verdict, an inadmissible outcome, and a
+    # verdict that reopens a settled frontier are each refused.
+    wrong_pcm = tmp_path / "wrong-pcm.json"
+    c.atomic_write_json(wrong_pcm, _master_verdict("2" * 64, container))
+    with pytest.raises(acc.AcceptanceError, match="audited"):
+        acc.load_master_verdict(wrong_pcm, master_pcm_sha256=pcm,
+                                master_container_sha256=container)
+
+    wrong_container = tmp_path / "wrong-container.json"
+    c.atomic_write_json(wrong_container, _master_verdict(pcm, "9" * 64))
+    with pytest.raises(acc.AcceptanceError, match="container"):
+        acc.load_master_verdict(wrong_container, master_pcm_sha256=pcm,
+                                master_container_sha256=container)
+
+    inadmissible = tmp_path / "inadmissible.json"
+    c.atomic_write_json(inadmissible, _master_verdict(pcm, container, verdict="LGTM"))
+    with pytest.raises(acc.AcceptanceError, match="inadmissible"):
+        acc.load_master_verdict(inadmissible, master_pcm_sha256=pcm,
+                                master_container_sha256=container)
+
+    reopening = tmp_path / "reopens.json"
+    c.atomic_write_json(reopening, _master_verdict(
+        pcm, container, authority={"human_review": True, "reopens_mix": True}))
+    with pytest.raises(acc.AcceptanceError, match="reopens_mix"):
+        acc.load_master_verdict(reopening, master_pcm_sha256=pcm,
+                                master_container_sha256=container)
+
+
+def test_master_revision_required_leaves_the_counter_where_it_was(tmp_path):
+    pcm, container = "7" * 64, "8" * 64
+    path = tmp_path / "revise.json"
+    c.atomic_write_json(path, _master_verdict(pcm, container, verdict=acc.REVISE))
+    verdict = acc.load_master_verdict(path, master_pcm_sha256=pcm,
+                                      master_container_sha256=container)
+    receipt = acc.build_acceptance_receipt(_manifest(pcm, container), verdict)
+
+    assert receipt["verdict"] == acc.REVISE
+    assert receipt["master_state"] == MASTER_QUALIFIED
+    assert receipt["state"]["accepted_album_master"] is False
+    assert receipt["state"]["accepted_album_masters"] == 0
+
+
+def test_an_unqualified_master_cannot_be_accepted(tmp_path):
+    """Audition follows qualification; a master that failed its gates is not heard."""
+    pcm, container = "7" * 64, "8" * 64
+    path = tmp_path / "accept.json"
+    c.atomic_write_json(path, _master_verdict(pcm, container))
+    verdict = acc.load_master_verdict(path, master_pcm_sha256=pcm,
+                                      master_container_sha256=container)
+    with pytest.raises(acc.AcceptanceError, match="qualified"):
+        acc.build_acceptance_receipt(_manifest(pcm, container, master_state="frontier_selected"),
+                                     verdict)

@@ -5,11 +5,24 @@ custody and the full identity chain, and stays outside Git. The public projectio
 carries mechanism and identity only -- no paths, no media, no credentials -- and is
 the object that lands in `proofs/album_one/`.
 
-The split is the same one the frontier used. What is new here is that the master
-is the first A1-07 object that can raise the accepted-album-master counter, so the
-manifest states explicitly which authority did that and which one did not: the
-monitoring ratification accepts the music, and it does not complete the withheld-
-answer system reference.
+The split is the same one the frontier used. What is new here is the distinction
+between three states that are easy to collapse into one:
+
+* `frontier_selected` -- the owner picked a timing law from a blind frontier;
+* `master_qualified` -- a deterministic, compliant master exists and every signal
+  gate passed;
+* `master_accepted` -- the owner listened to the mastered object and accepted it.
+
+The monitoring ratification is an `ACCEPT_FOR_MASTERING` verdict. It accepts the
+production render and authorizes the chain; it does not accept the mastered WAV,
+because that object did not exist when the verdict was given. A master can
+therefore be fully qualified and still unaccepted, and nothing in this module may
+advance the accepted-album-master counter. Only `acceptance.py`, holding a verdict
+that names the mastered PCM itself, can do that.
+
+The transformation being mathematically transparent -- a linear gain of exactly
++2.5 dB -- is not a substitute for the audition. Evidence doctrine does not let an
+inference stand in for a listening decision, however tight the inference is.
 """
 
 from __future__ import annotations
@@ -23,6 +36,19 @@ MASTER_ID = "a1-07-master-v1"
 MASTER_VERSION = "1.0.0"
 TRACK_ID = "A1-07"
 DESCENT_ID = "a1-07-full-form-v1"
+
+# The only monitoring verdict that authorizes a master to be cut. It is deliberately
+# not spelled "ACCEPT": the object it accepted is the production render.
+MONITORING_VERDICT = "ACCEPT_FOR_MASTERING"
+
+# The three states the lane distinguishes. A master may reach the middle one on
+# machine evidence alone; only an owner audition reaches the last.
+FRONTIER_SELECTED = "frontier_selected"
+MASTER_QUALIFIED = "master_qualified"
+MASTER_ACCEPTED = "master_accepted"
+MASTER_STATES = (FRONTIER_SELECTED, MASTER_QUALIFIED, MASTER_ACCEPTED)
+
+QUALIFIED_PENDING_AUDITION = "technically_qualified_pending_owner_audition"
 
 
 class MasterReceiptError(RuntimeError):
@@ -40,6 +66,12 @@ def load_monitoring_verdict(path: Path, *, accepted_pcm_sha256: str) -> dict[str
     value = c.load_json(path)
     if value.get("kind") != "earcrate_a1_07_monitoring_ratification":
         raise MasterReceiptError(f"wrong monitoring verdict kind: {value.get('kind')}")
+    if value.get("verdict") != MONITORING_VERDICT:
+        raise MasterReceiptError(
+            f"the monitoring verdict is {value.get('verdict')!r}, not {MONITORING_VERDICT}")
+    if (value.get("disposition") or {}).get("accepts_mastered_object"):
+        raise MasterReceiptError(
+            "a monitoring verdict cannot accept the mastered object; it predates it")
     if value.get("track_id") != TRACK_ID or value.get("descent_id") != DESCENT_ID:
         raise MasterReceiptError("the monitoring verdict belongs to another track or descent")
     c.validate_seal(value, "verdict_sha256")
@@ -117,17 +149,46 @@ def build_manifest(
         "master": dict(rendered),
         "verification": dict(verification),
         "authority": {
-            "album_master_accepted": True,
-            "accepted_by": "owner, monitoring-room ratification",
+            "master_state": MASTER_QUALIFIED,
+            "album_master_accepted": False,
+            "monitoring_verdict": MONITORING_VERDICT,
+            "monitoring_verdict_accepted": (
+                "the production render, and authorization to master it"),
+            "monitoring_verdict_did_not_accept": (
+                "the mastered object, which did not exist when the verdict was given"),
+            "awaiting": (
+                "a narrow post-master audition of the mastered PCM against the accepted "
+                "production render, admitting ACCEPT_MASTER or MASTER_REVISION_REQUIRED"),
             "system_reference_complete": False,
             "system_reference_note": (
-                "The withheld-answer recovery challenge has not run. An accepted master is "
-                "the album claim; the system reference is the separate autonomy claim."),
+                "The withheld-answer recovery challenge has not run. An accepted master would "
+                "be the album claim; the system reference is the separate autonomy claim."),
             "rights_and_release": "separate decision, not conferred here",
             "timing_law_reopened": False,
         },
     }
     return c.seal(manifest, "master_manifest_sha256")
+
+
+def rebind_manifest(manifest: Mapping[str, Any], *, verdict: Mapping[str, Any],
+                    verdict_path: Path, master_tree: Mapping[str, Any],
+                    repo_root: Path) -> dict[str, Any]:
+    """Re-seal an existing manifest against a corrected verdict, without recutting.
+
+    The audio is not a function of the verdict text, so a corrected verdict must not
+    demand a new master. The caller proves the files on disk are still the object the
+    manifest names; this swaps the authorizing identities and re-seals.
+    """
+    value = {key: item for key, item in manifest.items() if key != "master_manifest_sha256"}
+    decisions = dict(value["authorizing_decisions"])
+    decisions["monitoring_verdict_sha256"] = verdict["verdict_sha256"]
+    decisions["monitoring_verdict_container_sha256"] = c.sha256_file(verdict_path)
+    decisions["monitoring_constraints"] = list(verdict["constraints"])
+    decisions["monitoring_verdict"] = verdict["verdict"]
+    value["authorizing_decisions"] = decisions
+    value["master_tree"] = dict(master_tree)
+    value["earcrate_git_head"] = c.current_git_head(repo_root)
+    return c.seal(value, "master_manifest_sha256")
 
 
 def build_public_projection(manifest: Mapping[str, Any]) -> dict[str, Any]:
@@ -145,20 +206,23 @@ def build_public_projection(manifest: Mapping[str, Any]) -> dict[str, Any]:
         "descent": DESCENT_ID,
         "master_id": MASTER_ID,
         "master_version": MASTER_VERSION,
+        "master_state": QUALIFIED_PENDING_AUDITION,
         "musical_result": {
-            "headline": "A1-07 has an accepted, exactly reproducible album master.",
+            "headline": ("A1-07 has a technically qualified master awaiting its owner "
+                         "audition."),
             "detail": (
-                "The owner-selected native-pocket production render was ratified in the "
-                "monitoring room and mastered with a single linear gain of "
+                "The owner-selected native-pocket production render was ratified for "
+                "mastering in the monitoring room and mastered with a single linear gain of "
                 f"{plan['solved_gain_db']:+.2f} dB to a {plan['ceiling_dbtp']} dBTP ceiling. "
                 "No limiter, no EQ, no multiband, no resampling and no dither."),
             "consequence": (
-                "The vertical slice from private source custody to accepted master is closed "
-                "for one track. The mechanisms it proved are custody, deterministic rendering, "
-                "blind owner review and linear mastering -- not arrangement synthesis."),
+                "Every machine claim a master can carry is now carried: determinism, ceiling, "
+                "section invariance and signal condition. The listening claim is not, because "
+                "the mastered object has not been heard."),
             "scope_limit": (
-                "This accepts one album master. It does not complete the A1-07 system "
-                "reference, which requires the withheld-answer recovery challenge."),
+                "This accepts nothing. The monitoring verdict accepted the production render "
+                "and authorized the chain; the mastered WAV postdates it. Neither the album "
+                "master counter nor the system reference moves on this receipt."),
         },
         "chain": {
             "stages": ["solved linear gain"],
@@ -216,17 +280,33 @@ def build_public_projection(manifest: Mapping[str, Any]) -> dict[str, Any]:
         },
         "review": {
             "monitoring_room_ratification": True,
+            "monitoring_verdict": decisions.get("monitoring_verdict", MONITORING_VERDICT),
+            "monitoring_verdict_scope": (
+                "the production render and the authorization to master it, not the mastered "
+                "object"),
+            "post_master_audition_complete": False,
             "blind": False,
             "reopens_timing_law": False,
             "constraints": decisions["monitoring_constraints"],
         },
         "state": {
-            "accepted_album_master": True,
-            "accepted_album_masters": 1,
+            "master_state": MASTER_QUALIFIED,
+            "owner_frontier_selected": True,
+            "owner_monitoring_acceptance": True,
+            "authorized_for_mastering": True,
+            "mastering_chain_qualified": True,
+            "deterministic_master_pair": True,
+            "owner_master_acceptance": False,
+            "accepted_album_master": False,
+            "accepted_album_masters": 0,
             "system_reference_complete": False,
             "completed_system_references": 0,
             "rights_and_release_decided": False,
         },
+        "next_decision": (
+            "A narrow post-master audition of the mastered PCM against the already accepted "
+            "production render. Admissible outcomes are ACCEPT_MASTER and "
+            "MASTER_REVISION_REQUIRED. No timing, arrangement or mix frontier is reopened."),
         "boundary": {
             "note": ("Identity and decision only. The master audio, the source render, the "
                      "private receipts and the source custody all remain outside Git."),

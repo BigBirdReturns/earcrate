@@ -8,7 +8,7 @@ is measured by whether they help complete those seven works.
 
 Current product truth:
 
-- Album masters accepted: **1/7**
+- Album masters accepted: **0/7**
 - System references completed: **0/7**
 - Active proving track: **A1-07, Beggin' × Beggin'**
 - Completed-reference claims remain closed until owner acceptance and withheld
@@ -80,7 +80,7 @@ path produces an accountable result on real material.
 | Blind review, reject-all, tie, and scoped review patches | Functional | Preserves owner authority |
 | Work identity and section correspondence | Partial | Essential to Beggin and future same-work tracks |
 | Track-specific conductor and arrangement reasoning | Incomplete | Primary musical bottleneck |
-| Accepted Album One masters | **1/7** | A1-07 accepted; six tracks outstanding |
+| Accepted Album One masters | **0/7** | A1-07 master qualified, audition pending |
 | Withheld-answer system references | **0/7** | Autonomy outcome not yet achieved |
 | Album sequencing and mastering | Not started | Begins after accepted masters exist |
 | Editable Workbench and consumer listener polish | Long-term target | Must eventually expose and preserve accepted projects |

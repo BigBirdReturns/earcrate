@@ -6,7 +6,8 @@ transplants, performance studies, and perceptual discoveries into one record.
 
 Current truth:
 
-- **1/7** album masters are owner-accepted: A1-07, Beggin' × Beggin'.
+- **0/7** album masters are owner-accepted. A1-07 has a qualified master awaiting
+  its post-master audition; a qualified master is not an accepted one.
 - **0/7** references are completed by the system.
 - **A1-07, Beggin' × Beggin'**, is the active proving track.
 - Provider execution, green gates, reproducibility, and signal sanity do not

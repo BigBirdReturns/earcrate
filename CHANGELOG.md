@@ -1,5 +1,108 @@
 # EarCrate — CHANGELOG
 
+## unversioned — Album One has its first accepted master, and three states to prove it
+
+> The ledger moves to **1/7 accepted album masters**. It does *not* move on system
+> references, which stay at **0/7**. The counter advanced only after the owner
+> auditioned the mastered object itself and returned `ACCEPT_MASTER` against its
+> PCM by identity — never on the strength of the qualification evidence, and never
+> on the argument that a linear gain of a known size makes the audition a
+> formality. Getting that order wrong once is why this release has three states.
+
+### The master
+
+- **A1-07 is mastered, auditioned and accepted.** The owner-selected native-pocket production
+  render — not the level-matched review cut the blind verdict warned about — was
+  ratified in the monitoring room as **`ACCEPT_FOR_MASTERING`** and mastered with a
+  single solved linear gain of **+2.5 dB to a -1.0 dBTP ceiling**. Measured, not
+  chosen: the source sat at -3.5 dBTP, so the ceiling implied the gain exactly.
+- **The chain is one filter.** No limiter, no EQ, no multiband, no resampling. A
+  linear gain is order-preserving, so the macro span across setup, body and payoff
+  survived at **8.5 LU** with **0.0 dB** of section drift — every section moved by
+  the applied 2.5 dB and nothing else changed. `assert_linear_chain` enforces this
+  at render time rather than in a comment.
+- **Dither is deliberately absent.** Dither is stochastic and would break the
+  canonical PCM equality that makes the master verifiable. Both required executions
+  agree on canonical PCM *and* on container bytes, which is only possible without
+  it.
+- **Two refusals, both real.** A hard-clipped source raises, because attenuation
+  cannot restore samples destroyed upstream. A loudness target that outruns the
+  ceiling raises: asking this master for -14 LUFS needs +2.8 dB against +2.5 dB of
+  headroom, and that 0.3 dB shortfall is exactly where a limiter gets introduced by
+  accident. Both were exercised against the real object before the master was cut.
+
+### Acceptance
+
+- **`ACCEPT_MASTER`.** The owner reconstructed the declared chain from the accepted
+  production render, compared it to the delivered master at sample level, and found
+  the output to be the source times the declared gain plus the expected 24-bit
+  quantization error — no dynamics reshaping, spectral alteration, low-end
+  rebalance, transition change or arrangement change. The verdict names the mastered
+  PCM and container by identity and reopens no frontier.
+- **A re-seal now restates authority instead of carrying it forward.** The first
+  master run sealed an authority block claiming an accepted album master. Re-sealing
+  against the corrected verdict preserved that block verbatim, so the private
+  manifest went on asserting an acceptance nobody had given — and the acceptance
+  layer then refused the real verdict, because the manifest no longer described a
+  *qualified* master. The claim a correction removes must not survive the
+  correction; a gate now proves it does not.
+
+### Three states, because two collapse
+
+- The lane now distinguishes **`frontier_selected`**, **`master_qualified`** and
+  **`master_accepted`**. A1-07 has reached the second. The monitoring verdict
+  accepted the *production render* and authorized a master to be cut; it could not
+  accept the mastered WAV, which did not exist when the verdict was given.
+- The tempting shortcut is that the transfer is a linear gain of a known size, so
+  the mastered object is a transparent function of an already accepted one and the
+  audition is a formality. That argument substitutes an inference for a listening
+  decision. `earcrate/a1_07_master/acceptance.py` is the only module that can move
+  the counter, it requires a verdict naming the **mastered PCM and container by
+  identity**, and it admits exactly `ACCEPT_MASTER` or `MASTER_REVISION_REQUIRED`.
+- `requalify` re-seals a master against a corrected verdict **without recutting the
+  audio**, after re-verifying that the files on disk still decode to the sealed PCM.
+  A verdict's wording is not an input to the gain stage, so it must not be able to
+  demand a new master — but it also must not be able to silently re-point a receipt
+  at a different one.
+
+### Why mastering is its own package
+
+- `a1_07_full_form.provenance` digests every tracked file under the full-form
+  package, because any of them can change a rendered candidate. Mastering runs after
+  the render and cannot. Adding it inside that package would have moved the adapter
+  digest, contradicted the manifest the accepted render carries, and dropped the
+  lane to `representative_invocation_ready = False` — forcing a re-render to
+  re-prove something the change could not have touched, which is the false alarm the
+  digest exists to prevent. `earcrate/a1_07_master` therefore carries its own digest
+  over its own files, and gates assert the two path sets stay disjoint while both
+  digest implementations still agree.
+
+### Ledger integrity
+
+- The completion gate no longer asserts the counters are zero. That assertion was
+  unfalsifiable and would have failed on the first real acceptance without ever
+  checking that an acceptance was evidenced. The counters are now **derived** from
+  the track rows; an accepted track must name a landed **acceptance** receipt whose
+  verdict is `ACCEPT_MASTER` and whose audited PCM matches the ledger; a
+  qualification receipt is checked to claim no acceptance anywhere; and a completed
+  system reference cannot exist without an accepted master.
+- **The Album Sprint preflight reads acceptance from the ledger**, not from the
+  frontier manifest. That manifest is correctly immutable and correctly reports
+  machine qualification only, so reading acceptance off it could report nothing but
+  `false` — true while nothing was accepted, and still `false` afterwards. The
+  precedence is explicit: machine readiness, frontier selection, master
+  qualification, owner master acceptance, system reference. A lower level never
+  implies a higher one, and a ledger that claims acceptance without a receipt
+  binding that verdict to the mastered PCM is reported as unsupported.
+- Every landed `proofs/album_one/*.public.json` is now checked to still validate its
+  own seal, and `ALBUM_ONE.md` must quote the current manifest seal — the quoted
+  seal had already gone stale.
+- **`a1-07-full-form-v1-frontier-provenance-addendum.public.json`**: two pointers
+  sealed into the frontier receipt stopped resolving when the provenance
+  implementation was replaced and the manifest rebuilt an hour later. The winner,
+  the verdict and every content-addressed identity are unaffected; the addendum
+  records the drift rather than rewriting a sealed record of a completed audition.
+
 ## unversioned — provenance binds to code, not to a commit counter
 
 - **The exact-head check was too coarse in one direction and too weak in the

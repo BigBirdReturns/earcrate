@@ -94,7 +94,13 @@ def test_repo_only_retry_refuses_all_seven_lanes_for_exact_reasons() -> None:
     assert not any(row["kind"] == "blocked_full_form_adapter" for row in a107["blockers"])
     assert a107["observations"]["declared_form_seconds"] >= 45.0
     assert a107["observations"]["representative_full_form_invocation_receipt_bound"] is False
-    assert a107["observations"]["accepted_album_master"] is False
+    # Acceptance comes from the album ledger, not from this run, so it may be true
+    # here. What must hold is that it lifted none of the readiness flags above and
+    # that it is backed by a receipt rather than by machine evidence.
+    if a107["observations"]["accepted_album_master"]:
+        assert "acceptance receipt" in a107["observations"]["acceptance_evidence"]
+    assert a107["observations"]["manifest_declares_human_acceptance"] is False
+    assert a107["observations"]["system_reference_complete"] is False
 
 
 def test_complete_verified_fake_bindings_do_not_launder_missing_music_adapters() -> None:

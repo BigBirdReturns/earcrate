@@ -1,0 +1,45 @@
+{
+  "addendum_sha256": "68113d9260fcce01ee580ee4e10d3af168999e2f69ac1c27a3a740a7ee6e68ec",
+  "amends": {
+    "amendment_type": "clarification of two provenance pointers, not a correction of the verdict or the winner",
+    "receipt": "proofs/album_one/a1-07-full-form-v1-frontier.public.json",
+    "receipt_sha256": "d9e82c8638377840be0e5762cc76a81f6ea14b8e342a757bd950de1716036c76"
+  },
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "descent": "a1-07-full-form-v1",
+  "finding": {
+    "adapter_manifest_sha256": {
+      "current_manifest_container_sha256": "c5e318648ec74752172cbf104fefbdb453fa1fa8e4b820422120ab19021e1430",
+      "current_manifest_seal": "fd650805e53fbf508935cae9f2b3102daf4b37a23c085a93b4ff67345c14497b",
+      "declared_by_receipt": "f5efcee851748f4247bae126ad91a2b8ed4ccfe1611900643852358ad53591be",
+      "note": "The manifest was rewritten by the rebuild, so the pre-rebuild file digest names no file.",
+      "resolves": false
+    },
+    "cause": "The receipt was sealed at e511252. The next commit, 3864bfc, replaced the render provenance implementation -- it now digests Git blob identity rather than on-disk bytes -- and the frontier manifest was rebuilt under the new implementation. Both sealed pointers were computed before that rebuild.",
+    "issue": "Two identities sealed into the frontier receipt no longer resolve to anything.",
+    "render_provenance_digest": {
+      "current": "c14de5fc93a6c02e29c85d77b9dbee868bfe280a7d215f46477793c96247dfdd",
+      "declared_by_receipt": "f70c90365b6d0ba7d204052816d83218e14818cf7a0de65a0774d20448d6ceb9",
+      "member_count_unchanged": true,
+      "note": "Same declared paths and same member count; only the algorithm changed.",
+      "resolves": false
+    }
+  },
+  "kind": "earcrate_album_one_public_receipt_addendum",
+  "lesson": "A receipt should cite an identity that survives re-execution. Canonical PCM, score and contract identities did; a digest of a rebuilt manifest file and a digest computed by a since-replaced algorithm did not. The same lesson was recorded privately for the render receipts at promotion time, and it applies to public receipts too.",
+  "schema_version": 1,
+  "track_id": "A1-07",
+  "verdict_unaffected": true,
+  "visibility": "public",
+  "what_remains_verified": {
+    "canonical_pcm_sha256": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58",
+    "contract_sha256": "59f9b3599efad4bad268a81d8a72337d9162db55a4f54b3eeac361f7a954e740",
+    "note": "Content-addressed identities survived the rebuild unchanged. The audition, the verdict and the winner are unaffected.",
+    "owner_verdict_seal": "944f7ccd8adebc5f675dddacca723e901ec5ea927a868008aa275cfa47549071",
+    "score_sha256": "8cbec0b72cd417d656fc1e085ae9e426b0c91e3360ea050c5afd14f655260b7c",
+    "winning_timing_law": "native-pocket"
+  }
+}

@@ -147,10 +147,14 @@ def test_album_manifest_promotes_gold_v6_to_protected_incumbent() -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     track = next(row for row in manifest["tracks"] if row["track_id"] == "A1-07")
     evidence = track["private_evidence_commitments"]
-    assert track["status"]["evidence_state"] == (
-        "gold_v6_preferred_incumbent_gold_v7_active"
-    )
-    assert track["status"]["human_acceptance"] is False
+    # The master states are descendants of this lineage, not replacements for it.
+    # Neither qualification nor acceptance may release the protected incumbent,
+    # rewrite its review receipt, or reopen recovery. Written to survive the
+    # transition, so advancing the state does not require editing this gate.
+    assert track["status"]["evidence_state"].startswith(
+        ("gold_v6_", "master_qualified", "accepted_album_master"))
+    assert track["status"]["human_acceptance"] is (
+        track["status"]["album_master"] == "accepted")
     assert evidence["protected_incumbent_id"] == "gold-v6"
     assert evidence["gold_v6_owner_review_receipt_sha256"] == (
         "96aab3a610f0786047bfa076030531ea72da4d3c2b0000e35471ac5511ddc4b3"

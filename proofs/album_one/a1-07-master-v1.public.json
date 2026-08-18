@@ -1,0 +1,113 @@
+{
+  "boundary": {
+    "master_audio_exported": false,
+    "note": "Identity and decision only. The master audio, the source render, the private receipts and the source custody all remain outside Git.",
+    "private_paths_included": false,
+    "source_audio_exported": false,
+    "stems_included": false
+  },
+  "chain": {
+    "ceiling_dbtp": -1.0,
+    "dither": false,
+    "dither_note": "Omitted deliberately: dither is stochastic and would break canonical PCM equality between the two required executions.",
+    "equalization": false,
+    "gain_db": 2.5,
+    "gain_solved_from": "measured true peak, not chosen",
+    "limiter": false,
+    "multiband": false,
+    "resampling": false,
+    "stages": [
+      "solved linear gain"
+    ]
+  },
+  "descent": "a1-07-full-form-v1",
+  "kind": "earcrate_album_one_public_master_receipt",
+  "macro_dynamics": {
+    "claim": "a linear gain moves every section by the same amount",
+    "macro_span_lu_master": 8.5,
+    "macro_span_lu_source": 8.5,
+    "max_section_gain_drift_db": 0.0,
+    "preserved": true,
+    "section_delta_db": {
+      "body": 2.5,
+      "payoff": 2.5,
+      "setup": 2.5
+    }
+  },
+  "master_id": "a1-07-master-v1",
+  "master_state": "technically_qualified_pending_owner_audition",
+  "master_version": "1.0.0",
+  "musical_result": {
+    "consequence": "Every machine claim a master can carry is now carried: determinism, ceiling, section invariance and signal condition. The listening claim is not, because the mastered object has not been heard.",
+    "detail": "The owner-selected native-pocket production render was ratified for mastering in the monitoring room and mastered with a single linear gain of +2.50 dB to a -1.0 dBTP ceiling. No limiter, no EQ, no multiband, no resampling and no dither.",
+    "headline": "A1-07 has a technically qualified master awaiting its owner audition.",
+    "scope_limit": "This accepts nothing. The monitoring verdict accepted the production render and authorized the chain; the mastered WAV postdates it. Neither the album master counter nor the system reference moves on this receipt."
+  },
+  "next_decision": "A narrow post-master audition of the mastered PCM against the already accepted production render. Admissible outcomes are ACCEPT_MASTER and MASTER_REVISION_REQUIRED. No timing, arrangement or mix frontier is reopened.",
+  "private_receipts": {
+    "frontier_manifest_sha256": "fd650805e53fbf508935cae9f2b3102daf4b37a23c085a93b4ff67345c14497b",
+    "master_manifest_sha256": "4ed8e22aaf858341f2dc134ffdb2944e1d462d1c3b8a48464a72036fe4a96cce",
+    "monitoring_verdict_sha256": "6ea671e831412b2475cf3714a3316953c7e575a595a57ef428777076866973a9",
+    "note": "Identities only; the receipts themselves are not in Git."
+  },
+  "provenance": {
+    "canonical_pcm_equality_across_executions": true,
+    "container_equality_across_executions": true,
+    "deterministic_executions": 2,
+    "frontier_contract_sha256": "59f9b3599efad4bad268a81d8a72337d9162db55a4f54b3eeac361f7a954e740",
+    "master_canonical_pcm_sha256": "b467e224808285c6e0f6e1e90c8b8b3908322ffa6471472e8e01f1415ea0b785",
+    "master_container_sha256": "f821ce65c9e406a014f56aedd50c53d67e6539cd61af5a18d0f0bf42eea0312d",
+    "master_provenance_digest": "24ae757819930273bb8a7e79f549a20c35ff36c8769f68b8917e0af996be17a6",
+    "master_provenance_member_count": 3,
+    "master_provenance_paths": [
+      "earcrate/a1_07_master/chain.py",
+      "earcrate/a1_07_master/cli.py",
+      "scripts/earcrate_a1_07_master_v1.py"
+    ],
+    "render_provenance_digest": "c14de5fc93a6c02e29c85d77b9dbee868bfe280a7d215f46477793c96247dfdd",
+    "source_canonical_pcm_sha256": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58"
+  },
+  "receipt_sha256": "870b7d410d7f95a9d4064e054037942f68f810070ebd49125f7c76343426e0fc",
+  "review": {
+    "blind": false,
+    "constraints": [
+      "preserve macro-dynamics",
+      "do not introduce upper-mid or cymbal hardness",
+      "leave the accepted kick/bass relationship intact",
+      "retain at least approximately 1 dBTP delivery headroom",
+      "do not reopen timing, arrangement, source windows, or phrase placement"
+    ],
+    "monitoring_room_ratification": true,
+    "monitoring_verdict": "ACCEPT_FOR_MASTERING",
+    "monitoring_verdict_scope": "the production render and the authorization to master it, not the mastered object",
+    "post_master_audition_complete": false,
+    "reopens_timing_law": false
+  },
+  "schema_version": 1,
+  "signal": {
+    "flat_top_runs": 0,
+    "hard_clipped": false,
+    "master_integrated_lufs": -14.3,
+    "master_sample_peak_dbfs": -1.11,
+    "master_true_peak_dbtp": -1.0,
+    "source_integrated_lufs": -16.8,
+    "source_true_peak_dbtp": -3.5,
+    "true_peak_within_ceiling": true
+  },
+  "state": {
+    "accepted_album_master": false,
+    "accepted_album_masters": 0,
+    "authorized_for_mastering": true,
+    "completed_system_references": 0,
+    "deterministic_master_pair": true,
+    "master_state": "master_qualified",
+    "mastering_chain_qualified": true,
+    "owner_frontier_selected": true,
+    "owner_master_acceptance": false,
+    "owner_monitoring_acceptance": true,
+    "rights_and_release_decided": false,
+    "system_reference_complete": false
+  },
+  "track_id": "A1-07",
+  "visibility": "public"
+}

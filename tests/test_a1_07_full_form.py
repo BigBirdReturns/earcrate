@@ -155,13 +155,37 @@ def test_preflight_refuses_a_manifest_from_another_head():
 
 
 def test_preflight_never_reports_human_acceptance_from_machine_qualification():
+    """Machine evidence and owner acceptance stay independent, in both directions.
+
+    This gate used to assert the preflight reports no acceptance. That was the right
+    rule stated as the wrong fact: acceptance is now read from the album ledger and
+    the acceptance receipt it names, so it does not depend on bindings at all and can
+    legitimately be true here. What must remain true is that the render manifest never
+    claims acceptance, that a reported acceptance is sourced from a receipt, and that
+    acceptance lifts no machine readiness flag -- with nothing bound, nothing is ready
+    no matter what the owner has accepted.
+    """
     from album_sprint_preflight.secondary import beggin
 
     spec = {"adapter": "full_form_v1", "minimum_seconds": 45.0, "maximum_seconds": 120.0,
             "required_bindings": []}
     result = beggin("A1-07", spec, {})
-    assert result["observations"]["accepted_album_master"] is False
-    assert result["observations"]["human_acceptance"] is False
+    observations = result["observations"]
+
+    assert observations["manifest_declares_human_acceptance"] is False, \
+        "the render manifest must never be a source of acceptance"
+    assert result["representative_invocation_ready"] is False
+    assert result["full_form_adapter_ready"] is False
+    assert result["performance_realization_ready"] is False
+
+    if observations["accepted_album_master"]:
+        assert observations["owner_master_acceptance"] is True
+        assert "acceptance receipt" in observations["acceptance_evidence"], \
+            f"acceptance reported without a receipt: {observations['acceptance_evidence']}"
+    else:
+        assert observations["human_acceptance"] is False
+    # Accepting a master never completes the withheld-answer system reference.
+    assert observations["system_reference_complete"] is False
 
 
 def test_no_tracked_artifact_declares_a_candidate_to_letter_mapping():

@@ -83,6 +83,92 @@ def gesture(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any])
     return result
 
 
+def album_acceptance(track_id: str) -> dict[str, Any]:
+    """Where an acceptance claim legitimately comes from.
+
+    The frontier manifest is the wrong source and is correctly immutable: it records
+    machine qualification and says so. Reading acceptance off it could only ever
+    report False, which was true while nothing was accepted and would have gone on
+    being reported after something was. So acceptance is read from the album ledger
+    and the landed receipt it names, in this precedence:
+
+        machine readiness      adapter manifest + invocation evidence
+        frontier selection     sealed frontier receipt
+        master qualification   mastering receipt, deterministic pair, signal gates
+        master acceptance      acceptance receipt naming the exact mastered PCM
+        system reference       separate withheld-answer recovery challenge
+
+    Each level is reported on its own evidence. A lower level never implies a higher
+    one, and a missing receipt reports absence rather than failure.
+    """
+    state = {
+        "master_state": None,
+        "master_qualified": False,
+        "owner_master_acceptance": False,
+        "accepted_album_master": False,
+        "human_acceptance": False,
+        "system_reference_complete": False,
+        "acceptance_receipt_sha256": None,
+        "acceptance_evidence": "no album ledger entry",
+    }
+    ledger_path = ROOT / "configs/album_one/manifest.v1.json"
+    if not ledger_path.is_file():
+        return state
+    try:
+        ledger = load(ledger_path)
+        require_seal(ledger, "manifest_sha256")
+    except Exception as exc:
+        state["acceptance_evidence"] = f"album ledger unreadable or unsealed: {exc}"
+        return state
+
+    row = next((entry for entry in ledger.get("tracks") or []
+                if entry.get("track_id") == track_id), None)
+    if row is None:
+        return state
+
+    status = row.get("status") or {}
+    qualification = row.get("master_qualification") or {}
+    state["master_state"] = qualification.get("master_state")
+    state["master_qualified"] = bool(qualification)
+    state["system_reference_complete"] = status.get("system_reference") == "complete"
+
+    if status.get("album_master") != "accepted":
+        state["acceptance_evidence"] = (
+            f"ledger reports album_master={status.get('album_master')!r}")
+        return state
+
+    # The ledger says accepted; the receipt has to say it too, and name the same
+    # object. A ledger that claims more than its evidence is the failure mode here.
+    master = row.get("accepted_master") or {}
+    for relative in row.get("repo_evidence") or []:
+        if not str(relative).endswith(".public.json"):
+            continue
+        try:
+            receipt = load(ROOT / relative)
+        except Exception:
+            continue
+        if not str(receipt.get("kind", "")).endswith("master_acceptance_receipt"):
+            continue
+        if receipt.get("receipt_sha256") != master.get("acceptance_receipt_sha256"):
+            continue
+        if receipt.get("verdict") != "ACCEPT_MASTER":
+            continue
+        audited = (receipt.get("audited_object") or {}).get("canonical_pcm_sha256")
+        if audited != master.get("canonical_pcm_sha256"):
+            continue
+        state["owner_master_acceptance"] = True
+        state["accepted_album_master"] = True
+        state["human_acceptance"] = True
+        state["acceptance_receipt_sha256"] = receipt.get("receipt_sha256")
+        state["acceptance_evidence"] = f"acceptance receipt {relative}"
+        return state
+
+    state["acceptance_evidence"] = (
+        "the ledger claims acceptance but no landed receipt binds that verdict to this "
+        "mastered PCM")
+    return state
+
+
 def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, Any]:
     """Derive A1-07 readiness from the full-form adapter and its execution receipt.
 
@@ -153,6 +239,7 @@ def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) 
             invocation_errors.append(f"manifest is unreadable or unsealed: {exc}")
             manifest = {}
 
+    acceptance = album_acceptance(track_id)
     head = current_git_head()
     clean = worktree_is_clean()
     executed_head = str(manifest.get("earcrate_git_head") or "")
@@ -232,9 +319,19 @@ def beggin(track_id: str, spec: Mapping[str, Any], bindings: Mapping[str, Any]) 
         "form_sections_declared": sorted(sections),
         "phrase_map_declared": bool(phrase_map.get("vocal_phrases")),
         "representative_full_form_invocation_receipt_bound": bool(manifest),
-        # Machine qualification never speaks for the owner.
-        "human_acceptance": bool((manifest.get("authority") or {}).get("human_acceptance", False)),
-        "accepted_album_master": False,
+        # Machine qualification never speaks for the owner, so acceptance is read
+        # from the album ledger and its acceptance receipt -- never from this
+        # manifest, which correctly only ever reports machine qualification.
+        "manifest_declares_human_acceptance": bool(
+            (manifest.get("authority") or {}).get("human_acceptance", False)),
+        "master_state": acceptance["master_state"],
+        "master_qualified": acceptance["master_qualified"],
+        "owner_master_acceptance": acceptance["owner_master_acceptance"],
+        "human_acceptance": acceptance["human_acceptance"],
+        "accepted_album_master": acceptance["accepted_album_master"],
+        "system_reference_complete": acceptance["system_reference_complete"],
+        "acceptance_receipt_sha256": acceptance["acceptance_receipt_sha256"],
+        "acceptance_evidence": acceptance["acceptance_evidence"],
     }
 
     if tool_errors:

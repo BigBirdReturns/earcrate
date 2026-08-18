@@ -94,6 +94,33 @@ def load_monitoring_verdict(path: Path, *, accepted_pcm_sha256: str) -> dict[str
     return value
 
 
+def qualification_authority() -> dict[str, Any]:
+    """What a mastering run is entitled to claim, stated in one place.
+
+    Derived rather than stored, because a stale copy of this block is a manifest that
+    claims an acceptance nobody gave. `rebind_manifest` re-derives it for exactly that
+    reason: a re-seal must restate the authority, never carry the previous one forward.
+    """
+    return {
+        "master_state": MASTER_QUALIFIED,
+        "album_master_accepted": False,
+        "monitoring_verdict": MONITORING_VERDICT,
+        "monitoring_verdict_accepted": (
+            "the production render, and authorization to master it"),
+        "monitoring_verdict_did_not_accept": (
+            "the mastered object, which did not exist when the verdict was given"),
+        "awaiting": (
+            "a narrow post-master audition of the mastered PCM against the accepted "
+            "production render, admitting ACCEPT_MASTER or MASTER_REVISION_REQUIRED"),
+        "system_reference_complete": False,
+        "system_reference_note": (
+            "The withheld-answer recovery challenge has not run. An accepted master would "
+            "be the album claim; the system reference is the separate autonomy claim."),
+        "rights_and_release": "separate decision, not conferred here",
+        "timing_law_reopened": False,
+    }
+
+
 def build_manifest(
     *,
     source_render: Path,
@@ -148,24 +175,7 @@ def build_manifest(
         "plan": dict(plan),
         "master": dict(rendered),
         "verification": dict(verification),
-        "authority": {
-            "master_state": MASTER_QUALIFIED,
-            "album_master_accepted": False,
-            "monitoring_verdict": MONITORING_VERDICT,
-            "monitoring_verdict_accepted": (
-                "the production render, and authorization to master it"),
-            "monitoring_verdict_did_not_accept": (
-                "the mastered object, which did not exist when the verdict was given"),
-            "awaiting": (
-                "a narrow post-master audition of the mastered PCM against the accepted "
-                "production render, admitting ACCEPT_MASTER or MASTER_REVISION_REQUIRED"),
-            "system_reference_complete": False,
-            "system_reference_note": (
-                "The withheld-answer recovery challenge has not run. An accepted master would "
-                "be the album claim; the system reference is the separate autonomy claim."),
-            "rights_and_release": "separate decision, not conferred here",
-            "timing_law_reopened": False,
-        },
+        "authority": qualification_authority(),
     }
     return c.seal(manifest, "master_manifest_sha256")
 
@@ -188,6 +198,10 @@ def rebind_manifest(manifest: Mapping[str, Any], *, verdict: Mapping[str, Any],
     value["authorizing_decisions"] = decisions
     value["master_tree"] = dict(master_tree)
     value["earcrate_git_head"] = c.current_git_head(repo_root)
+    # Re-derive rather than carry forward: a re-seal that preserved a previous
+    # authority block would let a corrected manifest keep an acceptance claim the
+    # correction was made to remove.
+    value["authority"] = qualification_authority()
     return c.seal(value, "master_manifest_sha256")
 
 

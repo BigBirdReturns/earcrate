@@ -1,0 +1,50 @@
+{
+  "audited_object": {
+    "canonical_pcm_sha256": "b467e224808285c6e0f6e1e90c8b8b3908322ffa6471472e8e01f1415ea0b785",
+    "container_sha256": "f821ce65c9e406a014f56aedd50c53d67e6539cd61af5a18d0f0bf42eea0312d",
+    "note": "The accepted object is the mastered PCM itself, not the render it was derived from and not the chain that derived it.",
+    "source_canonical_pcm_sha256": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58"
+  },
+  "audition": {
+    "admissible_outcomes": [
+      "ACCEPT_MASTER",
+      "MASTER_REVISION_REQUIRED"
+    ],
+    "blind": false,
+    "findings": "A verified scalar transform of an already accepted production render, so the narrow final translation decision is supportable without reopening any musical authority.",
+    "human_review": true,
+    "kind": "narrow post-master audition against the accepted production render",
+    "reopened_frontiers": []
+  },
+  "authorizing_chain": {
+    "acceptance_verdict_sha256": "96516496ccd58a82179963c6ba6364cb86d9d54fb3c4f22e0a6326e1d76287bd",
+    "authorized_for_mastering_by": "ACCEPT_FOR_MASTERING",
+    "frontier_selected_by": "sealed blind owner verdict",
+    "master_manifest_sha256": "4ed8e22aaf858341f2dc134ffdb2944e1d462d1c3b8a48464a72036fe4a96cce",
+    "monitoring_verdict_sha256": "6ea671e831412b2475cf3714a3316953c7e575a595a57ef428777076866973a9"
+  },
+  "boundary": {
+    "master_audio_exported": false,
+    "note": "Identity and decision only. The mastered audio, the source render and the private receipts all remain outside Git.",
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "descent": "a1-07-full-form-v1",
+  "kind": "earcrate_album_one_public_master_acceptance_receipt",
+  "master_id": "a1-07-master-v1",
+  "master_state": "master_accepted",
+  "receipt_sha256": "1ece16c747cd567c152989d27b4845b24d8846b0eef950de9dcafcfdfbe26049",
+  "schema_version": 1,
+  "scope_limit": "This decides one album master and nothing else. The withheld-answer recovery challenge remains a separate unmet contract, and rights remain a third decision.",
+  "state": {
+    "accepted_album_master": true,
+    "accepted_album_masters": 1,
+    "completed_system_references": 0,
+    "owner_master_acceptance": true,
+    "rights_and_release_decided": false,
+    "system_reference_complete": false
+  },
+  "track_id": "A1-07",
+  "verdict": "ACCEPT_MASTER",
+  "visibility": "public"
+}

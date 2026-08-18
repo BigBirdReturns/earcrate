@@ -1,15 +1,17 @@
 # EarCrate — CHANGELOG
 
-## unversioned — A1-07 has a qualified master, and qualification is not acceptance
+## unversioned — Album One has its first accepted master, and three states to prove it
 
-> The ledger stays at **0/7 accepted album masters** and **0/7 completed system
-> references**. A deterministic, compliant, exactly reproducible master now exists
-> for A1-07, and nobody has heard it yet. Those are different claims, and this
-> release is mostly about refusing to let the second one ride on the first.
+> The ledger moves to **1/7 accepted album masters**. It does *not* move on system
+> references, which stay at **0/7**. The counter advanced only after the owner
+> auditioned the mastered object itself and returned `ACCEPT_MASTER` against its
+> PCM by identity — never on the strength of the qualification evidence, and never
+> on the argument that a linear gain of a known size makes the audition a
+> formality. Getting that order wrong once is why this release has three states.
 
 ### The master
 
-- **A1-07 is mastered and qualified.** The owner-selected native-pocket production
+- **A1-07 is mastered, auditioned and accepted.** The owner-selected native-pocket production
   render — not the level-matched review cut the blind verdict warned about — was
   ratified in the monitoring room as **`ACCEPT_FOR_MASTERING`** and mastered with a
   single solved linear gain of **+2.5 dB to a -1.0 dBTP ceiling**. Measured, not
@@ -28,6 +30,22 @@
   ceiling raises: asking this master for -14 LUFS needs +2.8 dB against +2.5 dB of
   headroom, and that 0.3 dB shortfall is exactly where a limiter gets introduced by
   accident. Both were exercised against the real object before the master was cut.
+
+### Acceptance
+
+- **`ACCEPT_MASTER`.** The owner reconstructed the declared chain from the accepted
+  production render, compared it to the delivered master at sample level, and found
+  the output to be the source times the declared gain plus the expected 24-bit
+  quantization error — no dynamics reshaping, spectral alteration, low-end
+  rebalance, transition change or arrangement change. The verdict names the mastered
+  PCM and container by identity and reopens no frontier.
+- **A re-seal now restates authority instead of carrying it forward.** The first
+  master run sealed an authority block claiming an accepted album master. Re-sealing
+  against the corrected verdict preserved that block verbatim, so the private
+  manifest went on asserting an acceptance nobody had given — and the acceptance
+  layer then refused the real verdict, because the manifest no longer described a
+  *qualified* master. The claim a correction removes must not survive the
+  correction; a gate now proves it does not.
 
 ### Three states, because two collapse
 

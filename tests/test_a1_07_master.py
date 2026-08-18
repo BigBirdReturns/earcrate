@@ -418,6 +418,33 @@ def test_the_public_master_receipt_carries_no_paths_or_media():
     assert c.validate_seal(public, "receipt_sha256") == public["receipt_sha256"]
 
 
+def test_a_re_seal_restates_authority_instead_of_carrying_it_forward(tmp_path):
+    """A corrected manifest must not keep the claim the correction removed.
+
+    The first master run sealed an authority block claiming an accepted album master.
+    Re-sealing against the corrected verdict preserved that block verbatim, so the
+    private manifest went on asserting an acceptance nobody had given -- and the
+    acceptance layer then refused the real verdict, because the manifest no longer
+    described a qualified master. Authority is derived on every seal now.
+    """
+    from earcrate.a1_07_master.receipt import qualification_authority, rebind_manifest
+
+    stale = _manifest()
+    stale["authority"] = {"album_master_accepted": True, "master_state": "master_accepted"}
+    verdict_path = tmp_path / "verdict.json"
+    c.atomic_write_json(verdict_path, _verdict("2" * 64))
+    verdict = load_monitoring_verdict(verdict_path, accepted_pcm_sha256="2" * 64)
+
+    resealed = rebind_manifest(stale, verdict=verdict, verdict_path=verdict_path,
+                               master_tree={"digest": "1" * 64, "member_count": 3,
+                                            "declared_paths": ["x"]},
+                               repo_root=ROOT)
+    assert resealed["authority"] == qualification_authority()
+    assert resealed["authority"]["album_master_accepted"] is False
+    assert resealed["authority"]["master_state"] == MASTER_QUALIFIED
+    assert c.validate_seal(resealed, "master_manifest_sha256")
+
+
 def test_only_a_verdict_naming_the_mastered_object_can_accept_it(tmp_path):
     """Acceptance binds to the mastered PCM, not to the render it came from.
 

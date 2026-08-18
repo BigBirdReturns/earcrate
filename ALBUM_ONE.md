@@ -12,10 +12,10 @@ only after the tracks exist as owner-accepted music.
 
 ## Current ledger
 
-- Album masters accepted: **0/7**
+- Album masters accepted: **1/7**
 - System references completed: **0/7**
-- Active proving track: **A1-07, Beggin' × Beggin'** (master qualified; owner
-  audition and system reference both open)
+- Active proving track: **A1-07, Beggin' × Beggin'** (master accepted; system
+  reference open)
 - Final album sequence: **unsequenced**
 - Acceptance authority: **the owner**
 - Release authority: **a separate rights decision**
@@ -25,7 +25,7 @@ The machine-readable authority is
 Its schema is
 [`schemas/earcrate_album_program_v1.schema.json`](schemas/earcrate_album_program_v1.schema.json).
 The manifest seal is
-`93a3e526a53d5137989009788cd067421f11558f752f5a128b823ebb9c6bb134`.
+`101f51b27be059cbd474b054787cb616b656acb264a804a16c23e5a0349bf44a`.
 
 ## The seven commissioned tracks
 
@@ -37,7 +37,7 @@ The manifest seal is
 | **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
 | **A1-05** | sombr “My Body Isn’t Ready” × Coldplay “Yellow” | Arrangement-ancestry handoff | Normalized specimen exists; exact private editions remain unbound | Test chorus width, drum lift, neutral alignment, and reverse modernization under blind review |
 | **A1-06** | PinkPantheress “Stateside” / bhangra gesture | Perceptual gesture to arrangement | Commissioned, but no canonical specimen or comparison corpus is materialized | Isolate the gesture and build a held-out retrieval and transformation audition with negative controls |
-| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | Qualified master: native-pocket full form, deterministic and compliant, **not yet auditioned** | Audition the mastered object itself; only that verdict can accept an album master |
+| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | **Accepted album master**: native-pocket full form, auditioned, deterministic, exactly reproducible | Run the withheld-answer recovery challenge; the album claim is closed, the autonomy claim is not |
 
 The answer-key corpora in `earcrate/reference/` remain calibration and discovery
 graders. They are not additional album tracks and may not inflate the completion
@@ -69,14 +69,15 @@ paths, and private option maps remain outside the repository.
 
 ## Active focus: A1-07 Beggin
 
-Beggin is the first track to reach a **qualified** master, and the distinction is
-the point. The lane now separates three states that are easy to collapse into one:
+Beggin is the first track to reach an **accepted album master**. It got there
+through three states the lane keeps separate, because they are easy to collapse
+into one:
 
 | State | Reached by | A1-07 |
 | --- | --- | --- |
 | `frontier_selected` | sealed owner verdict over a blind frontier | yes |
 | `master_qualified` | deterministic master pair and every signal gate | yes |
-| `master_accepted` | owner verdict naming the mastered PCM itself | **no** |
+| `master_accepted` | owner verdict naming the mastered PCM itself | yes |
 
 The qualified object is the native-pocket full form: 56.111 s of setup, body and
 payoff, selected from a blind frontier whose verdict was sealed before the letter
@@ -87,12 +88,15 @@ survives exactly and two executions agree on canonical PCM and on container byte
 The public receipt is
 [`proofs/album_one/a1-07-master-v1.public.json`](proofs/album_one/a1-07-master-v1.public.json).
 
-The monitoring verdict accepted the production render and authorized the chain. It
-did not accept the mastered WAV, because that object did not exist when the verdict
-was given. The transform is a linear gain of a known size, so it is tempting to
-treat the audition as a formality — but that argument replaces a listening decision
-with an inference, and the completion model does not allow it. The counter stays at
-0/7 until the mastered object is heard.
+The counter moved only on the third state. The monitoring verdict accepted the
+production render and authorized the chain; it could not accept the mastered WAV,
+because that object did not exist when the verdict was given. The transform is a
+linear gain of a known size, so it was tempting to treat the audition as a
+formality — but that argument replaces a listening decision with an inference, and
+the completion model does not allow it. The owner reconstructed the declared chain
+from the accepted render, compared the two at sample level, and returned
+`ACCEPT_MASTER` against the mastered PCM by identity. The acceptance receipt is
+[`proofs/album_one/a1-07-master-acceptance-v1.public.json`](proofs/album_one/a1-07-master-acceptance-v1.public.json).
 
 The withheld-answer recovery challenge is a further, separate contract, so
 `system_reference` stays `incomplete` regardless of how the audition goes. And what

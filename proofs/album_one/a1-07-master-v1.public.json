@@ -46,7 +46,7 @@
   "next_decision": "A narrow post-master audition of the mastered PCM against the already accepted production render. Admissible outcomes are ACCEPT_MASTER and MASTER_REVISION_REQUIRED. No timing, arrangement or mix frontier is reopened.",
   "private_receipts": {
     "frontier_manifest_sha256": "fd650805e53fbf508935cae9f2b3102daf4b37a23c085a93b4ff67345c14497b",
-    "master_manifest_sha256": "50ef5439fee8461933f1ea90940ed8c79cf7883d3954ce6b5e4adc3f6d3cbfcb",
+    "master_manifest_sha256": "4ed8e22aaf858341f2dc134ffdb2944e1d462d1c3b8a48464a72036fe4a96cce",
     "monitoring_verdict_sha256": "6ea671e831412b2475cf3714a3316953c7e575a595a57ef428777076866973a9",
     "note": "Identities only; the receipts themselves are not in Git."
   },
@@ -67,7 +67,7 @@
     "render_provenance_digest": "c14de5fc93a6c02e29c85d77b9dbee868bfe280a7d215f46477793c96247dfdd",
     "source_canonical_pcm_sha256": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58"
   },
-  "receipt_sha256": "4d60bfa686fc5398a837ddd6231a31ca7ac430e3c14a6e020eb691717fc8a713",
+  "receipt_sha256": "870b7d410d7f95a9d4064e054037942f68f810070ebd49125f7c76343426e0fc",
   "review": {
     "blind": false,
     "constraints": [

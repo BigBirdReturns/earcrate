@@ -4,9 +4,9 @@ The control question for every milestone is: **which Album One track becomes mor
 likely to reach an owner-accepted master, and what listening control proves that
 change?**
 
-The honest current ledger is **0/7 accepted album masters** and **0/7 completed
-system references**. A1-07 now has a technically qualified master, which is a
-machine claim and not a listening one. Beggin is the active proving track because it has the deepest
+The honest current ledger is **1/7 accepted album masters** and **0/7 completed
+system references**. A1-07 is accepted: the owner auditioned the mastered object,
+not merely the render it came from. The autonomy claim is untouched. Beggin is the active proving track because it has the deepest
 retained evidence and the clearest musical failure.
 
 ## 0. Make Album One the repository authority

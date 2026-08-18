@@ -1,5 +1,52 @@
 # EarCrate — CHANGELOG
 
+## unversioned — authority and event become separate identities
+
+> The defect had already happened twice at two levels: a render receipt sealed
+> `rendered_at`, and the master manifest sealed `earcrate_git_head`. Both times a
+> change that could not touch the audio moved an identity another receipt was citing.
+> The first was excused with an addendum. This is the schema fix.
+
+### Two digests
+
+```text
+authority_sha256   what was rendered, from which stable inputs and code identities
+event_sha256       authority_sha256 plus when, where and at which head it happened
+```
+
+- **Acceptance binds authority.** The event digest is recorded as audit context and
+  is explicitly not the predicate, so a commit, checkout, timestamp, hostname or
+  execution id cannot invalidate a decision about audio it could not have affected.
+- **Fields are classified explicitly**, not by excluding the volatile names we happen
+  to know about — that approach fails the next time somebody adds a hostname.
+  Authority and context are declared blocks; a context-shaped name anywhere inside
+  authority is refused at any depth; an unrecognized top-level key is refused rather
+  than silently assigned to either side.
+- Some environment facts are authority: an encoder build or model checkpoint identity
+  can change the output. The path to that binary cannot, so it is context.
+
+### The proof
+
+A matrix, not an assertion. Changing only `earcrate_git_head` moves `event_sha256`
+and leaves `authority_sha256`, qualification and acceptance intact. Changing only
+`rendered_at` does the same. Changing the audio-affecting tree digest moves authority.
+Changing the canonical PCM or the delivered container breaks acceptance outright.
+
+### Migration without rewriting history
+
+- **`a1-07-master-manifest-v2-migration.public.json`** maps the legacy sealed manifest
+  to its durable authority identity, and states what did not change: canonical PCM,
+  container, audio-affecting provenance, and that no audio was recut. The historical
+  manifest keeps its seal as evidence of the original event; nothing was rewritten.
+- **A bare legacy manifest is refused.** The shared loader requires an explicit
+  migration receipt and never infers the mapping, because silent inference is how the
+  original defect survived being diagnosed.
+- **A1-07 stays legacy-plus-migration permanently, by design.** Its master writer sits
+  inside the audio-affecting file set, so converting it to emit v2 would move the
+  digest identifying the code that produced the accepted master. New lanes are built
+  on v2 directly.
+
+
 ## unversioned — the evidence spine comes out; the musical abstractions stay in
 
 > Additive only. No landed receipt, no ledger value, and neither A1-07 provenance

@@ -1,5 +1,80 @@
 # EarCrate — CHANGELOG
 
+## unversioned — the rest of the evidence spine
+
+> Additive. A1-07's ledger state, receipt seals and both provenance digests are
+> unchanged, and the `LedgerTransition` fixed point still writes zero bytes. This is
+> the last framework-first work before A1-02 produces audio.
+
+### TrackCommission
+
+- A typed, validated **projection** of a commission the album ledger already names —
+  not a second authority. `configs/album_one/manifest.v1.json` stays the source of
+  truth.
+- Honest about what the ledger carries: source requirements are prose today, so they
+  project as `typed=False` requirements rather than being invented into a schema
+  nobody wrote. A commission that later declares `binding_requirements` gets typed
+  roles, and the absence is visible until then.
+- Enforces unique binding roles, capability-role agreement, and a content-addressed
+  commission identity that reports drift from the ledger it came from.
+
+### SourceBinding
+
+- **Identity is modality-specific.** A canonical PCM digest is meaningless for a PDF,
+  so `printed_score` refuses to carry one — modelling every source as audio-with-nulls
+  would make "not applicable" and "not yet verified" indistinguishable, and that is the
+  difference between a binding that is fine and one that is missing.
+- Ten modalities are expressible: audio recording, decoded PCM, stem, printed score,
+  symbolic score, MIDI, model checkpoint, rack preset, workspace evidence, reference
+  document.
+- **A path is not a binding.** Readiness requires the identities the modality needs,
+  the edition constraint the commission declared, and verification that actually
+  happened. `edition_candidate()` exists so an unestablished edition stays visible
+  rather than being quietly promoted — an answer key cannot be authoritative if the
+  edition was chosen after acquisition.
+- Custody location never reaches a public projection, whatever the privacy class.
+
+### MasteringPlan
+
+- The **contract**, not A1-07's policy. Declared stages and parameters, allowed tools
+  by identity, sample-format and dither policy, determinism requirement, signal
+  targets with tolerances, refusal conditions, section invariants, output identity
+  requirements.
+- The validator proves executed stages equal declared stages in exact order, refuses
+  undeclared processing and undeclared tools, checks determinism against the declared
+  policy, requires signal gates to carry a **measuring tool identity** rather than
+  echoing the targets, requires every declared refusal to have been exercised, and
+  requires the output to bind stable authority.
+- **Chains A1-07 forbade are permitted when declared.** EQ, compression, limiting,
+  resampling and dither all pass when a plan declares them; a stochastic stage under a
+  bit-exact determinism policy is refused as a contradiction. The framework verifies
+  the contract; it does not dictate an aesthetic.
+- A1-07's chain is expressed in the contract as a conformance fixture — in the test
+  suite, not in the shared module, because a shared module naming a track is the first
+  step toward one branching on a track. Its writer is untouched.
+
+### SystemReferenceChallenge scaffold
+
+- Authority model and state machine only: `not_started` → `prepared` →
+  `answer_withheld` → `executed` → `evaluated` → `passed` or `failed`.
+- A challenge cannot start before `master_accepted`; the withheld answer may not appear
+  anywhere inside the allowed evidence; only a passed challenge may complete a system
+  reference; repeating a result is byte-idempotent, and re-stating it with different
+  findings is refused.
+- **A failed challenge never revokes an accepted master.** The album claim and the
+  autonomy claim are independent, and conflating them would make an honest challenge
+  something we avoid running.
+- The recovery *mechanism* is deliberately absent. That is the next concrete challenge
+  design, not framework work.
+
+### One synthetic lane, walked end to end
+
+`AX-01` exists only in `tests/test_spine_future_path_fixture.py` and proves the whole
+future path — commission, modality-appropriate bindings, mastering qualification,
+acceptance validation, prepared challenge — while asserting it creates no album
+authority: the real ledger is byte-identical afterwards and still verifies.
+
+
 ## unversioned — authority and event become separate identities
 
 > The defect had already happened twice at two levels: a render receipt sealed

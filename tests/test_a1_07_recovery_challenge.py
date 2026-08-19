@@ -28,10 +28,10 @@ from earcrate.evidence.receipts import load_sealed, verify_body_free  # noqa: E4
 
 RECEIPT = ROOT / "proofs" / "album_one" / "a1-07-recovery-challenge-v1.public.json"
 
-CHALLENGE = "ae88e2c5f0093b617df3cdce7428188cfa50a1c09e890e15e9019f9b847033c4"
+CHALLENGE = "9858fe895dd275afdebc01beced7a931483fa8e85447f9c6e02835fb96b1f69e"
 GOLD_SCORE = "8cbec0b72cd417d656fc1e085ae9e426b0c91e3360ea050c5afd14f655260b7c"
 GOLD_RENDER_PCM = "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58"
-CONTROL_SCORE = "6f98bbc1778085db981e41de905b639d6a9b12653f71f2490a123dbefb70e7bc"
+CONTROL_SCORE = "80515df5be48468a840e839aed37b81897ea5e2a8a259b9c560b6c53ca3426b8"
 
 ARRANGEMENT_DECISIONS = frozenset({
     "section mapping", "progressive entry", "bar-level placement", "pitch shift",
@@ -99,6 +99,27 @@ def test_the_control_reproduces_or_it_is_not_a_control():
     receipt = load_sealed(RECEIPT)
     assert receipt["control_reproduces_identically"] is True
     assert len(receipt["control_canonical_pcm_sha256"]) == 64
+
+
+def test_the_control_does_not_distort()  :
+    """A control that clips is not a fair baseline.
+
+    Four stems summed at unity overshoot full scale by 2.1 dB, and the renderer writes 24-bit
+    PCM, so the overshoot becomes flat tops. If both options in a blind pair distort, the
+    comparison is partly about which one distorts less, and the frontier is measuring the
+    wrong thing.
+    """
+    headroom = load_sealed(RECEIPT)["control_headroom"]
+    assert headroom["solved_from"] == "measured true peak, not chosen"
+    assert headroom["boost_refused"] is True
+    assert headroom["solved_master_gain_db"] <= 0.0
+    assert headroom["measured_true_peak_dbtp"] + headroom["solved_master_gain_db"] <=         headroom["ceiling_dbtp"] + 0.01
+
+    # The overshoot has to be measured somewhere it cannot already have been clamped.
+    assert headroom["probe_gain_db"] < 0.0
+    assert headroom["probe_true_peak_dbtp"] < -0.5, (
+        "the probe render sat at full scale, so its own peak was clamped and the solve read "
+        "an overshoot that had already been thrown away")
 
 
 def test_the_gold_receipt_is_transcribed_and_not_invented():

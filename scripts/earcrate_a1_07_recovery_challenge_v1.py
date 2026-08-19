@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -62,6 +63,8 @@ EXCLUDED_FROM_CONTROL = "gold_v6_reviewed_compound"
 ONSET_FRAME = 1024                  # samples per RMS frame when finding where music starts
 ONSET_THRESHOLD_DBFS = -40.0
 CONTROL_FADE_SAMPLES = 480          # 10 ms at 48 kHz: click hygiene, not arrangement
+CONTROL_CEILING_DBTP = -1.0         # four stems summed at unity clip; a control may not
+HEADROOM_PROBE_GAIN_DB = -12.0      # measure the overshoot somewhere it cannot be clamped
 REVIEWER_ID = "operator:owner"
 
 
@@ -281,6 +284,45 @@ def build_naive_control(lineage: dict, bindings: dict) -> tuple[dict, dict]:
     return control, design
 
 
+def solve_master_gain(score: dict, bindings: dict, *, work: Path,
+                      ceiling_dbtp: float = CONTROL_CEILING_DBTP) -> tuple[dict, dict]:
+    """Attenuate the master until nothing clips, and never boost.
+
+    Four stems summed at unity overshoot full scale, and the renderer writes 24-bit PCM, so
+    the overshoot becomes flat tops rather than headroom. A control that distorts is not a
+    fair baseline -- the comparison would partly be about which option clips less. The fix is
+    the same single solved linear gain A1-07's own mastering used: measured rather than
+    chosen, and only ever downward, because boosting would be a decision the control is not
+    allowed to make.
+    """
+    work.mkdir(parents=True, exist_ok=True)
+    # Probe with the master pulled well down first. Measuring the unattenuated render would
+    # measure a file whose samples the 24-bit write had already clamped, so the overshoot
+    # would read as roughly zero and the solve could only ever recover the last dB of it.
+    probe_body = {key: value for key, value in score.items() if key != "score_sha256"}
+    probe_body["master"] = {**dict(probe_body["master"]), "gain_db": HEADROOM_PROBE_GAIN_DB}
+    probe = rz.seal(probe_body)
+    probe_bindings = rz.create_source_bindings(
+        probe, paths={row["source_id"]: Path(row["artifact_path"])
+                      for row in bindings["bindings"]}, verify_pcm=False)
+    rz.render_performance_score(probe, probe_bindings, output_path=work / "probe.wav",
+                                receipt_path=work / "probe.receipt.json")
+    _, probe_peak = rz._measure_loudness(work / "probe.wav")
+    true_peak = probe_peak - HEADROOM_PROBE_GAIN_DB
+    gain = min(0.0, round(ceiling_dbtp - true_peak, 2))
+    body = {key: value for key, value in score.items() if key != "score_sha256"}
+    body["master"] = {**dict(body["master"]), "gain_db": gain}
+    solved = rz.seal(body)
+    rz.validate_performance_score(solved)
+    return solved, {"measured_true_peak_dbtp": round(true_peak, 2),
+                    "probe_gain_db": HEADROOM_PROBE_GAIN_DB,
+                    "probe_true_peak_dbtp": round(probe_peak, 2),
+                    "ceiling_dbtp": ceiling_dbtp,
+                    "solved_master_gain_db": gain,
+                    "boost_refused": True,
+                    "solved_from": "measured true peak, not chosen"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--session", required=True, type=Path)
@@ -303,6 +345,11 @@ def main() -> int:
         raise ChallengeError(
             f"a challenge is already issued here ({load(existing)['challenge_sha256'][:16]}); "
             "pass --reissue to deliberately replace it")
+    if args.reissue:
+        # A reissue replaces the derived renders too. Leaving the old ones would let a new
+        # challenge point at audio the retired control produced.
+        for stale in ("control-render", "control-headroom"):
+            shutil.rmtree(out / stale, ignore_errors=True)
 
     print("verifying the accepted lineage ...")
     lineage = verify_accepted_lineage(session)
@@ -328,6 +375,14 @@ def main() -> int:
         print("rendering the control twice ...")
         paths = {row["source_id"]: Path(row["artifact_path"]) for row in bindings["bindings"]
                  if row["source_id"] != EXCLUDED_FROM_CONTROL}
+        control_bindings = rz.create_source_bindings(control, paths=paths, verify_pcm=True)
+        control, headroom = solve_master_gain(control, control_bindings,
+                                              work=out / "control-headroom")
+        design["headroom"] = headroom
+        print("  true peak {:+.2f} dBTP -> master {:+.2f} dB for a {:+.1f} dBTP ceiling".format(
+            headroom["measured_true_peak_dbtp"], headroom["solved_master_gain_db"],
+            headroom["ceiling_dbtp"]))
+        rz.write_json(out / "naive-control-score.json", control)
         control_bindings = rz.create_source_bindings(control, paths=paths, verify_pcm=True)
         rz.write_json(out / "control-bindings.private.json", control_bindings)
         control_render = rz.verify_reproduction(control, control_bindings,
@@ -379,7 +434,9 @@ def main() -> int:
             "master_cut_from_this_render": True,
             "void_if_owner_disputes_the_transcription": True,
         },
-        "control": {key: value for key, value in design.items() if key != "measurements"},
+        "control": {key: value for key, value in design.items()
+                    if key not in {"measurements", "headroom"}},
+        "control_headroom": design.get("headroom"),
         "control_score_sha256": control["score_sha256"],
         "control_reproduces_identically": None if control_render is None
             else control_render["ok"],

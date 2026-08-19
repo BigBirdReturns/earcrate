@@ -73,7 +73,7 @@
     "on_loss_or_tie": "close A1-01 as an unsuccessful editing candidate and move Album One to A1-03",
     "on_win": "proceed to mastering and A1-01 acceptance; rights eligibility remains a separate decision and is not asked by this pack"
   },
-  "receipt_sha256": "84f812da03ff7c99ec96fe27aed2d1c3bbf6b4128cd6f96e97f566cf59c0b714",
+  "receipt_sha256": "ed5696c7a788d55f080c006841f18d46e17c0c49b9c2779665e68e3db681a35d",
   "schema_version": 1,
   "source_binding": {
     "all_four_authorities_matched": true,
@@ -87,7 +87,20 @@
     "found": true,
     "path_recorded_in_repository": false,
     "rebind_note": "the historical container itself was recovered, so no dependent container had to be regenerated under a new source identity",
-    "rebind_required": false
+    "rebind_required": false,
+    "redundancy": {
+      "all_match_expected_container": true,
+      "byte_identical_copies_found": 4,
+      "distinct_filenames": 2,
+      "locations_kind": [
+        "a user downloads folder",
+        "a host-cutover backup recovery tree",
+        "the original EarCrate workspace external targets",
+        "a frozen shard in that workspace"
+      ],
+      "note": "the search swept every fixed drive for the exact byte length and then hashed each hit; four copies matched the container digest under two different filenames, so the binding does not depend on one surviving file and the recovery was not a lucky find",
+      "paths_recorded_in_repository": false
+    }
   },
   "source_only_contract": {
     "only_source_material_used": true,

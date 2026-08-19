@@ -178,3 +178,15 @@ def test_a_source_whose_audio_is_wrong_is_refused(tmp_path):
     with pytest.raises(SourceError) as caught:
         decode(wrong)
     assert "decoded PCM is" in str(caught.value)
+
+
+def test_the_binding_does_not_rest_on_one_surviving_file():
+    """Custody is stronger when the identity is redundantly present, and weaker if it is not."""
+    receipt = load_sealed(RECEIPT)
+    redundancy = receipt["source_binding"]["redundancy"]
+    assert redundancy["byte_identical_copies_found"] >= 2
+    assert redundancy["all_match_expected_container"] is True
+    assert redundancy["paths_recorded_in_repository"] is False
+    # Different filenames, identical bytes: the identity is the digest, never the name.
+    assert redundancy["distinct_filenames"] >= 2
+    assert len(redundancy["locations_kind"]) == redundancy["byte_identical_copies_found"]

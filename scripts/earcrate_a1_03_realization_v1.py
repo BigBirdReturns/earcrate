@@ -100,8 +100,13 @@ def verify_binding(source: Path) -> dict:
     return expected
 
 
-def recover_chart(source: Path) -> dict:
-    """Beat grid, bar lines and one chord per bar, from the recording and nothing else."""
+def recover_chart(source: Path, *, section_bars: int | None = SECTION_BARS) -> dict:
+    """Beat grid, bar lines and one chord per bar, from the recording and nothing else.
+
+    ``section_bars`` bounds the window. ``None`` recovers every bar the beat grid supports,
+    which is what a full-form realization needs; the bounded default is what the reduction
+    used, and the recovery itself is identical either way.
+    """
     import librosa
 
     y, sr = librosa.load(str(source), sr=ANALYSIS_SAMPLE_RATE, mono=True)
@@ -114,7 +119,8 @@ def recover_chart(source: Path) -> dict:
 
     # Downbeat phase: whichever offset puts the strongest accents on beat one.
     usable = len(beat_strength) - (len(beat_strength) % BEATS_PER_BAR)
-    if usable < BEATS_PER_BAR * (SECTION_BARS + 1):
+    minimum_bars = SECTION_BARS if section_bars is None else section_bars
+    if usable < BEATS_PER_BAR * (minimum_bars + 1):
         raise RealizationError("the recording yields too few beats for a section")
     phases = {}
     for phase in range(BEATS_PER_BAR):
@@ -133,7 +139,8 @@ def recover_chart(source: Path) -> dict:
 
     bars = []
     first = downbeat_phase
-    for index in range(SECTION_BARS):
+    limit = section_bars if section_bars is not None else len(beat_times) // BEATS_PER_BAR + 1
+    for index in range(limit):
         start = first + index * BEATS_PER_BAR
         if start + BEATS_PER_BAR >= len(beat_times):
             break
@@ -171,8 +178,8 @@ def recover_chart(source: Path) -> dict:
             "beat_strengths": [round(value, 4) for value in strengths],
         })
 
-    if len(bars) < SECTION_BARS:
-        raise RealizationError(f"recovered only {len(bars)} of {SECTION_BARS} bars")
+    if len(bars) < minimum_bars:
+        raise RealizationError(f"recovered only {len(bars)} of {minimum_bars} bars")
 
     intervals = np.diff([bar["beat_times"][0] for bar in bars])
     return {

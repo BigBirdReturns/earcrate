@@ -1,0 +1,413 @@
+{
+ "artifact_class": "complete_track_candidate",
+ "authority": {
+  "album_master_accepted": false,
+  "moves_album_counter": false,
+  "owner_audition_performed": false,
+  "rights_or_release_permission": false,
+  "system_reference_completed": false,
+  "witness_transcription_used": false
+ },
+ "boundary": {
+  "crate_atoms_named_by_id_not_by_path": true,
+  "private_paths_included": false,
+  "renders_remain_local": true,
+  "source_audio_exported": false,
+  "source_audio_modified": false
+ },
+ "control": {
+  "differs_from_the_candidate_by": "the bass part, the drum part, and the piano's left-hand root",
+  "incumbent_may_win": true,
+  "what": "the incumbent reduction -- root plus voicings, one piano -- over the same whole form"
+ },
+ "crate": {
+  "accepted": 28,
+  "attack_fraction_of_peak": 0.35,
+  "bass_atoms": 12,
+  "bass_key_root_required": 3,
+  "considered": 36,
+  "drum_atoms": 16,
+  "minimum_hit_peak": 0.05,
+  "screened_out_for_inaudible_attack": 8,
+  "taste_profile": "girl_talk_v1",
+  "trigger_regions_moved_onto_their_transient": 16,
+  "trigger_regions_trimmed_to_seconds": {
+   "36": 0.18,
+   "38": 0.18,
+   "51": 0.12
+  },
+  "why_trimmed": "the crate's drum atoms are bar-length breaks, not hits; a trigger zone plays its region once per note, so the region is trimmed to a stated hit length rather than built by a new hit-extraction organ"
+ },
+ "form": {
+  "bars": 137,
+  "bound_recording_seconds": 250.540417,
+  "duration_seconds": 249.893152,
+  "end_seconds": 250.520091,
+  "fraction_of_the_recording": 0.9974,
+  "start_seconds": 0.626939,
+  "window_not_used": "the form is every bar the recovered beat grid supports"
+ },
+ "headline": "A1-03 is realized as a trio -- piano, bass and drums as parts, from the corrected chart, across the whole bound form -- against the same piano-only reduction extended over that same form.",
+ "kind": "earcrate_a1_03_public_trio_realization_receipt",
+ "new_organs_added": 0,
+ "organs_reused_unmodified": [
+  "earcrate.a1_02.performance.demand",
+  "earcrate.a1_02.performance.rack",
+  "earcrate.a1_02.performance.rack_render",
+  "earcrate.midi.codec",
+  "earcrate.rack.library",
+  "earcrate.rack.render"
+ ],
+ "parts": {
+  "bass": {
+   "every_note_on_a_recovered_beat": true,
+   "figure": "walking quarters: root, third, fifth, chromatic approach to the next bar's root",
+   "instrument": "crate rack, pitched, built from approved EarAtoms",
+   "is_an_interpretation": true,
+   "notes": 548,
+   "register": [
+    28,
+    43
+   ]
+  },
+  "drums": {
+   "figure": "swung ride on every beat, hi-hat on two and four, swung eighth after two and four, feathered kick on the downbeat",
+   "hits": 1359,
+   "instrument": "crate rack, trigger, built from approved EarAtoms",
+   "is_an_interpretation": true,
+   "snare_placed_by": "the bar's own strongest accent in the recording, and only when it stands above the bar's mean",
+   "swing_ratio": 0.6666666666666666
+  },
+  "piano": {
+   "events": 1066,
+   "figure": "voicings on two and four, in a stated register",
+   "instrument": "one sampled grand piano rack, unchanged from A1-02",
+   "left_hand_root_dropped": true,
+   "pitch_range": [
+    60,
+    71
+   ],
+   "polyphony": 4,
+   "why": "the root was only there because nothing else played one"
+  }
+ },
+ "receipt_sha256": "250dd107635ab3875ff6bddfc100070f7ca0cb11b8128696a4672115c23d6e9e",
+ "recovered_chart": {
+  "bar_duration_seconds": {
+   "max": 2.0434,
+   "median": 1.8112,
+   "min": 1.6486
+  },
+  "bars": 137,
+  "chord_fit_median": 0.6751,
+  "chords": [
+   "E min7",
+   "F 7",
+   "A min7",
+   "G sus4",
+   "G min7",
+   "G min7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "G min7",
+   "G min7",
+   "E-flat maj7",
+   "D min7",
+   "E-flat maj7",
+   "D min7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "D min7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "D min7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "C sus4",
+   "F maj7",
+   "A maj7",
+   "G min7",
+   "D min7",
+   "G min",
+   "D min7",
+   "A sus4",
+   "C min7",
+   "C sus4",
+   "D min7",
+   "D min7",
+   "B-flat maj7",
+   "G min7",
+   "D maj7",
+   "E-flat maj7",
+   "F maj7",
+   "B-flat maj7",
+   "C min7",
+   "C sus4",
+   "D min7",
+   "B-flat maj7",
+   "E-flat maj7",
+   "C min7",
+   "G maj7",
+   "B-flat maj7",
+   "E-flat maj7",
+   "C min7",
+   "G maj7",
+   "B-flat maj7",
+   "E-flat maj7",
+   "C min7",
+   "G maj7",
+   "B-flat maj7",
+   "E-flat maj7",
+   "G maj7",
+   "G maj7",
+   "B-flat maj7",
+   "E-flat min7",
+   "D maj7",
+   "E-flat maj7",
+   "C maj7",
+   "G min7",
+   "E-flat maj7",
+   "C maj7",
+   "B-flat maj7",
+   "E-flat maj7",
+   "D maj7",
+   "E-flat maj7",
+   "C maj7",
+   "G min7",
+   "E-flat 7",
+   "C maj7",
+   "D min7",
+   "A min7",
+   "G min7",
+   "D maj7",
+   "B maj7",
+   "D min7",
+   "B-flat maj7",
+   "C min7",
+   "C sus4",
+   "E-flat maj7",
+   "F maj7",
+   "B-flat maj7",
+   "G min7",
+   "D min7",
+   "E-flat maj7",
+   "D min7",
+   "D min7",
+   "C min7",
+   "C maj7",
+   "B-flat maj7",
+   "B-flat sus4",
+   "G 7",
+   "G sus4",
+   "B-flat maj7",
+   "B-flat maj7",
+   "G 7",
+   "C maj7",
+   "G min7",
+   "B-flat sus4",
+   "C min7",
+   "C 7",
+   "G min7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "D min7",
+   "G min7",
+   "G min",
+   "G min",
+   "G sus4",
+   "G dim",
+   "G sus4",
+   "G min7",
+   "D min7",
+   "D min7",
+   "D 7",
+   "D maj7",
+   "E-flat maj7",
+   "G 7",
+   "G min7",
+   "G min7",
+   "G min7",
+   "B-flat maj7"
+  ],
+  "implied_bpm_from_bar_span": 132.512,
+  "reader_agreement": {
+   "bars": 137,
+   "bars_where_two_readers_agree": 110,
+   "floor": 0.75,
+   "fraction": 0.8029,
+   "readers": [
+    "chroma_cqt mean",
+    "chroma_cens median"
+   ],
+   "root_pinned_by": "bass register argmax"
+  },
+  "recovered_from": "the bound recording; no witness value was read"
+ },
+ "renders": {
+  "candidate_sha256": "fe168ede252c83255f787ff2c196c0b302b8571523b8706f0a7b95ec7e596d6d",
+  "clock": "identity: 60 bpm, one beat is one second, so a drifting recovered grid survives a renderer that only understands constant tempo",
+  "control_sha256": "eb1ff3c6c3ffdc71229f3c7b37a90c7883eb6426e7f2e708f6b5908b7bed125b",
+  "identity_clock_bpm": 60.0,
+  "level_matched_lufs": -22.3,
+  "levels": {
+   "bass_stem": {
+    "peak": 0.286963,
+    "rms": 0.09699,
+    "seconds": 249.968
+   },
+   "control": {
+    "peak": 0.707946,
+    "rms": 0.057539,
+    "seconds": 257.893
+   },
+   "drum_stem": {
+    "peak": 0.379082,
+    "rms": 0.050451,
+    "seconds": 249.968
+   },
+   "piano": {
+    "peak": 0.707946,
+    "rms": 0.051091,
+    "seconds": 257.893
+   },
+   "trio": {
+    "peak": 0.604106,
+    "rms": 0.062486,
+    "seconds": 257.893
+   }
+  },
+  "part_fidelity": {
+   "bass": {
+    "fraction": 1.0,
+    "method": "chroma argmax over each written note's own window",
+    "notes_measured": 548,
+    "notes_sounding_the_written_pitch_class": 548
+   },
+   "drums": {
+    "distinct_moments_written": 822,
+    "fraction": 0.9878,
+    "hits_written": 1359,
+    "median_offset_seconds": 0.0309,
+    "method": "librosa onset detection against the distinct written hit moments; the median offset is reported so a part that drags cannot pass as a part that lands",
+    "moments_with_an_attack_within_50ms": 812,
+    "onsets_detected_in_the_stem": 822,
+    "onsets_explained_by_a_written_moment": 812
+   }
+  },
+  "part_gains_db": {
+   "bass": -4.0,
+   "drums": -8.0,
+   "piano": 0.0
+  },
+  "piano_candidate_sha256": "614bbddfdb24ab9ab8a974fbb34d5884ff2d5822fb9b7d8a7d8648a891ea7612",
+  "piano_control_sha256": "87f348e575c4c7a0e596beb3c7606f012566892ee5540da4c3fee05ee8909fc7",
+  "renders_are_distinct": true,
+  "rhythm_master_sha256": "7249b71d06937d846517af7a2a30e0aafbb6cc856264608e77c171be8a1e2e89",
+  "rhythm_stems_sha256": {
+   "0001_Bass": "9d57b926a54d89311282883ad411d1df11f90ff96ca18fad286f54c46062cc62",
+   "0002_Drums": "e797b6d24397df8e19871c886348489fd06b23f444395b0c42a2115aa2254bd8"
+  }
+ },
+ "rhythm_build": {
+  "atom_pool_count": 28,
+  "atom_pool_sha256": "90e03f0b7ab2d9746bf1545532e5e384b184b3a92a4f1d0b0e858875fac85db0",
+  "binding_sha256": "a6b412e759291fcc5ee744349afe7112a66eacff8c41f0806dfdd14ccb5a33d4",
+  "build_sha256": "e95d269a895e6f1d07f98c13e8eba49026efe141d1c53fc7075c203ac8d24d5a",
+  "demand_sha256": "ba2534c27c6139cd9e32e8d698bbb6593b3c202cc6051d3352d08c7c86dc2efa",
+  "materialized_atoms": [
+   "atm_0f33187c08810505c128",
+   "atm_3b1174ca6a4812ea02b2",
+   "atm_55c0781818f96df1ecdb",
+   "atm_6fb598d75d6791491a98",
+   "atm_a7b0bc57972388c20daa"
+  ],
+  "proposal_sha256": "642e9cbbec66ac0b022b85b9b842887f7d8f18f0313ba9b98694b549e2de89bd",
+  "racks": [
+   "1993d0fb90d3c38152bb005bb83532d35964da1f8d5f7e0560c8d08d83ae2b9d",
+   "b8542b5dfaeb912233dfb24be4e44727c77cf4fcdcf4e2961f8fc7245f3fef64"
+  ],
+  "selected": [
+   {
+    "atoms": [
+     "atm_55c0781818f96df1ecdb"
+    ],
+    "maximum_transpose_semitones": 11,
+    "mode": "pitched",
+    "notes": [],
+    "role_hint": "bass",
+    "slot": "slot_533fa4ba6d9c979d4c2ce2a3"
+   },
+   {
+    "atoms": [
+     "atm_0f33187c08810505c128",
+     "atm_3b1174ca6a4812ea02b2",
+     "atm_6fb598d75d6791491a98",
+     "atm_a7b0bc57972388c20daa"
+    ],
+    "maximum_transpose_semitones": 0,
+    "mode": "trigger",
+    "notes": [
+     36,
+     38,
+     44,
+     51
+    ],
+    "role_hint": "drums",
+    "slot": "slot_b74d90ee44913dc72faea2cd"
+   }
+  ]
+ },
+ "schema_version": 1,
+ "source_binding": {
+  "canonical_pcm_sha256": "0c45672ea556b3f5a4fea4ef45b67cd20da0a713504fb4c77245ddf9b5369249",
+  "container_sha256": "b87f5ca6588eab74f30e7b2b7afed0c236bec02a0b46868252a5e3c437788fa5",
+  "path_recorded_in_repository": false
+ },
+ "track_id": "A1-03",
+ "what_this_is_not": [
+  "a transcription of the trio's actual bass line or drum part",
+  "a claim that the recovered chords are correct",
+  "an accepted master"
+ ],
+ "witness_cross_check": {
+  "chance_fraction": 0.2143,
+  "chords_in_claimed_key": 104,
+  "chords_outside": [
+   "A maj7",
+   "A min7",
+   "A sus4",
+   "B maj7",
+   "C 7",
+   "C maj7",
+   "D 7",
+   "D maj7",
+   "E min7",
+   "E-flat 7",
+   "E-flat min7",
+   "F maj7",
+   "G 7",
+   "G dim",
+   "G maj7"
+  ],
+  "chords_total": 137,
+  "claim_read_after_recovery": true,
+  "claimed_tonal_space": [
+   "B-flat major",
+   "G minor"
+  ],
+  "lift_over_chance": 0.5448,
+  "note": "the witness was wrong about tempo and is corroborated about harmony; that is a usable result, because it says which of its claims may inform a realization and which may not",
+  "observed_fraction": 0.7591,
+  "verdict": "converges"
+ }
+}

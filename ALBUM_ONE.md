@@ -32,7 +32,7 @@ The manifest seal is
 | ID | Working title | Reference class | Evidence now | Next musical gate |
 | --- | --- | --- | --- | --- |
 | **A1-01** | Pretty Lights, “Empire State of Mind” | Reference-fidelity reconstruction | Reproducible release-candidate fixture; signal sane; human acceptance pending | Put the strongest retained candidate and controls before the owner and require a musical verdict |
-| **A1-02** | Robert Miles, “Children” | Cross-modal score and audio reconstruction | Score, annotations, MIDI, MixScore, and score-side proof are bound; exact audio remains unbound | Bind the exact recording and make score, MIDI, racks, and audio converge on one performance |
+| **A1-02** | Robert Miles, “Children” | Cross-modal score and audio reconstruction | Score, annotations, MIDI, MixScore, and score-side proof are bound; exact audio remains unbound; realization attempt closed as unsuccessful | None. Work is stopped: not mastered, no second instrument commissioned, no further revision |
 | **A1-03** | Aphex Twin / The Bad Plus, “Flim” | Performance-arrangement reconstruction | Community-symbolic witness and adjacent-move evidence are bound; blind audio remains unbound | Bind the exact performance and require symbolic and audio convergence before audition |
 | **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
 | **A1-05** | sombr “My Body Isn’t Ready” × Coldplay “Yellow” | Arrangement-ancestry handoff | Normalized specimen exists; exact private editions remain unbound | Test chorus width, drum lift, neutral alignment, and reverse modernization under blind review |
@@ -188,8 +188,8 @@ record and teach the system nothing.
 | Track | Capability it must prove | Status |
 | --- | --- | --- |
 | **A1-07** | donor-recording arrangement, blind review, mastering, acceptance | proved; system reference open |
-| **A1-02** | score to performance: symbolic authority realized as a played object | next vertical |
-| **A1-01** | reference editing, release governance, the rights boundary | retained candidate is an edit of the reference, so it cannot prove synthesis |
+| **A1-02** | score to performance: symbolic authority realized as a played object | closed: the score was recovered and realized exactly, and the production candidate lost on arrangement and instrumentation |
+| **A1-01** | reference editing, release governance, the rights boundary | next owner-facing action: candidate and control review. The retained candidate is an edit of the reference, so it cannot prove synthesis |
 | **A1-03** | performed-arrangement recovery from symbolic and blind-audio witnesses | unbound; capability fixed by its commission |
 | **A1-04** | exact-edition binding and production-grammar transplant | sources unbound |
 | **A1-05** | arrangement-ancestry transplant under blind review | sources unbound |

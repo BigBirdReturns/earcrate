@@ -1,0 +1,359 @@
+{
+  "arrangement": {
+    "anchors": [
+      {
+        "beat": 0.0,
+        "intent": "intro: the tune alone"
+      },
+      {
+        "beat": 8.0,
+        "intent": "the left hand arrives underneath"
+      },
+      {
+        "beat": 16.0,
+        "intent": "A: full balance"
+      },
+      {
+        "beat": 32.0,
+        "intent": "A repeat: a small lift"
+      },
+      {
+        "beat": 44.0,
+        "intent": "second ending pushes into B"
+      },
+      {
+        "beat": 48.0,
+        "intent": "B: the left hand finally has content"
+      },
+      {
+        "beat": 80.0,
+        "intent": "B repeat: second time inward"
+      },
+      {
+        "beat": 112.0,
+        "intent": "body opens held back"
+      },
+      {
+        "beat": 160.0,
+        "intent": "body builds"
+      },
+      {
+        "beat": 200.0,
+        "intent": "body peak"
+      },
+      {
+        "beat": 252.0,
+        "intent": "C: bass-driven, no inner voices exist here"
+      },
+      {
+        "beat": 288.0,
+        "intent": "C repeat"
+      },
+      {
+        "beat": 312.0,
+        "intent": "second ending pushes into the return"
+      },
+      {
+        "beat": 324.0,
+        "intent": "D.S.: a return should read as a return"
+      },
+      {
+        "beat": 360.0,
+        "intent": "the return rebuilds"
+      },
+      {
+        "beat": 400.0,
+        "intent": "Coda: the densest music in the piece"
+      },
+      {
+        "beat": 417.0,
+        "intent": "let the last chord ring"
+      }
+    ],
+    "event_count": 45,
+    "pan_static": true,
+    "pan_static_reason": "a pan step under a long release jumps audibly",
+    "section_scale_changed": false,
+    "section_scale_note": "an authorised lever deliberately not pulled; the form is complete and uncut at 417 beats"
+  },
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "built_from": {
+    "notes": 1253,
+    "performance": "flat 136 incumbent",
+    "rack": "one bound piano rack",
+    "tempo_bpm": 136.0,
+    "why": "the expressive challenger tied and did not displace it"
+  },
+  "control_property": {
+    "claim": "with every arrangement move set to zero, the production path reproduces the incumbent",
+    "peak_matched_residual": 2.93e-06,
+    "verified": true
+  },
+  "disposition": {
+    "a1_02_album_master": "unaccepted",
+    "a1_02_status": "unsuccessful realization attempt",
+    "album_one_accepted_masters": "1/7",
+    "children_work": "stopped",
+    "further_revisions": "none",
+    "mastering_authorized": false,
+    "next_owner_facing_action": "A1-01 candidate and control review",
+    "piano_control_retained": true,
+    "second_instrument": "not commissioned"
+  },
+  "headline": "A1-02 produced a production candidate, the owner judged it a loss on arrangement and instrumentation, and Children stops here.",
+  "independence": {
+    "commissioned_answer_key_used": false,
+    "control_candidate_used": false,
+    "reference_recording_consulted": false
+  },
+  "kind": "earcrate_a1_02_public_production_candidate_receipt",
+  "limits": {
+    "orchestration": "not attempted; one rack is bound, so this is an arrangement of one piano",
+    "second_instrument_requires": "binding a second source"
+  },
+  "measured_arc": {
+    "largest_move_db": 1.74,
+    "method": "per-section RMS of the level-matched pack files",
+    "restraint_note": "the moves are deliberately modest, under 2 dB at the extremes; this is a first candidate and \"the arrangement is too timid\" is an admissible and useful verdict",
+    "sections": [
+      {
+        "control_rms_db": -26.68,
+        "delta_db": -1.71,
+        "from_beat": 0,
+        "production_rms_db": -28.39,
+        "section": "intro",
+        "to_beat": 16
+      },
+      {
+        "control_rms_db": -31.7,
+        "delta_db": -0.11,
+        "from_beat": 16,
+        "production_rms_db": -31.81,
+        "section": "A first pass",
+        "to_beat": 32
+      },
+      {
+        "control_rms_db": -31.0,
+        "delta_db": 0.6,
+        "from_beat": 32,
+        "production_rms_db": -30.4,
+        "section": "A repeat",
+        "to_beat": 44
+      },
+      {
+        "control_rms_db": -31.42,
+        "delta_db": 0.9,
+        "from_beat": 44,
+        "production_rms_db": -30.52,
+        "section": "A second ending",
+        "to_beat": 48
+      },
+      {
+        "control_rms_db": -28.14,
+        "delta_db": -0.2,
+        "from_beat": 48,
+        "production_rms_db": -28.34,
+        "section": "B first pass",
+        "to_beat": 80
+      },
+      {
+        "control_rms_db": -28.08,
+        "delta_db": -1.26,
+        "from_beat": 80,
+        "production_rms_db": -29.34,
+        "section": "B repeat",
+        "to_beat": 112
+      },
+      {
+        "control_rms_db": -21.6,
+        "delta_db": -0.78,
+        "from_beat": 112,
+        "production_rms_db": -22.38,
+        "section": "body opening",
+        "to_beat": 160
+      },
+      {
+        "control_rms_db": -24.1,
+        "delta_db": 0.97,
+        "from_beat": 160,
+        "production_rms_db": -23.13,
+        "section": "body build",
+        "to_beat": 200
+      },
+      {
+        "control_rms_db": -23.79,
+        "delta_db": 1.25,
+        "from_beat": 200,
+        "production_rms_db": -22.54,
+        "section": "body peak",
+        "to_beat": 252
+      },
+      {
+        "control_rms_db": -27.85,
+        "delta_db": 0.78,
+        "from_beat": 252,
+        "production_rms_db": -27.07,
+        "section": "C first pass",
+        "to_beat": 288
+      },
+      {
+        "control_rms_db": -29.35,
+        "delta_db": 1.0,
+        "from_beat": 288,
+        "production_rms_db": -28.35,
+        "section": "C repeat",
+        "to_beat": 312
+      },
+      {
+        "control_rms_db": -25.99,
+        "delta_db": 0.05,
+        "from_beat": 312,
+        "production_rms_db": -25.94,
+        "section": "C second ending",
+        "to_beat": 324
+      },
+      {
+        "control_rms_db": -22.99,
+        "delta_db": -1.74,
+        "from_beat": 324,
+        "production_rms_db": -24.73,
+        "section": "D.S. return",
+        "to_beat": 360
+      },
+      {
+        "control_rms_db": -23.89,
+        "delta_db": 0.34,
+        "from_beat": 360,
+        "production_rms_db": -23.55,
+        "section": "D.S. rebuild",
+        "to_beat": 400
+      },
+      {
+        "control_rms_db": -25.52,
+        "delta_db": 1.67,
+        "from_beat": 400,
+        "production_rms_db": -23.85,
+        "section": "Coda",
+        "to_beat": 417
+      }
+    ],
+    "why": "a claimed arrangement that is not present in the render is a claim about a plan, not a track"
+  },
+  "mixscore": {
+    "assets": 3,
+    "clock_bpm": 136.0,
+    "decks": 3,
+    "score_sha256": "dbdafbdfb4d6b9739d8fd2d0d3c041f634717e844fc6b8095e6d1b9029d7cb68"
+  },
+  "no_new_organs": "no comparator, tempo family, provider survey, evidence framework or A/B test was added; this uses the existing score, rack, MIDI, stems and MixScore transport",
+  "owner_pack": {
+    "admissible_outcomes": [
+      "production_wins",
+      "loses",
+      "ties"
+    ],
+    "blind": false,
+    "disclosed_control": "flat 136 piano performance",
+    "level_matched_lufs": -22.6,
+    "measured_lufs": {
+      "A1-02-PIANO-CONTROL.wav": -22.6,
+      "A1-02-PRODUCTION-CANDIDATE.wav": -22.4
+    },
+    "on_loss": "record A1-02 as an unsuccessful realization attempt, stop Children, move Album One to A1-01 owner review"
+  },
+  "receipt_sha256": "3b41e3146b6edfee3135d3f772efdc66a848d2369d9f10d8f1ee16426d292189",
+  "renders": {
+    "bit_identical_across_executions": true,
+    "container_caveat": "the MixScore writer emits a libsndfile PEAK chunk carrying a wall-clock timestamp, so two identical renders differ by one header byte; determinism is therefore asserted on the PCM digest, which is what the existing MixScore gate already binds",
+    "duration_seconds": 191.911770833,
+    "executed_events": 45,
+    "frames": 9211765,
+    "identity_is_pcm_not_container": true,
+    "master_pcm_f32le_sha256": "5e03407fd9aee65887747cf482afdef8554403004c32fe20f57cdc19487c27b9",
+    "mix_receipt_sha256": "0577140273bf885dec345a0440a3ccc877b44f2ecf0ff3ea282a1c75e1776a58",
+    "per_deck_stems": 3,
+    "refused_events": 0,
+    "stem_reconciliation_max_abs": 0.0
+  },
+  "reproduction": {
+    "arguments": [
+      "--rack",
+      "--ledger",
+      "--out"
+    ],
+    "private_paths_in_script": false,
+    "rebuild_reproduced_master_pcm_f32le_sha256": true,
+    "rebuild_reproduced_residuals": {
+      "null_arrangement": 2.93e-06,
+      "role_split": 3.814e-06
+    },
+    "rebuilt_from_a_clean_directory": true,
+    "score_digest_is_path_bound": true,
+    "score_digest_note": "a MixScore binds absolute asset paths, so bound_score_sha256 changes when the stems are relocated even though the render is identical; the arrangement identity that survives relocation is the master PCM digest together with the anchors",
+    "script": "scripts/earcrate_a1_02_production_v1.py"
+  },
+  "role_split": {
+    "counts": {
+      "bass": 710,
+      "inner": 92,
+      "melody": 451
+    },
+    "method": "the top right-hand note at each onset is the tune; the rest of the right hand is inner; the left hand is bass",
+    "rebalanced_onto_incumbent_db": {
+      "bass": -4.461,
+      "inner": -5.873,
+      "melody": -5.5344
+    },
+    "roles_reconstruct_incumbent_residual": 3.813702851962475e-06
+  },
+  "schema_version": 1,
+  "state": {
+    "a1_02": "closed as an unsuccessful realization attempt",
+    "album_authority_changed": false,
+    "audio_answer_key": "unbound",
+    "mastering": "not authorized"
+  },
+  "track_id": "A1-02",
+  "verdict": {
+    "answer": "no",
+    "authority": "owner",
+    "bound_containers": {
+      "A1-02-PIANO-CONTROL.wav": "add7e984dd988c1b60703149bb4b3cca7911e80eb55fd109e96548860f373dc1",
+      "A1-02-PRODUCTION-CANDIDATE.wav": "3da004b01ee28137d3547f6838a39b42fe7fa99660a4007ac87ff4ccde668531"
+    },
+    "credited": [
+      "clearer macro contour than the control",
+      "more focused opening",
+      "the second B pass turns inward",
+      "a recognizably reduced D.S. return",
+      "an audibly enlarged coda"
+    ],
+    "decisive": "the moves remain fader and balance gestures over one sustained sampled piano; they supply no new rhythmic body, timbral development, countermotion, production punctuation or orchestral escalation, and across the 35-bar body the gradual gain build reads as automation applied to a mockup rather than a developing track",
+    "failure_primary": "arrangement_and_instrumentation",
+    "failure_secondary": "unedited_form",
+    "measurement_note": "the owner per-bar figures and the per-section RMS arc recorded above are the same signal at different granularity, not competing measurements",
+    "outcome": "LOSE",
+    "owner_measurements": {
+      "full_waveform_correlation": 0.989,
+      "integrated_lufs_pair": [
+        -22.67,
+        -22.61
+      ],
+      "largest_per_bar_moves_db": {
+        "coda": 1.67,
+        "opening": -2.92
+      },
+      "median_per_bar_correlation": 0.99955,
+      "residual_below_control_db": 16.8,
+      "typical_per_bar_move_db": 1.0
+    },
+    "question": "does the production version turn the recovered score into a convincing musical track",
+    "score_failure": false,
+    "tempo_failure": false,
+    "why_not_the_score_or_the_tempo": "both files carry the same notes and the same 136 BPM interpretation, so neither can be the variable under test"
+  },
+  "visibility": "public"
+}

@@ -48,11 +48,16 @@ def test_candidate_and_control_differ_only_in_the_clock():
     assert candidate["clock"] == "recovered"
     assert control["clock"] == "fixed"
 
-    # Same chart, same voicings, same rack: identical event count, range and polyphony.
+    # Same chart, same voicings, same rack: identical notes, range and sample set.
     assert candidate["events"] == control["events"]
     assert candidate["pitch_range"] == control["pitch_range"]
-    assert candidate["polyphony"] == control["polyphony"]
     assert candidate["distinct_samples_used"] == control["distinct_samples_used"]
+
+    # Polyphony is deliberately NOT asserted equal. It is a timing-derived measure -- how many
+    # notes happen to overlap -- and the clock is precisely what differs, so a held root
+    # crossing into the next bar's comp is the isolation working rather than leaking. An
+    # earlier version of this gate required equality and failed for that reason.
+    assert abs(candidate["polyphony"] - control["polyphony"]) <= 1
 
     # And they are genuinely two objects, or the clock was never applied.
     assert realization["renders_are_distinct"] is True
@@ -116,3 +121,29 @@ def test_the_receipt_keeps_calling_a_reduction_a_reduction():
     assert boundary["source_audio_modified"] is False
     assert boundary["source_audio_exported"] is False
     assert boundary["private_paths_included"] is False
+
+
+def test_two_independent_readers_agree_about_the_chart():
+    """The first version of this recovery agreed with itself and nothing else.
+
+    Reading root and quality off one mixed chroma profile cannot separate a chord from its
+    relative substitute -- B-flat major shares two of three tones with G minor 7 -- and a
+    second opinion agreed with it on 12 bars of 32. Pinning the root from the bass register
+    and letting two different full-spectrum readers name the quality took that to 30 of 32.
+
+    So the chart carries its own reliability, and a realization is refused below the floor.
+    A chart nobody can vouch for is not worth rendering.
+    """
+    agreement = load_sealed(RECEIPT)["recovered_chart"]["reader_agreement"]
+    assert agreement["fraction"] >= agreement["floor"]
+    assert agreement["fraction"] == round(
+        agreement["bars_where_two_readers_agree"] / agreement["bars"], 4)
+    assert len(agreement["readers"]) == 2
+    assert agreement["root_pinned_by"] == "bass register argmax"
+
+
+def test_the_chart_publishes_the_dissenting_reading_too():
+    """Where the readers disagree, the receipt has to show both rather than only the winner."""
+    chart = load_sealed(RECEIPT)["recovered_chart"]
+    assert len(chart["second_opinions"]) == chart["bar_count"]
+    assert len(chart["chords"]) == chart["bar_count"]

@@ -69,6 +69,14 @@ VOICING_REGISTER = (60, 72)         # C4 to C5
 COMP_BEATS = (1, 3)                 # zero-based: beats two and four
 VELOCITY_RANGE = (52, 104)
 
+# The root comes from the bass register, not from full-spectrum chroma. Reading both root and
+# quality off one mixed profile cannot separate a chord from its relative substitute -- B-flat
+# major shares two of three tones with G minor 7 -- and that is exactly where the first version
+# of this went wrong.
+BASS_FMIN_HZ = 41.2                 # E1
+BASS_OCTAVES = 2
+MINIMUM_READER_AGREEMENT = 0.75     # below this the chart is not trustworthy at chord level
+
 CHORD_TEMPLATES = {
     "maj": (0, 4, 7), "min": (0, 3, 7), "7": (0, 4, 7, 10), "min7": (0, 3, 7, 10),
     "maj7": (0, 4, 7, 11), "sus4": (0, 5, 7), "dim": (0, 3, 6),
@@ -115,7 +123,12 @@ def recover_chart(source: Path) -> dict:
         phases[phase] = float(folded.reshape(-1, BEATS_PER_BAR).mean(axis=0)[0])
     downbeat_phase = max(phases, key=phases.__getitem__)
 
+    # Three views: the bass register states the root, and two different full-spectrum readers
+    # independently name the quality over that root. Where they disagree, the chart says so.
+    bass_chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=HOP_LENGTH,
+                                             fmin=BASS_FMIN_HZ, n_octaves=BASS_OCTAVES)
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=HOP_LENGTH)
+    cens = librosa.feature.chroma_cens(y=y, sr=sr, hop_length=HOP_LENGTH)
     frames_per_second = sr / HOP_LENGTH
 
     bars = []
@@ -126,23 +139,19 @@ def recover_chart(source: Path) -> dict:
             break
         times = [float(beat_times[start + offset]) for offset in range(BEATS_PER_BAR)]
         end = float(beat_times[start + BEATS_PER_BAR])
-        window = chroma[:, int(times[0] * frames_per_second):int(end * frames_per_second)]
+        lo = int(times[0] * frames_per_second)
+        hi = int(end * frames_per_second)
+        window = chroma[:, lo:hi]
         if not window.size:
             raise RealizationError(f"bar {index} has no chroma")
+
+        root = int(np.argmax(bass_chroma[:, lo:hi].mean(axis=1)))
+        quality, score = _quality_over_root(window.mean(axis=1), root)
+        second_quality, _ = _quality_over_root(np.median(cens[:, lo:hi], axis=1), root)
+
         profile = window.mean(axis=1)
         profile = profile / (profile.sum() + 1e-9)
-
-        best = None
-        for root in range(12):
-            for quality, intervals in CHORD_TEMPLATES.items():
-                template = np.zeros(12)
-                for interval in intervals:
-                    template[(root + interval) % 12] = 1.0
-                template /= template.sum()
-                score = float(np.dot(profile, template))
-                if best is None or score > best[0]:
-                    best = (score, root, quality)
-        score, root, quality = best
+        mass = float(sum(profile[(root + i) % 12] for i in CHORD_TEMPLATES[quality]))
 
         strengths = [float(beat_strength[start + offset]) for offset in range(BEATS_PER_BAR)]
         bars.append({
@@ -153,10 +162,11 @@ def recover_chart(source: Path) -> dict:
             "chord_quality": quality,
             "chord": f"{PITCH_NAMES[root]} {quality}",
             "chord_fit": round(score, 4),
-            # The dot product alone is uninterpretable. This is the share of the bar's
-            # chroma energy sitting on the chosen chord's own tones, which can be read
-            # against the share those tones would hold in a flat chroma.
-            "chord_mass_fraction": round(score * len(CHORD_TEMPLATES[quality]), 4),
+            "second_opinion_quality": second_quality,
+            "readers_agree": quality == second_quality,
+            # The share of the bar's chroma energy sitting on the chosen chord's own tones,
+            # readable against the share those tones would hold in a flat chroma.
+            "chord_mass_fraction": round(mass, 4),
             "chance_mass_fraction": round(len(CHORD_TEMPLATES[quality]) / 12.0, 4),
             "beat_strengths": [round(value, 4) for value in strengths],
         })
@@ -178,6 +188,14 @@ def recover_chart(source: Path) -> dict:
         "implied_bpm_from_bar_span": round(
             BEATS_PER_BAR * 60.0 / float(np.median(intervals)), 3),
         "chord_fit_median": round(float(np.median([bar["chord_fit"] for bar in bars])), 4),
+        "reader_agreement": {
+            "bars_where_two_readers_agree": sum(1 for bar in bars if bar["readers_agree"]),
+            "bars": len(bars),
+            "fraction": round(sum(1 for bar in bars if bar["readers_agree"]) / len(bars), 4),
+            "floor": MINIMUM_READER_AGREEMENT,
+            "readers": ["chroma_cqt mean", "chroma_cens median"],
+            "root_pinned_by": "bass register argmax",
+        },
         "chord_mass_fraction_median": round(
             float(np.median([bar["chord_mass_fraction"] for bar in bars])), 4),
         "chance_mass_fraction_median": round(
@@ -230,6 +248,21 @@ def witness_cross_check(chart: dict) -> dict:
                  "is a usable result, because it says which of its claims may inform a "
                  "realization and which may not"),
     }
+
+
+def _quality_over_root(profile: np.ndarray, root: int) -> tuple[str, float]:
+    """Name the chord quality, given a root the bass already settled."""
+    profile = profile / (float(np.linalg.norm(profile)) or 1.0)
+    best = None
+    for quality, intervals in CHORD_TEMPLATES.items():
+        template = np.zeros(12)
+        for interval in intervals:
+            template[(root + interval) % 12] = 1.0
+        template /= float(np.linalg.norm(template))
+        score = float(np.dot(profile, template))
+        if best is None or score > best[0]:
+            best = (score, quality)
+    return best[1], best[0]
 
 
 def voice(root: int, quality: str) -> tuple[int, list[int]]:
@@ -390,6 +423,16 @@ def main() -> int:
           f"(median implies {chart['implied_bpm_from_bar_span']} bpm)")
     print("  " + " ".join(bar["chord"].replace(" ", "") for bar in chart["bars"][:16]))
 
+    agreement = chart["reader_agreement"]
+    print(f"  two readers agree on {agreement['bars_where_two_readers_agree']}/"
+          f"{agreement['bars']} bars ({agreement['fraction']:.3f}, floor "
+          f"{agreement['floor']})")
+    if agreement["fraction"] < agreement["floor"]:
+        raise RealizationError(
+            f"chord recovery agrees on only {agreement['fraction']:.3f} of bars, below the "
+            f"{agreement['floor']} floor; a realization built on that chart would be playing "
+            "a chart nobody can vouch for")
+
     cross_check = witness_cross_check(chart)
     print(f"  {cross_check['chords_in_claimed_key']}/{cross_check['chords_total']} recovered "
           f"chords sit inside the claimed key "
@@ -444,6 +487,7 @@ def main() -> int:
             "chords": [bar["chord"] for bar in chart["bars"]],
             "chord_fits": [bar["chord_fit"] for bar in chart["bars"]],
             "chord_mass_fractions": [bar["chord_mass_fraction"] for bar in chart["bars"]],
+            "second_opinions": [bar["second_opinion_quality"] for bar in chart["bars"]],
         },
         "realization": {
             "instrument": "one sampled grand piano rack, unchanged from A1-02",

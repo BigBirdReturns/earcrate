@@ -37,6 +37,7 @@ from earcrate.evidence.identity import seal  # noqa: E402
 TRACK_ID = "A1-07"
 PUBLIC_RECEIPT = ROOT / "proofs" / "album_one" / "a1-07-inference-result-v1.public.json"
 TERMINAL_VERDICTS = {"control_wins", "tie_terminates_lineage", "reject_all_terminates_lineage"}
+LEAD_SOURCE = "four_seasons_vocals"
 
 
 class ResultError(RuntimeError):
@@ -66,11 +67,24 @@ def profile(score: dict) -> dict:
             for source_id, row in sorted(rows.items())}
 
 
-def compare(candidate: dict, gold: dict) -> dict:
-    """What the attempt got right, and what it got wrong, source by source."""
+def compare(candidate: dict, gold: dict, source_lufs: dict | None = None) -> dict:
+    """What the attempt got right, and what it got wrong, source by source.
+
+    Balance needs care. A clip's `gain_db` is an attenuation applied to a source, and two
+    scores can only be compared on it if their sources are equally loud to begin with -- which
+    these are not. Comparing the raw numbers said the candidate's band was ten dB hot when it
+    was not. With per-source loudness in hand the comparison runs on where each source
+    actually sits relative to the lead; without it, the balance finding says it cannot be made
+    rather than making it wrongly.
+    """
     left, right = profile(candidate), profile(gold)
     shared = sorted(set(left) & set(right))
     findings = []
+
+    lead = None
+    if source_lufs and LEAD_SOURCE in left and LEAD_SOURCE in right and LEAD_SOURCE in source_lufs:
+        lead = {"candidate": source_lufs[LEAD_SOURCE] + max(left[LEAD_SOURCE]["gain_db"]),
+                "gold": source_lufs[LEAD_SOURCE] + max(right[LEAD_SOURCE]["gain_db"])}
 
     for source_id in shared:
         c, g = left[source_id], right[source_id]
@@ -86,13 +100,22 @@ def compare(candidate: dict, gold: dict) -> dict:
             findings.append({"source_id": source_id, "decision": "tempo_scale",
                              "candidate": c["tempo_scale"], "gold": g["tempo_scale"],
                              "assessment": "wrong"})
-        gap = min(c["gain_db"]) - min(g["gain_db"])
-        if abs(gap) >= 3.0:
+        if source_lufs is None or source_id not in source_lufs:
             findings.append({"source_id": source_id, "decision": "balance",
-                             "candidate_quietest_db": min(c["gain_db"]),
-                             "gold_quietest_db": min(g["gain_db"]),
-                             "candidate_is_louder_by_db": round(gap, 2),
-                             "assessment": "wrong"})
+                             "assessment": "not_comparable",
+                             "why": ("gain_db is an attenuation on a source, and per-source "
+                                     "loudness was not supplied, so the two scores cannot be "
+                                     "compared on it")})
+        elif lead is not None:
+            c_rel = (source_lufs[source_id] + max(c["gain_db"])) - lead["candidate"]
+            g_rel = (source_lufs[source_id] + max(g["gain_db"])) - lead["gold"]
+            gap = c_rel - g_rel
+            findings.append({"source_id": source_id, "decision": "balance",
+                             "candidate_db_under_lead": round(c_rel, 1),
+                             "gold_db_under_lead": round(g_rel, 1),
+                             "candidate_is_louder_by_db": round(gap, 1),
+                             "measured_in": "source loudness plus clip gain, against the lead",
+                             "assessment": "wrong" if abs(gap) >= 3.0 else "near"})
         if c["clips"] != g["clips"]:
             findings.append({"source_id": source_id, "decision": "granularity",
                              "candidate_clips": c["clips"], "gold_clips": g["clips"],
@@ -114,6 +137,8 @@ def main() -> int:
     parser.add_argument("--review-directory", required=True, type=Path)
     parser.add_argument("--candidate-score", required=True, type=Path)
     parser.add_argument("--gold-score", required=True, type=Path)
+    parser.add_argument("--source-lufs", action="append", default=[],
+                        help="source_id=integrated_lufs, so balance is comparable at all")
     args = parser.parse_args()
 
     root = args.review_directory.expanduser().resolve()
@@ -127,7 +152,13 @@ def main() -> int:
     gold = load(args.gold_score)
     rz.validate_performance_score(candidate)
     rz.validate_performance_score(gold)
-    comparison = compare(candidate, gold)
+    source_lufs = {}
+    for entry in args.source_lufs:
+        source_id, _, value = entry.partition("=")
+        source_lufs[source_id] = float(value)
+    comparison = compare(candidate, gold, source_lufs or None)
+    comparison["balance_measured_in"] = ("source integrated loudness plus clip gain, relative "
+                                         "to the lead" if source_lufs else "not measured")
 
     print(f"verdict: {verdict}")
     print(f"  candidate {comparison['candidate_clip_count']} clips against gold "

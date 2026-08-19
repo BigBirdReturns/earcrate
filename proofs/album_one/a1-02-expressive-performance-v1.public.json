@@ -3,7 +3,8 @@
     "private_paths_included": false,
     "source_audio_exported": false
   },
-  "headline": "A1-02 is played rather than triggered, and the difference is auditionable.",
+  "experimental_weakness": "the trial moved velocity, sounding length, pedal, voicing balance, phrase contour, cadence timing and micro-timing at once, so a tie cannot attribute success or failure to any single mechanism; the bundle is the finding, not any part of it",
+  "headline": "A1-02 was played rather than triggered, the owner did not prefer it, and the flat 136 reading remains the incumbent.",
   "independence": {
     "commissioned_answer_key_used": false,
     "control_candidate_used": false,
@@ -48,7 +49,7 @@
     },
     "revisions_remaining_after_verdict": 1
   },
-  "receipt_sha256": "5dffd0685c16e360959436fc368d9ae3c04edbb82814c5483587811020b60b9b",
+  "receipt_sha256": "d97ab7f1ff726929e8e74d64883502bc51d2339f2d420905db66d0fe51176ca1",
   "renders": {
     "expressive": {
       "bit_identical_across_executions": true,
@@ -107,7 +108,9 @@
   "state": {
     "album_authority_changed": false,
     "audio_answer_key": "unbound",
-    "mixscore_v2": "follows the verdict"
+    "expressive_performance": "preserved as a negative result, not promoted",
+    "mixscore_v2": "follows the verdict",
+    "next_owner_object": "one complete A1-02 production candidate from MixScore v2"
   },
   "tempo_decision": {
     "further_tempo_families": "not authorized",
@@ -117,5 +120,21 @@
     "why": "the independently measured performance pulse; fixed after the tempo tie"
   },
   "track_id": "A1-02",
-  "visibility": "public"
+  "verdict": {
+    "assignment_disclosed_after_verdict": {
+      "A": "expressive",
+      "B": "flat"
+    },
+    "assignment_reproducible_from": "sha256 over the two master digests; the map was forced by the audio before the pack was built, not chosen after the verdict",
+    "assignment_sealed_sha256": "27a509122de8dc19c08a1184692f51552b1878816390f503c647ca1c29e806db",
+    "authority": "owner",
+    "disposition": "the challenger did not beat the incumbent",
+    "further_expression_trials": "not authorized",
+    "incumbent_retained": "flat 136 performance",
+    "outcome": "tie",
+    "revision_spent": false,
+    "revision_waived_by_owner": true
+  },
+  "visibility": "public",
+  "what_the_tie_does_not_show": "it does not show that voicing, pedal, phrase shape, cadence relaxation or micro-timing are individually useless; none of them was tested alone"
 }

@@ -166,3 +166,38 @@ def test_the_pack_is_blind_only_on_which_is_played():
     assert pack["revisions_remaining_after_verdict"] == 1
     assert pack["level_matched_lufs"] == min(pack["measured_lufs"].values())
     assert "no framework" in receipt["no_new_organs"]
+
+
+def test_the_negative_result_is_recorded_without_being_promoted():
+    """A tie is a result. The gate is that it is kept as one, not quietly upgraded."""
+    receipt = load_sealed(RECEIPT)
+    assert verify_body_free(receipt) == []
+
+    verdict = receipt["verdict"]
+    assert verdict["outcome"] == "tie"
+    assert verdict["authority"] == "owner"
+    assert verdict["incumbent_retained"] == "flat 136 performance"
+    assert verdict["further_expression_trials"] == "not authorized"
+    assert receipt["state"]["expressive_performance"] == \
+        "preserved as a negative result, not promoted"
+    assert receipt["state"]["album_authority_changed"] is False
+
+    # The tie is about the bundle, and the receipt has to say so: seven mechanisms moved
+    # at once, so nothing here licenses a claim about any one of them.
+    assert "at once" in receipt["experimental_weakness"]
+    assert "individually useless" in receipt["what_the_tie_does_not_show"]
+
+
+def test_the_disclosed_assignment_is_the_one_the_audio_forced():
+    """Disclosure after a verdict is worth nothing if the map could have been chosen after it."""
+    import hashlib
+
+    receipt = load_sealed(RECEIPT)
+    renders = receipt["renders"]
+    nonce = hashlib.sha256((renders["flat"]["master_sha256"]
+                            + renders["expressive"]["master_sha256"]).encode()).hexdigest()
+    first = "expressive" if int(nonce[:8], 16) % 2 == 0 else "flat"
+
+    disclosed = receipt["verdict"]["assignment_disclosed_after_verdict"]
+    assert disclosed["A"] == first, "the disclosed map is not the one the render digests force"
+    assert disclosed["B"] != disclosed["A"]

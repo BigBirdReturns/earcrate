@@ -231,6 +231,12 @@ What replaces it:
   mastering review and the separate rights decisions need accepted masters to exist.
   That is a dependency, not a priority.
 
+The manifest's machine-readable `execution_order` is retained and reread as an
+inventory of outstanding work rather than a priority queue. Two of its entries — bind
+the exact *Children* reference edition, and build the A1-02 score-to-performance
+realization and run its convergence gate — are closed by that track's own verdict and
+are waiting on nothing at all. The rest are the lanes above.
+
 `AGENTS.md` § Execution policy states which of these actions proceed without asking
 and which are worth an owner's attention.
 

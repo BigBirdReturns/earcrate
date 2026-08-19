@@ -225,16 +225,20 @@ def main() -> int:
                         help="the candidate render on the recovered clock")
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--base-url", default="http://127.0.0.1:8001")
+    parser.add_argument("--reuse-bed", type=Path,
+                        help="an already-generated bed for this exact sealed request; the "
+                             "role permits one generation, so rebuilding the pack around a "
+                             "corrected comp must not call the provider again")
     args = parser.parse_args()
 
     out = args.out.expanduser().resolve()
     pack = out / "pack"
     work = out / "provider"
-    if work.exists():
+    if work.exists() and not args.reuse_bed:
         raise RoleError(f"{work} already holds a provider exchange; move it or choose another "
                         "output directory rather than overwriting an executed request")
     pack.mkdir(parents=True, exist_ok=True)
-    work.mkdir(parents=True)
+    work.mkdir(parents=True, exist_ok=True)
 
     chart = json.loads(args.chart.read_text(encoding="utf-8"))["chart"]
     shape = window(chart)
@@ -252,10 +256,22 @@ def main() -> int:
         encoding="utf-8", newline="\n")
     print(f"  request sealed {request['request_sha256'][:16]} before the provider was called")
 
-    print("executing one ACE-Step request ...")
-    bed = ace_step_execute(request_path=request_path, output_directory=work, seed=SEED,
-                          base_url=args.base_url, source_audio=None,
-                          timeout_seconds=1800.0, poll_seconds=2.0)
+    if args.reuse_bed:
+        bed = args.reuse_bed.expanduser().resolve()
+        if not bed.is_file():
+            raise RoleError(f"no bed to reuse at {bed}")
+        executed = work / "provider-request.private.json"
+        if not executed.is_file():
+            raise RoleError("cannot reuse a bed without the provider exchange that made it")
+        print(f"  reusing the bed already generated for request "
+              f"{request['request_sha256'][:16]}; the provider is not called again")
+        generated = False
+    else:
+        print("executing one ACE-Step request ...")
+        bed = ace_step_execute(request_path=request_path, output_directory=work, seed=SEED,
+                               base_url=args.base_url, source_audio=None,
+                               timeout_seconds=1800.0, poll_seconds=2.0)
+        generated = True
     print(f"  bed {bed.name} ({bed.stat().st_size} bytes)")
 
     measured = measure_bed(bed, shape)
@@ -347,6 +363,11 @@ ADMISSIBLE OUTCOMES
             "incumbent": request["incumbent"],
             "incumbent_may_win": True,
             "generations": 1,
+            "provider_called_this_run": generated,
+            "bed_reused_because": (None if generated else
+                                   "the comp under it changed; the sealed request did not, so "
+                                   "regenerating would have been a second generation the role "
+                                   "does not permit"),
             "seed": SEED,
             "request_sha256": request["request_sha256"],
             "request_sealed_before_execution": True,

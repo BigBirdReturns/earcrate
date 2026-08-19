@@ -1,0 +1,110 @@
+{
+  "binding": {
+    "all_events_bound": true,
+    "bound": 1253,
+    "distinct_samples_used": 61,
+    "max_transposition_semitones": 3,
+    "mutated_sources": 0,
+    "refused": 0,
+    "selected": 1253,
+    "sources_intact": true,
+    "transposition_histogram": {
+      "-1": 741,
+      "0": 198,
+      "1": 314
+    }
+  },
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "headline": "A1-02 is realized through one coherent sampled piano, at two tempi, with every note accounted for.",
+  "independence": {
+    "commissioned_answer_key_used": false,
+    "control_candidate_used": false,
+    "reference_recording_consulted": false
+  },
+  "interpretation_rule": {
+    "child": "performed_interpretation_136",
+    "child_may_change": "tempo map and derived timestamps only",
+    "child_preserved": "every note, beat duration, voice, staff, tie, dynamic and navigation edge",
+    "child_validated_against_parent": true,
+    "parent": "score_literal_130"
+  },
+  "kind": "earcrate_a1_02_public_rack_realization_receipt",
+  "owner_pack": {
+    "admissible_outcomes": [
+      "130",
+      "136",
+      "tie",
+      "reject_all"
+    ],
+    "assignment_derivation": "sha256 of the two masters own digests, reproducible from the evidence",
+    "assignment_map_withheld": true,
+    "assignment_sealed_sha256": "fe0568b8ed6d58a8a13c27bb5e89269a6911492f3fb2880e7fa611779a5fe56c",
+    "blind": "which letter carries which tempo",
+    "disclosed": "everything else",
+    "engineering_control": "disclosed, not a candidate",
+    "level_matched_lufs": -22.6,
+    "measured_lufs": {
+      "130": -21.7,
+      "136": -22.6
+    }
+  },
+  "rack": {
+    "archive_sha256": "04a4442f2432d846f7a6aaf7156e83e06a84342f4d7475e6e070587b3b28ef21",
+    "author": "Alexander Holm",
+    "collage_used": false,
+    "controller_zones": 4,
+    "definition": "SalamanderGrandPianoV3.sfz",
+    "general_midi_fallback_used": false,
+    "instrument": "Salamander Grand Piano V3, 48 kHz 24-bit",
+    "licence": "CC-BY",
+    "note_zones": 480,
+    "one_coherent_instrument": true,
+    "regions": 641,
+    "release_zones": 157
+  },
+  "receipt_sha256": "03ed65da43b78bdec27ae508ec779a20331fdf56f3e7ad0bbb8dbca3d79f73e4",
+  "renders": {
+    "130": {
+      "applied_gain_db": -2.3167,
+      "bit_identical_across_executions": true,
+      "duration_seconds": 200.4615,
+      "events_rendered": 1253,
+      "left_hand_sha256": "56eb05ffa6166afb1d0e88c16d4a9496ca94e32304d9345fb3a0d479f1aaaefe",
+      "master_sha256": "eb9bcdf02b7affafe28ceae4c466615a69ab585fddfc3917fc5a9d57ccd0cb19",
+      "right_hand_sha256": "7facbb620efde191faad975b01bfc03ad87e2a96158997032b636f376d168760",
+      "stem_sum_reproduces_master": true,
+      "tempo_bpm": 130.0
+    },
+    "136": {
+      "applied_gain_db": -2.8754,
+      "bit_identical_across_executions": true,
+      "duration_seconds": 191.9706,
+      "events_rendered": 1253,
+      "left_hand_sha256": "a8e6656763a743ea9edbc1f4da598848e5fdd33c9c4b0d67b6c66e493216d2cb",
+      "master_sha256": "eb86be884f1464e8e4e0a2a4b6ee1ce3a3c731676918fc9dcdb5007274b47c12",
+      "right_hand_sha256": "612955fc5b74e54f98f887fbf91e7d5aa89a5b9caaf79498ce43e4be57562370",
+      "stem_sum_reproduces_master": true,
+      "tempo_bpm": 136.0
+    }
+  },
+  "schema_version": 1,
+  "state": {
+    "album_authority_changed": false,
+    "album_realization_readiness": false,
+    "approved_private_rack": "bound",
+    "audio_answer_key": "unbound",
+    "mixscore_v2": "deferred until the tempo decision"
+  },
+  "still_absent": [
+    "pedalling",
+    "articulation beyond note length",
+    "rubato",
+    "voicing decisions",
+    "dynamic shaping beyond the printed marks"
+  ],
+  "track_id": "A1-02",
+  "visibility": "public"
+}

@@ -1,0 +1,180 @@
+"""Gates for the A1-01 full-length recurrence pack.
+
+The whole point of this branch is that a 31-second excerpt was standing in for a
+276-second work. So these gates hold two things: the source is bound to a stated
+identity rather than to whatever file happened to be nearby, and the edit really is
+confined to the span it claims -- because "one recurrence substitution and nothing else"
+is the entire source-only contract, and it is invisible in the audio if it quietly fails.
+
+The runner is not pytest: gate functions take no arguments, or a lone `tmp_path`.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+import numpy as np
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from earcrate.evidence.receipts import load_sealed, verify_body_free  # noqa: E402
+
+RECEIPT = ROOT / "proofs" / "album_one" / "a1-01-full-context-pack-v1.public.json"
+
+HISTORICAL_WITNESS_PCM = ("5da1bef8526576ca49628de636337e8fe"
+                          "9e100b4e0da7ada0605d164a4298e59")
+SOURCE_CONTAINER = "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979"
+SOURCE_PCM = "bb7fede642c57eb155c4d784c36883abfeea0e20b2ab4d551e915cd8d74de832"
+
+
+def test_the_source_is_bound_to_the_identity_that_was_asked_for():
+    receipt = load_sealed(RECEIPT)
+    assert verify_body_free(receipt) == []
+
+    binding = receipt["source_binding"]
+    assert binding["found"] is True
+    assert binding["container_sha256"] == SOURCE_CONTAINER
+    assert binding["container_bytes"] == 9_745_454
+    assert binding["decoded_pcm_sha256"] == SOURCE_PCM
+    assert binding["decoded_frames"] == 13_266_582
+    assert binding["exact_container"] is True
+    assert binding["binding_kind"] == "exact_container"
+
+    # An exact container means no dependent artifact had to be regenerated. If that ever
+    # flips to a rebind, the receipt has to stop claiming it did not.
+    assert binding["rebind_required"] is False
+    assert binding["path_recorded_in_repository"] is False
+
+
+def test_the_retained_witness_rebuilds_from_the_bound_source():
+    """If the found file could not reproduce history, it would not be the right file."""
+    receipt = load_sealed(RECEIPT)
+    witness = receipt["witness_reproduction"]
+    assert witness["decoded_pcm_sha256"] == HISTORICAL_WITNESS_PCM
+    assert witness["matches_historical"] is True
+    assert witness["frames"] == 1_500_528
+
+    # The JSON record digest does differ, and saying only "reproduces" would hide that.
+    assert witness["record_digest_differs"] is True
+    assert "the audio is the claim" in witness["record_digest_note"]
+
+
+def test_the_excerpt_is_kept_as_a_diagnostic_and_refused_as_a_candidate():
+    receipt = load_sealed(RECEIPT)
+    why = receipt["why_the_excerpt_is_not_the_review"]
+    assert why["excerpt_seconds"] < why["work_seconds"] / 8
+    assert "functions as a track" in why["excerpt_cannot_answer"]
+
+    pack = receipt["owner_pack"]
+    assert pack["diagnostic_not_candidate"] == "the retained 31-second excerpt"
+    assert why["member_name"] == "EDIT_WINDOW"
+    assert pack["blind"] == "which letter carries the edit"
+    assert pack["assignment_map_withheld"] is True
+    assert set(pack["admissible_outcomes"]) == {"WIN", "LOSE", "TIE"}
+    assert "A1-03" in pack["on_loss_or_tie"]
+    assert "rights" in pack["on_win"], "a win must not be read as a rights decision"
+
+
+def test_the_edit_is_confined_to_the_span_it_claims():
+    receipt = load_sealed(RECEIPT)
+    edit = receipt["edit"]
+
+    assert edit["samples_altered_outside_target_span"] == 0
+    assert edit["duration_preserved"] is True
+    assert edit["joins_inside_replaced_span"] is True
+    assert edit["joins"] == ["entry", "exit"], "a replacement needs a join at both ends"
+    assert edit["crossfade_ms"] == 35.0
+    assert edit["join_law"].startswith("equal power")
+
+    target = edit["target_seconds"]
+    donor = edit["donor_seconds"]
+    assert round(target[1] - target[0], 6) == round(donor[1] - donor[0], 6), \
+        "a replacement requires spans of equal length"
+    assert edit["altered_sample_count"] == edit["replaced_frames"]
+
+    # No processing on either side, or the comparison stops being about the edit.
+    assert edit["normalisation_applied"] is False
+    assert edit["prohibited_operations_performed"] == []
+    assert receipt["source_only_contract"]["preserved"] is True
+    assert receipt["source_only_contract"]["performed"] == []
+    for banned in ("beat chopping", "stem layering", "synthesis", "MIDI overlay"):
+        assert banned in edit["prohibited_operations"]
+
+
+def test_the_pack_does_not_move_album_authority_or_decide_rights():
+    receipt = load_sealed(RECEIPT)
+    state = receipt["state"]
+    assert state["album_authority_changed"] is False
+    assert state["album_one_accepted_masters"] == "1/7"
+    assert state["a1_01_album_master"] == "unaccepted"
+    assert state["release_allowed"] is False
+    assert "not asked by this pack" in state["rights_eligibility"]
+    assert receipt["boundary"]["source_audio_remains_local"] is True
+    assert receipt["boundary"]["private_paths_included"] is False
+
+
+# --- the construction itself ---------------------------------------------------------
+
+def test_a_replacement_edit_touches_nothing_outside_its_span():
+    """The property the receipt asserts, exercised on signal the test owns.
+
+    Reproduces the builder's construction on a synthetic source so the invariant is
+    checked rather than trusted: every sample outside the replaced span survives, the
+    duration is unchanged, and both joins land inside the span.
+    """
+    from scripts.earcrate_a1_01_full_context_v1 import CROSSFADE_MS, SAMPLE_RATE
+
+    rng = np.random.default_rng(11)
+    source = rng.standard_normal((SAMPLE_RATE * 4, 2)) * 0.1
+    entry, leave = SAMPLE_RATE, SAMPLE_RATE * 2
+    donor_start, donor_end = SAMPLE_RATE * 2, SAMPLE_RATE * 3
+
+    donor = source[donor_start:donor_end]
+    out = source.copy()
+    out[entry:leave] = donor
+    frames = round(CROSSFADE_MS * SAMPLE_RATE / 1000.0)
+    phase = np.arange(frames, dtype=np.float64) / frames
+    fade_out = np.cos(phase * np.pi / 2.0)[:, None]
+    fade_in = np.sin(phase * np.pi / 2.0)[:, None]
+    out[entry:entry + frames] = source[entry:entry + frames] * fade_out + donor[:frames] * fade_in
+    out[leave - frames:leave] = donor[-frames:] * fade_out + source[leave - frames:leave] * fade_in
+
+    assert len(out) == len(source)
+    assert np.array_equal(out[:entry], source[:entry])
+    assert np.array_equal(out[leave:], source[leave:])
+    assert not np.array_equal(out[entry:leave], source[entry:leave]), "nothing was replaced"
+
+    # Equal power: the two join curves sum in quadrature to unity.
+    assert np.allclose(fade_out[:, 0] ** 2 + fade_in[:, 0] ** 2, 1.0)
+
+
+def test_spans_of_unequal_length_are_refused_rather_than_stretched():
+    from scripts.earcrate_a1_01_full_context_v1 import SourceError, edit
+
+    import scripts.earcrate_a1_01_full_context_v1 as builder
+
+    original = builder.DONOR_SECONDS
+    try:
+        builder.DONOR_SECONDS = (255.146667, 260.0)  # shorter than the target span
+        with pytest.raises(SourceError) as caught:
+            edit(np.zeros((builder.SAMPLE_RATE * 300, 2)))
+        assert "not a replacement" in str(caught.value)
+    finally:
+        builder.DONOR_SECONDS = original
+
+
+def test_a_source_whose_audio_is_wrong_is_refused(tmp_path):
+    """Binding is on identity, not on filename or plausibility."""
+    import soundfile as sf
+
+    from scripts.earcrate_a1_01_full_context_v1 import SourceError, decode
+
+    wrong = tmp_path / "(HQ) Pretty Lights - Empire State Of Mind Remix.wav"
+    sf.write(str(wrong), np.zeros((48_000, 2), dtype=np.float32), 48_000, subtype="PCM_24")
+    with pytest.raises(SourceError) as caught:
+        decode(wrong)
+    assert "decoded PCM is" in str(caught.value)

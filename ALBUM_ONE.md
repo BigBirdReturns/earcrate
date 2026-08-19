@@ -201,30 +201,38 @@ a plan, not a ledger.
 
 ## Execution order
 
-Revised after A1-07 was accepted. The previous order sent the next vertical to
-A1-01; that is wrong for the capability question, and the change is recorded rather
-than quietly dropped.
+There is no execution order. There are lanes, and they run at the same time.
 
-1. Keep all seven source and intent contracts current in the manifest.
-2. Extract the reusable lane machinery from A1-07, so a new track describes music
-   instead of rebuilding workflow infrastructure.
-3. Bind the exact *Children* reference edition, through both container and decoded
-   audio identity. Stop at `edition_candidate` if the commission does not already
-   name the edition unambiguously — an answer key cannot be authoritative if the
-   edition was chosen after acquisition.
-4. Build the A1-02 score-to-performance realization: measure and voice model, tempo
-   map and rubato, note timing, dynamics, pedalling, articulation, rack selection,
-   mix-event realization, then comparison against the bound recording. The goal is
-   not sample-identical reconstruction. It is to find out whether the score and the
-   recording encode the same performed object, and where the symbolic path loses
-   the performance.
-5. Run A1-07's withheld-answer recovery challenge. Until it passes, A1-07 is an
-   accepted master and a valuable specimen, but not proof that a fresh operator or
-   environment can reconstruct the lane without privileged knowledge.
-6. Execute the remaining reference-bound tracks in the order their custody allows,
-   each against the capability its commission names.
-7. Sequence the accepted masters, perform album-level continuity and mastering
-   review, then make the separate rights decisions.
+The numbered list that stood here was a queue, and a queue has a head: one track held
+the front while six waited, and any uncertainty in the leading track stopped
+everything behind it. That is how A1-02 came to block A1-03, A1-04, A1-05, A1-06, the
+A1-07 system reference and the provider work in turn, first on a PDF, then on OMR,
+then on MIDI, then on a rack, then on three successive reviews. The order was never
+the problem. Having one was.
+
+What replaces it:
+
+- **Every commissioned track is always live.** A track advances whenever its own next
+  action is unblocked, regardless of what any other track is doing. The next actions
+  are the ones in the ledger table above.
+- **A review blocks its own candidate.** It does not block the track's source
+  recovery, its rendering, or any other track.
+- **A closed track stays closed and stops nothing else.** A1-02 is closed on a musical
+  result. That is a verdict about *Children*, not a verdict about Album One.
+- **Album-wide work is a lane, not a gate.** Keeping the seven contracts current in
+  the manifest, and extracting reusable lane machinery from A1-07 so a new track
+  describes music instead of rebuilding workflow, both proceed alongside the tracks
+  rather than in front of them.
+- **The system reference is its own lane.** A1-07's withheld-answer recovery challenge
+  runs independently of every album master. Until it passes, A1-07 is an accepted
+  master and a valuable specimen, and not proof that a fresh operator or environment
+  can reconstruct the lane without privileged knowledge.
+- **Sequencing is last, and only because it cannot be first.** Album-level continuity,
+  mastering review and the separate rights decisions need accepted masters to exist.
+  That is a dependency, not a priority.
+
+`AGENTS.md` § Execution policy states which of these actions proceed without asking
+and which are worth an owner's attention.
 
 A1-01 remains commissioned and is not deprioritized as music. It is reclassified:
 its lane is editing, custody and release governance, not the proof that EarCrate can

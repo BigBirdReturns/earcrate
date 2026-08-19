@@ -65,6 +65,92 @@ progress.
   repository. Public cut notes may disclose musical mechanisms without exposing
   private media or credentials.
 
+## Execution policy
+
+Four events are routinely collapsed into one:
+
+```text
+one candidate loses
+one mechanism fails
+one track closes
+the whole program stops
+```
+
+Only the first three can follow from a negative musical result. The fourth never
+follows. A losing candidate ends that candidate. A failing mechanism ends that
+mechanism. A closed track ends that track. None of them ends Album One, and none of
+them is a reason to pause source recovery, rendering, provider auditions,
+system-reference execution, or work on a different commissioned track.
+
+This is written down because the opposite happened for a long time. The evidence
+controls prevented false claims, which was worth having. The scheduling habit they
+grew into — treat every uncertainty as a gate, every gate as a pull request, every
+negative result as a stop instruction — prevented throughput, which was not.
+
+Tracks advance in parallel. An owner review blocks acceptance of the candidate it is
+reviewing, and nothing else.
+
+### Continue without asking
+
+```text
+source searches and exact binding
+non-destructive estate reads
+tool installation under versioned custody
+provider execution
+score extraction
+rendering
+comparison construction
+test and gate repairs
+branching, committing, pushing, and pull-request creation
+evidence replication
+work on other Album tracks
+```
+
+### Interrupt the owner only for
+
+```text
+a short genuine musical verdict
+spending money or entering credentials
+destructive deletion
+publication or rights authority
+an irreversible product decision
+```
+
+### What a pull request must do
+
+At least one of:
+
+- produce owner-auditionable audio;
+- bind material required to produce audio;
+- repair a defect directly preventing audio.
+
+A pull request that does none of these may still be worth landing, but it is not
+Album One progress and it may not become a prerequisite for production work.
+
+### What an owner review may cost
+
+An owner review is the smallest object that can answer its question, and no larger.
+If two candidates are identical outside one span, the review leads with that span and
+the context around it; the full-length objects travel as optional material, not as the
+task. Handing over two four-minute files whose difference is ten seconds is not a
+listening task, it is a search task, and it spends owner attention on the wrong thing.
+
+### No new organs are authorized
+
+The mechanisms already exist:
+
+```text
+source custody          audio analysis          score and OMR ingestion
+MIDI authority          crate retrieval         rack binding
+deterministic rendering MixScore                ACE-Step
+project and DAW export  review authority        mastering
+system-reference governance
+```
+
+The work is to connect them into repeated musical output. A new organ still enters
+only under the rule below — a declared track gap, or an album-wide bottleneck two
+tracks demonstrate — and "the existing organ is inconvenient here" is not that.
+
 ## Album One completion model
 
 A track has an accepted album master only when the owner accepts the music, every

@@ -56,8 +56,26 @@
     "assignment_map_withheld": true,
     "assignment_sealed_sha256": "4b0628c84dd689311f41743e43bb0c2b78ee589943b40d259701d371eb7f9a0f",
     "blind": "which letter carries the edit",
+    "blind_strength": {
+      "affects_verdict_validity": false,
+      "blinded": "which letter carries the edit",
+      "leak": "the donor region is untouched in both readings, so in the edited file the 2:41 passage returns at 4:15; an attentive end-to-end listen can therefore identify which letter is edited",
+      "robust": false,
+      "sealed": true,
+      "why_disclosed": "an owner who believes a blind is stronger than it is cannot correct for it; the verdict asks which is musically better, not which can be identified"
+    },
     "diagnostic_not_candidate": "the retained 31-second excerpt",
+    "difference_extent": {
+      "correlation_inside_window": -0.1988,
+      "differs_from_seconds": 161.237,
+      "differs_to_seconds": 171.669,
+      "fraction_of_file_differing": 0.0377,
+      "identical_elsewhere": true,
+      "note": "the two readings are uncorrelated inside the window, so the substitution is plainly audible rather than subtle; outside it they are bit-identical, so there is nothing to hear anywhere else"
+    },
     "disclosed": "everything else, including the edit windows and the join law",
+    "focused_excerpts_provided": true,
+    "focused_excerpts_reason": "asking for an A/B over 276 seconds when 266 of them are identical bytes is not a listening task; the focus pair carries the run-up, the edit and the landing",
     "level_matched_lufs": -7.9,
     "measured_lufs": {
       "candidate": -7.9,
@@ -65,7 +83,10 @@
     },
     "members": {
       "A": "one of the two full-length readings",
+      "A_FOCUS": "2:20-3:10 of the A reading",
       "B": "the other full-length reading",
+      "B_FOCUS": "2:20-3:10 of the B reading",
+      "DONOR_SOURCE": "4:10-4:30, where the inserted material lives; identical in both",
       "EDIT_WINDOW": "the retained 31-second excerpt, disclosed",
       "MANIFEST": "digests of every pack member",
       "REVIEW": "the question and the admissible outcomes"
@@ -73,7 +94,7 @@
     "on_loss_or_tie": "close A1-01 as an unsuccessful editing candidate and move Album One to A1-03",
     "on_win": "proceed to mastering and A1-01 acceptance; rights eligibility remains a separate decision and is not asked by this pack"
   },
-  "receipt_sha256": "ed5696c7a788d55f080c006841f18d46e17c0c49b9c2779665e68e3db681a35d",
+  "receipt_sha256": "2a503bbedc73d4137b44c7c9f2a22487df93f33df1dcab46a2cd9cd0aed313f3",
   "schema_version": 1,
   "source_binding": {
     "all_four_authorities_matched": true,

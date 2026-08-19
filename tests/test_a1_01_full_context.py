@@ -190,3 +190,26 @@ def test_the_binding_does_not_rest_on_one_surviving_file():
     # Different filenames, identical bytes: the identity is the digest, never the name.
     assert redundancy["distinct_filenames"] >= 2
     assert len(redundancy["locations_kind"]) == redundancy["byte_identical_copies_found"]
+
+
+def test_the_pack_says_where_the_difference_is_and_how_big_it_is():
+    """A comparison the owner cannot locate is not a review, it is a scavenger hunt."""
+    receipt = load_sealed(RECEIPT)
+    extent = receipt["owner_pack"]["difference_extent"]
+    edit = receipt["edit"]
+
+    assert extent["differs_from_seconds"] == round(edit["target_seconds"][0], 3)
+    assert extent["differs_to_seconds"] == round(edit["target_seconds"][1], 3)
+    assert extent["identical_elsewhere"] is True
+    assert extent["fraction_of_file_differing"] < 0.05
+    assert receipt["owner_pack"]["focused_excerpts_provided"] is True
+
+
+def test_the_blind_declares_its_own_weakness():
+    """A blind that leaks and says so is usable; one that leaks silently corrupts the verdict."""
+    receipt = load_sealed(RECEIPT)
+    blind = receipt["owner_pack"]["blind_strength"]
+    assert blind["sealed"] is True
+    assert blind["robust"] is False, "this blind leaks and the receipt must not claim otherwise"
+    assert "returns at 4:15" in blind["leak"]
+    assert blind["affects_verdict_validity"] is False

@@ -303,6 +303,7 @@ def _tags_agree(binding: dict, target: dict) -> bool:
 def compare(binding: dict, measured: dict, witness: dict) -> dict:
     """Read the claims, now that the measurement is finished, and score each one."""
     target, wit = witness["target"], witness["witness"]
+    move = witness["adjacent_move"]
     claimed_bpm = float(target["tempo_bpm"])
     claimed_meter = int(target["meter"]["numerator"])
     claimed_field = [name.lower() for name in target["tonal_space"]]
@@ -325,10 +326,13 @@ def compare(binding: dict, measured: dict, witness: dict) -> dict:
     near_claim = int((np.abs(local - claimed_bpm) / claimed_bpm <= TEMPO_TOLERANCE_PERCENT / 100).sum())
     near_measured = int((np.abs(local - measured_bpm) / measured_bpm <= TEMPO_TOLERANCE_PERCENT / 100).sum())
 
-    # The witness's own three numbers have to agree with each other before the recording is
-    # asked to agree with them.
+    # The witness's own numbers have to agree with each other before the recording is asked
+    # to agree with them. There are three of them: the declared tempo, the tempo implied by
+    # the witness span, and the tempo implied by the continuation the package generated.
     implied_bpm = wit["beats"] / wit["duration_seconds"] * 60.0
     internal_error = abs(implied_bpm - claimed_bpm) / claimed_bpm * 100.0
+    continuation_bpm = move["bars"] * int(target["meter"]["numerator"]) /         move["duration_seconds"] * 60.0
+    continuation_error = abs(continuation_bpm - claimed_bpm) / claimed_bpm * 100.0
 
     top3_keys = [row["key"].lower() for row in measured["tonal_field_top3"]]
     coverage = wit["duration_seconds"] / binding["canonical_seconds"]
@@ -386,6 +390,20 @@ def compare(binding: dict, measured: dict, witness: dict) -> dict:
             "note": ("container tags are self-declared and are not an authority; they are "
                      "recorded because a silent edition substitution is the failure this "
                      "lane cannot afford"),
+        },
+        "witness_continuation_consistency": {
+            "claimed_tempo_bpm": claimed_bpm,
+            "continuation_bars": move["bars"],
+            "continuation_duration_seconds": move["duration_seconds"],
+            "tempo_implied_by_continuation": round(continuation_bpm, 3),
+            "error_against_declared_percent": round(continuation_error, 3),
+            "error_against_measured_percent": round(
+                abs(continuation_bpm - measured_bpm) / measured_bpm * 100.0, 3),
+            "verdict": ("consistent" if continuation_error <= TEMPO_TOLERANCE_PERCENT
+                        else "inconsistent"),
+            "note": ("the witness carries three tempo-bearing numbers and they do not agree "
+                     "with each other; the one implied by the material it generated is the "
+                     "one that agrees with the recording"),
         },
         "span_coverage": {
             "witness_seconds": wit["duration_seconds"],

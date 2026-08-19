@@ -92,7 +92,18 @@
     "peak_matched_residual": 2.93e-06,
     "verified": true
   },
-  "headline": "A1-02 has a production candidate: the recovered score, arranged, against the piano performance it was built from.",
+  "disposition": {
+    "a1_02_album_master": "unaccepted",
+    "a1_02_status": "unsuccessful realization attempt",
+    "album_one_accepted_masters": "1/7",
+    "children_work": "stopped",
+    "further_revisions": "none",
+    "mastering_authorized": false,
+    "next_owner_facing_action": "A1-01 candidate and control review",
+    "piano_control_retained": true,
+    "second_instrument": "not commissioned"
+  },
+  "headline": "A1-02 produced a production candidate, the owner judged it a loss on arrangement and instrumentation, and Children stops here.",
   "independence": {
     "commissioned_answer_key_used": false,
     "control_candidate_used": false,
@@ -253,7 +264,7 @@
     },
     "on_loss": "record A1-02 as an unsuccessful realization attempt, stop Children, move Album One to A1-01 owner review"
   },
-  "receipt_sha256": "a4ddc9a11efcddbe1be8cb1b3c17d3415ebbe464de32b010f554e98040f97b17",
+  "receipt_sha256": "3b41e3146b6edfee3135d3f772efdc66a848d2369d9f10d8f1ee16426d292189",
   "renders": {
     "bit_identical_across_executions": true,
     "container_caveat": "the MixScore writer emits a libsndfile PEAK chunk carrying a wall-clock timestamp, so two identical renders differ by one header byte; determinism is therefore asserted on the PCM digest, which is what the existing MixScore gate already binds",
@@ -300,10 +311,49 @@
   },
   "schema_version": 1,
   "state": {
+    "a1_02": "closed as an unsuccessful realization attempt",
     "album_authority_changed": false,
     "audio_answer_key": "unbound",
-    "mastering": "follows the verdict"
+    "mastering": "not authorized"
   },
   "track_id": "A1-02",
+  "verdict": {
+    "answer": "no",
+    "authority": "owner",
+    "bound_containers": {
+      "A1-02-PIANO-CONTROL.wav": "add7e984dd988c1b60703149bb4b3cca7911e80eb55fd109e96548860f373dc1",
+      "A1-02-PRODUCTION-CANDIDATE.wav": "3da004b01ee28137d3547f6838a39b42fe7fa99660a4007ac87ff4ccde668531"
+    },
+    "credited": [
+      "clearer macro contour than the control",
+      "more focused opening",
+      "the second B pass turns inward",
+      "a recognizably reduced D.S. return",
+      "an audibly enlarged coda"
+    ],
+    "decisive": "the moves remain fader and balance gestures over one sustained sampled piano; they supply no new rhythmic body, timbral development, countermotion, production punctuation or orchestral escalation, and across the 35-bar body the gradual gain build reads as automation applied to a mockup rather than a developing track",
+    "failure_primary": "arrangement_and_instrumentation",
+    "failure_secondary": "unedited_form",
+    "measurement_note": "the owner per-bar figures and the per-section RMS arc recorded above are the same signal at different granularity, not competing measurements",
+    "outcome": "LOSE",
+    "owner_measurements": {
+      "full_waveform_correlation": 0.989,
+      "integrated_lufs_pair": [
+        -22.67,
+        -22.61
+      ],
+      "largest_per_bar_moves_db": {
+        "coda": 1.67,
+        "opening": -2.92
+      },
+      "median_per_bar_correlation": 0.99955,
+      "residual_below_control_db": 16.8,
+      "typical_per_bar_move_db": 1.0
+    },
+    "question": "does the production version turn the recovered score into a convincing musical track",
+    "score_failure": false,
+    "tempo_failure": false,
+    "why_not_the_score_or_the_tempo": "both files carry the same notes and the same 136 BPM interpretation, so neither can be the variable under test"
+  },
   "visibility": "public"
 }

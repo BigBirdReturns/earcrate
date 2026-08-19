@@ -197,3 +197,37 @@ def test_the_production_can_be_rebuilt_from_the_repository():
     # here stops a later reader from reading a changed digest as a changed render.
     assert repro["score_digest_is_path_bound"] is True
     assert "survives relocation" in repro["score_digest_note"]
+
+
+def test_the_loss_is_recorded_against_the_files_that_were_actually_heard():
+    """A verdict that does not name the bytes it judged can be reattached to anything later."""
+    receipt = load_sealed(RECEIPT)
+    verdict = receipt["verdict"]
+    assert verdict["outcome"] == "LOSE"
+    assert verdict["authority"] == "owner"
+
+    bound = verdict["bound_containers"]
+    assert set(bound) == {"A1-02-PRODUCTION-CANDIDATE.wav", "A1-02-PIANO-CONTROL.wav"}
+    for name, digest in bound.items():
+        assert len(digest) == 64 and digest == digest.lower(), name
+
+    # The loss is attributed, and attributed away from the two things it was not.
+    assert verdict["failure_primary"] == "arrangement_and_instrumentation"
+    assert verdict["failure_secondary"] == "unedited_form"
+    assert verdict["score_failure"] is False
+    assert verdict["tempo_failure"] is False
+    assert verdict["credited"], "a loss that credits nothing is not a review"
+
+
+def test_a_loss_closes_the_track_rather_than_leaving_it_open():
+    """The cost of losing was declared before the verdict; it has to be paid after it."""
+    receipt = load_sealed(RECEIPT)
+    disposition = receipt["disposition"]
+    assert disposition["mastering_authorized"] is False
+    assert disposition["a1_02_album_master"] == "unaccepted"
+    assert disposition["album_one_accepted_masters"] == "1/7"
+    assert disposition["children_work"] == "stopped"
+    assert disposition["second_instrument"] == "not commissioned"
+    assert disposition["further_revisions"] == "none"
+    assert "A1-01" in disposition["next_owner_facing_action"]
+    assert receipt["state"]["album_authority_changed"] is False

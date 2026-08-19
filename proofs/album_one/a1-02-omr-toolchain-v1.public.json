@@ -1,0 +1,56 @@
+{
+  "authority": {
+    "note": "A completed batch command is not a transcription anyone should trust. Raw output is a candidate; the .omr project is the evidence object and MusicXML is a lossy projection of it.",
+    "omr_output_is_score_authority": false,
+    "raw_export_self_authorizing": false
+  },
+  "blocked_on": {
+    "artifact": "Children-Sheet-Music-Robert-Miles-thepianonotes.com_.pdf",
+    "expected_sha256": "e029e1a3030800d7fb04c9f5163acb9270579a571d57f63eb63787df692d5845",
+    "note": "the toolchain is ready; the input is not here yet",
+    "state": "not present on this workstation"
+  },
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "cli_contract_confirmed": {
+    "accepts_pdf_input": true,
+    "batch": true,
+    "export": true,
+    "force": true,
+    "note": "verified from the installed binary's own -help output, not from docs",
+    "output_folder": true,
+    "save": true,
+    "sheets": true,
+    "step": true,
+    "transcribe": true
+  },
+  "kind": "earcrate_a1_02_public_omr_toolchain_receipt",
+  "ocr": {
+    "engine": "TesseractOCR 137",
+    "language_data_installed": false,
+    "note": "no OCR language data ships with the installer. English is installed before the reviewed pass; text recognition stays auxiliary evidence, because noteheads, stems, beams, durations, voices and navigation are not text."
+  },
+  "purpose": "bind the optical music recognition toolchain by identity before it transcribes anything, so a later transcription can name the exact binary that produced it",
+  "receipt_sha256": "750a1130d7b0ecec0fce40127178a8416d871818130126dbfdcc4086c5f7a00c",
+  "schema_version": 1,
+  "tool": {
+    "bundled_runtime": "openjdk version \"25.0.3\" 2026-04-21 LTS",
+    "console_variant": "chosen so launch and processing diagnostics are visible; the silent-install path was avoided because it bypasses directory selection and weakens versioned custody",
+    "distribution": "official GitHub release, Windows Console MSI",
+    "executable_bytes": 532992,
+    "executable_sha256": "06dbf3b4a5acd4dbbefcf9dfbcef43529ad6afde4ba9330cb856d849cd7fe172",
+    "installed_under_versioned_root": true,
+    "installer_bytes": 85062430,
+    "installer_sha256": "5f1b4e96a12c53c7da426814b76e599363c4181e291855996e0a6878dda95f71",
+    "name": "Audiveris",
+    "provenance_warning_observed": "downloaded only from the Audiveris/audiveris GitHub organisation; the similarly named .com site is unrelated",
+    "release": "5.11.0",
+    "reported_commit": "9e1e55cd2746037d059345881c53e6a6754bffbd",
+    "reported_version": "5.11.0",
+    "source": "https://github.com/Audiveris/audiveris/releases/download/5.11.0/Audiveris-5.11.0-windowsConsole-x86_64.msi"
+  },
+  "track_id": "A1-02",
+  "visibility": "public"
+}

@@ -1,0 +1,52 @@
+{
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "kind": "earcrate_public_pipeline_generality_proof",
+  "method": "the same OMR, extraction, traversal, compilation and render, run on a public-domain score by a different composer with a different structure. The traversal became a parameter; nothing else changed.",
+  "question": "does the A1-02 score pipeline work on a score it was not built for?",
+  "receipt_sha256": "7af8966cc32e6053e67c318eeba9a5e58127653f3181096a608b06f8902f33d0",
+  "schema_version": 1,
+  "scores": [
+    {
+      "name": "Children (A1-02)",
+      "performed_measures": 105,
+      "performed_notes": 1253,
+      "printed_measures": 69,
+      "printed_notes": 852,
+      "role": "the score the pipeline was built for",
+      "staves": 2,
+      "structure": "repeats, alternate endings, Segno, To Coda, D.S. al Coda",
+      "traversal_source": "A1-02's own module, derived from the printed markers",
+      "voices": 3
+    },
+    {
+      "licence": "public domain, Mutopia Project",
+      "midi_semantic_sha256": "87e58028b6a7810638add49bde85d377265343dd0110997a87253e77525180b9",
+      "midi_sha256": "06cd4822613be170c4bdc4a2b94f724a5ab6a644522c2b3db743c327d5b53a2e",
+      "name": "J.S. Bach, WTK I Prelude No. 1, BWV 846",
+      "pages": 2,
+      "pdf_sha256": "b1c5be9fb63954df9c1a3e7b651ae930c4e5e332a5ab3e14b197379cfa04c35a",
+      "performed_measures": 35,
+      "performed_notes": 577,
+      "printed_measures": 35,
+      "printed_notes": 577,
+      "render_bit_identical": true,
+      "render_seconds": 117.0167,
+      "render_sha256": "6df3035a72d6947e0e0fcc4e1c1920fe2d1043282895e5f46b59863d1d55ae07",
+      "role": "a score the pipeline had never seen",
+      "staves": 2,
+      "structure": "no repeats, no endings, no Segno, no Coda; ratio 1.0",
+      "ties_balanced": true,
+      "traversal_source": "read from its own notation by traversal.from_score",
+      "voices": 7
+    }
+  ],
+  "the_one_change_required": "compile_performed imported A1-02's traversal. A traversal belongs to the piece, not to the compiler, so it became a parameter defaulting to A1-02's. The tempo rule that keeps a commercial recording's pulse out of score extraction is also A1-02's, and a score with no such control has nothing to be protected from.",
+  "visibility": "public",
+  "what_did_not_generalize": [
+    "OMR glyph recognition missed the Segno, the Coda and one forward repeat on the A1-02 score, so its traversal still comes from an independent reading of the page rather than from the transcription",
+    "the engineering piano is one caricature voice for any score"
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "difference": {
+    "notes": -4,
+    "percent": 0.318
+  },
+  "finding": "The historical 1,257 was never the printed count. It is the traversal-weighted count: 852 printed notes performed across the 105-measure navigation give 1,253. A fresh transcription of the recovered PDF, run through a traversal derived independently from the printed markers, lands four notes from a number produced by a pipeline whose bytes are gone.",
+  "internal_audit": {
+    "chord_member_count": 77,
+    "grace_notes": 0,
+    "measures_without_notes": [],
+    "notes_per_printed_measure_recorded": true,
+    "plausible_sources_of_a_four_note_difference": [
+      "tie handling across a repeat boundary",
+      "the alternate endings at printed measures 8/9 and 59/61/62",
+      "a chord member read as one notehead or two",
+      "a genuine miss in either transcription"
+    ],
+    "staff_distribution": {
+      "1": 394,
+      "2": 458
+    },
+    "tie_counts": {
+      "tie_in": 46,
+      "tie_out": 46
+    },
+    "ties_balanced": true,
+    "voice_distribution": {
+      "1": 375,
+      "2": 19,
+      "5": 458
+    }
+  },
+  "kind": "earcrate_a1_02_public_note_reconciliation",
+  "no_adjustment_made": "Nothing was added, split, merged or suppressed to reach 1,257. The v2 count is whatever the page and the traversal produce.",
+  "receipt_sha256": "f1009c3e688f04ccd6b4e7b7300337ec212c1b61f5e0c6429749b62c8462ca9a",
+  "schema_version": 1,
+  "track_id": "A1-02",
+  "v2": {
+    "performed_measures": 105,
+    "performed_note_count": 1253,
+    "printed_measures": 69,
+    "printed_note_count": 852
+  },
+  "visibility": "public",
+  "why_the_gap_cannot_be_diffed_note_by_note": "The historical MIDI does not exist. There is nothing to align against, so no correction vocabulary can be applied to individual events. The honest statement is the aggregate relationship plus the internal audit below.",
+  "witness": {
+    "historical_performed_note_count": 1257,
+    "role": "comparison witness, never a quota",
+    "source": "the sealed score-side proof of a pipeline whose bytes no longer exist"
+  }
+}

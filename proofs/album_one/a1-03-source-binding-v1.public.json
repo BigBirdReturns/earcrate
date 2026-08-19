@@ -1,0 +1,386 @@
+{
+ "authority": {
+  "album_master_accepted": false,
+  "moves_album_counter": false,
+  "owner_audition_performed": false,
+  "realization_produced": false,
+  "rights_or_release_permission": false,
+  "system_reference_completed": false
+ },
+ "blind_measurement": {
+  "analysis_sample_rate": 22050,
+  "beat_count": 550,
+  "beat_interval_iqr_percent": 5.0,
+  "beat_interval_median_seconds": 0.464399,
+  "beat_tracker_start_bpm": 120.0,
+  "comb_filter_best": {
+   "bpm": 127.6,
+   "phase_seconds": 0.08,
+   "score": 0.25655
+  },
+  "comb_filter_curve_by_bpm": {
+   "100": 0.12132,
+   "101": 0.12915,
+   "102": 0.18563,
+   "103": 0.15752,
+   "104": 0.12193,
+   "105": 0.11583,
+   "106": 0.14522,
+   "107": 0.15593,
+   "108": 0.16117,
+   "109": 0.12344,
+   "110": 0.13284,
+   "111": 0.08671,
+   "112": 0.09739,
+   "113": 0.10258,
+   "114": 0.14654,
+   "115": 0.1254,
+   "116": 0.11123,
+   "117": 0.11275,
+   "118": 0.10595,
+   "119": 0.09344,
+   "120": 0.12455,
+   "121": 0.12929,
+   "122": 0.1015,
+   "123": 0.12064,
+   "124": 0.12031,
+   "125": 0.11681,
+   "126": 0.11887,
+   "127": 0.17299,
+   "128": 0.25655,
+   "129": 0.14646,
+   "130": 0.15448,
+   "131": 0.2269,
+   "132": 0.19836,
+   "133": 0.17765,
+   "134": 0.20061,
+   "135": 0.14683,
+   "136": 0.13985,
+   "137": 0.10712,
+   "138": 0.0924,
+   "139": 0.11629,
+   "140": 0.09079,
+   "141": 0.08264,
+   "142": 0.0978,
+   "143": 0.07099,
+   "144": 0.0914,
+   "145": 0.08866,
+   "146": 0.07475,
+   "147": 0.08844,
+   "148": 0.0826,
+   "149": 0.09054,
+   "150": 0.10671,
+   "151": 0.08131,
+   "152": 0.09558,
+   "153": 0.07208,
+   "154": 0.08549,
+   "155": 0.08589,
+   "156": 0.10305,
+   "157": 0.0701,
+   "158": 0.10617,
+   "159": 0.08294,
+   "160": 0.08049,
+   "161": 0.06669,
+   "162": 0.09539,
+   "163": 0.08657,
+   "164": 0.08238,
+   "165": 0.09153,
+   "166": 0.08666,
+   "167": 0.09344,
+   "168": 0.08854,
+   "169": 0.11603,
+   "170": 0.11766,
+   "171": 0.08605,
+   "172": 0.09399,
+   "173": 0.08801,
+   "174": 0.11697,
+   "175": 0.11019,
+   "176": 0.10731,
+   "177": 0.08243,
+   "178": 0.12433,
+   "179": 0.11103,
+   "180": 0.12407,
+   "181": 0.08126,
+   "182": 0.10741,
+   "183": 0.07367,
+   "184": 0.11331,
+   "185": 0.12146
+  },
+  "duration_seconds": 250.540408,
+  "first_beat_seconds": 0.163,
+  "hop_length": 512,
+  "key_profile_source": "Krumhansl-Kessler",
+  "librosa_version": "0.11.0",
+  "local_tempo": {
+   "curve_bpm": [
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    89.1,
+    89.1,
+    89.1,
+    89.1,
+    89.1,
+    129.2,
+    129.2,
+    89.1,
+    89.1,
+    89.1,
+    89.1,
+    89.1,
+    89.1,
+    89.1,
+    92.29,
+    92.29,
+    136.0,
+    136.0,
+    136.0,
+    136.0,
+    136.0,
+    136.0,
+    89.1,
+    136.0,
+    136.0,
+    129.2,
+    129.2,
+    129.2,
+    129.2,
+    136.0,
+    136.0,
+    136.0,
+    136.0,
+    136.0,
+    129.2,
+    129.2,
+    129.2,
+    123.05,
+    129.2,
+    129.2
+   ],
+   "hop_seconds": 4.0,
+   "max_bpm": 135.999,
+   "median_bpm": 129.199,
+   "min_bpm": 89.103,
+   "window_count": 59,
+   "window_seconds": 16.0
+  },
+  "meter_accent_contrast": {
+   "2": 0.005,
+   "3": 0.0154,
+   "4": 0.0309,
+   "5": 0.0194,
+   "6": 0.0241,
+   "7": 0.0282
+  },
+  "meter_beats_per_bar": 4,
+  "numpy_version": "2.5.2",
+  "tempo_ensemble_median_bpm": 129.199,
+  "tempo_ensemble_spread_percent": 1.238,
+  "tempo_estimators_bpm": {
+   "autocorrelation_peak": 129.199,
+   "beat_interval_median": 129.199,
+   "comb_filter_argmax": 127.6,
+   "global_tempogram": 129.199
+  },
+  "tempo_search_bpm": [
+   100.0,
+   185.0
+  ],
+  "tonal_field_top3": [
+   {
+    "correlation": 0.8053,
+    "key": "G minor"
+   },
+   {
+    "correlation": 0.74,
+    "key": "B-flat major"
+   },
+   {
+    "correlation": 0.6083,
+    "key": "E-flat major"
+   }
+  ]
+ },
+ "boundary": {
+  "private_paths_included": false,
+  "source_audio_exported": false,
+  "source_audio_remains_local": true,
+  "witness_transcription_included": false
+ },
+ "convergence": {
+  "claims": {
+   "edition_identity": {
+    "claimed": {
+     "album": "These Are the Vistas",
+     "performer": "The Bad Plus",
+     "title": "Flim"
+    },
+    "declared_by_container": {
+     "album": "These Are The Vistas",
+     "artist": "The Bad Plus",
+     "date": "2003-02-11",
+     "title": "Flim",
+     "track": "8"
+    },
+    "note": "container tags are self-declared and are not an authority; they are recorded because a silent edition substitution is the failure this lane cannot afford",
+    "verdict": "converges"
+   },
+   "meter": {
+    "accent_contrast": {
+     "2": 0.005,
+     "3": 0.0154,
+     "4": 0.0309,
+     "5": 0.0194,
+     "6": 0.0241,
+     "7": 0.0282
+    },
+    "claimed_beats_per_bar": 4,
+    "measured_beats_per_bar": 4,
+    "verdict": "converges"
+   },
+   "span_coverage": {
+    "fraction_of_performance_witnessed": 0.3965,
+    "note": "the witness accounts for the opening portion of the performance; the remainder has no symbolic account of any kind",
+    "performance_seconds": 250.540417,
+    "verdict": "partial",
+    "witness_seconds": 99.339
+   },
+   "tempo": {
+    "best_pulse_ratio": "1:1",
+    "claimed_bpm": 138.0,
+    "click_grid_best": {
+     "bpm": 127.6,
+     "phase_seconds": 0.08,
+     "score": 0.25655
+    },
+    "click_grid_score_at_claimed_bpm": 0.0924,
+    "click_grid_score_at_measured_bpm": 0.14646,
+    "error_percent": 6.378,
+    "estimator_spread_percent": 1.238,
+    "estimators_bpm": {
+     "autocorrelation_peak": 129.199,
+     "beat_interval_median": 129.199,
+     "comb_filter_argmax": 127.6,
+     "global_tempogram": 129.199
+    },
+    "local_windows_near_claimed_bpm": 13,
+    "local_windows_near_measured_bpm": 30,
+    "local_windows_total": 59,
+    "measured_bpm": 129.199,
+    "note": "four estimators that fail differently were run, and the claim was then scored on the same click-grid instrument as the measurement; the divergence is the recording's, not one tracker's",
+    "tolerance_percent": 2.0,
+    "verdict": "diverges"
+   },
+   "tonal_field": {
+    "claimed": [
+     "B-flat major",
+     "G minor"
+    ],
+    "measured_top3": [
+     {
+      "correlation": 0.8053,
+      "key": "G minor"
+     },
+     {
+      "correlation": 0.74,
+      "key": "B-flat major"
+     },
+     {
+      "correlation": 0.6083,
+      "key": "E-flat major"
+     }
+    ],
+    "note": "blind key estimation across a whole performance is a weak instrument; a top-three hit is corroboration, not proof",
+    "verdict": "converges"
+   },
+   "witness_internal_consistency": {
+    "claimed_bars": 56,
+    "claimed_beats": 224,
+    "claimed_duration_seconds": 99.339,
+    "claimed_tempo_bpm": 138.0,
+    "error_percent": 1.961,
+    "note": "this claim is arithmetic on the witness alone and needs no recording",
+    "tempo_implied_by_claimed_beats_and_duration": 135.294,
+    "verdict": "consistent"
+   }
+  },
+  "converged": [
+   "edition_identity",
+   "meter",
+   "tonal_field"
+  ],
+  "diverged": [
+   "tempo"
+  ],
+  "gate": "symbolic_and_audio_convergence",
+  "gate_passed": false
+ },
+ "headline": "The A1-03 performance is bound by container and canonical PCM, and the community-symbolic witness has been tested against the recording it never used.",
+ "kind": "earcrate_a1_03_public_source_binding_receipt",
+ "method": {
+  "analysis_parameters_fixed_before_comparison": true,
+  "order": "bind, then measure, then read the claims",
+  "why": "a tracker seeded with the claimed tempo agrees with the claim by construction and tests nothing",
+  "witness_values_used_as_analysis_priors": false
+ },
+ "next_musical_action": "Realize the bound performance. The proof pack holding the witness's executable notes is not in local custody, so the realization must derive its symbolic layer from the recording rather than replay a transcription -- which is the control the witness itself names as remaining.",
+ "receipt_sha256": "ed60439742d8d9f963fa74be413fd8ed9b45e35a1eece6baac51430c8ecf6cea",
+ "schema_version": 1,
+ "source_binding": {
+  "binding_kind": "exact_object_bound_edition_unclaimed",
+  "canonical_channels": 2,
+  "canonical_frames": 12025940,
+  "canonical_pcm_sha256": "0c45672ea556b3f5a4fea4ef45b67cd20da0a713504fb4c77245ddf9b5369249",
+  "canonical_sample_rate": 48000,
+  "canonical_seconds": 250.540417,
+  "container_bytes": 4071424,
+  "container_sha256": "b87f5ca6588eab74f30e7b2b7afed0c236bec02a0b46868252a5e3c437788fa5",
+  "delivery": {
+   "codec_name": "mp3",
+   "container_channels": 2,
+   "container_sample_rate": 44100,
+   "container_seconds": 250.548378,
+   "declared_tags": {
+    "album": "These Are The Vistas",
+    "artist": "The Bad Plus",
+    "date": "2003-02-11",
+    "title": "Flim",
+    "track": "8"
+   },
+   "format_name": "mp3",
+   "stream_bit_rate": 128000
+  },
+  "edition_class": "lossy_delivery_copy",
+  "edition_is_master_edition": false,
+  "edition_note": "The commission names the work and the performer; it does not name a pressing. This binds the one copy in custody, exactly, and classifies it as a lossy delivery copy. Every measurement inherits that limit: a 130 kbit/s encode is authoritative about pulse and harmony and is not authoritative about timbre, stereo detail or noise floor.",
+  "found": true,
+  "path_recorded_in_repository": false
+ },
+ "track_id": "A1-03",
+ "witness": {
+  "evidence_tier": "community_symbolic_witness",
+  "executable_notes_available": false,
+  "proof_pack_present_locally": false,
+  "proof_pack_sha256": "a7dabd71af884a4933b7e3c8077bc9d5e7b2e69de3fa9d370fd8b592d09cdf52",
+  "remaining_control_named_by_witness": "withhold every community transcription and run the cephalopod on exact recording bytes only",
+  "report_sha256": "1939c0e8d5717c46807f75260a6d589fc07de6d52b976532e4c4f8ebade899f9",
+  "specimen_id": "flim_bad_plus_v1",
+  "target_recording_bytes_used_by_witness": false
+ }
+}

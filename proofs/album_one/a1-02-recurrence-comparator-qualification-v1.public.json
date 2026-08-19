@@ -1,0 +1,84 @@
+{
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "comparator_id": "a1-02-recurrence-comparator-v1",
+  "implementation": {
+    "digest": "e896dfb2d62d0adbba4a9f24a92dcee79148013110b4a2572a37457e9a54f32c",
+    "members": [
+      {
+        "file": "earcrate/a1_02/audio_compare/features.py",
+        "sha256": "5cd1a5558710efd4b3f5fed49ea14650f299dad38f1223fb8f490852cddefe70"
+      },
+      {
+        "file": "earcrate/a1_02/audio_compare/sources.py",
+        "sha256": "46fddaae574b8ec1e4f554585f9b60793504ddcf5f5d9b895cc4a78a1722a00f"
+      },
+      {
+        "file": "earcrate/a1_02/audio_compare/structure.py",
+        "sha256": "1fef9b9a146f9e5891494b21d85dbca64275d60ab6c65763c2163b2b4d0da00b"
+      }
+    ]
+  },
+  "kind": "earcrate_a1_02_public_recurrence_comparator_qualification",
+  "measured": {
+    "note": "the score's MIDI and its own engineering render agree at 0.714, which bounds what any cross-modal number can mean: a round trip through audio through one caricature voice already costs 0.29.",
+    "score_v2_midi_vs_control_recording": 0.455,
+    "score_v2_midi_vs_its_own_render": 0.714,
+    "score_v2_render_vs_control_recording": 0.636
+  },
+  "metric_correction": "The first scalar divided the common subsequence by the longer side, so deleting material shrank its own denominator and a four-minute edit outscored the untouched recording. Coverage of each side is now reported separately and combined harmonically, and completeness is a distinct criterion rather than folded into one number.",
+  "not_qualified_for": {
+    "transposition": {
+      "measurement": {
+        "control_agreement": 0.588,
+        "pitch_shifted_agreement": 0.556
+      },
+      "verdict": "NOT_QUALIFIED",
+      "why": "recurrence is pitch-relative, so a globally transposed piece has the same form. That is correct behaviour for a form measure and means transposition must be decided by the tonal profile instead."
+    },
+    "truncation_and_coda_removal": {
+      "measurement": {
+        "control_agreement": 0.588,
+        "control_repeated_bars": 201,
+        "radio_truncated_agreement": 0.769,
+        "radio_truncated_repeated_bars": 93,
+        "score_repeated_bars": 65
+      },
+      "verdict": "NOT_QUALIFIED",
+      "where_it_belongs": "the audio side alone: terminal fade, macro-boundary census and duration against the declared edition, all of which already detect truncation without consulting the score",
+      "why": "The score is far shorter than the record -- it accounts for roughly 44 percent of it, established before any audio was compared. A radio edit is therefore CLOSER to the score's length than the full version is, and every length-based measure prefers the edit. This is not a defect in the ratio; it follows from the score's coverage, and no reweighting fixes it."
+    }
+  },
+  "qualified_for": {
+    "material_substitution": {
+      "evidence": "replacing one repeated span with unrelated material drops 0.588 to 0.500",
+      "verdict": "QUALIFIED"
+    },
+    "section_reordering": {
+      "evidence": "shuffling two macro sections is the largest drop measured, 0.588 to 0.476",
+      "verdict": "QUALIFIED"
+    },
+    "tempo_change": {
+      "evidence": "a moderate time stretch leaves agreement unchanged at 0.588, because both sides are quantized to their own pulse",
+      "verdict": "QUALIFIED"
+    },
+    "unrelated_music": {
+      "evidence": "Bach's BWV 846 prelude returns not comparable rather than a number, because it carries no repeated material at all",
+      "verdict": "QUALIFIED"
+    }
+  },
+  "receipt_sha256": "dbf30e784f8e1b7d892e3ac351345e4b2b547fdacfeb326e8876c5fd4f97231a",
+  "schema_version": 2,
+  "state": {
+    "album_authority_changed": false,
+    "audio_answer_key": "unbound",
+    "frozen": false,
+    "reason": "qualification is partial by construction: this instrument decides ordering and substitution, and truncation belongs elsewhere. Freezing it as though it decided everything would repeat the mistake the harmonic comparator made."
+  },
+  "supersedes": "the harmonic comparator, which could not localize form in a four-chord loop and was landed unfrozen and unqualified",
+  "track_id": "A1-02",
+  "visibility": "public",
+  "what_changed": "The score side is now the v2 performed MIDI rather than chord symbols, so both sides go through the same source reader and are compared on recurrence -- which bars are like which other bars -- instead of on harmonic content."
+}

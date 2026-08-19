@@ -263,6 +263,18 @@ def compare_structures(left: dict[str, Any], right: dict[str, Any]) -> dict[str,
                 else max(table[i - 1][j], table[i][j - 1])
     common = int(table[-1][-1])
 
+    # Coverage of each side separately, because a single ratio over the longer side
+    # rewards deletion: a truncated object shrinks its own denominator and scores
+    # HIGHER than the untouched one. The adverse controls caught exactly that -- a
+    # four-minute edit outscored the full recording -- so shape and completeness are
+    # now reported apart, and neither can stand in for the other.
+    left_coverage = common / len(ca)
+    right_coverage = common / len(cb)
+    left_bars = sum(row["bars"] for row in left["segments"] if row["label"] != "-")
+    right_bars = sum(row["bars"] for row in right["segments"] if row["label"] != "-")
+    span_ratio = min(left_bars, right_bars) / max(left_bars, right_bars) if max(
+        left_bars, right_bars) else 0.0
+
     return {
         "comparable": True,
         "left_form": left["form_string"],
@@ -270,7 +282,16 @@ def compare_structures(left: dict[str, Any], right: dict[str, Any]) -> dict[str,
         "left_sections": len(a),
         "right_sections": len(b),
         "common_subsequence": common,
-        "shape_agreement": round(common / max(len(ca), len(cb)), 4),
+        "left_coverage": round(left_coverage, 4),
+        "right_coverage": round(right_coverage, 4),
+        # Harmonic mean, so one side covering well cannot hide the other covering badly.
+        "shape_agreement": round(
+            2 * left_coverage * right_coverage / (left_coverage + right_coverage), 4)
+        if (left_coverage + right_coverage) else 0.0,
+        "repeated_bars_left": left_bars,
+        "repeated_bars_right": right_bars,
+        "span_ratio": round(span_ratio, 4),
+        "completeness": round(min(1.0, span_ratio), 4),
         "repetition_fraction_left": left["repetition_fraction"],
         "repetition_fraction_right": right["repetition_fraction"],
     }

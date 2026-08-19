@@ -24,7 +24,9 @@ Every pull request must state:
   `infrastructure-with-track-demand`;
 - `musical_gap`: the exact failure being addressed;
 - `control_or_baseline`: the incumbent or naive mechanism the change must beat;
-- `owner_audition_effect`: the new or improved listening decision;
+- `owner_audition_effect`: the new or improved listening decision, or `none` --
+  and when it is not `none`, the exact track state each admissible verdict changes,
+  under the admission rule below;
 - `private_execution_required`: the local media, evidence, hardware, or
   credentials still required.
 
@@ -109,12 +111,15 @@ work on other Album tracks
 ### Interrupt the owner only for
 
 ```text
-a short genuine musical verdict
+a short genuine musical verdict on an admissible object
 spending money or entering credentials
 destructive deletion
 publication or rights authority
 an irreversible product decision
 ```
+
+The first line is the one that gets abused, so admission is defined below rather than
+left to judgement.
 
 ### What a pull request must do
 
@@ -134,6 +139,70 @@ If two candidates are identical outside one span, the review leads with that spa
 the context around it; the full-length objects travel as optional material, not as the
 task. Handing over two four-minute files whose difference is ten seconds is not a
 listening task, it is a search task, and it spends owner attention on the wrong thing.
+
+### Owner review admission
+
+Sizing a review correctly does not make it admissible. The question before "how small"
+is "may this reach a person at all", and it has an answer.
+
+An object may reach the owner only when the verdict can immediately:
+
+1. select or reject a complete track candidate;
+2. select or reject one localized edit shown in sufficient full-context;
+3. accept or reject a master.
+
+These objects may never create `owner_review_pending`:
+
+```text
+diagnostic
+engineering render
+score reduction
+provider probe
+control-candidate measurement
+partial excerpt whose result cannot move the track
+```
+
+Every review request must name the exact track state that each admissible verdict
+changes. When no verdict can advance, close, or materially redirect the track, the
+system refuses to ask.
+
+The gate is one question:
+
+> **Can this artifact's verdict change a track-level authority state immediately?**
+
+When the answer is no, it never reaches the owner. A machine disposition is recorded
+instead, and the lane keeps running. This is not a courtesy. An inadmissible review
+spends the one input the program cannot manufacture, and it spends it on a question the
+machine was supposed to answer.
+
+An artifact does not become admissible by being placed underneath something else. A
+reduction with a bed under it is still a reduction; a probe that gained a second option
+is still a probe.
+
+### Who executes what
+
+```text
+LOCAL ESTATE
+Execute source binding, analysis, rendering, provider work, gates,
+branches, receipts, and parallel tracks without asking.
+Stop only when a real owner-admissible musical object exists.
+
+CLOUD ASSISTANT
+Triage diagnostics and issue machine dispositions.
+Do not convert provider probes or engineering evidence into owner tasks.
+Do not invent another architecture program from a negative result.
+
+OWNER
+Hear complete-track candidates, properly contextualized edits, and masters.
+No provider benchmarks, no receipt adjudication, no status approvals.
+```
+
+### How a report ends
+
+A report that contains no owner-admissible artifact ends with the next action already
+running. Not "say the word", not "what do you want", and not another review request.
+Asking what to do next is the same failure as asking for an inadmissible verdict: it
+converts machine work into owner work.
 
 ### No new organs are authorized
 

@@ -237,8 +237,10 @@ the exact *Children* reference edition, and build the A1-02 score-to-performance
 realization and run its convergence gate — are closed by that track's own verdict and
 are waiting on nothing at all. The rest are the lanes above.
 
-`AGENTS.md` § Execution policy states which of these actions proceed without asking
-and which are worth an owner's attention.
+`AGENTS.md` § Execution policy states which of these actions proceed without asking,
+which are worth an owner's attention, and — under § Owner review admission — which
+objects may reach the owner at all. A review whose verdict cannot change a track-level
+authority state is not a small review. It is not a review.
 
 A1-01 remains commissioned and is not deprioritized as music. It is reclassified:
 its lane is editing, custody and release governance, not the proof that EarCrate can

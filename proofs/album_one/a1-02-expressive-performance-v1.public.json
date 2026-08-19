@@ -1,0 +1,121 @@
+{
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "headline": "A1-02 is played rather than triggered, and the difference is auditionable.",
+  "independence": {
+    "commissioned_answer_key_used": false,
+    "control_candidate_used": false,
+    "reference_recording_consulted": false
+  },
+  "invariants_verified": true,
+  "kind": "earcrate_a1_02_public_expressive_performance_receipt",
+  "may_change": [
+    "velocity",
+    "sounding length",
+    "micro-timing"
+  ],
+  "may_not_change": [
+    "pitch",
+    "printed_measure",
+    "performed_occurrence",
+    "staff",
+    "voice",
+    "source_note_index",
+    "section",
+    "note count",
+    "order",
+    "traversal"
+  ],
+  "no_new_organs": "this adds no framework, comparator family, provider survey, evidence schema or tempo hypothesis; it is expression inside the existing A1-02 realizer",
+  "owner_pack": {
+    "admissible_outcomes": [
+      "A",
+      "B",
+      "tie",
+      "reject_both"
+    ],
+    "assignment_map_withheld": true,
+    "assignment_sealed_sha256": "27a509122de8dc19c08a1184692f51552b1878816390f503c647ca1c29e806db",
+    "blind": "which letter is played and which is triggered",
+    "control": "score_literal_130, not a candidate",
+    "disclosed": "everything else",
+    "level_matched_lufs": -22.6,
+    "measured_lufs": {
+      "expressive": -22.3,
+      "flat": -22.6
+    },
+    "revisions_remaining_after_verdict": 1
+  },
+  "receipt_sha256": "5dffd0685c16e360959436fc368d9ae3c04edbb82814c5483587811020b60b9b",
+  "renders": {
+    "expressive": {
+      "bit_identical_across_executions": true,
+      "distinct_velocities": 78,
+      "duration_seconds": 192.4206,
+      "events_rendered": 1253,
+      "left_hand_sha256": "01ffc28a5aa718684007ba022a90a5d623600f6fed2c443195f1f6a2f9e502c0",
+      "master_sha256": "9d28b567398f8632702e25da745de9503108ceda40a284f55cf2da80a034c6a6",
+      "max_polyphony": 10,
+      "rack_samples_used": 117,
+      "right_hand_sha256": "1e79e59c19addfca951fe8570643aaa3bed9455b386a40dbd307d8690c4357ae",
+      "stem_sum_reproduces_master": true,
+      "velocity_range": [
+        22,
+        127
+      ]
+    },
+    "flat": {
+      "bit_identical_across_executions": true,
+      "distinct_velocities": 6,
+      "duration_seconds": 191.9706,
+      "events_rendered": 1253,
+      "left_hand_sha256": "a8e6656763a743ea9edbc1f4da598848e5fdd33c9c4b0d67b6c66e493216d2cb",
+      "master_sha256": "eb86be884f1464e8e4e0a2a4b6ee1ce3a3c731676918fc9dcdb5007274b47c12",
+      "max_polyphony": 4,
+      "rack_samples_used": 61,
+      "right_hand_sha256": "612955fc5b74e54f98f887fbf91e7d5aa89a5b9caaf79498ce43e4be57562370",
+      "stem_sum_reproduces_master": true,
+      "velocity_range": [
+        36,
+        108
+      ]
+    }
+  },
+  "schema_version": 1,
+  "shaping": {
+    "bass_drop": 6,
+    "cadence_soften": 12,
+    "cadence_stretch_beats": 0.16,
+    "counts": {
+      "bass_notes": 710,
+      "cadence_notes": 124,
+      "detached_notes": 0,
+      "inner_voice_notes": 92,
+      "melody_notes": 451,
+      "pedalled_notes": 1253
+    },
+    "detach_fraction": 0.88,
+    "inner_voice_drop": 10,
+    "melody_lift": 14,
+    "pedal_overhang_beats": 0.9,
+    "phrase_arc": 8,
+    "phrase_peak": 0.66,
+    "voicing_hierarchy": "top right-hand note at each onset is the tune"
+  },
+  "state": {
+    "album_authority_changed": false,
+    "audio_answer_key": "unbound",
+    "mixscore_v2": "follows the verdict"
+  },
+  "tempo_decision": {
+    "further_tempo_families": "not authorized",
+    "parent_retained_as": "provenance parent and disclosed control",
+    "production_interpretation": "performed_interpretation_136",
+    "score_literal_parent": "score_literal_130",
+    "why": "the independently measured performance pulse; fixed after the tempo tie"
+  },
+  "track_id": "A1-02",
+  "visibility": "public"
+}

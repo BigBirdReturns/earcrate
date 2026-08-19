@@ -1,0 +1,94 @@
+{
+ "authority": {
+  "album_master_accepted": true,
+  "candidate_beat_control": false,
+  "inference_attempted": false,
+  "rights_or_release_permission": false,
+  "system_reference_completed": false
+ },
+ "boundary": {
+  "clip_decisions_exported": false,
+  "control_measurements_exported": false,
+  "private_paths_included": false,
+  "source_audio_exported": false
+ },
+ "challenge": {
+  "acceptance": {
+   "candidate_must_blindly_beat_naive_control": true,
+   "gold_similarity_is_evaluated_only_after_candidate_submission": true,
+   "least_bad_does_not_pass": true,
+   "reject_all_terminates_lineage": true,
+   "tie_terminates_lineage": true
+  },
+  "challenge_id": "album-one-a1-07-full-form-v1-native-pocket-recovery",
+  "challenge_sha256": "ae88e2c5f0093b617df3cdce7428188cfa50a1c09e890e15e9019f9b847033c4",
+  "clip_decisions_published": false,
+  "control_score_sha256": "6f98bbc1778085db981e41de905b639d6a9b12653f71f2490a123dbefb70e7bc",
+  "gold_receipt_sha256": "dda9f850199071419f44c74f321d5c24f89d9b038cbd909aeb7f34a5fb23cd14",
+  "gold_render_pcm_commitment": "61e20e832b98e606b241d8e91bddaa4c01a7fbfbb02b77bddc86aff1c913da58",
+  "gold_score_sha256": "8cbec0b72cd417d656fc1e085ae9e426b0c91e3360ea050c5afd14f655260b7c",
+  "review_dimensions": [
+   "one-band coherence",
+   "lead vocal authority",
+   "pulse and backbeat lock",
+   "percussion impact",
+   "harmonic stability",
+   "phrase freedom",
+   "transform and separation artifacts",
+   "desire to hear the next section"
+  ],
+  "source_count": 5,
+  "timeline": {
+   "channels": 2,
+   "duration_samples": 2693328,
+   "sample_rate": 48000
+  }
+ },
+ "control": {
+  "decisions_refused": [
+   "section mapping",
+   "progressive entry",
+   "bar-level placement",
+   "pitch shift",
+   "tempo scaling",
+   "phrase placement",
+   "per-section gain"
+  ],
+  "decisions_taken": [
+   "align each source to its own first music above a stated RMS threshold",
+   "match integrated loudness to the quietest source",
+   "play every source for the whole timeline",
+   "10 ms fades at the ends"
+  ],
+  "every_decision_derivable_without_the_gold": true,
+  "exclusion_reason": "it is a previously reviewed compound and carries accepted arrangement work; a control holding part of the answer is not a control",
+  "kind": "naive_co_play",
+  "loudness_reference": "quietest source, so nothing is boosted",
+  "onset_threshold_dbfs": -40.0,
+  "source_excluded": "gold_v6_reviewed_compound",
+  "sources_used": [
+   "four_seasons_vocals",
+   "maneskin_bass",
+   "maneskin_drums",
+   "maneskin_other"
+  ]
+ },
+ "control_canonical_pcm_sha256": "c52091054a42bfd4d6b217922f3aef3de4138bb424fd5b2662770a6d2e77d681",
+ "control_reproduces_identically": true,
+ "control_score_sha256": "6f98bbc1778085db981e41de905b639d6a9b12653f71f2490a123dbefb70e7bc",
+ "gold_receipt_is_a_transcription": {
+  "invented": false,
+  "master_cut_from_this_render": true,
+  "monitoring_accepted_production_render": true,
+  "sealed_blind_verdict_sha256": "944f7ccd8adebc5f675dddacca723e901ec5ea927a868008aa275cfa47549071",
+  "transcribed": true,
+  "void_if_owner_disputes_the_transcription": true,
+  "winning_total": 68.9
+ },
+ "headline": "The A1-07 withheld-answer recovery challenge is issued, with a naive co-play control that was declared before any inference ran.",
+ "kind": "earcrate_a1_07_public_recovery_challenge_receipt",
+ "next_musical_action": "Attempt inference against this challenge and nothing else. A candidate passes only by blindly beating the control; a tie, a reject-all, or the control winning terminates that candidate lineage and leaves the system reference open.",
+ "receipt_sha256": "d43543175dd8aad99cfdd95dd68a56aaa67cc4b62ae381bcb59fdcd1855d9d3c",
+ "schema_version": 1,
+ "track_id": "A1-07"
+}

@@ -51,9 +51,88 @@ TARGET_SECONDS = (161.237333, 171.669333)
 DONOR_SECONDS = (255.146667, 265.578667)
 CROSSFADE_MS = 35.0
 
+# What the owner is actually asked to compare. The two full-length readings are identical for
+# 266 of their 276 seconds, so the pack leads with the neighbourhood of the edit and carries
+# the whole work only for anyone who wants the entire arc.
+FOCUS_SECONDS = (140.0, 190.0)            # 2:20 to 3:10 -- run-up, edit, landing
+DONOR_CONTEXT_SECONDS = (250.0, 270.0)    # 4:10 to 4:30 -- where the inserted material lives
+PACK_MEMBERS = ("A", "A_FOCUS", "B", "B_FOCUS", "DONOR_SOURCE", "EDIT_WINDOW",
+                "MANIFEST", "REVIEW")
+
 # The source-only contract. None of these is performed here, and the receipt says so.
 PROHIBITED = ("beat chopping", "stem layering", "synthesis", "MIDI overlay",
               "filtered intros", "any other hidden production change")
+
+
+REVIEW_SHEET = """A1-01 EMPIRE STATE OF MIND -- FULL-LENGTH RECURRENCE EDIT
+=========================================================
+
+WHERE THE TWO FILES DIFFER
+    2:41.2 to 2:51.7. That is all. Every other sample in A.wav and B.wav is bit-identical
+    -- four minutes twenty-six seconds of the same bytes. There is nothing to hear anywhere
+    else, so do not hunt.
+
+    Inside those 10.4 seconds the two are uncorrelated (-0.20). This is not a subtle
+    crossfade. It is ten seconds of different music at the same level, and it is obvious.
+
+START HERE
+    A_FOCUS.wav and B_FOCUS.wav
+        2:20 to 3:10 of each side: the run-up, the edit, and where it lands. Fifty seconds
+        instead of four and a half minutes. This is the comparison.
+
+THEN, IF YOU WANT IT
+    DONOR_SOURCE.wav
+        4:10 to 4:30, identical in both files. This is where the inserted material lives
+        in the original. Worth hearing, because the edit moves this passage earlier.
+
+    A.wav and B.wav
+        the complete work, if you want the whole arc rather than the neighbourhood.
+
+    EDIT_WINDOW.wav
+        the retained 31-second object, disclosed, NOT a candidate. Eight bars of prefix
+        into the four-bar donor. It answers a smaller question -- does the seam itself hold
+        -- and it cannot answer the one below.
+
+WHAT TO ACTUALLY JUDGE
+    Not "is the join clean". Judge whether the passage belongs where it now is.
+
+    The inserted material comes from 4:15, later in the track. So the risk this edit runs
+    is arriving somewhere too early: importing a more developed idea into a spot that had
+    not earned it, spending the payoff before the payoff, or making the section stall
+    because it has already said what it was building toward.
+
+    Listen for the entry at 2:41, the ten seconds after it, the return at 2:51, and then
+    whether what follows still makes sense.
+
+ONE THING ABOUT THE BLIND
+    Which letter carries the edit is withheld and sealed. But the blind is weak by
+    construction, and you should know that rather than trust it: in the edited file the
+    2:41 passage comes back at 4:15, because the donor region is untouched. Listen to
+    either file end to end and you can work out which one it is.
+
+    That does not damage the verdict. The question is whether the edit is musically
+    better, not whether you can identify it.
+
+ADMISSIBLE OUTCOMES
+    WIN
+        the edited version improves the work
+        proceed to mastering and A1-01 acceptance
+        rights eligibility is a separate decision and is not asked here
+
+    LOSE or TIE
+        close A1-01 as an unsuccessful editing candidate
+        move Album One to A1-03
+
+    If it loses, say whether the damage is at the seam, in the phrase continuity, in the
+    development, or in the payoff.
+
+WHAT WAS AND WAS NOT DONE
+    One recurrence substitution: 161.237-171.669 s replaced by 255.147-265.579 s, the same
+    length, with 35 ms equal-power joins at entry and exit. Zero samples altered outside
+    that span. Both files are the same duration. No normalisation on either side; A and B
+    are level-matched at pack time so loudness is not the difference. No beat chopping, no
+    stem layering, no synthesis, no MIDI overlay, no filtered intro.
+"""
 
 
 class SourceError(RuntimeError):
@@ -152,6 +231,23 @@ def write_wav(path: Path, audio: np.ndarray) -> str:
     return sha256_file(path)
 
 
+def cut(source: Path, destination: Path, span: tuple[float, float]) -> None:
+    """Take a span out of a finished pack member without touching anything else.
+
+    The focus pair and the donor context are cut from the level-matched files the owner is
+    given, not from the pre-match renders, so what is heard in the excerpt is exactly what is
+    heard at that point in the full-length reading.
+    """
+    start, stop = span
+    result = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", f"{start:.6f}",
+         "-t", f"{stop - start:.6f}", "-i", str(source), "-c:a", "pcm_s24le",
+         "-map_metadata", "-1", "-fflags", "+bitexact", "-flags", "+bitexact",
+         str(destination)], capture_output=True, text=True, timeout=3600)
+    if result.returncode:
+        raise SourceError(result.stderr[-400:])
+
+
 def lufs(path: Path) -> float:
     result = subprocess.run(
         ["ffmpeg", "-nostdin", "-hide_banner", "-i", str(path), "-filter_complex",
@@ -219,48 +315,14 @@ def main() -> int:
         excerpt.unlink()
     shutil.copy2(args.excerpt, excerpt)
 
-    (pack / "REVIEW.txt").write_text("""A1-01 EMPIRE STATE OF MIND -- FULL-LENGTH RECURRENCE EDIT
-=========================================================
+    # The comparison the owner is actually asked to make, cut from the two files above.
+    for letter in ("A", "B"):
+        cut(pack / f"{letter}.wav", pack / f"{letter}_FOCUS.wav", FOCUS_SECONDS)
+    cut(pack / "A.wav", pack / "DONOR_SOURCE.wav", DONOR_CONTEXT_SECONDS)
+    print("focus pair {}-{}s, donor context {}-{}s".format(
+        *FOCUS_SECONDS, *DONOR_CONTEXT_SECONDS))
 
-ONE QUESTION
-    Does the recurrence edit improve the complete Pretty Lights work without damaging
-    phrase continuity, development, payoff, or overall legibility?
-
-    A.wav and B.wav are the complete 276.387-second work. One is edited, the other is
-    untouched. Which is which is withheld. They are level-matched, so loudness is not
-    the difference.
-
-WHAT THE EDIT IS
-    One recurrence substitution. The span at 161.237 to 171.669 seconds is replaced by
-    the span at 255.147 to 265.579 seconds -- the same length -- with 35 ms equal-power
-    joins at the entry and the exit.
-
-    Every other sample is bit-identical to the source. Both files are the same duration.
-    No normalisation and no processing was applied to either side: no beat chopping, no
-    stem layering, no synthesis, no MIDI overlay, no filtered intro.
-
-EDIT_WINDOW.wav
-    Disclosed, not blind, NOT a candidate. This is the retained 31-second object: eight
-    bars of prefix into the four-bar donor recurrence. It shows the seam closely and it
-    is a diagnostic only. It cannot answer the question above, because it never exposes
-    the development or payoff the edit has to survive. It is included so the seam can be
-    inspected, not ranked.
-
-    It is the historical witness, reproduced bit-for-bit from the bound source.
-
-ADMISSIBLE OUTCOMES
-    WIN
-        the edited version improves the work
-        proceed to mastering and A1-01 acceptance
-        rights eligibility remains a separate decision and is not asked here
-
-    LOSE or TIE
-        close A1-01 as an unsuccessful editing candidate
-        move Album One to A1-03
-
-    If it loses, say whether the damage is at the seam, in the phrase continuity, in the
-    development, or in the payoff.
-""", encoding="utf-8", newline="\n")
+    (pack / "REVIEW.txt").write_text(REVIEW_SHEET, encoding="utf-8", newline="\n")
 
     lines = ["{}  {}".format(sha256_file(p), p.name) for p in sorted(pack.glob("*"))
              if p.name != "MANIFEST.sha256"]

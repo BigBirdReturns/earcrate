@@ -213,3 +213,36 @@ def test_the_blind_declares_its_own_weakness():
     assert blind["robust"] is False, "this blind leaks and the receipt must not claim otherwise"
     assert "returns at 4:15" in blind["leak"]
     assert blind["affects_verdict_validity"] is False
+
+
+def test_the_builder_emits_every_member_the_receipt_promises():
+    """A receipt that names pack members the builder cannot produce is a promise, not a fact.
+
+    The delivered pack carries A_FOCUS, B_FOCUS and DONOR_SOURCE, and the receipt lists them.
+    The builder did not make them, so the pack could not be rebuilt from the bound source --
+    which is the whole basis on which anything else in this lane is trusted.
+    """
+    import scripts.earcrate_a1_01_full_context_v1 as builder
+
+    receipt = load_sealed(RECEIPT)
+    promised = set(receipt["owner_pack"]["members"])
+    assert set(builder.PACK_MEMBERS) == promised, (
+        f"builder emits {sorted(builder.PACK_MEMBERS)}, receipt promises {sorted(promised)}")
+
+
+def test_the_focus_pair_actually_contains_the_edit():
+    """A focus cut that misses the difference sends the owner to listen at nothing."""
+    import scripts.earcrate_a1_01_full_context_v1 as builder
+
+    focus_start, focus_stop = builder.FOCUS_SECONDS
+    edit_start, edit_stop = builder.TARGET_SECONDS
+    assert focus_start < edit_start and focus_stop > edit_stop
+
+    # And run-up and landing on both sides, not the edit jammed against an edge.
+    assert edit_start - focus_start >= 15.0
+    assert focus_stop - edit_stop >= 15.0
+
+    # The donor context is where the inserted material lives in the untouched reading.
+    donor_start, donor_stop = builder.DONOR_CONTEXT_SECONDS
+    source_start, source_stop = builder.DONOR_SECONDS
+    assert donor_start <= source_start and donor_stop >= source_stop

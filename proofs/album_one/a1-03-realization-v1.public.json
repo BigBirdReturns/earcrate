@@ -1,0 +1,282 @@
+{
+ "authority": {
+  "album_master_accepted": false,
+  "moves_album_counter": false,
+  "owner_audition_performed": false,
+  "rights_or_release_permission": false,
+  "system_reference_completed": false,
+  "witness_transcription_used": false
+ },
+ "boundary": {
+  "private_paths_included": false,
+  "renders_remain_local": true,
+  "source_audio_exported": false,
+  "source_audio_modified": false
+ },
+ "fixed_grid_departure": {
+  "control_bpm": 138.0,
+  "departure_in_beats_at_the_end": 6.945,
+  "final_departure_seconds": 3.1848,
+  "max_absolute_departure_seconds": 3.1848,
+  "mean_absolute_departure_seconds": 1.7774,
+  "monotonic": true,
+  "per_bar_seconds": [
+   0.0,
+   0.1185,
+   0.1905,
+   0.3322,
+   0.4506,
+   0.6388,
+   0.7805,
+   0.8525,
+   0.9942,
+   1.1823,
+   1.3472,
+   1.4657,
+   1.5841,
+   1.7026,
+   1.7514,
+   1.8699,
+   1.9883,
+   2.1068,
+   2.202,
+   2.2276,
+   2.3229,
+   2.4646,
+   2.5134,
+   2.5854,
+   2.6342,
+   2.7294,
+   2.7783,
+   2.8503,
+   2.9223,
+   3.0176,
+   3.0896,
+   3.1848
+  ]
+ },
+ "headline": "A1-03's chart is recovered from the bound recording and played on the performance's own clock, against the same chart on the witness's declared grid.",
+ "kind": "earcrate_a1_03_public_realization_receipt",
+ "next_musical_action": "Judge the recovery machine-side first: whether the recovered chords survive a second opinion, and whether the comp figure is worth keeping. The owner is worth interrupting only once this lane has a musical proposition rather than a reduction.",
+ "realization": {
+  "candidate": {
+   "clock": "recovered",
+   "distinct_samples_used": 42,
+   "events": 244,
+   "pitch_range": [
+    36,
+    70
+   ],
+   "polyphony": 5,
+   "render": {
+    "applied_gain_db": -1.728,
+    "duration_seconds": 67.1412,
+    "master_sha256": "5596e83754205db29b5508636bf985f4bffa323e33b38e0c8002eda5174dae8b"
+   }
+  },
+  "candidate_and_control_differ_only_in_the_clock": true,
+  "comp_is_interpretation_not_recovery": {
+   "comp_beats_zero_based": [
+    1,
+    3
+   ],
+   "note": "the chart is recovered; the figure that plays it is chosen, and is stated here so it is not mistaken for a finding",
+   "root_register": [
+    36,
+    47
+   ],
+   "velocity_range": [
+    52,
+    104
+   ],
+   "voicing_register": [
+    60,
+    72
+   ]
+  },
+  "control": {
+   "clock": "fixed",
+   "distinct_samples_used": 42,
+   "events": 244,
+   "pitch_range": [
+    36,
+    70
+   ],
+   "polyphony": 5,
+   "render": {
+    "applied_gain_db": -1.4934,
+    "duration_seconds": 63.6522,
+    "master_sha256": "f215dba90d23f0109f47c762e4550882bf3450eaa8e30c8ab2f3d326861ab1e6"
+   }
+  },
+  "instrument": "one sampled grand piano rack, unchanged from A1-02",
+  "new_organs_added": 0,
+  "organs_reused_unmodified": [
+   "earcrate.a1_02.performance.demand",
+   "earcrate.a1_02.performance.rack",
+   "earcrate.a1_02.performance.rack_render"
+  ],
+  "renderer_clock": {
+   "tempo_bpm": 60.0,
+   "why": "set to identity so one beat is one second and a drifting recovered grid survives a renderer that only understands constant tempo"
+  },
+  "renders_are_distinct": true
+ },
+ "receipt_sha256": "2588b553b054e1293dc2f176917e93920e06cb88b97612c0f592215c6ea19981",
+ "recovered_chart": {
+  "bar_count": 32,
+  "bar_duration_seconds": {
+   "max": 1.9273,
+   "median": 1.8344,
+   "min": 1.7647
+  },
+  "beats_per_bar": 4,
+  "chance_mass_fraction_median": 0.25,
+  "chord_fit_median": 0.1157,
+  "chord_fits": [
+   0.1184,
+   0.1107,
+   0.1118,
+   0.1297,
+   0.1392,
+   0.1147,
+   0.1111,
+   0.1201,
+   0.1264,
+   0.1264,
+   0.1132,
+   0.1125,
+   0.119,
+   0.1088,
+   0.1121,
+   0.1093,
+   0.1171,
+   0.1188,
+   0.1216,
+   0.1212,
+   0.1429,
+   0.1141,
+   0.1129,
+   0.126,
+   0.1086,
+   0.1188,
+   0.1175,
+   0.0988,
+   0.108,
+   0.1071,
+   0.1154,
+   0.116
+  ],
+  "chord_mass_fraction_median": 0.3587,
+  "chord_mass_fractions": [
+   0.3551,
+   0.332,
+   0.4473,
+   0.389,
+   0.4177,
+   0.3441,
+   0.4445,
+   0.3604,
+   0.3791,
+   0.5057,
+   0.4529,
+   0.3374,
+   0.357,
+   0.4354,
+   0.4482,
+   0.328,
+   0.3514,
+   0.4754,
+   0.4864,
+   0.4846,
+   0.4287,
+   0.3422,
+   0.4517,
+   0.378,
+   0.3258,
+   0.3565,
+   0.3526,
+   0.2964,
+   0.3239,
+   0.3213,
+   0.3462,
+   0.3479
+  ],
+  "chords": [
+   "D min",
+   "D min",
+   "F 7",
+   "C min",
+   "B-flat maj",
+   "C min",
+   "E-flat maj7",
+   "C min",
+   "B-flat maj",
+   "E-flat maj7",
+   "E-flat maj7",
+   "D sus4",
+   "D min",
+   "E-flat maj7",
+   "E-flat maj7",
+   "C min",
+   "B-flat sus4",
+   "E-flat maj7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "C min",
+   "B-flat sus4",
+   "E-flat maj7",
+   "C sus4",
+   "B-flat sus4",
+   "B-flat sus4",
+   "A sus4",
+   "C min",
+   "C min",
+   "B-flat sus4",
+   "B-flat sus4",
+   "C sus4"
+  ],
+  "downbeat_phase": 1,
+  "downbeat_phase_scores": {
+   "0": 1.3792,
+   "1": 1.3996,
+   "2": 1.3475,
+   "3": 1.3034
+  },
+  "implied_bpm_from_bar_span": 130.835,
+  "librosa_version": "0.11.0",
+  "recovered_from": "the bound recording; no witness value was read",
+  "section_end_seconds": 59.768163,
+  "section_start_seconds": 0.626939
+ },
+ "schema_version": 1,
+ "source_binding": {
+  "canonical_pcm_sha256": "0c45672ea556b3f5a4fea4ef45b67cd20da0a713504fb4c77245ddf9b5369249",
+  "container_sha256": "b87f5ca6588eab74f30e7b2b7afed0c236bec02a0b46868252a5e3c437788fa5",
+  "path_recorded_in_repository": false
+ },
+ "track_id": "A1-03",
+ "what_this_is_not": [
+  "a reconstruction of the trio's performance",
+  "an attempt at drums, bass or interplay",
+  "an owner audition",
+  "a claim that the recovered chords are correct"
+ ],
+ "witness_cross_check": {
+  "chance_fraction": 0.2143,
+  "chords_in_claimed_key": 31,
+  "chords_outside": [
+   "A sus4"
+  ],
+  "chords_total": 32,
+  "claim_read_after_recovery": true,
+  "claimed_tonal_space": [
+   "B-flat major",
+   "G minor"
+  ],
+  "lift_over_chance": 0.7545,
+  "note": "the witness was wrong about tempo and is corroborated about harmony; that is a usable result, because it says which of its claims may inform a realization and which may not",
+  "observed_fraction": 0.9688,
+  "verdict": "converges"
+ }
+}

@@ -1,4 +1,4 @@
-"""Give ACE-Step one bounded musical role in A1-03, and audition it against not having it.
+"""Give ACE-Step one bounded musical role in A1-03, and measure it against not having it.
 
 The A1-03 realization is a chart played by one piano. The trio it came from has a bass and a
 drummer, and the reduction plainly misses them. That is a named, track-level, musical gap --
@@ -7,6 +7,14 @@ which is the only thing that entitles a generative provider to be pointed at any
 So the role is exactly one thing: **replacement instrumentation for the missing rhythm
 section**, over one window, once. Not a census, not a benchmark, not a bake-off. The
 incumbent is the comp on its own, and the incumbent is allowed to win.
+
+What this produces is a **provider role probe**, and it is not admissible as an owner review.
+Two cuts of the same twenty-nine seconds of the same reduction, one of them carrying a bed
+that was never conditioned on the recording and does not know the chord changes, can tell a
+machine whether that bed contributes low end and rhythmic support. No verdict it can return
+selects a track candidate, accepts a master, or decides whether ACE-Step is adopted -- so
+under AGENTS.md's owner-review admission rule it never reaches a person, and the pack carries
+a machine disposition instead. The cuts remain private diagnostic evidence.
 
 Everything the model is told comes from the recovery, not from the witness and not from
 taste: the window's own tempo, the key implied by the recovered chords, the meter, the
@@ -301,14 +309,23 @@ def main() -> int:
             gain_db=target - measured_lufs[role])
     print(f"  LUFS {measured_lufs} -> matched to {target}")
 
-    (pack / "REVIEW.txt").write_text(f"""A1-03 FLIM -- DOES A GENERATED RHYTHM SECTION HELP?
-===================================================
+    (pack / "DISPOSITION.txt").write_text(f"""A1-03 FLIM -- ACE-STEP ROLE PROBE
+==================================
 
-ONE QUESTION
-    A.wav and B.wav are the same {duration:.1f} seconds of the same piano comp. One of them
-    has a generated bass-and-drums bed underneath it. The other has nothing underneath it.
+NO OWNER VERDICT IS OWED ON THESE FILES.
 
-    Which is the better {duration:.0f} seconds of music?
+    artifact class              provider_role_probe
+    owner review required       no
+    owner review pending        no
+    ACE-Step adopted            no
+    ACE-Step rejected globally  no
+    bounded role qualified      not established
+    album authority changed     no
+    owner action                none
+
+WHAT A.wav AND B.wav ARE
+    The same {duration:.1f} seconds of the same piano comp, level-matched. One of them has a
+    generated bass-and-drums bed underneath it; the other has nothing underneath it.
 
 WHAT THE COMP IS
     The chart of the first {shape['bars']} bars of the Bad Plus performance of Flim, recovered
@@ -325,16 +342,16 @@ WHAT THE BED IS
     It was not conditioned on the recording, and it does not know the chord changes. It
     knows a tempo and a key.
 
-ADMISSIBLE OUTCOMES
-    THE BED HELPS
-        keep the role; give ACE-Step the rhythm section for the wider section next
-    THE COMP ALONE IS BETTER
-        the role fails on this track; that closes the role, not the track and not the
-        provider
-    TIE
-        treated as the comp winning, because adding a generated layer has to earn itself
+WHY THIS IS NOT A REVIEW
+    A verdict here could say whether a generated bed contributes low end and rhythmic
+    support under a reduction. It could not select or reject a complete track candidate,
+    accept or reject a master, or decide one localized edit in full context -- so it cannot
+    change a track-level authority state, and AGENTS.md's owner-review admission rule keeps
+    it away from a person. Stacking a second option under a reduction does not admit it.
 
-    If the bed loses, say whether it is the groove, the harmony, the timing, or the sound.
+    These cuts stay private machine diagnostic evidence. What survives the probe is the
+    corrected bass-root chart, the recovered performance clock and the one-generation
+    provider receipt -- all retained, none of them owner tasks.
 """, encoding="utf-8", newline="\n")
 
     lines = ["{}  {}".format(sha256_file(path), path.name)
@@ -355,8 +372,32 @@ ADMISSIBLE OUTCOMES
         "schema_version": 1,
         "track_id": TRACK_ID,
         "headline": ("ACE-Step was given one bounded role on A1-03 -- the rhythm section the "
-                     "piano-only realization is missing -- and it is auditioned against not "
-                     "having it."),
+                     "piano-only realization is missing -- and the result is a provider role "
+                     "probe, not an owner review."),
+        "artifact_class": "provider_role_probe",
+        "disposition": {
+            "artifact_class": "provider_role_probe",
+            "owner_review_required": False,
+            "owner_review_pending": False,
+            "ace_step_adopted": False,
+            "ace_step_rejected_globally": False,
+            "bounded_role_qualified": "not_established",
+            "corrected_chart_retained": True,
+            "one_generation_receipt_retained": True,
+            "album_authority_changed": False,
+            "owner_action": "none",
+            "why": ("the two cuts compare the same reduction over the same twenty-nine "
+                    "seconds; one carries a bed that was not conditioned on the recording "
+                    "and does not know the chord changes. That can say whether the bed adds "
+                    "low end and rhythmic support. It cannot say whether A1-03 is a "
+                    "convincing reconstruction, whether ACE-Step deserves adoption, or "
+                    "whether the track belongs on Album One -- so no verdict it returns "
+                    "changes a track-level authority state"),
+            "rule": ("AGENTS.md -- Owner review admission: a provider probe may never create "
+                     "owner_review_pending, and does not become admissible by having a "
+                     "second option placed under it"),
+            "evidence_status": "retained as private machine diagnostic evidence",
+        },
         "role": {
             "role": request["role"],
             "statement": request["role_statement"],
@@ -386,7 +427,9 @@ ADMISSIBLE OUTCOMES
                        "musical fit"),
         },
         "bed_measurement": measured,
-        "audition": {
+        "probe": {
+            "owner_review_required": False,
+            "owner_review_pending": False,
             "cuts": 2,
             "blind": "which letter carries the bed",
             "assignment_sealed_sha256": private["assignment_sha256"],
@@ -401,6 +444,10 @@ ADMISSIBLE OUTCOMES
         },
         "authority": {
             "provider_adopted": False,
+            "provider_rejected_globally": False,
+            "bounded_role_qualified": "not_established",
+            "owner_review_required": False,
+            "owner_review_pending": False,
             "album_master_accepted": False,
             "owner_audition_performed": False,
             "generation_is_not_acceptance": True,

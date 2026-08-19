@@ -14,6 +14,11 @@ The conditioning quietly comes from somewhere better than the recovery. The bed 
 tempo and a key; both came from the blind chart, and whether the provider actually delivered
 them is measured rather than assumed.
 
+And the one that actually happened: the probe presents itself as an owner review. Two cuts of
+the same reduction, one of them carrying a bed that never saw the recording, cannot select a
+track candidate or accept a master, so no verdict on them changes a track-level authority
+state. The pack is machine diagnostic evidence and carries a disposition, not a question.
+
 The runner is not pytest: gate functions take no arguments, or a lone `tmp_path`.
 """
 
@@ -49,7 +54,7 @@ def test_the_role_stayed_one_role():
 def test_the_incumbent_can_still_win():
     receipt = load_sealed(RECEIPT)
     assert receipt["role"]["incumbent_may_win"] is True
-    assert receipt["audition"]["tie_counts_as_the_incumbent_winning"] is True
+    assert receipt["probe"]["tie_counts_as_the_incumbent_winning"] is True
     assert "no bed at all" in receipt["role"]["incumbent"]
     assert "closes" in receipt["on_loss"]
 
@@ -104,9 +109,49 @@ def test_a_generation_is_not_an_adoption():
 
 
 def test_the_blind_is_sealed_before_a_verdict_can_choose_it():
-    audition = load_sealed(RECEIPT)["audition"]
-    assert audition["cuts"] == 2
-    assert audition["assignment_map_withheld"] is True
-    assert len(audition["assignment_sealed_sha256"]) == 64
-    assert "forced by the audio" in audition["assignment_derivation"]
-    assert audition["bed_gain_db_under_the_comp"] < 0.0
+    probe = load_sealed(RECEIPT)["probe"]
+    assert probe["cuts"] == 2
+    assert probe["assignment_map_withheld"] is True
+    assert len(probe["assignment_sealed_sha256"]) == 64
+    assert "forced by the audio" in probe["assignment_derivation"]
+    assert probe["bed_gain_db_under_the_comp"] < 0.0
+
+
+def test_the_probe_never_becomes_an_owner_review():
+    """The exact failure this pack was rebuilt to stop: a probe wearing a review's clothes."""
+    receipt = load_sealed(RECEIPT)
+    assert receipt["artifact_class"] == "provider_role_probe"
+
+    disposition = receipt["disposition"]
+    assert disposition["artifact_class"] == "provider_role_probe"
+    assert disposition["owner_review_required"] is False
+    assert disposition["owner_review_pending"] is False
+    assert disposition["owner_action"] == "none"
+    assert disposition["album_authority_changed"] is False
+    assert "Owner review admission" in disposition["rule"]
+
+    # Both directions stay open. A probe that cannot move the track cannot adopt a provider,
+    # and it cannot condemn one either.
+    assert disposition["ace_step_adopted"] is False
+    assert disposition["ace_step_rejected_globally"] is False
+    assert disposition["bounded_role_qualified"] == "not_established"
+
+    authority = receipt["authority"]
+    assert authority["owner_review_pending"] is False
+    assert authority["provider_adopted"] is False
+    assert authority["provider_rejected_globally"] is False
+
+
+def test_what_survives_the_probe_is_named():
+    """A negative disposition on the pack is not a negative disposition on the work."""
+    disposition = load_sealed(RECEIPT)["disposition"]
+    assert disposition["corrected_chart_retained"] is True
+    assert disposition["one_generation_receipt_retained"] is True
+    assert "diagnostic evidence" in disposition["evidence_status"]
+
+
+def test_the_pack_ships_a_disposition_and_not_a_question():
+    source = (ROOT / "scripts" / "earcrate_a1_03_ace_step_role_v1.py").read_text(encoding="utf-8")
+    assert 'pack / "DISPOSITION.txt"' in source
+    assert 'pack / "REVIEW.txt"' not in source, "the pack asks for an owner verdict again"
+    assert "NO OWNER VERDICT IS OWED" in source

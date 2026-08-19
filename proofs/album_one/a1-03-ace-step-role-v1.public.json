@@ -1,22 +1,15 @@
 {
- "audition": {
-  "assignment_derivation": "sha256 over the two render digests; forced by the audio before the pack was built",
-  "assignment_map_withheld": true,
-  "assignment_sealed_sha256": "2d066dbfc1137db38496f34463b81d37a0e0e0ca240409b409c52b286a1dd790",
-  "bed_gain_db_under_the_comp": -3.0,
-  "blind": "which letter carries the bed",
-  "cuts": 2,
-  "disclosed": "everything else, including what the bed is and what it was told",
-  "duration_seconds": 29.820613,
-  "level_matched_lufs": -22.4,
-  "tie_counts_as_the_incumbent_winning": true
- },
+ "artifact_class": "provider_role_probe",
  "authority": {
   "album_master_accepted": false,
+  "bounded_role_qualified": "not_established",
   "generation_is_not_acceptance": true,
   "moves_album_counter": false,
   "owner_audition_performed": false,
+  "owner_review_pending": false,
+  "owner_review_required": false,
   "provider_adopted": false,
+  "provider_rejected_globally": false,
   "rights_or_release_permission": false
  },
  "bed_measurement": {
@@ -34,7 +27,22 @@
   "renders_remain_local": true,
   "source_audio_exported": false
  },
- "headline": "ACE-Step was given one bounded role on A1-03 -- the rhythm section the piano-only realization is missing -- and it is auditioned against not having it.",
+ "disposition": {
+  "ace_step_adopted": false,
+  "ace_step_rejected_globally": false,
+  "album_authority_changed": false,
+  "artifact_class": "provider_role_probe",
+  "bounded_role_qualified": "not_established",
+  "corrected_chart_retained": true,
+  "evidence_status": "retained as private machine diagnostic evidence",
+  "one_generation_receipt_retained": true,
+  "owner_action": "none",
+  "owner_review_pending": false,
+  "owner_review_required": false,
+  "rule": "AGENTS.md -- Owner review admission: a provider probe may never create owner_review_pending, and does not become admissible by having a second option placed under it",
+  "why": "the two cuts compare the same reduction over the same twenty-nine seconds; one carries a bed that was not conditioned on the recording and does not know the chord changes. That can say whether the bed adds low end and rhythmic support. It cannot say whether A1-03 is a convincing reconstruction, whether ACE-Step deserves adoption, or whether the track belongs on Album One -- so no verdict it returns changes a track-level authority state"
+ },
+ "headline": "ACE-Step was given one bounded role on A1-03 -- the rhythm section the piano-only realization is missing -- and the result is a provider role probe, not an owner review.",
  "key": {
   "chords_inside": 14,
   "chords_total": 16,
@@ -44,7 +52,21 @@
  },
  "kind": "earcrate_a1_03_public_ace_step_role_receipt",
  "on_loss": "the role closes. Not the track, not the provider, and not the realization lane -- one bounded role failed on one window, which is a result and not a stop instruction",
- "receipt_sha256": "34fd944b79c171efdc9d187410bf0e53648cdc6e8cf0ee92b2dc3202c0581e5f",
+ "probe": {
+  "assignment_derivation": "sha256 over the two render digests; forced by the audio before the pack was built",
+  "assignment_map_withheld": true,
+  "assignment_sealed_sha256": "2d066dbfc1137db38496f34463b81d37a0e0e0ca240409b409c52b286a1dd790",
+  "bed_gain_db_under_the_comp": -3.0,
+  "blind": "which letter carries the bed",
+  "cuts": 2,
+  "disclosed": "everything else, including what the bed is and what it was told",
+  "duration_seconds": 29.820613,
+  "level_matched_lufs": -22.4,
+  "owner_review_pending": false,
+  "owner_review_required": false,
+  "tie_counts_as_the_incumbent_winning": true
+ },
+ "receipt_sha256": "aebacaa260777e594966ff3e9f5fea24e5c72600b785f21558cd66c5a38e88b4",
  "role": {
   "bed_reused_because": "the comp under it changed; the sealed request did not, so regenerating would have been a second generation the role does not permit",
   "conditioning_source": "the blind recovery, not the witness",

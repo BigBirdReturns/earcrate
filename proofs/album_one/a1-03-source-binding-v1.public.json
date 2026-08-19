@@ -309,6 +309,16 @@
     "note": "blind key estimation across a whole performance is a weak instrument; a top-three hit is corroboration, not proof",
     "verdict": "converges"
    },
+   "witness_continuation_consistency": {
+    "claimed_tempo_bpm": 138.0,
+    "continuation_bars": 16,
+    "continuation_duration_seconds": 29.8,
+    "error_against_declared_percent": 6.624,
+    "error_against_measured_percent": 0.263,
+    "note": "the witness carries three tempo-bearing numbers and they do not agree with each other; the one implied by the material it generated is the one that agrees with the recording",
+    "tempo_implied_by_continuation": 128.859,
+    "verdict": "inconsistent"
+   },
    "witness_internal_consistency": {
     "claimed_bars": 56,
     "claimed_beats": 224,
@@ -326,7 +336,8 @@
    "tonal_field"
   ],
   "diverged": [
-   "tempo"
+   "tempo",
+   "witness_continuation_consistency"
   ],
   "gate": "symbolic_and_audio_convergence",
   "gate_passed": false
@@ -340,7 +351,7 @@
   "witness_values_used_as_analysis_priors": false
  },
  "next_musical_action": "Realize the bound performance. The proof pack holding the witness's executable notes is not in local custody, so the realization must derive its symbolic layer from the recording rather than replay a transcription -- which is the control the witness itself names as remaining.",
- "receipt_sha256": "ed60439742d8d9f963fa74be413fd8ed9b45e35a1eece6baac51430c8ecf6cea",
+ "receipt_sha256": "eb960ed58c593509ecbb5633a4658c76198de7c045dccabfd39089ce4463c6a7",
  "schema_version": 1,
  "source_binding": {
   "binding_kind": "exact_object_bound_edition_unclaimed",

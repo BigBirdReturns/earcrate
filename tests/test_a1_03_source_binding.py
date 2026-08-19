@@ -108,6 +108,26 @@ def test_the_tempo_claim_is_scored_by_more_than_one_instrument():
         assert tempo["error_percent"] > tempo["tolerance_percent"]
 
 
+def test_the_witness_carries_three_tempos_and_the_receipt_says_so():
+    """The declared tempo is contradicted by the witness's own duration-bearing artifacts.
+
+    That is the finding, not a footnote: the number implied by the material the package
+    generated is the one that agrees with the recording, which is what makes the declared
+    138 look like metadata rather than measurement.
+    """
+    claims = load_sealed(RECEIPT)["convergence"]["claims"]
+    declared = claims["tempo"]["claimed_bpm"]
+    span = claims["witness_internal_consistency"]["tempo_implied_by_claimed_beats_and_duration"]
+    continuation = claims["witness_continuation_consistency"]["tempo_implied_by_continuation"]
+
+    assert len({declared, span, continuation}) == 3, "the three tempos are no longer distinct"
+
+    # The continuation is nearer the measurement than the declaration is.
+    measured = claims["tempo"]["measured_bpm"]
+    assert abs(continuation - measured) < abs(declared - measured)
+    assert claims["witness_continuation_consistency"]["error_against_measured_percent"] <         claims["tempo"]["error_percent"]
+
+
 def test_the_witness_is_still_a_witness_and_not_an_answer_key():
     receipt = load_sealed(RECEIPT)
     witness = receipt["witness"]

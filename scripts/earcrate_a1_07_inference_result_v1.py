@@ -139,6 +139,8 @@ def main() -> int:
     parser.add_argument("--gold-score", required=True, type=Path)
     parser.add_argument("--source-lufs", action="append", default=[],
                         help="source_id=integrated_lufs, so balance is comparable at all")
+    parser.add_argument("--owner-note", help="a post-verdict owner note, added beside the "
+                                             "adjudication and never into it")
     args = parser.parse_args()
 
     root = args.review_directory.expanduser().resolve()
@@ -166,6 +168,26 @@ def main() -> int:
     for finding in comparison["findings"]:
         print(f"  {finding['assessment']:>8}  {finding['source_id']:<26} {finding['decision']}")
 
+    addendum = None
+    if args.owner_note:
+        # Additive only. The ledger is sealed and exclusive-write; this sits beside it and
+        # says so in its own fields, so nothing downstream can read it as a re-adjudication.
+        addendum = seal({
+            "kind": "earcrate_reference_zero_owner_note_addendum",
+            "schema_version": 1,
+            "track_id": TRACK_ID,
+            "review_ledger_sha256": ledger["ledger_sha256"],
+            "verdict": ledger["choice"],
+            "revealed_role": ledger["semantic_choice"],
+            "owner_note": args.owner_note,
+            "changes_adjudication": False,
+            "changes_dimensions": False,
+            "authorizes_new_attempt": False,
+        }, "addendum_sha256")
+        rz.write_json(root / "private" / "owner-note-addendum.json", addendum)
+        print(f"  owner note addendum {addendum['addendum_sha256'][:16]} "
+              "(additive; the ledger is untouched)")
+
     receipt = seal({
         "kind": "earcrate_a1_07_public_inference_result_receipt",
         "schema_version": 1,
@@ -178,6 +200,13 @@ def main() -> int:
         "submission_sha256": ledger["submission_sha256"],
         "assignment_sha256": ledger["assignment_sha256"],
         "owner_notes": ledger["notes"],
+        "owner_note_addendum": addendum,
+        "attribution": {
+            "owner_words": ["owner_notes", "owner_note_addendum.owner_note"],
+            "machine_analysis": ["gold_comparison"],
+            "note": ("the comparison below is a post-verdict analytical finding. It is not "
+                     "attributable to the owner, and no score in it was given by anyone"),
+        },
         "numeric_dimension_scores_returned": bool(ledger["dimensions"]),
         "which_letter_carried_which_object": "withheld; the mapping stays with the owner",
         "gold_comparison": {

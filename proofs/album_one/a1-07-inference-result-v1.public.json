@@ -1,5 +1,15 @@
 {
  "assignment_sha256": "6fa83ce9766da06bafc8843e9463727a2fe2e3e974e3198dcd02f7ec387bd8e6",
+ "attribution": {
+  "machine_analysis": [
+   "gold_comparison"
+  ],
+  "note": "the comparison below is a post-verdict analytical finding. It is not attributable to the owner, and no score in it was given by anyone",
+  "owner_words": [
+   "owner_notes",
+   "owner_note_addendum.owner_note"
+  ]
+ },
  "authority": {
   "candidate_lineage": "terminated",
   "challenge_still_open": true,
@@ -243,12 +253,25 @@
  "kind": "earcrate_a1_07_public_inference_result_receipt",
  "ledger_sha256": "2bca44b9dc116f18d614534f62983894de62b3f2fc98dd975fcb95c6ae3ed644",
  "numeric_dimension_scores_returned": false,
+ "owner_note_addendum": {
+  "addendum_sha256": "a2f11baa390a19886605b293db15b1137bd45c740f5f1ec79cc097f228697ac4",
+  "authorizes_new_attempt": false,
+  "changes_adjudication": false,
+  "changes_dimensions": false,
+  "kind": "earcrate_reference_zero_owner_note_addendum",
+  "owner_note": "B was better because I could actually hear the instrumental. It functioned as the band and the result read as music. The inferred candidate did not preserve enough instrumental presence.",
+  "revealed_role": "control",
+  "review_ledger_sha256": "2bca44b9dc116f18d614534f62983894de62b3f2fc98dd975fcb95c6ae3ed644",
+  "schema_version": 1,
+  "track_id": "A1-07",
+  "verdict": "B"
+ },
  "owner_notes": [
   "Owner verdict, verbatim: i can actually hear the background... it is music... not quite how i would sync it, but the potential is there",
   "No numeric dimension scores were returned and none were invented; the dimensions map is deliberately empty rather than filled in on the owner's behalf.",
   "The comment addresses synchronisation and placement rather than material or balance."
  ],
- "receipt_sha256": "c06f4081cbc940ee779596ee5e52dfd7cd0c63f58feb71d58cd01dd0849e3899",
+ "receipt_sha256": "8517ba04a412f649c66afbe825677a65296b299031a30abeacb27f6cd59d4cef",
  "schema_version": 1,
  "submission_sha256": "d247ee604acbe2fbe932087087160edfc840d4f3125ce768a84d4eb77bd3baed",
  "track_id": "A1-07",

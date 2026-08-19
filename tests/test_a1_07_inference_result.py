@@ -108,3 +108,57 @@ def test_the_owner_was_not_given_scores_they_did_not_give():
     receipt = load_sealed(RECEIPT)
     assert receipt["numeric_dimension_scores_returned"] is False
     assert receipt["owner_notes"], "the verdict was qualitative; the words are the record"
+
+
+def test_the_owner_note_addendum_sits_beside_the_adjudication_not_inside_it():
+    """Additive by construction: it references the ledger and disclaims every power it lacks.
+
+    The risk with a post-verdict note is that it becomes a second verdict by accident -- read
+    later as though the owner revised something. So it carries the ledger's own digest, and it
+    says in its own fields that it changes neither the adjudication nor the dimensions and
+    authorizes nothing.
+    """
+    receipt = load_sealed(RECEIPT)
+    addendum = receipt.get("owner_note_addendum")
+    if addendum is None:
+        return
+
+    assert addendum["kind"] == "earcrate_reference_zero_owner_note_addendum"
+    assert addendum["review_ledger_sha256"] == receipt["ledger_sha256"]
+    assert addendum["changes_adjudication"] is False
+    assert addendum["changes_dimensions"] is False
+    assert addendum["authorizes_new_attempt"] is False
+    assert addendum["revealed_role"] in {"candidate", "control"}
+    assert addendum["owner_note"].strip()
+
+    # A note cannot flip the outcome it comments on.
+    assert receipt["candidate_beat_control"] == (addendum["revealed_role"] == "candidate"
+                                                 and receipt["verdict"] == "candidate_beats_control")
+    # And it still may not resurrect dimension scores nobody gave.
+    assert receipt["numeric_dimension_scores_returned"] is False
+
+
+def test_machine_findings_are_not_dressed_up_as_owner_words():
+    """The comparison is analysis. Attributing it to the owner would manufacture authority."""
+    receipt = load_sealed(RECEIPT)
+    attribution = receipt["attribution"]
+    assert "gold_comparison" in attribution["machine_analysis"]
+    assert "gold_comparison" not in attribution["owner_words"]
+    assert "owner_notes" in attribution["owner_words"]
+    assert "not attributable to the owner" in attribution["note"]
+
+    # Nothing in the comparison may claim to be a score somebody returned.
+    for finding in receipt["gold_comparison"]["findings"]:
+        assert "owner" not in json_keys(finding)
+
+
+def json_keys(node, seen=None):
+    seen = set() if seen is None else seen
+    if isinstance(node, dict):
+        for key, value in node.items():
+            seen.add(str(key))
+            json_keys(value, seen)
+    elif isinstance(node, list):
+        for value in node:
+            json_keys(value, seen)
+    return " ".join(sorted(seen))

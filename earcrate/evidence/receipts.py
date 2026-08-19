@@ -68,11 +68,19 @@ def verify_body_free(receipt: Mapping[str, Any]) -> list[str]:
     """
     findings: list[str] = []
 
+    # A path-shaped key is private whatever it holds. `executions` is private only when
+    # it holds a structure, because that is when it carries per-run file paths -- as a
+    # count it is exactly the kind of determinism evidence a public receipt should show.
+    always_private = ("artifact_path", "path", "local_path")
+    private_when_structured = ("executions",)
+
     def walk(node: Any, path: str = "") -> None:
         if isinstance(node, dict):
             for key, value in node.items():
-                if key in ("artifact_path", "path", "executions", "local_path"):
+                if key in always_private:
                     findings.append(f"private field at {path}/{key}")
+                elif key in private_when_structured and isinstance(value, (dict, list)):
+                    findings.append(f"private structure at {path}/{key}")
                 walk(value, f"{path}/{key}")
         elif isinstance(node, list):
             for index, value in enumerate(node):

@@ -1,0 +1,82 @@
+{
+  "audio": {
+    "bit_depth": 24,
+    "channels": 2,
+    "container_sha256": "aba56dbdd844663939670d6c98510e2ba705144791efdb93a4689dc155af8985",
+    "duration_seconds": 194.1963,
+    "peak_target_dbfs": -3.0,
+    "sample_rate": 48000
+  },
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false
+  },
+  "derivation": {
+    "annotations_sha256": "611d0ac808f342e6ab8c062caf4b1238c9b73061845980a02bfb18308c832498",
+    "chord_symbols": 36,
+    "chord_vocabulary_entries": 11,
+    "navigation": [
+      "8->5 repeat",
+      "7->9 alternate_ending",
+      "17->10 repeat",
+      "17->18 repeat_exit",
+      "61->54 repeat",
+      "59->62 alternate_ending",
+      "64->34 dal_segno",
+      "52->65 to_coda"
+    ],
+    "note_count": 803,
+    "performed_measures": 105,
+    "printed_measures": 69,
+    "section_velocity_declared_not_derived": true,
+    "tempo_bpm": 130.0
+  },
+  "determinism": {
+    "classification": "bit_exact_across_executions",
+    "container_equal": true,
+    "executions": 2,
+    "how": "no randomness, no dither, no clock input"
+  },
+  "headline": "A1-02 has its first score-derived audio, and it is not a performance.",
+  "independence": {
+    "audio_comparison_imported_by_performance": false,
+    "control_candidate_used": false,
+    "reference_pcm_used": false,
+    "reference_recording_consulted": false
+  },
+  "kind": "earcrate_a1_02_public_engineering_render_receipt",
+  "receipt_sha256": "d80a86e5cbf8d24d8fd9a3d46c23bdec828a7bd39692edcfb551ba1e5d56c97f",
+  "rendered_on": "2026-08-18",
+  "schema_version": 1,
+  "score_timeline_agreement": {
+    "difference_is_release_tail": true,
+    "predicted_seconds_at_printed_tempo": 193.846154,
+    "rendered_seconds": 194.1963
+  },
+  "state": {
+    "album_authority_changed": false,
+    "album_realization_readiness": false,
+    "approved_private_rack": "unbound",
+    "audio_answer_key": "unbound",
+    "engineering_audio_render": "complete_harmonic_only",
+    "performed_midi": "not_produced_reconstruction_midi_unavailable",
+    "score_authority_v2": "not_started_pdf_unavailable"
+  },
+  "track_id": "A1-02",
+  "visibility": "public",
+  "what_this_is": {
+    "purpose": "expose the traversal, the repeats, the D.S. return, the coda, and whether 130 bpm reads as a plausible tempo for this music",
+    "realization": "harmonic, from the sealed chord vocabulary and printed navigation",
+    "voice": "engineering piano: five decaying partials, fixed attack and release"
+  },
+  "what_this_is_not": {
+    "absent": [
+      "melody and inner voices, which live in the unavailable reconstruction MIDI",
+      "printed dynamics, which are on the unavailable score pages",
+      "articulation, pedalling and voicing",
+      "rhythm within the bar beyond a stated chord pattern"
+    ],
+    "note": "A chord symbol says which harmony is in force, not how it was played. Realizing more than that would invent the thing A1-02 exists to derive.",
+    "note_level_performance": false
+  }
+}

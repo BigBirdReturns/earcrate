@@ -153,3 +153,22 @@ def test_the_rhythm_section_is_sealed_and_reproducible():
         if slot["mode"] == "trigger":
             # A trigger zone is rooted on its own note; retuning drums is not the mechanism.
             assert slot["maximum_transpose_semitones"] == 0
+
+
+def test_the_receipt_says_which_digests_a_second_run_can_be_held_to():
+    """The crate's WAV wrapper is not reproducible. Saying so is the difference between a
+    known limit and a false reproducibility claim discovered by whoever tries it."""
+    receipt = load_sealed(RECEIPT)
+    pcm = receipt["renders"]["pcm_sha256"]
+    for part in ("candidate", "control", "rhythm_master", "bass_stem", "drum_stem",
+                 "piano_candidate", "piano_control"):
+        assert len(pcm[part]) == 64, f"{part} has no PCM identity"
+    assert pcm["candidate"] != pcm["control"]
+
+    reproducibility = receipt["reproducibility"]
+    assert reproducibility["what_a_second_run_is_held_to"] == "pcm_sha256"
+    assert "pcm_sha256" in reproducibility["stable_across_runs"]
+    assert "proposal_sha256" in reproducibility["stable_across_runs"]
+    assert "rack_sha256" in reproducibility["not_stable_across_runs"], (
+        "the receipt is claiming the rack seal reproduces, and it does not"
+    )

@@ -572,6 +572,22 @@ def part_fidelity(bass_stem: Path, drum_stem: Path, bass: list[dict],
     }
 
 
+def pcm_sha256(path: Path) -> str:
+    """Identity of what the render sounds like, not of the file it arrived in.
+
+    The crate path materializes its samples through a WAV container that carries bytes the
+    audio does not. Two runs that decode the same region write identical PCM inside
+    non-identical files, and every digest downstream of that inherits the difference. So the
+    receipt carries a PCM digest as well: that is the one a second run can be held to.
+    """
+    import hashlib
+
+    import soundfile as sf
+
+    audio, _ = sf.read(str(path), always_2d=True, dtype="float32")
+    return hashlib.sha256(np.ascontiguousarray(audio).tobytes()).hexdigest()
+
+
 def audible(path: Path) -> dict:
     import soundfile as sf
 
@@ -764,6 +780,15 @@ def main() -> int:
             "part_gains_db": {"piano": 0.0, "bass": BASS_GAIN_DB, "drums": DRUMS_GAIN_DB},
             "levels": levels,
             "renders_are_distinct": candidate_sha != control_sha,
+            "pcm_sha256": {
+                "candidate": pcm_sha256(trio),
+                "control": pcm_sha256(control_matched),
+                "rhythm_master": pcm_sha256(rhythm["paths"]["master"]),
+                "bass_stem": pcm_sha256(bass_stem),
+                "drum_stem": pcm_sha256(drum_stem),
+                "piano_candidate": pcm_sha256(candidate_piano),
+                "piano_control": pcm_sha256(control_piano),
+            },
             "part_fidelity": fidelity,
         },
         "control": {
@@ -793,6 +818,19 @@ def main() -> int:
             "a claim that the recovered chords are correct",
             "an accepted master",
         ],
+        "reproducibility": {
+            "stable_across_runs": ["atom_pool_sha256", "demand_sha256", "proposal_sha256",
+                                   "pcm_sha256"],
+            "not_stable_across_runs": ["rack_sha256", "binding_sha256", "build_sha256",
+                                       "the container digest of every render"],
+            "why": ("the crate materializes each selected atom through a WAV container that "
+                    "carries bytes the audio does not; two runs decode the same region to "
+                    "identical PCM inside non-identical files, and the rack seal hashes the "
+                    "file. The selection is deterministic and the sound is deterministic; the "
+                    "wrapper is not, and that is recorded here rather than left to be "
+                    "discovered by a reproduction attempt"),
+            "what_a_second_run_is_held_to": "pcm_sha256",
+        },
         "new_organs_added": 0,
         "organs_reused_unmodified": [
             "earcrate.a1_02.performance.demand",
@@ -813,6 +851,44 @@ def main() -> int:
                     "chart": chart, "bass": bass, "drums": drums, "pool": pool},
                    ensure_ascii=False, indent=1, sort_keys=True) + "\n",
         encoding="utf-8", newline="\n")
+
+    (out / "REVIEW.txt").write_text(f"""A1-03 FLIM -- TRIO CANDIDATE AGAINST ITS CONTROL
+=================================================
+
+TWO FILES, {levels['trio']['seconds']:.0f} SECONDS EACH, LEVEL-MATCHED TO {target} LUFS
+
+    {trio.name}
+        piano, bass and drums
+
+    {control_matched.name}
+        the same chart, the same rack, one piano -- root plus voicings
+
+WHAT DIFFERS
+    The bass part, the drum part, and the piano's left-hand root. Nothing else. Same
+    recovered chart, same {len(bars)} bars, same clock, same instrument for the piano.
+
+WHAT THE CHART IS
+    Recovered from the recording by machine -- beat grid, bar lines, one chord per bar,
+    root read from the bass register. Two readers agree on
+    {chart['reader_agreement']['bars_where_two_readers_agree']} of {len(bars)} bars. It is
+    not a transcription of the trio's actual parts, and it may be wrong.
+
+WHAT IS CHOSEN RATHER THAN RECOVERED
+    How the bass walks the chart, and how the drums swing it. The one drum decision taken
+    from the recording is where the snare falls: the beat each bar itself accented hardest.
+
+ADMISSIBLE VERDICTS
+    THE TRIO
+        A1-03 has an accepted candidate; the master lane opens.
+    THE CONTROL
+        the added parts fail; the piano-only realization stands as A1-03's object and this
+        arrangement closes.
+    NEITHER
+        the chart-driven realization approach for A1-03 closes.
+
+    If the trio loses, say whether it is the bass line, the drum sound, the placement, or
+    the balance. Nothing else here needs a verdict.
+""", encoding="utf-8", newline="\n")
 
     print(f"\ncandidate {trio.name}")
     print(f"control   {control_matched.name}")

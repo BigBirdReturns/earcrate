@@ -91,7 +91,7 @@
    "why": "the root was only there because nothing else played one"
   }
  },
- "receipt_sha256": "250dd107635ab3875ff6bddfc100070f7ca0cb11b8128696a4672115c23d6e9e",
+ "receipt_sha256": "ab1f861f8c3857883abcd91619a6b74fdc94d287ed704f7c860f393e665f37e8",
  "recovered_chart": {
   "bar_duration_seconds": {
    "max": 2.0434,
@@ -309,20 +309,45 @@
    "drums": -8.0,
    "piano": 0.0
   },
+  "pcm_sha256": {
+   "bass_stem": "6cf7e1f0ae0250d76365327203ecf6fcaa97ef140b649174f3b214dfd7e8eca8",
+   "candidate": "6ba4d643c1a113ee28b925c0aa9d98bed252efb889508fd7b0bc158bd99f1df0",
+   "control": "dda1886b8dfb6dc4dc5a0876023bd2a136a591b92b7ef217fab29d844e1d0e49",
+   "drum_stem": "8d9ad63f938257787195355ea14d069e999a85ec4936545c09a0ff52a415b5e7",
+   "piano_candidate": "e0e957e542f9d7f918720854c3d4b9c205d6cc3046cc2c185e579fa7b8651c21",
+   "piano_control": "dda1886b8dfb6dc4dc5a0876023bd2a136a591b92b7ef217fab29d844e1d0e49",
+   "rhythm_master": "183f70109caa771f40664590dc916edc2acd6e8aafcc5a09cf590c577a885e8a"
+  },
   "piano_candidate_sha256": "614bbddfdb24ab9ab8a974fbb34d5884ff2d5822fb9b7d8a7d8648a891ea7612",
   "piano_control_sha256": "87f348e575c4c7a0e596beb3c7606f012566892ee5540da4c3fee05ee8909fc7",
   "renders_are_distinct": true,
-  "rhythm_master_sha256": "7249b71d06937d846517af7a2a30e0aafbb6cc856264608e77c171be8a1e2e89",
+  "rhythm_master_sha256": "ab267fb53b2c7b2c1e23446773c7af7575d650509cdbc8bd131bccd1c87c752d",
   "rhythm_stems_sha256": {
-   "0001_Bass": "9d57b926a54d89311282883ad411d1df11f90ff96ca18fad286f54c46062cc62",
-   "0002_Drums": "e797b6d24397df8e19871c886348489fd06b23f444395b0c42a2115aa2254bd8"
+   "0001_Bass": "794933f6f9da616926bf0d73487e834b1270253ca45f1328353ce4001f4a8ea4",
+   "0002_Drums": "625f057ee3bbcf89285f9c99af189f89e31aaf9c5989e8160e28c446dc72f319"
   }
+ },
+ "reproducibility": {
+  "not_stable_across_runs": [
+   "rack_sha256",
+   "binding_sha256",
+   "build_sha256",
+   "the container digest of every render"
+  ],
+  "stable_across_runs": [
+   "atom_pool_sha256",
+   "demand_sha256",
+   "proposal_sha256",
+   "pcm_sha256"
+  ],
+  "what_a_second_run_is_held_to": "pcm_sha256",
+  "why": "the crate materializes each selected atom through a WAV container that carries bytes the audio does not; two runs decode the same region to identical PCM inside non-identical files, and the rack seal hashes the file. The selection is deterministic and the sound is deterministic; the wrapper is not, and that is recorded here rather than left to be discovered by a reproduction attempt"
  },
  "rhythm_build": {
   "atom_pool_count": 28,
   "atom_pool_sha256": "90e03f0b7ab2d9746bf1545532e5e384b184b3a92a4f1d0b0e858875fac85db0",
-  "binding_sha256": "a6b412e759291fcc5ee744349afe7112a66eacff8c41f0806dfdd14ccb5a33d4",
-  "build_sha256": "e95d269a895e6f1d07f98c13e8eba49026efe141d1c53fc7075c203ac8d24d5a",
+  "binding_sha256": "07834b267902ef2b60fff7fa00459d36be04c27e043860b2f3af0e2ee47a9a25",
+  "build_sha256": "00e323903c710101e921771827b6b700c4d50378501d067a532835d33e70e9e7",
   "demand_sha256": "ba2534c27c6139cd9e32e8d698bbb6593b3c202cc6051d3352d08c7c86dc2efa",
   "materialized_atoms": [
    "atm_0f33187c08810505c128",
@@ -333,8 +358,8 @@
   ],
   "proposal_sha256": "642e9cbbec66ac0b022b85b9b842887f7d8f18f0313ba9b98694b549e2de89bd",
   "racks": [
-   "1993d0fb90d3c38152bb005bb83532d35964da1f8d5f7e0560c8d08d83ae2b9d",
-   "b8542b5dfaeb912233dfb24be4e44727c77cf4fcdcf4e2961f8fc7245f3fef64"
+   "8dc5a694d02e04f75811144db9dc37c03805d74380b16e003bfed36421fc480d",
+   "f1051cd179b664217f419c48a700b65e61da5608e4fe07c981b63ecc77599fbd"
   ],
   "selected": [
    {

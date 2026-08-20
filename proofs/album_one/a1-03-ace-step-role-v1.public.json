@@ -1,0 +1,119 @@
+{
+ "artifact_class": "provider_role_probe",
+ "authority": {
+  "album_master_accepted": false,
+  "bounded_role_qualified": "not_established",
+  "generation_is_not_acceptance": true,
+  "moves_album_counter": false,
+  "owner_audition_performed": false,
+  "owner_review_pending": false,
+  "owner_review_required": false,
+  "provider_adopted": false,
+  "provider_rejected_globally": false,
+  "rights_or_release_permission": false
+ },
+ "bed_measurement": {
+  "duration_seconds": 29.8,
+  "measured_bpm": 129.199,
+  "measured_key_correlation": 0.3699,
+  "measured_key_top": "G-flat major",
+  "note": "the provider was asked for a tempo and a key; whether it delivered them is measured rather than assumed",
+  "requested_bpm": 128.77,
+  "tempo_error_percent": 0.333
+ },
+ "boundary": {
+  "private_paths_included": false,
+  "prompt_text_exported": false,
+  "renders_remain_local": true,
+  "source_audio_exported": false
+ },
+ "disposition": {
+  "ace_step_adopted": false,
+  "ace_step_rejected_globally": false,
+  "album_authority_changed": false,
+  "artifact_class": "provider_role_probe",
+  "bounded_role_qualified": "not_established",
+  "corrected_chart_retained": true,
+  "evidence_status": "retained as private machine diagnostic evidence",
+  "one_generation_receipt_retained": true,
+  "owner_action": "none",
+  "owner_review_pending": false,
+  "owner_review_required": false,
+  "rule": "AGENTS.md -- Owner review admission: a provider probe may never create owner_review_pending, and does not become admissible by having a second option placed under it",
+  "why": "the two cuts compare the same reduction over the same twenty-nine seconds; one carries a bed that was not conditioned on the recording and does not know the chord changes. That can say whether the bed adds low end and rhythmic support. It cannot say whether A1-03 is a convincing reconstruction, whether ACE-Step deserves adoption, or whether the track belongs on Album One -- so no verdict it returns changes a track-level authority state"
+ },
+ "headline": "ACE-Step was given one bounded role on A1-03 -- the rhythm section the piano-only realization is missing -- and the result is a provider role probe, not an owner review.",
+ "key": {
+  "chords_inside": 14,
+  "chords_total": 16,
+  "derived_from": "the recovered chords for this window",
+  "key": "B-flat major",
+  "witness_consulted": false
+ },
+ "kind": "earcrate_a1_03_public_ace_step_role_receipt",
+ "on_loss": "the role closes. Not the track, not the provider, and not the realization lane -- one bounded role failed on one window, which is a result and not a stop instruction",
+ "probe": {
+  "assignment_derivation": "sha256 over the two render digests; forced by the audio before the pack was built",
+  "assignment_map_withheld": true,
+  "assignment_sealed_sha256": "2d066dbfc1137db38496f34463b81d37a0e0e0ca240409b409c52b286a1dd790",
+  "bed_gain_db_under_the_comp": -3.0,
+  "blind": "which letter carries the bed",
+  "cuts": 2,
+  "disclosed": "everything else, including what the bed is and what it was told",
+  "duration_seconds": 29.820613,
+  "level_matched_lufs": -22.4,
+  "owner_review_pending": false,
+  "owner_review_required": false,
+  "tie_counts_as_the_incumbent_winning": true
+ },
+ "receipt_sha256": "aebacaa260777e594966ff3e9f5fea24e5c72600b785f21558cd66c5a38e88b4",
+ "role": {
+  "bed_reused_because": "the comp under it changed; the sealed request did not, so regenerating would have been a second generation the role does not permit",
+  "conditioning_source": "the blind recovery, not the witness",
+  "generations": 1,
+  "incumbent": "the recovered comp with no bed at all",
+  "incumbent_may_win": true,
+  "is_a_benchmark": false,
+  "is_a_provider_census": false,
+  "provider_called_this_run": false,
+  "request_sealed_before_execution": true,
+  "request_sha256": "fa3c0e0bc1c162bd254a5b104193029e7bfc4cd8fee64fbb3612a2bbf5ec62d2",
+  "role": "replacement_instrumentation",
+  "seed": 20260819,
+  "statement": "supply the rhythm section the piano-only realization is missing, for one window, once"
+ },
+ "schema_version": 1,
+ "track_id": "A1-03",
+ "why_sixteen_bars": {
+  "bound_seconds": 0.15,
+  "max_constant_grid_departure_seconds": 0.1006,
+  "reason": "the provider generates on a constant grid and the performance does not; past this bound the audition measures drift rather than musical fit"
+ },
+ "window": {
+  "bar_period_seconds": 1.863788,
+  "bars": 16,
+  "chords": [
+   "E min7",
+   "F 7",
+   "A min7",
+   "G sus4",
+   "G min7",
+   "G min7",
+   "E-flat maj7",
+   "E-flat maj7",
+   "G min7",
+   "G min7",
+   "E-flat maj7",
+   "D min7",
+   "E-flat maj7",
+   "D min7",
+   "E-flat maj7",
+   "E-flat maj7"
+  ],
+  "departure_bound_seconds": 0.15,
+  "duration_seconds": 29.820613,
+  "max_constant_grid_departure_seconds": 0.1006,
+  "start_seconds": 0.626939,
+  "tempo_bpm": 128.77
+ }
+}

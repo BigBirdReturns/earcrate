@@ -246,3 +246,19 @@ def test_the_focus_pair_actually_contains_the_edit():
     donor_start, donor_stop = builder.DONOR_CONTEXT_SECONDS
     source_start, source_stop = builder.DONOR_SECONDS
     assert donor_start <= source_start and donor_stop >= source_stop
+
+
+def test_a_losing_verdict_is_not_routed_into_a_closed_lane():
+    """A review sheet that names where the work goes next has to be re-read whenever a lane
+    closes. A1-03's chart-driven realization closed after this pack was written, and a sheet
+    still pointing there would spend a verdict on a lane that cannot receive it."""
+    source = (ROOT / "scripts" / "earcrate_a1_01_full_context_v1.py").read_text(
+        encoding="utf-8")
+    outcomes = source.split("ADMISSIBLE OUTCOMES", 1)[1].split("WHAT WAS AND WAS NOT DONE", 1)[0]
+    flat = " ".join(outcomes.split())
+    assert "move Album One to A1-03" not in flat, (
+        "the sheet routes a losing verdict to A1-03, whose realization is closed")
+    assert "A1-03's chart-driven realization is closed" in flat
+    assert "source binding for A1-04 and A1-05" in flat
+    # The winning branch still has to say what it changes, or the review is inadmissible.
+    assert "proceed to mastering and A1-01 acceptance" in flat

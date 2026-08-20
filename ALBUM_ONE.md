@@ -37,7 +37,7 @@ The manifest seal is
 | **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
 | **A1-05** | sombr “My Body Isn’t Ready” × Coldplay “Yellow” | Arrangement-ancestry handoff | Normalized specimen exists; exact private editions remain unbound | Test chorus width, drum lift, neutral alignment, and reverse modernization under blind review |
 | **A1-06** | PinkPantheress “Stateside” / bhangra gesture | Perceptual gesture to arrangement | Commissioned, but no canonical specimen or comparison corpus is materialized | Isolate the gesture and build a held-out retrieval and transformation audition with negative controls |
-| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | **Accepted album master**: native-pocket full form, auditioned, deterministic, exactly reproducible. The challenge is issued and open; attempt one lost on synchronisation, attempt two refused to place | The next decision is whether the no-stretch prior stands — named by attempt two, not authorized |
+| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | **Accepted album master**: native-pocket full form, auditioned, deterministic, exactly reproducible. The challenge was issued and is now answered: attempt one lost on synchronisation, attempt two refused to place, attempt three placed phrase-locally and closed the inference family — no margin on this material separates a correct placement from an ambiguous one | None. The autonomy claim fails on the evidence; the album master is unaffected |
 
 The answer-key corpora in `earcrate/reference/` remain calibration and discovery
 graders. They are not additional album tracks and may not inflate the completion
@@ -187,7 +187,7 @@ record and teach the system nothing.
 
 | Track | Capability it must prove | Status |
 | --- | --- | --- |
-| **A1-07** | donor-recording arrangement, blind review, mastering, acceptance | proved; system reference open |
+| **A1-07** | donor-recording arrangement, blind review, mastering, acceptance | proved. System reference **closed negative**: the inference family cannot recover the arrangement, measured rather than assumed |
 | **A1-02** | score to performance: symbolic authority realized as a played object | closed: the score was recovered and realized exactly, and the production candidate lost on arrangement and instrumentation |
 | **A1-01** | reference editing, release governance, the rights boundary | next owner-facing action: candidate and control review. The retained candidate is an edit of the reference, so it cannot prove synthesis |
 | **A1-03** | performed-arrangement recovery from symbolic and blind-audio witnesses | bound and recovered; the chart-driven realization is closed — a recovered chord chart played by a rack is not a reconstruction of a melody tune |

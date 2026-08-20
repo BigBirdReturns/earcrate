@@ -236,7 +236,10 @@ naive control. Rights and release remain a third, separate decision.
 
 The honest current ledger is **1/7 accepted album masters** and **0/7 completed
 system references**. `A1-07` is the active track: its master is accepted, and its
-withheld-answer system reference is still open. Acceptance required a verdict that
+withheld-answer system reference is **closed negative** -- three attempts, the last
+of which showed that no margin on this material separates a correct placement from
+an ambiguous one, so the inference family cannot recover the arrangement. That is a
+result about autonomy, not about the master. Acceptance required a verdict that
 named the mastered object itself. Machine qualification is never acceptance, and a
 transparent transform of an accepted object is still a different object.
 

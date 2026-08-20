@@ -1,19 +1,26 @@
 {
  "commission": "EC-S1-01",
  "crate": {
-  "accepted": 20,
-  "aligned": 20,
+  "accepted": 13,
+  "aligned": 13,
   "by_voice": {
    "chops": 10,
-   "hits": 10
+   "hits": 3
   },
-  "considered": 20,
-  "screened_out": 0,
-  "taste_profile": "girl_talk_v1",
-  "trimmed_to_seconds": {
-   "chops": 0.55,
+  "chop_note_seconds": 0.55,
+  "chop_register": [
+   62,
+   69
+  ],
+  "considered": 13,
+  "region_seconds": {
+   "chops": 1.6,
    "hits": 0.45
-  }
+  },
+  "screened_out": 0,
+  "single_record": true,
+  "source_file_id": "019F5C76031FCB7D81B31FF24C",
+  "taste_profile": "girl_talk_v1"
  },
  "gain_db": {
   "chops": -9.0,
@@ -31,33 +38,33 @@
  "midi": {
   "chops": 40,
   "hits": 8,
-  "sha256": "0367ccaeba79a60eca12dc7f7352cd8c41ec8deaceb474d98c8535bd4c5edf51"
+  "sha256": "ac7a16f84c34b8c96f49770710202bd59dea28a2e8f41f42969ac8f25bee3a24"
  },
  "render": {
   "events": 48,
-  "sha256": "69034665f524cfb4f025006c79da7c52ccd7bada423c6656efaba67eb54af6bf"
+  "sha256": "3c8cf71f5930451e3ed3452dcbdd925504b5747a09760f0346c52643ea946d26"
  },
  "rights": "atoms come from the owner's own commercial library; renders stay local and this version is not a rights-clear object",
  "selected": [
   {
    "atoms": [
-    "atm_322bc2dd4a58a71f6ae5"
+    "atm_31da562bbd84a673400f"
    ],
    "mode": "pitched",
    "role_hint": "vocal",
-   "slot": "slot_613c4e88eaba553ed9b45f12"
+   "slot": "slot_37260f58227e8f0be96b3b33"
   },
   {
    "atoms": [
-    "atm_164cf28d1062cbf56ed7"
+    "atm_2fe7812007afdd6f20dc"
    ],
    "mode": "trigger",
    "role_hint": "drums",
-   "slot": "slot_e05f6e3428fad4d3bebf3e8d"
+   "slot": "slot_114b08409768e43cc000a5e0"
   }
  ],
  "stems": {
-  "0001_Vocal_chops": "f9b6b2dc13215bf3b8f4981e835f1f716240f9fc31a9045c8373e7e164cbb297",
-  "0002_Hits": "c616dd54fdeac73b3d8fed9b56337ff450a779b2c1ab4716f015ce1f0e637dbc"
+  "0001_Vocal_chops": "00344df9395c63593e5b919a8377a281b5b352111ead17cadb1a33c15207fe0e",
+  "0002_Hits": "02ad3c3a3bef8ab7c27d0398b38d721b25d2a338d1335111ea991a446403c12d"
  }
 }

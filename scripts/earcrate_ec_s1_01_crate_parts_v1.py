@@ -55,8 +55,15 @@ KEY_ROOT = 2                        # D
 SCALE = (0, 2, 3, 5, 7, 8, 10)
 PROGRESSION_ROOTS = (2, 10, 5, 0)   # Dm Bb F C, one per bar
 
-CHOP_REGISTER = (60, 76)            # C4 to E5, above the bass and around the melody
-CHOP_SECONDS = 0.55                 # a chop, not a phrase
+# One octave and a bit, not a keyboard. A sampled voice dragged across sixteen semitones
+# chipmunks at the top and muds at the bottom; the first version did exactly that and the
+# result sounded scattered even though every chop came from a single record.
+CHOP_REGISTER = (62, 69)            # D4 to A4, seven semitones of stretch at most
+CHOP_SECONDS = 0.55                 # a chop, not a phrase -- the note length, not the region
+# A pitched zone is gate mode: it stops at note-off. So the region only has to be long enough
+# to survive being transposed down, and trimming it to the note length starved the transpose
+# budget and got every hook rejected for insufficient duration.
+CHOP_REGION_SECONDS = 1.6
 HIT_SECONDS = 0.45
 HIT_NOTE = 49                       # a crash-ish slot: high spectral fit
 
@@ -168,7 +175,7 @@ def _screen(path: str, start: float, end: float) -> tuple[float, float]:
     return peak, int(np.argmax(envelope > ATTACK_FRACTION * peak)) / float(SAMPLE_RATE)
 
 
-def pool(crate: Path) -> tuple[list[dict], dict]:
+def pool(crate: Path, file_id: str | None) -> tuple[list[dict], dict]:
     """Hooks that can carry a pitch, and hits that can carry an accent."""
     connection = sqlite3.connect(f"file:{crate.as_posix()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
@@ -176,10 +183,13 @@ def pool(crate: Path) -> tuple[list[dict], dict]:
              "from ear_atoms a join files f on f.id = a.file_id "
              "where a.status = 'approved' and f.present = 1 and {filter} "
              "order by {order} desc, a.id asc limit ?")
+    if file_id is None:
+        file_id = _one_record(connection)
     wanted = (
-        ("chops", f"a.ear_role = 'VOX_HOOK' and a.key_root = {KEY_ROOT}",
-         "a.hook_score * a.intelligibility", CHOP_SECONDS),
-        ("hits", "a.ear_role in ('DROP_HIT','TEXTURE','PICKUP_FILL')",
+        ("chops", f"a.ear_role = 'VOX_HOOK' and a.file_id = '{file_id}'",
+         "a.hook_score * a.intelligibility", CHOP_REGION_SECONDS),
+        ("hits", "a.ear_role in ('DROP_HIT','DRUM_BREAK','PICKUP_FILL','TEXTURE') "
+         f"and a.file_id = '{file_id}'",
          "a.spark_score * a.transient_density", HIT_SECONDS),
     )
     atoms: dict[str, dict] = {}
@@ -218,9 +228,38 @@ def pool(crate: Path) -> tuple[list[dict], dict]:
     if not atoms:
         raise CratePartsError("the crate offered no audible atom for either voice")
     report["accepted"] = len(atoms)
-    report["trimmed_to_seconds"] = {"chops": CHOP_SECONDS, "hits": HIT_SECONDS}
+    report["single_record"] = True
+    report["source_file_id"] = file_id
+    report["chop_register"] = list(CHOP_REGISTER)
+    report["region_seconds"] = {"chops": CHOP_REGION_SECONDS, "hits": HIT_SECONDS}
+    report["chop_note_seconds"] = CHOP_SECONDS
     report["taste_profile"] = TASTE_PROFILE
     return [atoms[key] for key in sorted(atoms)], report
+
+
+def _one_record(connection: sqlite3.Connection) -> str:
+    """Both voices from a single record, so the kit and the hook are the same instrument.
+
+    Chosen on harmonic fit rather than on score alone: a hook already sitting in D, F, A or C
+    lands on this progression without being retuned into something else.
+    """
+    friendly = (KEY_ROOT, 5, 9, 0)          # D, F, A, C against Dm - Bb - F - C
+    row = connection.execute(
+        "select f.id as file_id, "
+        "  sum(case when a.ear_role='VOX_HOOK' then 1 else 0 end) as hooks, "
+        "  sum(case when a.ear_role in ('DROP_HIT','DRUM_BREAK','PICKUP_FILL','TEXTURE') "
+        "      then 1 else 0 end) as hits, "
+        "  max(case when a.ear_role='VOX_HOOK' then a.hook_score * a.intelligibility end) "
+        "      as quality "
+        "from ear_atoms a join files f on f.id = a.file_id "
+        "where a.status = 'approved' and f.present = 1 "
+        "  and (a.ear_role != 'VOX_HOOK' or a.key_root in "
+        f"      ({','.join(str(value) for value in friendly)})) "
+        "group by f.id having hooks >= 3 and hits >= 2 "
+        "order by quality desc limit 1").fetchone()
+    if row is None:
+        raise CratePartsError("no single record in the crate carries both a hook and a hit")
+    return str(row["file_id"])
 
 
 def _ffmpeg(args: list[str]) -> None:
@@ -236,6 +275,8 @@ def main() -> int:
     parser.add_argument("--track", required=True, type=Path)
     parser.add_argument("--crate", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--source-file-id", default=None,
+                        help="draw both voices from this one record")
     args = parser.parse_args()
 
     fg = json.loads((args.foreground.expanduser().resolve() / "foreground.json")
@@ -259,7 +300,7 @@ def main() -> int:
     midi = write_midi(chops, hits, bar_seconds, out / "crate-parts.mid")
     print(f"midi: {midi['chops']} + {midi['hits']} -> {Path(midi['path']).name}")
 
-    atoms, report = pool(args.crate.expanduser().resolve())
+    atoms, report = pool(args.crate.expanduser().resolve(), args.source_file_id)
     print(f"crate: {report['accepted']} atoms accepted "
           f"({report['by_voice']}), {report['screened_out']} screened out, "
           f"{report['aligned']} moved onto their transient")

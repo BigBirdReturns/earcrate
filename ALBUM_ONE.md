@@ -37,7 +37,7 @@ The manifest seal is
 | **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
 | **A1-05** | sombr “My Body Isn’t Ready” × Coldplay “Yellow” | Arrangement-ancestry handoff | Normalized specimen exists; exact private editions remain unbound | Test chorus width, drum lift, neutral alignment, and reverse modernization under blind review |
 | **A1-06** | PinkPantheress “Stateside” / bhangra gesture | Perceptual gesture to arrangement | Commissioned, but no canonical specimen or comparison corpus is materialized | Isolate the gesture and build a held-out retrieval and transformation audition with negative controls |
-| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | **Accepted album master**: native-pocket full form, auditioned, deterministic, exactly reproducible | Run the withheld-answer recovery challenge; the album claim is closed, the autonomy claim is not |
+| **A1-07** | The Four Seasons “Beggin’” × Måneskin “Beggin’” | Same-work, cross-era performance arrangement | **Accepted album master**: native-pocket full form, auditioned, deterministic, exactly reproducible. The challenge is issued and open; attempt one lost on synchronisation, attempt two refused to place | The next decision is whether the no-stretch prior stands — named by attempt two, not authorized |
 
 The answer-key corpora in `earcrate/reference/` remain calibration and discovery
 graders. They are not additional album tracks and may not inflate the completion

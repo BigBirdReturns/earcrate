@@ -189,9 +189,11 @@ def test_the_new_placement_criterion_actually_separates_its_candidates():
     truth = 0.5                                   # the vocal sits half a second into the bar
     analysis = {
         "vocal": {"onset": _synthetic(bar_seconds, fps, bars, truth, structured=True),
-                  "frames_per_second": fps},
+                  "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
         "band": {"onset": _synthetic(bar_seconds, fps, bars, 0.0, structured=True),
-                 "frames_per_second": fps},
+                 "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
     }
     placed = inference.align(analysis, "vocal", ["band"], vocal_start=0.0, band_start=0.0,
                              duration=bars * bar_seconds - 1.0, bar_seconds=bar_seconds,
@@ -215,9 +217,11 @@ def test_an_unplaceable_vocal_stops_the_attempt_instead_of_being_placed():
     bar_seconds, fps, bars = 2.0, 43.0, 60
     analysis = {
         "vocal": {"onset": _synthetic(bar_seconds, fps, bars, 0.0, structured=False),
-                  "frames_per_second": fps},
+                  "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
         "band": {"onset": _synthetic(bar_seconds, fps, bars, 0.0, structured=True),
-                 "frames_per_second": fps},
+                 "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
     }
     try:
         inference.align(analysis, "vocal", ["band"], vocal_start=0.0, band_start=0.0,

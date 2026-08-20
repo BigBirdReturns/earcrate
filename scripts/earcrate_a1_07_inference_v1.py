@@ -300,6 +300,36 @@ def _phase_margin(curve: list[tuple[float, float]], bar_seconds: float,
             "margin": best_score - rival[0]}
 
 
+def divergence(analysis: dict, vocal_id: str, *, bar_seconds: float, duration: float,
+               beats_per_bar: float) -> dict:
+    """Whether a constant placement phase can exist at all between these two parts.
+
+    A bar-phase criterion assumes one number can describe where the vocal sits in the bar.
+    That is only true if the two parts share a bar. Nothing here is stretched -- the stated
+    prior is minimal intervention, and a vocal-only stem yields no tempo worth stretching to
+    -- so if the eras are at different tempi the vocal walks through every phase during the
+    window and no offset is more right than any other. That is a different failure from "the
+    vocal has no accent structure", and the receipt should be able to tell them apart.
+    """
+    vocal_tempo = float(analysis[vocal_id]["tempo_bpm"])
+    vocal_bar = beats_per_bar * 60.0 / vocal_tempo
+    bars = duration / bar_seconds
+    slip_seconds = abs(vocal_bar - bar_seconds) * bars
+    return {
+        "band_bar_seconds": round(bar_seconds, 6),
+        "vocal_bar_seconds": round(vocal_bar, 6),
+        "vocal_tempo_bpm": round(vocal_tempo, 3),
+        "band_tempo_bpm": round(beats_per_bar * 60.0 / bar_seconds, 3),
+        "bars_in_window": round(bars, 2),
+        "slip_seconds_across_the_window": round(slip_seconds, 3),
+        "slip_in_beats": round(slip_seconds / (bar_seconds / beats_per_bar), 2),
+        "slip_in_bars": round(slip_seconds / bar_seconds, 2),
+        "a_constant_phase_exists": bool(slip_seconds < bar_seconds / 4.0),
+        "why": ("nothing is stretched, so a tempo difference makes the vocal walk through "
+                "every bar phase during the window and no single offset can be right"),
+    }
+
+
 def align(analysis: dict, vocal_id: str, band_ids: list[str], *, vocal_start: float,
           band_start: float, duration: float, bar_seconds: float,
           beats_per_bar: float) -> dict:
@@ -345,7 +375,9 @@ def align(analysis: dict, vocal_id: str, band_ids: list[str], *, vocal_start: fl
             f"no phase places the vocal decisively: best margin {chosen['margin']:.4f} at "
             f"{chosen['offset_seconds']:.3f}s, below the stated {MINIMUM_ALIGNMENT_MARGIN} "
             "floor. A non-discriminating placement search may not be resolved by argmax, and "
-            "may not fall back to quantizing one attack.")
+            "may not fall back to quantizing one attack. "
+            + json.dumps(divergence(analysis, vocal_id, bar_seconds=bar_seconds,
+                                    duration=duration, beats_per_bar=beats_per_bar)))
 
     # A rotation past half a bar is the same placement reached backwards, and saying so keeps
     # the offset the smallest move that produces it.
@@ -476,6 +508,75 @@ def solve_master_gain(score: dict, bindings: dict, *, work: Path) -> tuple[dict,
                     "solved_from": "measured true peak, not chosen"}
 
 
+def record_refusal(challenge: dict, interval: dict, refusal: Exception,
+                   spread: dict) -> int:
+    """Write what the attempt found when it refused to place, and end the lineage there.
+
+    No candidate, no pack, no owner question. The challenge is untouched -- this attempt
+    answered nothing, so nothing about it is retired.
+    """
+    receipt = seal({
+        "kind": "earcrate_a1_07_public_inference_refusal_receipt",
+        "schema_version": 1,
+        "track_id": TRACK_ID,
+        "headline": ("A1-07 attempt two refused to place the vocal. The placement criterion "
+                     "was not the fixable defect: at these two tempi, with nothing "
+                     "stretched, no constant placement phase exists."),
+        "attempt": 2,
+        "challenge_sha256": challenge["challenge_sha256"],
+        "challenge_reused_not_reissued": True,
+        "placement": {
+            "criterion": "bar-phase accent agreement across the whole window",
+            "minimum_margin": MINIMUM_ALIGNMENT_MARGIN,
+            "refused": True,
+            "fallback_available": False,
+            "message": str(refusal).split(" {")[0],
+        },
+        "why_it_refused": spread,
+        "what_this_says_about_attempt_one": (
+            "attempt one lost on synchronisation, and the placement mechanism was the "
+            "visible cause: a 0.070 onset lock, called not a lock, followed by quantizing "
+            "one attack onto a downbeat. Replacing it with a criterion that has a margin "
+            "shows the deeper cause -- the parts are at different tempi and the stated prior "
+            "stretches nothing, so no placement was ever going to sync them. The old "
+            "fallback hid that by always producing a number"),
+        "transposition": {"semitones": interval["semitones"], "margin": interval["margin"],
+                          "witness_source": interval["witness_source"]},
+        "authority": {
+            "album_master_accepted": True,
+            "candidate_produced": False,
+            "candidate_beat_control": False,
+            "challenge_still_open": True,
+            "challenge_retired": False,
+            "system_reference_completed": False,
+            "moves_album_counter": False,
+            "owner_pack_built": False,
+            "owner_review_pending": False,
+        },
+        "named_next_decision": {
+            "decision": ("whether the no-stretch prior stands. It is a declared decision of "
+                         "this lane, not a defect of this attempt"),
+            "authorized_now": False,
+            "why_not": "a negative result does not authorize revising a different prior",
+        },
+        "boundary": {
+            "gold_score_consulted": False,
+            "private_paths_included": False,
+            "renders_remain_local": True,
+        },
+    }, "receipt_sha256")
+    path = ROOT / "proofs" / "album_one" / "a1-07-inference-two-v1.public.json"
+    path.write_text(json.dumps(receipt, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+                    encoding="utf-8", newline="\n")
+    print(f"\n  REFUSED -- {receipt['placement']['message']}")
+    print(f"  vocal {spread['vocal_tempo_bpm']} bpm against band {spread['band_tempo_bpm']} "
+          f"bpm: the vocal slips {spread['slip_in_bars']} bars across the window")
+    print(f"  a constant phase exists: {spread['a_constant_phase_exists']}")
+    print(f"  receipt {receipt['receipt_sha256'][:16]} -> "
+          f"{path.relative_to(ROOT).as_posix()}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--challenge", required=True, type=Path)
@@ -532,9 +633,18 @@ def main() -> int:
 
     band_window = rising_window(analysis, band_ids, duration=duration, bar_seconds=bar_seconds)
     vocal_window = sung_window(analysis, vocal_id, duration=duration)
-    locked = align(analysis, vocal_id, band_ids, vocal_start=vocal_window["start_seconds"],
-                   band_start=band_window["start_seconds"], duration=duration,
-                   bar_seconds=bar_seconds, beats_per_bar=beats_per_bar)
+    try:
+        locked = align(analysis, vocal_id, band_ids,
+                       vocal_start=vocal_window["start_seconds"],
+                       band_start=band_window["start_seconds"], duration=duration,
+                       bar_seconds=bar_seconds, beats_per_bar=beats_per_bar)
+    except InferenceError as refusal:
+        # A refusal is a result. It is adjudicated here rather than left as a traceback,
+        # because "the attempt stopped" and "the attempt was never possible" are different
+        # findings and only the measurement can tell them apart.
+        return record_refusal(challenge, interval, refusal,
+                              divergence(analysis, vocal_id, bar_seconds=bar_seconds,
+                                         duration=duration, beats_per_bar=beats_per_bar))
     vocal_start = max(0.0, vocal_window["start_seconds"] + locked["offset_seconds"])
     print(f"  band from {band_window['start_seconds']:.3f}s "
           f"(rise {band_window['rise_correlation']:+.3f}), vocal from {vocal_start:.3f}s "

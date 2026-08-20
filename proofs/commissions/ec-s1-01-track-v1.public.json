@@ -1,0 +1,349 @@
+{
+ "arrangement": {
+  "every_transition_changes_content": true,
+  "sections": [
+   {
+    "end_bar": 8,
+    "end_seconds": 22.291156,
+    "material": {
+     "foreground": "melody"
+    },
+    "roles_sounding": [
+     "foreground"
+    ],
+    "section": "INTRO",
+    "start_bar": 0,
+    "start_seconds": 0.0,
+    "withholds": [
+     "drums",
+     "bass"
+    ]
+   },
+   {
+    "end_bar": 24,
+    "end_seconds": 66.873469,
+    "material": {
+     "bass": "bass_root",
+     "drums": "drums_sparse",
+     "foreground": "melody+comp+low"
+    },
+    "roles_sounding": [
+     "bass",
+     "drums",
+     "foreground"
+    ],
+    "section": "BUILD",
+    "start_bar": 8,
+    "start_seconds": 22.291156,
+    "withholds": [
+     "backbeat"
+    ]
+   },
+   {
+    "end_bar": 32,
+    "end_seconds": 89.164626,
+    "material": {
+     "bass": "bass_root",
+     "foreground": "low+sustain"
+    },
+    "roles_sounding": [
+     "bass",
+     "foreground"
+    ],
+    "section": "HOLD",
+    "start_bar": 24,
+    "start_seconds": 66.873469,
+    "withholds": [
+     "drums",
+     "melody"
+    ]
+   },
+   {
+    "end_bar": 48,
+    "end_seconds": 133.746939,
+    "material": {
+     "bass": "bass_moving",
+     "drums": "drums_full",
+     "foreground": "melody+comp+low+counter"
+    },
+    "roles_sounding": [
+     "bass",
+     "drums",
+     "foreground"
+    ],
+    "section": "PAYOFF",
+    "start_bar": 32,
+    "start_seconds": 89.164626,
+    "withholds": []
+   },
+   {
+    "end_bar": 58,
+    "end_seconds": 161.610884,
+    "material": {
+     "bass": "bass_root",
+     "foreground": "melody+low"
+    },
+    "roles_sounding": [
+     "bass",
+     "foreground"
+    ],
+    "section": "OUTRO",
+    "start_bar": 48,
+    "start_seconds": 133.746939,
+    "withholds": [
+     "drums"
+    ]
+   }
+  ],
+  "transitions": [
+   {
+    "from": "INTRO",
+    "is_content_change": true,
+    "material_changed": [
+     "foreground"
+    ],
+    "roles_entering": [
+     "bass",
+     "drums"
+    ],
+    "roles_leaving": [],
+    "to": "BUILD"
+   },
+   {
+    "from": "BUILD",
+    "is_content_change": true,
+    "material_changed": [
+     "foreground"
+    ],
+    "roles_entering": [],
+    "roles_leaving": [
+     "drums"
+    ],
+    "to": "HOLD"
+   },
+   {
+    "from": "HOLD",
+    "is_content_change": true,
+    "material_changed": [
+     "bass",
+     "foreground"
+    ],
+    "roles_entering": [
+     "drums"
+    ],
+    "roles_leaving": [],
+    "to": "PAYOFF"
+   },
+   {
+    "from": "PAYOFF",
+    "is_content_change": true,
+    "material_changed": [
+     "bass",
+     "foreground"
+    ],
+    "roles_entering": [],
+    "roles_leaving": [
+     "drums"
+    ],
+    "to": "OUTRO"
+   }
+  ]
+ },
+ "boundary": {
+  "private_paths_included": false,
+  "renders_remain_local": true
+ },
+ "commission": "EC-S1-01",
+ "grid": {
+  "bar_seconds": 2.786394558,
+  "beat_interval_iqr_percent": 3.333,
+  "beat_seconds": 0.696598639,
+  "first_beat_seconds": 0.04644,
+  "measured_bpm": 86.133,
+  "taken_from": "the generated drum material, because that is what everything plays to",
+  "tracker_bpm": 86.133
+ },
+ "kind": "earcrate_ec_s1_01_public_session_receipt",
+ "midi": {
+  "notes": 318,
+  "sha256": "5130273e9c10ea80d8b81c8c1a5c22e7f604fa8a5ec80f6c5ba1f151eeb7a4e7"
+ },
+ "receipt_sha256": "f7dff177bf22697db182cf8d8385829e980090ad94a672b8555b35e3eb138eb5",
+ "role_presence": [
+  {
+   "rms": {
+    "bass": 0.0,
+    "drums": 0.0,
+    "foreground": 0.029486
+   },
+   "section": "INTRO",
+   "sounding": [
+    "foreground"
+   ]
+  },
+  {
+   "rms": {
+    "bass": 0.068578,
+    "drums": 0.08581,
+    "foreground": 0.061814
+   },
+   "section": "BUILD",
+   "sounding": [
+    "bass",
+    "drums",
+    "foreground"
+   ]
+  },
+  {
+   "rms": {
+    "bass": 0.074387,
+    "drums": 0.0,
+    "foreground": 0.03451
+   },
+   "section": "HOLD",
+   "sounding": [
+    "bass",
+    "foreground"
+   ]
+  },
+  {
+   "rms": {
+    "bass": 0.079596,
+    "drums": 0.099177,
+    "foreground": 0.075717
+   },
+   "section": "PAYOFF",
+   "sounding": [
+    "bass",
+    "drums",
+    "foreground"
+   ]
+  },
+  {
+   "rms": {
+    "bass": 0.073292,
+    "drums": 0.0,
+    "foreground": 0.047704
+   },
+   "section": "OUTRO",
+   "sounding": [
+    "bass",
+    "foreground"
+   ]
+  }
+ ],
+ "schema_version": 1,
+ "session": {
+  "clips": 11,
+  "format": "rpp",
+  "role_tracks": [
+   "foreground",
+   "bass",
+   "drums"
+  ],
+  "sha256": "396c7463051044b9ba4e8df4956249f8150eaeb09e42e932e166ae86ea41fcd9",
+  "withheld_roles_have_no_item": true
+ },
+ "states": {
+  "all_adjacent_states_differ": true,
+  "distance_floor": 0.001094,
+  "floor_is_calibrated_not_chosen": true,
+  "method": "perceptual, not waveform: two spans can decorrelate completely and sound identical, which is how A1-01 closed. The floor is three times the distance between two halves of the same section",
+  "pairs": [
+   {
+    "centroid_hz": [
+     918.7,
+     688.8
+    ],
+    "from": "INTRO",
+    "harmony_distance": 0.04412,
+    "low_share": [
+     0.061,
+     0.3566
+    ],
+    "materially_different": true,
+    "rms": [
+     0.02642,
+     0.08432
+    ],
+    "timbre_distance": 0.10002,
+    "times_the_noise_floor": 274.2,
+    "to": "BUILD"
+   },
+   {
+    "centroid_hz": [
+     688.8,
+     543.2
+    ],
+    "from": "BUILD",
+    "harmony_distance": 0.00828,
+    "low_share": [
+     0.3566,
+     0.4962
+    ],
+    "materially_different": true,
+    "rms": [
+     0.08432,
+     0.05408
+    ],
+    "timbre_distance": 0.00573,
+    "times_the_noise_floor": 15.71,
+    "to": "HOLD"
+   },
+   {
+    "centroid_hz": [
+     543.2,
+     699.3
+    ],
+    "from": "HOLD",
+    "harmony_distance": 0.00937,
+    "low_share": [
+     0.4962,
+     0.3301
+    ],
+    "materially_different": true,
+    "rms": [
+     0.05408,
+     0.09847
+    ],
+    "timbre_distance": 0.02174,
+    "times_the_noise_floor": 59.61,
+    "to": "PAYOFF"
+   },
+   {
+    "centroid_hz": [
+     699.3,
+     593.3
+    ],
+    "from": "PAYOFF",
+    "harmony_distance": 0.01116,
+    "low_share": [
+     0.3301,
+     0.428
+    ],
+    "materially_different": true,
+    "rms": [
+     0.09847,
+     0.06105
+    ],
+    "timbre_distance": 0.01368,
+    "times_the_noise_floor": 37.51,
+    "to": "OUTRO"
+   }
+  ],
+  "required_multiple": 3.0,
+  "within_state_distances": [
+   0.001209,
+   0.000476,
+   2e-05,
+   0.000133,
+   0.000365
+  ],
+  "within_state_median": 0.000365
+ },
+ "track": {
+  "lufs": -18.8,
+  "seconds": 161.611,
+  "sha256": "185e071f5a6d7c687da12d23e651b9ed018742654e766eb993ffd30be904b825"
+ }
+}

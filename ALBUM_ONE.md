@@ -33,7 +33,7 @@ The manifest seal is
 | --- | --- | --- | --- | --- |
 | **A1-01** | Pretty Lights, “Empire State of Mind” | Reference-fidelity reconstruction | Reproducible release-candidate fixture; signal sane; human acceptance pending | Put the strongest retained candidate and controls before the owner and require a musical verdict |
 | **A1-02** | Robert Miles, “Children” | Cross-modal score and audio reconstruction | Score, annotations, MIDI, MixScore, and score-side proof are bound; exact audio remains unbound; realization attempt closed as unsuccessful | None. Work is stopped: not mastered, no second instrument commissioned, no further revision |
-| **A1-03** | Aphex Twin / The Bad Plus, “Flim” | Performance-arrangement reconstruction | Exact performance bound; chart recovered blind and corrected from the bass; a complete trio candidate — piano, bass and drums as parts — exists over the whole form, against the piano-only reduction | Owner verdict on the trio candidate against its control |
+| **A1-03** | Aphex Twin / The Bad Plus, “Flim” | Performance-arrangement reconstruction | Exact performance bound; chart recovered blind and corrected from the bass; the whole-form trio candidate was auditioned and **lost** — it realizes harmony and no melody | None on this mechanism. The chart-driven realization is closed; a reconstruction of Flim needs the tune, and no melody recovery is commissioned |
 | **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
 | **A1-05** | sombr “My Body Isn’t Ready” × Coldplay “Yellow” | Arrangement-ancestry handoff | Normalized specimen exists; exact private editions remain unbound | Test chorus width, drum lift, neutral alignment, and reverse modernization under blind review |
 | **A1-06** | PinkPantheress “Stateside” / bhangra gesture | Perceptual gesture to arrangement | Commissioned, but no canonical specimen or comparison corpus is materialized | Isolate the gesture and build a held-out retrieval and transformation audition with negative controls |
@@ -190,14 +190,17 @@ record and teach the system nothing.
 | **A1-07** | donor-recording arrangement, blind review, mastering, acceptance | proved; system reference open |
 | **A1-02** | score to performance: symbolic authority realized as a played object | closed: the score was recovered and realized exactly, and the production candidate lost on arrangement and instrumentation |
 | **A1-01** | reference editing, release governance, the rights boundary | next owner-facing action: candidate and control review. The retained candidate is an edit of the reference, so it cannot prove synthesis |
-| **A1-03** | performed-arrangement recovery from symbolic and blind-audio witnesses | unbound; capability fixed by its commission |
+| **A1-03** | performed-arrangement recovery from symbolic and blind-audio witnesses | bound and recovered; the chart-driven realization is closed — a recovered chord chart played by a rack is not a reconstruction of a melody tune |
 | **A1-04** | exact-edition binding and production-grammar transplant | sources unbound |
 | **A1-05** | arrangement-ancestry transplant under blind review | sources unbound |
 | **A1-06** | perceptual gesture to arrangement; potentially generative | unmaterialized |
 
 A1-03, A1-05 and A1-06 keep the capabilities their commissions already name. They
 are not reassigned here, because a capability map written ahead of the evidence is
-a plan, not a ledger.
+a plan, not a ledger. A1-03's row now carries a result rather than a plan, and the
+result is negative: the lane proved it can bind a performance, recover its clock and
+its harmony, and play that through two instruments, and it proved that doing so is
+not the same as reconstructing the piece.
 
 ## Execution order
 

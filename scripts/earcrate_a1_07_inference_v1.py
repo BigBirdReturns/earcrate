@@ -23,10 +23,14 @@ measurement, not a preference:
   prior says leave it alone.
 - *Where.* The band window is the one whose bar-level energy rises most across the timeline,
   so the result has somewhere to go. The vocal window is the most continuously sung stretch.
-- *Together.* The vocal's entry is quantized to a band downbeat. An onset-envelope lock is
-  measured and reported, but it is not trusted to place anything: a legato vocal against a
-  drum kit does not correlate, and the first version of this scored 0.07 and called it a
-  lock.
+- *Together.* Both parts are folded into one bar of accent phase across the whole window,
+  and the vocal is placed at the rotation whose agreement with the band beats every rival
+  more than half a beat away by a stated margin. Below that margin the attempt stops. The
+  first lineage measured an instantaneous onset-envelope lock instead, scored 0.070,
+  correctly called that not a lock, and then placed the vocal anyway by quantizing its
+  loudest early attack onto a downbeat -- which assumes that attack is a downbeat attack,
+  and rotates the whole lead by however far off it was. That lineage lost on
+  synchronisation. There is no fallback here.
 - *Entry.* Harmonic material, then bass, then drums, on bar boundaries. An arrangement that
   arrives all at once reads as pasted.
 - *Balance.* The challenge calls one source `lead_vocal_authority`. It leads, and the band
@@ -83,10 +87,11 @@ BALANCE_DB_UNDER_VOCAL = {"lead_vocal_authority": 0.0,
                           "modern_harmonic_and_room_material": -12.0}
 CLIP_FADE_SECONDS = 0.02
 ENTRY_FADE_SECONDS = 0.5
-ALIGNMENT_SEARCH_BARS = 1.0
 PEAK_NEIGHBOURHOOD_SEMITONES = 1.0
 MINIMUM_INTERVAL_MARGIN = 0.05            # below this the search has not answered
-MINIMUM_ALIGNMENT_LOCK = 0.15             # below this the onset lock is not a lock
+ALIGNMENT_PHASE_BINS = 64                 # resolution of one bar of accent phase
+ALIGNMENT_NEIGHBOURHOOD_BEATS = 0.5       # how far a rival phase must sit from the peak
+MINIMUM_ALIGNMENT_MARGIN = 0.15           # below this the phase search has not answered
 CEILING_DBTP = -1.0                       # the candidate may not distort either
 HEADROOM_PROBE_GAIN_DB = -12.0            # measure the overshoot where it cannot be clamped
 
@@ -247,64 +252,129 @@ def sung_window(analysis: dict, source_id: str, *, duration: float) -> dict:
             "criterion": "densest voiced activity over one timeline length"}
 
 
-def align(analysis: dict, vocal_id: str, band_ids: list[str], *, vocal_start: float,
-          band_start: float, duration: float, bar_seconds: float) -> dict:
-    """Place the vocal against the band, and be honest about how well it is placed.
+def _bar_phase_profile(onset, start_frame: int, span: int, frames_per_second: float,
+                       bar_seconds: float):
+    """Where in the bar this signal tends to put its accents, over the whole window.
 
-    The onset-envelope correlation is measured across a bar either way, because if it were
-    strong it would be the best evidence available. It is not strong -- a legato lead against
-    a drum kit shares almost no onset structure -- so the placement falls back to quantizing
-    the vocal's entry onto a band downbeat, and the receipt says which of the two decided it.
+    Folding at the bar period is what makes a legato lead measurable at all. Instant by
+    instant a sung line and a drum kit share almost nothing, which is why the envelope
+    correlation that decided this before scored 0.07. Averaged over sixty bars, where a
+    singer pushes inside the bar is a real statistic.
+    """
+    block = onset[start_frame:start_frame + span]
+    if len(block) < ALIGNMENT_PHASE_BINS or float(block.max()) <= 0.0:
+        raise InferenceError("the chosen window has no accent structure to fold")
+    index = np.arange(len(block)) / frames_per_second
+    phase = np.floor((index % bar_seconds) / bar_seconds * ALIGNMENT_PHASE_BINS).astype(int)
+    phase = np.clip(phase, 0, ALIGNMENT_PHASE_BINS - 1)
+    profile = np.zeros(ALIGNMENT_PHASE_BINS)
+    counts = np.zeros(ALIGNMENT_PHASE_BINS)
+    np.add.at(profile, phase, block)
+    np.add.at(counts, phase, 1.0)
+    if float(counts.min()) <= 0.0:
+        raise InferenceError("the window is too short to fill one bar of phase")
+    return profile / counts
+
+
+def _phase_margin(curve: list[tuple[float, float]], bar_seconds: float,
+                  beats_per_bar: float) -> dict:
+    """The decisiveness of a phase answer: its peak against the best rival elsewhere.
+
+    Same discipline as the interval witness above, for the same reason. A curve with one
+    sharp phase is telling us where the vocal sits in the bar. A flat curve is telling us
+    nothing, and resolving that by argmax is how the first attempt placed a vocal it could
+    not actually hear against the band.
+    """
+    neighbourhood = ALIGNMENT_NEIGHBOURHOOD_BEATS * bar_seconds / beats_per_bar
+    ranked = sorted(curve, reverse=True)
+    best_score, best_offset = ranked[0]
+    rival = next(((score, offset) for score, offset in ranked[1:]
+                  if min(abs(offset - best_offset),
+                         bar_seconds - abs(offset - best_offset)) > neighbourhood), None)
+    if rival is None:
+        return {"offset_seconds": best_offset, "correlation": best_score,
+                "rival_correlation": 0.0, "rival_offset_seconds": None,
+                "margin": best_score}
+    return {"offset_seconds": best_offset, "correlation": best_score,
+            "rival_correlation": rival[0], "rival_offset_seconds": rival[1],
+            "margin": best_score - rival[0]}
+
+
+def align(analysis: dict, vocal_id: str, band_ids: list[str], *, vocal_start: float,
+          band_start: float, duration: float, bar_seconds: float,
+          beats_per_bar: float) -> dict:
+    """Place the vocal in the bar by where its accents actually fall, or refuse to place it.
+
+    The first attempt measured an onset-envelope correlation between the lead and the kit,
+    scored 0.070, correctly called that not a lock, and then quantized the vocal's single
+    loudest early attack onto a downbeat. That fallback is not a measurement: it assumes the
+    attack it found is a downbeat attack, and if the singer's phrase begins off the bar the
+    whole lead is rotated by however far off it was. The owner heard exactly that -- the
+    material was right and the synchronisation was not.
+
+    So there is no fallback here. Both parts are folded into one bar of accent phase over the
+    whole window, the vocal's profile is rotated against the band's, and the placement is the
+    rotation whose correlation beats every rival more than half a beat away by a stated
+    margin. Below that margin the search has not answered and the attempt stops.
+
+    What this decides is phase within the bar, which is what a bar-periodic criterion can
+    honestly decide. Which bar the vocal enters on is the entry decision, and it is made
+    elsewhere.
     """
     frames_per_second = analysis[vocal_id]["frames_per_second"]
     span = int(duration * frames_per_second)
     band = sum(analysis[source_id]["onset"] for source_id in band_ids)
-    band_block = band[int(band_start * frames_per_second):][:span]
-    vocal = analysis[vocal_id]["onset"]
 
-    reach = int(ALIGNMENT_SEARCH_BARS * bar_seconds * frames_per_second)
-    best = None
-    for shift in range(-reach, reach + 1, max(1, reach // 60)):
-        start = int(vocal_start * frames_per_second) + shift
-        if start < 0 or start + span > len(vocal):
-            continue
-        block = vocal[start:start + span]
-        if len(block) != len(band_block) or block.std() < 1e-9:
-            continue
-        score = float(np.corrcoef(block, band_block)[0, 1])
-        if best is None or score > best[0]:
-            best = (score, shift)
-    if best is None:
-        raise InferenceError("no admissible alignment offset")
-    score, shift = best
+    band_profile = _bar_phase_profile(band, int(band_start * frames_per_second), span,
+                                      frames_per_second, bar_seconds)
+    vocal_profile = _bar_phase_profile(analysis[vocal_id]["onset"],
+                                       int(vocal_start * frames_per_second), span,
+                                       frames_per_second, bar_seconds)
+    if band_profile.std() < 1e-9 or vocal_profile.std() < 1e-9:
+        raise InferenceError("a flat accent profile cannot place anything")
 
-    if score >= MINIMUM_ALIGNMENT_LOCK:
-        return {"offset_seconds": round(shift / frames_per_second, 6),
-                "lock_correlation": round(score, 4),
-                "minimum_lock": MINIMUM_ALIGNMENT_LOCK,
-                "lock_is_real": True,
-                "decided_by": "onset lock",
-                "searched_bars_either_way": ALIGNMENT_SEARCH_BARS}
+    curve = []
+    for bins in range(ALIGNMENT_PHASE_BINS):
+        rotated = np.roll(vocal_profile, bins)
+        score = float(np.corrcoef(rotated, band_profile)[0, 1])
+        curve.append((score, bins * bar_seconds / ALIGNMENT_PHASE_BINS))
+    chosen = _phase_margin(curve, bar_seconds, beats_per_bar)
 
-    # The lock is noise. Put the vocal's first sung attack on a bar line instead: the band
-    # clip starts at target zero and is bar-aligned, so target downbeats are multiples of one
-    # bar, and the nearest one to that attack is a defensible place for a phrase to begin.
-    vocal_onset = analysis[vocal_id]["onset"]
-    window = vocal_onset[int(vocal_start * frames_per_second):][:span]
-    if not len(window) or window.max() <= 0:
-        raise InferenceError("the chosen vocal window has no attack to align")
-    attack = float(np.argmax(window > window.max() * 0.5)) / frames_per_second
-    offset = attack - round(attack / bar_seconds) * bar_seconds
-    if vocal_start + offset < 0:
-        offset += bar_seconds
-    return {"offset_seconds": round(offset, 6),
-            "lock_correlation": round(score, 4),
-            "minimum_lock": MINIMUM_ALIGNMENT_LOCK,
-            "lock_is_real": False,
-            "decided_by": "downbeat quantization of the first sung attack",
-            "first_attack_seconds_into_window": round(attack, 6),
-            "bar_seconds": round(bar_seconds, 6),
-            "searched_bars_either_way": ALIGNMENT_SEARCH_BARS}
+    if chosen["margin"] < MINIMUM_ALIGNMENT_MARGIN:
+        raise InferenceError(
+            f"no phase places the vocal decisively: best margin {chosen['margin']:.4f} at "
+            f"{chosen['offset_seconds']:.3f}s, below the stated {MINIMUM_ALIGNMENT_MARGIN} "
+            "floor. A non-discriminating placement search may not be resolved by argmax, and "
+            "may not fall back to quantizing one attack.")
+
+    # A rotation past half a bar is the same placement reached backwards, and saying so keeps
+    # the offset the smallest move that produces it.
+    offset = chosen["offset_seconds"]
+    if offset > bar_seconds / 2.0:
+        offset -= bar_seconds
+
+    return {
+        "offset_seconds": round(offset, 6),
+        "decided_by": "bar-phase accent agreement across the whole window",
+        "correlation": round(chosen["correlation"], 4),
+        "margin": round(chosen["margin"], 4),
+        "minimum_margin": MINIMUM_ALIGNMENT_MARGIN,
+        "runner_up": {
+            "offset_seconds": (None if chosen["rival_offset_seconds"] is None
+                               else round(chosen["rival_offset_seconds"], 6)),
+            "correlation": round(chosen["rival_correlation"], 4),
+        },
+        "phase_bins_per_bar": ALIGNMENT_PHASE_BINS,
+        "phase_resolution_seconds": round(bar_seconds / ALIGNMENT_PHASE_BINS, 6),
+        "neighbourhood_beats": ALIGNMENT_NEIGHBOURHOOD_BEATS,
+        "bar_seconds": round(bar_seconds, 6),
+        "decides": "phase within the bar",
+        "does_not_decide": "which bar the vocal enters on; that is the entry decision",
+        "replaces": ("the 0.070 onset lock and its downbeat-quantization fallback, which "
+                     "placed a vocal on the assumption that its loudest early attack was a "
+                     "downbeat attack"),
+        "fallback_available": False,
+    }
 
 
 def build_score(challenge: dict, paths: dict, decisions: dict) -> dict:
@@ -455,7 +525,8 @@ def main() -> int:
           f"{interval['runner_up']['semitones']:+.2f} at {interval['runner_up']['correlation']:+.3f})")
 
     band_tempo = float(np.median([analysis[source_id]["tempo_bpm"] for source_id in band_ids]))
-    bar_seconds = 4 * 60.0 / band_tempo
+    beats_per_bar = 4.0
+    bar_seconds = beats_per_bar * 60.0 / band_tempo
     duration = int(challenge["timeline"]["duration_samples"]) / int(
         challenge["timeline"]["sample_rate"])
 
@@ -463,11 +534,13 @@ def main() -> int:
     vocal_window = sung_window(analysis, vocal_id, duration=duration)
     locked = align(analysis, vocal_id, band_ids, vocal_start=vocal_window["start_seconds"],
                    band_start=band_window["start_seconds"], duration=duration,
-                   bar_seconds=bar_seconds)
+                   bar_seconds=bar_seconds, beats_per_bar=beats_per_bar)
     vocal_start = max(0.0, vocal_window["start_seconds"] + locked["offset_seconds"])
     print(f"  band from {band_window['start_seconds']:.3f}s "
           f"(rise {band_window['rise_correlation']:+.3f}), vocal from {vocal_start:.3f}s "
-          f"(lock {locked['lock_correlation']:+.3f})")
+          f"(bar phase {locked['offset_seconds']:+.3f}s, corr "
+          f"{locked['correlation']:+.3f}, margin {locked['margin']:.3f} over "
+          f"{locked['minimum_margin']})")
 
     # Balance, measured rather than guessed, then offset by the stated prior.
     loudness = {}

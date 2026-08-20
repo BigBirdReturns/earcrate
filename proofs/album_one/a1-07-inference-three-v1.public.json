@@ -1,0 +1,121 @@
+{
+ "attempt": 3,
+ "authority": {
+  "album_master_accepted": true,
+  "candidate_beat_control": false,
+  "candidate_produced": false,
+  "challenge_retired": false,
+  "challenge_still_open": false,
+  "inference_family_closed": true,
+  "moves_album_counter": false,
+  "owner_pack_built": false,
+  "owner_review_pending": false,
+  "system_reference_completed": false
+ },
+ "boundary": {
+  "gold_score_consulted": false,
+  "private_paths_included": false,
+  "renders_remain_local": true
+ },
+ "challenge_reused_not_reissued": true,
+ "challenge_sha256": "9858fe895dd275afdebc01beced7a931483fa8e85447f9c6e02835fb96b1f69e",
+ "closed_because": "no margin floor separates a correct placement from an ambiguous one on this material",
+ "criterion_self_test": {
+  "passed": true,
+  "probes": [
+   {
+    "localized": true,
+    "phase_error_seconds": 0.0156,
+    "probe_seconds": 2.0,
+    "recovered_phase_seconds": 0.6037,
+    "recovered_start_seconds": 21.780317,
+    "tolerance_seconds": 0.2206,
+    "true_phase_seconds": 0.5881,
+    "true_start_seconds": 20.0,
+    "z_margin_on_ground_truth": 0.552
+   },
+   {
+    "localized": true,
+    "phase_error_seconds": 0.0156,
+    "probe_seconds": 3.0,
+    "recovered_phase_seconds": 0.6037,
+    "recovered_start_seconds": 21.780317,
+    "tolerance_seconds": 0.2206,
+    "true_phase_seconds": 0.5881,
+    "true_start_seconds": 20.0,
+    "z_margin_on_ground_truth": 0.301
+   },
+   {
+    "localized": true,
+    "phase_error_seconds": 0.0156,
+    "probe_seconds": 5.0,
+    "recovered_phase_seconds": 0.6037,
+    "recovered_start_seconds": 21.780317,
+    "tolerance_seconds": 0.2206,
+    "true_phase_seconds": 0.5881,
+    "true_start_seconds": 20.0,
+    "z_margin_on_ground_truth": 0.148
+   }
+  ],
+  "tolerance_beats": 0.5,
+  "what_it_asks": "whether the criterion can place a phrase cut from the band back into the band",
+  "why_it_runs_first": "a criterion that cannot find a known answer cannot be trusted to refuse an unknown one, and a floor set on it decides nothing"
+ },
+ "form": {
+  "phrases_found": 11,
+  "phrases_placed": 0,
+  "reason": "a correct placement scores at most 0.552 deviations above its rivals on this material, and as little as 0.148. A floor at or above that rejects known-correct placements; a floor below it admits placements that are not decisive at all. There is no floor that separates the two, so the margin cannot carry an admission rule here",
+  "refused_at_phrase": null,
+  "refused_decision": null,
+  "vocal_window_start_seconds": 76.184671
+ },
+ "headline": "A1-07 attempt three placed the vocal as phrases rather than as a block, and could not place the full declared form decisively. The inference family closes.",
+ "kind": "earcrate_a1_07_public_inference_three_receipt",
+ "margin_calibration": {
+  "ground_truth_z_margins": [
+   0.552,
+   0.301,
+   0.148
+  ],
+  "guessed_floor": 3.0,
+  "guessed_floor_would_reject_ground_truth": true,
+  "lowest_correct_placement_scores": 0.148,
+  "reason": "a correct placement scores at most 0.552 deviations above its rivals on this material, and as little as 0.148. A floor at or above that rejects known-correct placements; a floor below it admits placements that are not decisive at all. There is no floor that separates the two, so the margin cannot carry an admission rule here",
+  "usable": false,
+  "what_this_is_not": "a statement that the criterion is broken. It localizes exactly on known material. What it cannot do is report how confident it is in a way that discriminates"
+ },
+ "method": {
+  "clip_count_targeted": false,
+  "each_phrase_placed": "independently, against the band's native pocket",
+  "fallback_available": false,
+  "no_stretch": true,
+  "phrases_are": "segmented from the vocal stem's own activity envelope",
+  "replaces": "the continuous-vocal-window assumption"
+ },
+ "placed": [],
+ "receipt_sha256": "8d98d20b887c5f75a2f5c076d1fe72d779cbeb51a5c1dde644985b16c7976612",
+ "schema_version": 1,
+ "tempo_divergence": {
+  "a_constant_phase_exists": false,
+  "band_bar_seconds": 1.764719,
+  "band_tempo_bpm": 135.999,
+  "bars_in_window": 31.8,
+  "slip_in_bars": 3.35,
+  "slip_in_beats": 13.39,
+  "slip_seconds_across_the_window": 5.906,
+  "vocal_bar_seconds": 1.950474,
+  "vocal_tempo_bpm": 123.047,
+  "why": "nothing is stretched, so a tempo difference makes the vocal walk through every bar phase during the window and no single offset can be right"
+ },
+ "track_id": "A1-07",
+ "transposition": {
+  "margin": 0.0644,
+  "semitones": 3.0,
+  "witness_source": "maneskin_bass"
+ },
+ "what_closing_does_not_close": {
+  "the_album_master": "accepted, unchanged, and not in question here",
+  "the_challenge_object": "not retired -- it was answered and the answer is that this family cannot recover the arrangement",
+  "the_track": "A1-07 keeps its master; the autonomy claim is what fails"
+ }
+}

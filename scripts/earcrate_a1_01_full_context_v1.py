@@ -121,9 +121,10 @@ ADMISSIBLE OUTCOMES
 
     LOSE or TIE
         close A1-01 as an unsuccessful editing candidate
-        Album One's remaining production frontier is then source binding for A1-04 and
-        A1-05, and the A1-07 system reference. A1-03's chart-driven realization is closed
-        and is not where a verdict here sends anything.
+        the only lane the estate can then advance on its own is the A1-07 system
+        reference. A1-03's chart-driven realization is closed, and A1-04 and A1-05
+        cannot be bound: none of their four recordings are in the library, and
+        obtaining them is an owner action, not an estate one.
 
     If it loses, say whether the damage is at the seam, in the phrase continuity, in the
     development, or in the payoff.

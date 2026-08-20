@@ -259,6 +259,10 @@ def test_a_losing_verdict_is_not_routed_into_a_closed_lane():
     assert "move Album One to A1-03" not in flat, (
         "the sheet routes a losing verdict to A1-03, whose realization is closed")
     assert "A1-03's chart-driven realization is closed" in flat
-    assert "source binding for A1-04 and A1-05" in flat
+    # A1-04 and A1-05 have no local recordings, so naming them as the next lane would be
+    # routing a verdict at work the estate cannot start either.
+    assert "A1-04 and A1-05 cannot be bound" in flat
+    assert "obtaining them is an owner action" in flat
+    assert "A1-07 system reference" in flat
     # The winning branch still has to say what it changes, or the review is inadmissible.
     assert "proceed to mastering and A1-01 acceptance" in flat

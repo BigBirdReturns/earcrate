@@ -1,0 +1,60 @@
+{
+ "boundary": {
+  "private_paths_included": false,
+  "renders_remain_local": true,
+  "source_audio_exported": false
+ },
+ "disposition": {
+  "a1_03_album_master": "unaccepted",
+  "a1_03_status": "chart-driven realization closed; the track is not closed",
+  "album_one_accepted_masters": "1/7",
+  "chart_driven_realization": "closed",
+  "further_revisions_of_this_arrangement": "none",
+  "moves_album_counter": false,
+  "next_owner_facing_action_from_a1_03": "none",
+  "piano_only_control": "not selected",
+  "trio_candidate": "rejected"
+ },
+ "headline": "The A1-03 trio candidate lost. It realizes harmony and no melody, and a chord chart played that way is a lounge idiom -- which is what the owner heard.",
+ "kind": "earcrate_a1_03_public_trio_verdict_receipt",
+ "named_gap_this_verdict_creates": {
+  "authorized_now": false,
+  "gap": "a reconstruction of Flim requires the tune. Nothing in the lane recovers or realizes melody, and a chord chart is not the piece",
+  "why_not": "a negative result does not authorize an architecture program. This is recorded as the demand a future A1-03 commission would have to name, not as work starting"
+ },
+ "new_organs_added": 0,
+ "receipt_sha256": "61b717575de5775bf28bc1eaa79f741ea57caa67410eaa05695b348f0a45c7e4",
+ "retained_evidence": [
+  "the exact source binding",
+  "the corrected bass-root chart over the whole form",
+  "the recovered performance clock",
+  "the crate rack build and its PCM identity"
+ ],
+ "schema_version": 1,
+ "track_id": "A1-03",
+ "verdict": {
+  "aimed_at": "the object, not the mix; both cuts in the pack share the comp that produces the character the verdict named",
+  "answer": "no",
+  "authority": "owner",
+  "credited": [],
+  "decisive": "the realization contains no melody. Flim's identity is its tune; the recovery never attempted one and the object never carried one, so what was left is a chord chart played as block voicings on two and four over a walking bass. That is a lounge idiom, and no revision of the bass figure, the drum sound or the balance reaches it",
+  "failure_primary": "harmony_realized_without_melody",
+  "failure_secondary": "generic_comp_and_walking_bass_idiom",
+  "judged_objects": {
+   "candidate_pcm_sha256": "6ba4d643c1a113ee28b925c0aa9d98bed252efb889508fd7b0bc158bd99f1df0",
+   "control_pcm_sha256": "dda1886b8dfb6dc4dc5a0876023bd2a136a591b92b7ef217fab29d844e1d0e49"
+  },
+  "outcome": "LOSE",
+  "owner_characterization": "daytime-television piano",
+  "selected": "neither",
+  "trio_receipt_sha256": "ab1f861f8c3857883abcd91619a6b74fdc94d287ed704f7c860f393e665f37e8",
+  "why_nothing_is_credited": "the owner granted no musical positive, and inventing one from the machine result would misreport the verdict"
+ },
+ "what_this_does_not_close": {
+  "ace_step": "stays where its own disposition left it, neither adopted nor rejected globally",
+  "the_crate_rack_path": "not condemned. It rendered the parts it was given, and they were measured playing what they were written to play; the parts themselves were the wrong parts",
+  "the_recovered_clock": "the performance's own grid is still the lane's timing authority",
+  "the_source_binding": "the exact performance stays bound",
+  "the_track": "A1-03 keeps its commission. A failing mechanism ends that mechanism"
+ }
+}

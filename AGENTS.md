@@ -179,6 +179,12 @@ An artifact does not become admissible by being placed underneath something else
 reduction with a bed under it is still a reduction; a probe that gained a second option
 is still a probe.
 
+One limit is known rather than discovered. A completed system reference is a declared
+authority state in this repository, and it is not a track state -- so a verdict on an
+inferred candidate against its naive control cannot reach the owner under this rule, and
+that lane is decided on its declared measurements instead. Widening the rule to admit a
+fourth object is an owner decision, and it has not been taken.
+
 ### Who executes what
 
 ```text

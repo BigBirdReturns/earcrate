@@ -72,8 +72,11 @@ WHERE THE TWO FILES DIFFER
     -- four minutes twenty-six seconds of the same bytes. There is nothing to hear anywhere
     else, so do not hunt.
 
-    Inside those 10.4 seconds the two are uncorrelated (-0.20). This is not a subtle
-    crossfade. It is ten seconds of different music at the same level, and it is obvious.
+    Inside those 10.4 seconds the two are uncorrelated (-0.20). That means they are not
+    the same samples. It does not mean they sound different: two bars of the same
+    loop-based section decorrelate completely while carrying the same material, so this
+    number cannot tell you whether there is anything to hear. Whether there is, is the
+    question being asked.
 
 START HERE
     A_FOCUS.wav and B_FOCUS.wav

@@ -31,7 +31,7 @@ The manifest seal is
 
 | ID | Working title | Reference class | Evidence now | Next musical gate |
 | --- | --- | --- | --- | --- |
-| **A1-01** | Pretty Lights, “Empire State of Mind” | Reference-fidelity reconstruction | Reproducible release-candidate fixture; signal sane; human acceptance pending | Put the strongest retained candidate and controls before the owner and require a musical verdict |
+| **A1-01** | Pretty Lights, “Empire State of Mind” | Reference-fidelity reconstruction | Source bound, pack reproducible and verified, edit auditioned in full context and **closed**: the two sides are perceptually identical, so the edit is inaudible | None. The retained edit is closed on a musical result |
 | **A1-02** | Robert Miles, “Children” | Cross-modal score and audio reconstruction | Score, annotations, MIDI, MixScore, and score-side proof are bound; exact audio remains unbound; realization attempt closed as unsuccessful | None. Work is stopped: not mastered, no second instrument commissioned, no further revision |
 | **A1-03** | Aphex Twin / The Bad Plus, “Flim” | Performance-arrangement reconstruction | Exact performance bound; chart recovered blind and corrected from the bass; the whole-form trio candidate was auditioned and **lost** — it realizes harmony and no melody | None on this mechanism. The chart-driven realization is closed; a reconstruction of Flim needs the tune, and no melody recovery is commissioned |
 | **A1-04** | KATSEYE “Animal” × Britney Spears “Toxic” | Production-grammar transplant | Normalized specimen exists; exact private editions remain unbound | Test role-based percussion and identity transfer against naive overlap |
@@ -189,7 +189,7 @@ record and teach the system nothing.
 | --- | --- | --- |
 | **A1-07** | donor-recording arrangement, blind review, mastering, acceptance | proved. System reference **closed negative**: the inference family cannot recover the arrangement, measured rather than assumed |
 | **A1-02** | score to performance: symbolic authority realized as a played object | closed: the score was recovered and realized exactly, and the production candidate lost on arrangement and instrumentation |
-| **A1-01** | reference editing, release governance, the rights boundary | next owner-facing action: candidate and control review. The retained candidate is an edit of the reference, so it cannot prove synthesis |
+| **A1-01** | reference editing, release governance, the rights boundary | closed: the retained edit is an edit of the reference and proved inaudible, so it proves neither synthesis nor editing |
 | **A1-03** | performed-arrangement recovery from symbolic and blind-audio witnesses | bound and recovered; the chart-driven realization is closed — a recovered chord chart played by a rack is not a reconstruction of a melody tune |
 | **A1-04** | exact-edition binding and production-grammar transplant | sources unbound |
 | **A1-05** | arrangement-ancestry transplant under blind review | sources unbound |

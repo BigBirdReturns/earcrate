@@ -1,0 +1,85 @@
+{
+ "album_state_after_this_verdict": {
+  "a1_01": "closed on a musical result",
+  "a1_02": "closed on a musical result",
+  "a1_03": "chart-driven realization closed on a musical result",
+  "a1_04": "source recordings absent",
+  "a1_05": "source recordings absent",
+  "a1_06": "unmaterialized",
+  "a1_07": "accepted master; system reference closed negative",
+  "executable_lanes_remaining": 0,
+  "note": "recorded because it is the state, not as an argument for authorizing anything. No new program follows from a negative result"
+ },
+ "boundary": {
+  "private_paths_included": false,
+  "renders_remain_local": true,
+  "source_audio_exported": false
+ },
+ "disposition": {
+  "a1_01_album_master": "unaccepted",
+  "a1_01_status": "unsuccessful editing candidate",
+  "album_one_accepted_masters": "1/7",
+  "further_revisions_of_this_edit": "none",
+  "mastering_authorized": false,
+  "moves_album_counter": false,
+  "next_owner_facing_action": "none",
+  "retained_edit": "closed",
+  "rights_or_release_permission": false
+ },
+ "headline": "The A1-01 recurrence edit is inaudible. The two sides are perceptually identical, the retained edit closes, and the pack's claim that the difference was obvious rested on a measurement that cannot support it.",
+ "kind": "earcrate_a1_01_public_verdict_receipt",
+ "new_organs_added": 0,
+ "pack_verified_against": "2a503bbedc73d4137b44c7c9f2a22487df93f33df1dcab46a2cd9cd0aed313f3",
+ "receipt_sha256": "12ad7d7d52ceb082d85b14799df92c6ed4154536f1f545a38a142f63637ea1ca",
+ "schema_version": 1,
+ "the_artifact_was_checked_first": {
+  "conclusion": "the pack delivered exactly what it claimed to deliver",
+  "differing_sample_fraction": 0.2086,
+  "differing_span_seconds": [
+   21.237,
+   31.669
+  ],
+  "expected_span_seconds": [
+   21.237,
+   31.669
+  ],
+  "focus_cuts_differ": true,
+  "waveform_correlation_inside_span": -0.1988,
+  "why": "an owner who cannot hear a difference and a pack that failed to deliver one are different findings, and only a measurement separates them"
+ },
+ "the_measurement_defect_this_exposes": {
+  "defect": "the lane treated waveform correlation inside the replaced span as evidence that the replacement is audible, and told the owner the difference was obvious",
+  "scope": "this is a defect in how difference was argued, not in how the edit was cut; the edit is confined to its declared span and every other sample is bit-identical, which the gates already hold",
+  "what_would_have_caught_it": "a perceptual comparison of the replaced and replacing spans -- timbre, harmony, brightness, level -- before the pack was ever built",
+  "why_it_is_wrong": "correlation measures sample alignment. Two different bars of the same loop-based section are uncorrelated and sound the same, so a low correlation is consistent with an inaudible edit and cannot distinguish the two"
+ },
+ "track_id": "A1-01",
+ "verdict": {
+  "answer": "no",
+  "authority": "owner",
+  "credited": [],
+  "decisive": "the substituted passage is perceptually equivalent to the one it replaced, so the edit changes nothing a listener can hear. A change that cannot be heard has not earned itself",
+  "failure_primary": "inaudible_edit",
+  "outcome": "TIE",
+  "owner_words": "i can't tell the difference",
+  "selected": "neither",
+  "why_nothing_is_credited": "no musical positive was granted, and the artifact was verified sound before the verdict was accepted"
+ },
+ "why_it_is_inaudible": {
+  "chroma_cosine": 1.0,
+  "measured": "after the verdict, to explain it rather than to produce it",
+  "mfcc_cosine": 1.0,
+  "rms": [
+   0.32505,
+   0.32379
+  ],
+  "spectral_centroid_hz": [
+   2791.7,
+   2795.3
+  ],
+  "tempo_bpm": [
+   92.29,
+   92.29
+  ]
+ }
+}

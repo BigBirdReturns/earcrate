@@ -1,0 +1,167 @@
+{
+  "boundary": {
+    "private_paths_included": false,
+    "source_audio_exported": false,
+    "source_audio_remains_local": true
+  },
+  "edit": {
+    "altered_sample_count": 500736,
+    "crossfade_frames": 1680,
+    "crossfade_ms": 35.0,
+    "donor_seconds": [
+      255.146667,
+      265.578667
+    ],
+    "duration_preserved": true,
+    "join_law": "equal power, cos/sin",
+    "joins": [
+      "entry",
+      "exit"
+    ],
+    "joins_inside_replaced_span": true,
+    "normalisation_applied": false,
+    "prohibited_operations": [
+      "beat chopping",
+      "stem layering",
+      "synthesis",
+      "MIDI overlay",
+      "filtered intros",
+      "any other hidden production change"
+    ],
+    "prohibited_operations_performed": [],
+    "replaced_frames": 500736,
+    "replaced_seconds": 10.432,
+    "samples_altered_outside_target_span": 0,
+    "target_seconds": [
+      161.237333,
+      171.669333
+    ]
+  },
+  "edit_is_a_replacement_not_a_splice": true,
+  "headline": "The A1-01 source is found and bound, and the recurrence edit is now auditionable against the complete work rather than a 31-second window.",
+  "independence": {
+    "generative_provider_used": false,
+    "midi_overlay_used": false,
+    "reference_recording_consulted": "the source IS the reference for this lane; no other recording was consulted"
+  },
+  "kind": "earcrate_a1_01_public_full_context_pack_receipt",
+  "normalisation_note": "the retained 31-second witness applies a global true-peak gain; this does not, because the control is untouched and a gain on one side would turn the comparison into a loudness test",
+  "owner_pack": {
+    "admissible_outcomes": [
+      "WIN",
+      "LOSE",
+      "TIE"
+    ],
+    "assignment_derivation": "sha256 over the two render digests; forced by the audio before the pack was built and reproducible from the evidence",
+    "assignment_map_withheld": true,
+    "assignment_sealed_sha256": "4b0628c84dd689311f41743e43bb0c2b78ee589943b40d259701d371eb7f9a0f",
+    "blind": "which letter carries the edit",
+    "blind_strength": {
+      "affects_verdict_validity": false,
+      "blinded": "which letter carries the edit",
+      "leak": "the donor region is untouched in both readings, so in the edited file the 2:41 passage returns at 4:15; an attentive end-to-end listen can therefore identify which letter is edited",
+      "robust": false,
+      "sealed": true,
+      "why_disclosed": "an owner who believes a blind is stronger than it is cannot correct for it; the verdict asks which is musically better, not which can be identified"
+    },
+    "diagnostic_not_candidate": "the retained 31-second excerpt",
+    "difference_extent": {
+      "correlation_inside_window": -0.1988,
+      "differs_from_seconds": 161.237,
+      "differs_to_seconds": 171.669,
+      "fraction_of_file_differing": 0.0377,
+      "identical_elsewhere": true,
+      "note": "the two readings are uncorrelated inside the window, so the substitution is plainly audible rather than subtle; outside it they are bit-identical, so there is nothing to hear anywhere else"
+    },
+    "disclosed": "everything else, including the edit windows and the join law",
+    "focused_excerpts_provided": true,
+    "focused_excerpts_reason": "asking for an A/B over 276 seconds when 266 of them are identical bytes is not a listening task; the focus pair carries the run-up, the edit and the landing",
+    "level_matched_lufs": -7.9,
+    "measured_lufs": {
+      "candidate": -7.9,
+      "control": -7.9
+    },
+    "members": {
+      "A": "one of the two full-length readings",
+      "A_FOCUS": "2:20-3:10 of the A reading",
+      "B": "the other full-length reading",
+      "B_FOCUS": "2:20-3:10 of the B reading",
+      "DONOR_SOURCE": "4:10-4:30, where the inserted material lives; identical in both",
+      "EDIT_WINDOW": "the retained 31-second excerpt, disclosed",
+      "MANIFEST": "digests of every pack member",
+      "REVIEW": "the question and the admissible outcomes"
+    },
+    "on_loss_or_tie": "close A1-01 as an unsuccessful editing candidate and move Album One to A1-03",
+    "on_win": "proceed to mastering and A1-01 acceptance; rights eligibility remains a separate decision and is not asked by this pack"
+  },
+  "receipt_sha256": "2a503bbedc73d4137b44c7c9f2a22487df93f33df1dcab46a2cd9cd0aed313f3",
+  "schema_version": 1,
+  "source_binding": {
+    "all_four_authorities_matched": true,
+    "binding_kind": "exact_container",
+    "container_bytes": 9745454,
+    "container_sha256": "af3116da67067e2ce2d8f1635471388c371641f63687917948e154c289cef979",
+    "decoded_frames": 13266582,
+    "decoded_pcm_sha256": "bb7fede642c57eb155c4d784c36883abfeea0e20b2ab4d551e915cd8d74de832",
+    "decoded_seconds": 276.387125,
+    "exact_container": true,
+    "found": true,
+    "path_recorded_in_repository": false,
+    "rebind_note": "the historical container itself was recovered, so no dependent container had to be regenerated under a new source identity",
+    "rebind_required": false,
+    "redundancy": {
+      "all_match_expected_container": true,
+      "byte_identical_copies_found": 4,
+      "distinct_filenames": 2,
+      "locations_kind": [
+        "a user downloads folder",
+        "a host-cutover backup recovery tree",
+        "the original EarCrate workspace external targets",
+        "a frozen shard in that workspace"
+      ],
+      "note": "the search swept every fixed drive for the exact byte length and then hashed each hit; four copies matched the container digest under two different filenames, so the binding does not depend on one surviving file and the recovery was not a lucky find",
+      "paths_recorded_in_repository": false
+    }
+  },
+  "source_only_contract": {
+    "only_source_material_used": true,
+    "performed": [],
+    "preserved": true,
+    "prohibited": [
+      "beat chopping",
+      "stem layering",
+      "synthesis",
+      "MIDI overlay",
+      "filtered intros",
+      "any other hidden production change"
+    ]
+  },
+  "state": {
+    "a1_01_album_master": "unaccepted",
+    "album_authority_changed": false,
+    "album_one_accepted_masters": "1/7",
+    "mastering": "follows the verdict",
+    "release_allowed": false,
+    "rights_eligibility": "not_evaluated, and not asked by this pack"
+  },
+  "track_id": "A1-01",
+  "visibility": "public",
+  "why_the_excerpt_is_not_the_review": {
+    "disposition": "retained in the pack as a disclosed diagnostic, not as a candidate",
+    "excerpt_can_answer": "whether this one substitution and its entry seam work",
+    "excerpt_cannot_answer": "whether A1-01 functions as a track, because it never exposes the phrase continuity, development or payoff that the edit has to survive",
+    "excerpt_covers": "eight retained bars into a four-bar donor recurrence",
+    "excerpt_seconds": 31.261,
+    "member_name": "EDIT_WINDOW",
+    "work_seconds": 276.387125
+  },
+  "witness_reproduction": {
+    "claim": "the retained 31-second object rebuilds bit-for-bit from the bound source",
+    "decoded_pcm_sha256": "5da1bef8526576ca49628de636337e8fe9e100b4e0da7ada0605d164a4298e59",
+    "frames": 1500528,
+    "matches_historical": true,
+    "record_digest_differs": true,
+    "record_digest_note": "the candidate JSON record digest differs because it carries build context; the audio is identical, and the audio is the claim being made",
+    "seconds": 31.261
+  }
+}

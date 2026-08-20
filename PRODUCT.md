@@ -18,6 +18,29 @@ Current product truth:
 works, their evidence states, and their next musical gates. This file defines the
 product relationship between that program and the reusable system.
 
+## Names
+
+```text
+product                 EarCrate
+repository              earcrate
+estate                  EarCrate
+album program           Album One
+
+possible internal IR    ArrangementGraph or PerformanceGraph
+SongGraph               not the product name
+```
+
+The product is **EarCrate** and stays EarCrate. A product name does not have to mirror
+its canonical internal representation: the system may well grow a track-level
+intermediate representation called `ArrangementGraph` or `PerformanceGraph`, and that
+is an implementation object inside EarCrate, not a rename of it.
+
+"SongGraph" is specifically rejected. It is already in use by an active AI music
+playlist product, so adopting it would collide on day one — and it would describe the
+wrong thing, making a production system sound like a discovery or playlist graph. This
+is a naming decision, not a trademark opinion, and it is recorded here so the question
+does not get reopened by whoever next notices that the internal graph has a good name.
+
 ## The product loop
 
 One private catalog and one governed execution estate support a coupled loop:

@@ -31,6 +31,7 @@ if str(ROOT) not in sys.path:
 
 from earcrate.evidence.receipts import load_sealed, verify_body_free  # noqa: E402
 
+RESULT = ROOT / "proofs" / "album_one" / "a1-07-inference-result-v1.public.json"
 RECEIPT = ROOT / "proofs" / "album_one" / "a1-07-inference-v1.public.json"
 CHALLENGE_RECEIPT = ROOT / "proofs" / "album_one" / "a1-07-recovery-challenge-v1.public.json"
 
@@ -77,15 +78,42 @@ def test_every_decisive_decision_carries_the_margin_that_made_it_decisive():
                for row in interval["rejected_witnesses"].values())
 
 
-def test_a_lock_that_is_not_a_lock_is_not_used_to_place_anything():
+def test_no_live_lineage_rests_on_a_placement_that_cannot_discriminate():
+    """The receipt on this head is attempt one's, and attempt one's lineage is terminated.
+
+    So the rule is not "this receipt has the new shape" -- it is that a lineage still standing
+    may not rest on the placement that lost. A terminated attempt keeps its own record; a live
+    one has to carry a placement decided by a margin, with no fallback.
+    """
     alignment = load_sealed(RECEIPT)["decisions"]["alignment"]
-    assert ("lock_is_real" in alignment) and ("decided_by" in alignment)
-    if not alignment["lock_is_real"]:
-        assert alignment["lock_correlation"] < alignment["minimum_lock"]
-        assert "quantization" in alignment["decided_by"]
-    else:
-        assert alignment["lock_correlation"] >= alignment["minimum_lock"]
-        assert alignment["decided_by"] == "onset lock"
+    terminated = load_sealed(RESULT)["authority"]["candidate_lineage"] == "terminated"
+
+    if alignment.get("decided_by") != "bar-phase accent agreement across the whole window":
+        assert terminated, (
+            "a live lineage is resting on the non-discriminating placement that lost")
+        return
+
+    assert alignment["fallback_available"] is False
+    assert alignment["margin"] >= alignment["minimum_margin"], (
+        "a placement below its own floor should have stopped the attempt")
+    runner_up = alignment["runner_up"]
+    if runner_up["offset_seconds"] is not None:
+        assert alignment["correlation"] - runner_up["correlation"] >= alignment["minimum_margin"]
+
+    # A bar-periodic criterion decides phase, and saying so keeps it from being read as
+    # having chosen the entry bar.
+    assert alignment["decides"] == "phase within the bar"
+    assert "which bar" in alignment["does_not_decide"]
+    assert abs(alignment["offset_seconds"]) <= alignment["bar_seconds"] / 2.0 + 1e-6
+
+
+def test_the_placement_that_lost_cannot_come_back():
+    """Attempt one's lineage was terminated on synchronisation. The mechanism that produced
+    it is named in the source so its return is a visible edit rather than a quiet one."""
+    source = (ROOT / "scripts" / "earcrate_a1_07_inference_v1.py").read_text(encoding="utf-8")
+    assert "MINIMUM_ALIGNMENT_LOCK" not in source, "the onset-lock threshold is back"
+    assert "MINIMUM_ALIGNMENT_MARGIN" in source
+    assert "_bar_phase_profile" in source
 
 
 def test_the_candidate_does_not_distort_either():
@@ -125,3 +153,82 @@ def test_an_attempt_completes_nothing_by_existing():
     outcomes = receipt["admissible_outcomes"]
     assert "terminates" in outcomes["control_wins_or_tie_or_reject_all"]
     assert "stays open" in outcomes["control_wins_or_tie_or_reject_all"]
+
+
+def _synthetic(bar_seconds: float, fps: float, bars: int, phase_seconds: float,
+               *, structured: bool):
+    """An accent envelope with peaks at a known phase in each bar, or with none."""
+    import numpy as np
+
+    frames = int(bars * bar_seconds * fps)
+    time = np.arange(frames) / fps
+    if not structured:
+        # Deterministic broadband wobble with no bar period in it at all.
+        return 0.5 + 0.5 * np.sin(2.0 * np.pi * time / (bar_seconds * 0.37))
+    phase = (time - phase_seconds) % bar_seconds
+    beat = bar_seconds / 4.0
+    envelope = np.zeros(frames)
+    for index, weight in enumerate((1.0, 0.45, 0.7, 0.45)):
+        envelope += weight * np.exp(-((phase - index * beat) ** 2) / (2 * (beat / 8.0) ** 2))
+    return envelope + 0.05
+
+
+def test_the_new_placement_criterion_actually_separates_its_candidates():
+    """The criterion that lost could not tell its candidates apart. This one is required to,
+    on a signal whose answer is known, before it is trusted with a real one."""
+    import importlib.util
+
+    import numpy as np
+
+    spec = importlib.util.spec_from_file_location(
+        "inference", ROOT / "scripts" / "earcrate_a1_07_inference_v1.py")
+    inference = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inference)
+
+    bar_seconds, fps, bars = 2.0, 43.0, 60
+    truth = 0.5                                   # the vocal sits half a second into the bar
+    analysis = {
+        "vocal": {"onset": _synthetic(bar_seconds, fps, bars, truth, structured=True),
+                  "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
+        "band": {"onset": _synthetic(bar_seconds, fps, bars, 0.0, structured=True),
+                 "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
+    }
+    placed = inference.align(analysis, "vocal", ["band"], vocal_start=0.0, band_start=0.0,
+                             duration=bars * bar_seconds - 1.0, bar_seconds=bar_seconds,
+                             beats_per_bar=4.0)
+    # Rotating the vocal forward by (bar - truth) puts its accents back on the band's.
+    expected = -truth
+    assert abs(placed["offset_seconds"] - expected) <= 3.0 * placed["phase_resolution_seconds"], (
+        f"recovered {placed['offset_seconds']:.3f}s, expected {expected:.3f}s")
+    assert placed["margin"] >= placed["minimum_margin"]
+    assert placed["fallback_available"] is False
+
+
+def test_an_unplaceable_vocal_stops_the_attempt_instead_of_being_placed():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "inference", ROOT / "scripts" / "earcrate_a1_07_inference_v1.py")
+    inference = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inference)
+
+    bar_seconds, fps, bars = 2.0, 43.0, 60
+    analysis = {
+        "vocal": {"onset": _synthetic(bar_seconds, fps, bars, 0.0, structured=False),
+                  "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
+        "band": {"onset": _synthetic(bar_seconds, fps, bars, 0.0, structured=True),
+                 "frames_per_second": fps,
+                  "tempo_bpm": 4.0 * 60.0 / bar_seconds},
+    }
+    try:
+        inference.align(analysis, "vocal", ["band"], vocal_start=0.0, band_start=0.0,
+                        duration=bars * bar_seconds - 1.0, bar_seconds=bar_seconds,
+                        beats_per_bar=4.0)
+    except inference.InferenceError as error:
+        assert "below the stated" in str(error)
+        assert "may not be resolved by argmax" in str(error)
+        return
+    raise AssertionError("a vocal with no bar-phase structure was placed anyway")

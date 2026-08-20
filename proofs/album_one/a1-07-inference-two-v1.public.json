@@ -1,0 +1,56 @@
+{
+ "attempt": 2,
+ "authority": {
+  "album_master_accepted": true,
+  "candidate_beat_control": false,
+  "candidate_produced": false,
+  "challenge_retired": false,
+  "challenge_still_open": true,
+  "moves_album_counter": false,
+  "owner_pack_built": false,
+  "owner_review_pending": false,
+  "system_reference_completed": false
+ },
+ "boundary": {
+  "gold_score_consulted": false,
+  "private_paths_included": false,
+  "renders_remain_local": true
+ },
+ "challenge_reused_not_reissued": true,
+ "challenge_sha256": "9858fe895dd275afdebc01beced7a931483fa8e85447f9c6e02835fb96b1f69e",
+ "headline": "A1-07 attempt two refused to place the vocal. The placement criterion was not the fixable defect: at these two tempi, with nothing stretched, no constant placement phase exists.",
+ "kind": "earcrate_a1_07_public_inference_refusal_receipt",
+ "named_next_decision": {
+  "authorized_now": false,
+  "decision": "whether the no-stretch prior stands. It is a declared decision of this lane, not a defect of this attempt",
+  "why_not": "a negative result does not authorize revising a different prior"
+ },
+ "placement": {
+  "criterion": "bar-phase accent agreement across the whole window",
+  "fallback_available": false,
+  "message": "no phase places the vocal decisively: best margin 0.0333 at 1.710s, below the stated 0.15 floor. A non-discriminating placement search may not be resolved by argmax, and may not fall back to quantizing one attack.",
+  "minimum_margin": 0.15,
+  "refused": true
+ },
+ "receipt_sha256": "ccb60892d746a1718557be446b42fb8b6cdecca9fc514adfa18c56ba0558f33c",
+ "schema_version": 1,
+ "track_id": "A1-07",
+ "transposition": {
+  "margin": 0.0644,
+  "semitones": 3.0,
+  "witness_source": "maneskin_bass"
+ },
+ "what_this_says_about_attempt_one": "attempt one lost on synchronisation, and the placement mechanism was the visible cause: a 0.070 onset lock, called not a lock, followed by quantizing one attack onto a downbeat. Replacing it with a criterion that has a margin shows the deeper cause -- the parts are at different tempi and the stated prior stretches nothing, so no placement was ever going to sync them. The old fallback hid that by always producing a number",
+ "why_it_refused": {
+  "a_constant_phase_exists": false,
+  "band_bar_seconds": 1.764719,
+  "band_tempo_bpm": 135.999,
+  "bars_in_window": 31.8,
+  "slip_in_bars": 3.35,
+  "slip_in_beats": 13.39,
+  "slip_seconds_across_the_window": 5.906,
+  "vocal_bar_seconds": 1.950474,
+  "vocal_tempo_bpm": 123.047,
+  "why": "nothing is stretched, so a tempo difference makes the vocal walk through every bar phase during the window and no single offset can be right"
+ }
+}

@@ -1,0 +1,181 @@
+{
+ "admissible_outcomes": {
+  "candidate_wins": "the withheld-answer recovery is passed and only then is the candidate compared to the gold",
+  "control_wins_or_tie_or_reject_all": "this candidate lineage terminates and the system reference stays open; it does not close the track, the challenge, or another attempt"
+ },
+ "authority": {
+  "candidate_beat_control": false,
+  "gold_similarity_measured": false,
+  "moves_album_counter": false,
+  "owner_audition_performed": false,
+  "rights_or_release_permission": false,
+  "system_reference_completed": false
+ },
+ "boundary": {
+  "option_map_exported": false,
+  "private_paths_included": false,
+  "renders_remain_local": true,
+  "source_audio_exported": false
+ },
+ "candidate": {
+  "canonical_pcm_sha256": "b99fd700aac84c942fbfbedd8b67c7685118b7b19be9319c935b73e222678be3",
+  "container_byte_identity": true,
+  "headroom": {
+   "boost_refused": true,
+   "ceiling_dbtp": -1.0,
+   "measured_true_peak_dbtp": 2.4,
+   "probe_gain_db": -12.0,
+   "probe_true_peak_dbtp": -9.6,
+   "solved_from": "measured true peak, not chosen",
+   "solved_master_gain_db": -3.4
+  },
+  "renders_identically": true,
+  "score_sha256": "8a9884dca8f765add796f720d8ba368c39a2e735401dc82258dc1e9fb0ec899e"
+ },
+ "challenge_sha256": "9858fe895dd275afdebc01beced7a931483fa8e85447f9c6e02835fb96b1f69e",
+ "decisions": {
+  "alignment": {
+   "bar_seconds": 1.764719,
+   "decided_by": "downbeat quantization of the first sung attack",
+   "first_attack_seconds_into_window": 6.339048,
+   "lock_correlation": 0.0696,
+   "lock_is_real": false,
+   "minimum_lock": 0.15,
+   "offset_seconds": -0.719828,
+   "searched_bars_either_way": 1.0
+  },
+  "balance_db_under_vocal": {
+   "lead_vocal_authority": 0.0,
+   "modern_bass_material": -7.0,
+   "modern_drum_material": -6.0,
+   "modern_harmonic_and_room_material": -12.0
+  },
+  "band_tempo_bpm": 135.999,
+  "band_window": {
+   "bars": 31,
+   "criterion": "bar-level energy correlated with a linear rise",
+   "rise_correlation": 0.5708,
+   "start_seconds": 61.765079
+  },
+  "entry_bars": {
+   "modern_bass_material": 8,
+   "modern_drum_material": 16,
+   "modern_harmonic_and_room_material": 0
+  },
+  "every_decision_is_a_stated_prior_on_a_measurement": true,
+  "gain_db": {
+   "four_seasons_vocals": 0.0,
+   "maneskin_bass": -6.1,
+   "maneskin_drums": -5.9,
+   "maneskin_other": -9.1
+  },
+  "time_stretch": {
+   "applied": false,
+   "reason": "a vocal-only stem yields no trustworthy tempo, so no measured relationship justifies stretching"
+  },
+  "transposition": {
+   "applied_to": "every modern stem, so the band moves and the vocal is left alone",
+   "correlation": 0.4257,
+   "margin": 0.0644,
+   "minimum_margin": 0.05,
+   "peak_neighbourhood_semitones": 1.0,
+   "rejected_witnesses": {
+    "maneskin_other": {
+     "correlation": 0.5033,
+     "margin": 0.0011,
+     "semitones": -2.0
+    }
+   },
+   "runner_up": {
+    "correlation": 0.3613,
+    "semitones": -2.0
+   },
+   "search_resolution_semitones": 0.3333,
+   "semitones": 3.0,
+   "witness_chosen_by": "largest margin between its own peak and the best rival outside the peak's neighbourhood",
+   "witness_source": "maneskin_bass"
+  },
+  "vocal_window": {
+   "criterion": "densest voiced activity over one timeline length",
+   "start_seconds": 76.184671,
+   "sung_fraction": 0.8746
+  }
+ },
+ "gold_score_consulted": false,
+ "headline": "An arrangement was inferred from the A1-07 challenge alone and is now blind against the naive control. Nothing is claimed until the owner listens.",
+ "kind": "earcrate_a1_07_public_inference_receipt",
+ "leak_disclosed": {
+  "exploited": false,
+  "leak": "the challenge publishes source roles, and one of them is named protected_incumbent_compound, which tells an inference that a previously reviewed object is available",
+  "why_disclosed": "a blind whose weakness is not stated is worse than a weaker blind that is"
+ },
+ "measurements": {
+  "four_seasons_vocals": {
+   "active_fraction": 0.6352,
+   "chroma_entropy": 3.5426,
+   "seconds": 186.122,
+   "tempo_bpm": 123.047
+  },
+  "maneskin_bass": {
+   "active_fraction": 0.7468,
+   "chroma_entropy": 3.5371,
+   "seconds": 195.527,
+   "tempo_bpm": 135.999
+  },
+  "maneskin_drums": {
+   "active_fraction": 0.7512,
+   "chroma_entropy": 3.5503,
+   "seconds": 195.527,
+   "tempo_bpm": 135.999
+  },
+  "maneskin_other": {
+   "active_fraction": 0.7754,
+   "chroma_entropy": 3.5311,
+   "seconds": 195.527,
+   "tempo_bpm": 135.999
+  }
+ },
+ "receipt_sha256": "7ee5c654f971e9437388538febd0a97ba4ff0c1eb7a39d0ecf0657c178c89a54",
+ "review": {
+  "acceptance": {
+   "candidate_must_beat_control": true,
+   "least_bad_does_not_pass": true
+  },
+  "assignment_sha256": "6fa83ce9766da06bafc8843e9463727a2fe2e3e974e3198dcd02f7ec387bd8e6",
+  "candidate_score_sha256": "8a9884dca8f765add796f720d8ba368c39a2e735401dc82258dc1e9fb0ec899e",
+  "choices": [
+   "A",
+   "B",
+   "tie",
+   "reject_all",
+   "abstain"
+  ],
+  "control_score_sha256": "80515df5be48468a840e839aed37b81897ea5e2a8a259b9c560b6c53ca3426b8",
+  "dimensions": [
+   "one-band coherence",
+   "lead vocal authority",
+   "pulse and backbeat lock",
+   "percussion impact",
+   "harmonic stability",
+   "phrase freedom",
+   "transform and separation artifacts",
+   "desire to hear the next section"
+  ],
+  "option_map_withheld": true
+ },
+ "schema_version": 1,
+ "sources": {
+  "excluded": [
+   "gold_v6_reviewed_compound"
+  ],
+  "exclusion_reason": "a previously reviewed compound is partly the answer, and the control does not have it either; excluding it makes candidate and control differ in arrangement alone",
+  "named_by_challenge": 5,
+  "used": [
+   "four_seasons_vocals",
+   "maneskin_bass",
+   "maneskin_drums",
+   "maneskin_other"
+  ]
+ },
+ "track_id": "A1-07"
+}

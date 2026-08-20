@@ -1,0 +1,280 @@
+{
+ "assignment_sha256": "6fa83ce9766da06bafc8843e9463727a2fe2e3e974e3198dcd02f7ec387bd8e6",
+ "attribution": {
+  "machine_analysis": [
+   "gold_comparison"
+  ],
+  "note": "the comparison below is a post-verdict analytical finding. It is not attributable to the owner, and no score in it was given by anyone",
+  "owner_words": [
+   "owner_notes",
+   "owner_note_addendum.owner_note"
+  ]
+ },
+ "authority": {
+  "candidate_lineage": "terminated",
+  "challenge_still_open": true,
+  "moves_album_counter": false,
+  "rights_or_release_permission": false,
+  "system_reference_completed": false,
+  "track_still_accepted_as_album_master": true
+ },
+ "boundary": {
+  "option_map_exported": false,
+  "private_paths_included": false,
+  "source_audio_exported": false
+ },
+ "candidate_beat_control": false,
+ "gold_comparison": {
+  "balance_measured_in": "source integrated loudness plus clip gain, relative to the lead",
+  "candidate_clip_count": 4,
+  "candidate_profile": {
+   "four_seasons_vocals": {
+    "clips": 1,
+    "gain_db": [
+     0.0
+    ],
+    "pitch_semitones": [
+     0.0
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   },
+   "maneskin_bass": {
+    "clips": 1,
+    "gain_db": [
+     -6.1
+    ],
+    "pitch_semitones": [
+     3.0
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   },
+   "maneskin_drums": {
+    "clips": 1,
+    "gain_db": [
+     -5.9
+    ],
+    "pitch_semitones": [
+     3.0
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   },
+   "maneskin_other": {
+    "clips": 1,
+    "gain_db": [
+     -9.1
+    ],
+    "pitch_semitones": [
+     3.0
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   }
+  },
+  "findings": [
+   {
+    "assessment": "near",
+    "candidate_db_under_lead": 0.0,
+    "candidate_is_louder_by_db": 0.0,
+    "decision": "balance",
+    "gold_db_under_lead": 0.0,
+    "measured_in": "source loudness plus clip gain, against the lead",
+    "source_id": "four_seasons_vocals"
+   },
+   {
+    "assessment": "coarser",
+    "candidate_clips": 1,
+    "decision": "granularity",
+    "gold_clips": 2,
+    "source_id": "four_seasons_vocals"
+   },
+   {
+    "assessment": "near",
+    "candidate": [
+     3.0
+    ],
+    "decision": "pitch",
+    "gold": [
+     2.8
+    ],
+    "source_id": "maneskin_bass"
+   },
+   {
+    "assessment": "near",
+    "candidate_db_under_lead": -7.0,
+    "candidate_is_louder_by_db": 1.9,
+    "decision": "balance",
+    "gold_db_under_lead": -8.9,
+    "measured_in": "source loudness plus clip gain, against the lead",
+    "source_id": "maneskin_bass"
+   },
+   {
+    "assessment": "coarser",
+    "candidate_clips": 1,
+    "decision": "granularity",
+    "gold_clips": 15,
+    "source_id": "maneskin_bass"
+   },
+   {
+    "assessment": "wrong",
+    "candidate": [
+     3.0
+    ],
+    "decision": "pitch",
+    "gold": [
+     0.0
+    ],
+    "source_id": "maneskin_drums"
+   },
+   {
+    "assessment": "near",
+    "candidate_db_under_lead": -6.0,
+    "candidate_is_louder_by_db": 1.1,
+    "decision": "balance",
+    "gold_db_under_lead": -7.1,
+    "measured_in": "source loudness plus clip gain, against the lead",
+    "source_id": "maneskin_drums"
+   },
+   {
+    "assessment": "coarser",
+    "candidate_clips": 1,
+    "decision": "granularity",
+    "gold_clips": 12,
+    "source_id": "maneskin_drums"
+   },
+   {
+    "assessment": "near",
+    "candidate": [
+     3.0
+    ],
+    "decision": "pitch",
+    "gold": [
+     2.8
+    ],
+    "source_id": "maneskin_other"
+   },
+   {
+    "assessment": "wrong",
+    "candidate_db_under_lead": -12.0,
+    "candidate_is_louder_by_db": 3.9,
+    "decision": "balance",
+    "gold_db_under_lead": -15.9,
+    "measured_in": "source loudness plus clip gain, against the lead",
+    "source_id": "maneskin_other"
+   },
+   {
+    "assessment": "coarser",
+    "candidate_clips": 1,
+    "decision": "granularity",
+    "gold_clips": 18,
+    "source_id": "maneskin_other"
+   }
+  ],
+  "gold_clip_count": 48,
+  "gold_profile": {
+   "four_seasons_vocals": {
+    "clips": 2,
+    "gain_db": [
+     -5.39
+    ],
+    "pitch_semitones": [
+     0.0
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   },
+   "gold_v6_reviewed_compound": {
+    "clips": 1,
+    "gain_db": [
+     0.0
+    ],
+    "pitch_semitones": [
+     0.0
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   },
+   "maneskin_bass": {
+    "clips": 15,
+    "gain_db": [
+     -16.39,
+     -13.39
+    ],
+    "pitch_semitones": [
+     2.8
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   },
+   "maneskin_drums": {
+    "clips": 12,
+    "gain_db": [
+     -12.39
+    ],
+    "pitch_semitones": [
+     0.0
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   },
+   "maneskin_other": {
+    "clips": 18,
+    "gain_db": [
+     -25.39,
+     -21.39,
+     -18.39
+    ],
+    "pitch_semitones": [
+     2.8
+    ],
+    "tempo_scale": [
+     1.0
+    ]
+   }
+  },
+  "performed_after_verdict": true,
+  "permitted_because": "a verdict exists; the challenge forbids measuring gold similarity before submission",
+  "sources_only_in_candidate": [],
+  "sources_only_in_gold": [
+   "gold_v6_reviewed_compound"
+  ]
+ },
+ "headline": "The owner chose the control. The inferred candidate lineage terminates and the system reference stays open at zero of seven.",
+ "kind": "earcrate_a1_07_public_inference_result_receipt",
+ "ledger_sha256": "2bca44b9dc116f18d614534f62983894de62b3f2fc98dd975fcb95c6ae3ed644",
+ "numeric_dimension_scores_returned": false,
+ "owner_note_addendum": {
+  "addendum_sha256": "a2f11baa390a19886605b293db15b1137bd45c740f5f1ec79cc097f228697ac4",
+  "authorizes_new_attempt": false,
+  "changes_adjudication": false,
+  "changes_dimensions": false,
+  "kind": "earcrate_reference_zero_owner_note_addendum",
+  "owner_note": "B was better because I could actually hear the instrumental. It functioned as the band and the result read as music. The inferred candidate did not preserve enough instrumental presence.",
+  "revealed_role": "control",
+  "review_ledger_sha256": "2bca44b9dc116f18d614534f62983894de62b3f2fc98dd975fcb95c6ae3ed644",
+  "schema_version": 1,
+  "track_id": "A1-07",
+  "verdict": "B"
+ },
+ "owner_notes": [
+  "Owner verdict, verbatim: i can actually hear the background... it is music... not quite how i would sync it, but the potential is there",
+  "No numeric dimension scores were returned and none were invented; the dimensions map is deliberately empty rather than filled in on the owner's behalf.",
+  "The comment addresses synchronisation and placement rather than material or balance."
+ ],
+ "receipt_sha256": "8517ba04a412f649c66afbe825677a65296b299031a30abeacb27f6cd59d4cef",
+ "schema_version": 1,
+ "submission_sha256": "d247ee604acbe2fbe932087087160edfc840d4f3125ce768a84d4eb77bd3baed",
+ "track_id": "A1-07",
+ "verdict": "control_wins",
+ "which_letter_carried_which_object": "withheld; the mapping stays with the owner"
+}

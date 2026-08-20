@@ -1,0 +1,63 @@
+{
+ "commission": "EC-S1-01",
+ "crate": {
+  "accepted": 20,
+  "aligned": 20,
+  "by_voice": {
+   "chops": 10,
+   "hits": 10
+  },
+  "considered": 20,
+  "screened_out": 0,
+  "taste_profile": "girl_talk_v1",
+  "trimmed_to_seconds": {
+   "chops": 0.55,
+   "hits": 0.45
+  }
+ },
+ "gain_db": {
+  "chops": -9.0,
+  "hits": -11.0
+ },
+ "grid": {
+  "bar_seconds": 2.786394558,
+  "beat_interval_iqr_percent": 3.333,
+  "beat_seconds": 0.696598639,
+  "first_beat_seconds": 0.04644,
+  "measured_bpm": 86.133,
+  "taken_from": "the generated drum material, because that is what everything plays to",
+  "tracker_bpm": 86.133
+ },
+ "midi": {
+  "chops": 40,
+  "hits": 8,
+  "sha256": "0367ccaeba79a60eca12dc7f7352cd8c41ec8deaceb474d98c8535bd4c5edf51"
+ },
+ "render": {
+  "events": 48,
+  "sha256": "69034665f524cfb4f025006c79da7c52ccd7bada423c6656efaba67eb54af6bf"
+ },
+ "rights": "atoms come from the owner's own commercial library; renders stay local and this version is not a rights-clear object",
+ "selected": [
+  {
+   "atoms": [
+    "atm_322bc2dd4a58a71f6ae5"
+   ],
+   "mode": "pitched",
+   "role_hint": "vocal",
+   "slot": "slot_613c4e88eaba553ed9b45f12"
+  },
+  {
+   "atoms": [
+    "atm_164cf28d1062cbf56ed7"
+   ],
+   "mode": "trigger",
+   "role_hint": "drums",
+   "slot": "slot_e05f6e3428fad4d3bebf3e8d"
+  }
+ ],
+ "stems": {
+  "0001_Vocal_chops": "f9b6b2dc13215bf3b8f4981e835f1f716240f9fc31a9045c8373e7e164cbb297",
+  "0002_Hits": "c616dd54fdeac73b3d8fed9b56337ff450a779b2c1ab4716f015ce1f0e637dbc"
+ }
+}

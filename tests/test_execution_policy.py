@@ -141,3 +141,14 @@ def test_a_report_without_an_admissible_artifact_ends_with_work_already_running(
     assert "ends with the next action already running" in " ".join(ending.split())
     for refusal in ("say the word", "what do you want"):
         assert refusal in ending, f"{refusal!r} is no longer refused by name"
+
+
+def test_the_rule_states_the_limit_it_creates():
+    """A system reference is a declared authority state and is not a track state, so this
+    rule excludes it. Better named than found by the lane it stops."""
+    admission = (AGENTS.read_text(encoding="utf-8")
+                 .split("### Owner review admission", 1)[1].split("\n### ", 1)[0])
+    flat = " ".join(admission.split())
+    assert "completed system reference is a declared authority state" in flat
+    assert "it is not a track state" in flat
+    assert "has not been taken" in flat

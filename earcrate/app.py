@@ -4486,6 +4486,8 @@ class EarcrateCore:
             total_bars = max(total_bars, int(sec["bar_start"]) + int(sec["bars"]))
         total_len = int(math.ceil(total_bars * 4 * 60.0 / bpm * sr))
         mix = np.zeros(total_len, dtype=np.float32)
+        stem_export = bool((arrangement.get("params") or {}).get("stem_export"))
+        stem_bufs: Dict[str, np.ndarray] = {}
         audio_cache: Dict[str, np.ndarray] = {}
         transform_cache: Dict[str, np.ndarray] = {}
         transform_cache_dir = c.agent_root / "cache" / "transforms" / ENGINE_VERSION
@@ -4691,6 +4693,7 @@ class EarcrateCore:
 
         def render_section_deck(sidx: int, sec: Dict[str, Any], tail_len: int) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
             sec_len = int(round(int(sec["bars"]) * 4 * 60.0 / bpm * sr))
+            sec_abs = int(round(int(sec["bar_start"]) * 4 * 60.0 / bpm * sr))
             deck_len = sec_len + max(0, int(tail_len))
             vocal_present = any(layer.get("role") == "vocal" for layer in sec.get("layers", []))
             section_has_bass = any(layer.get("role") == "bass" for layer in sec.get("layers", []))
@@ -4799,6 +4802,13 @@ class EarcrateCore:
                     if active_end > active_start:
                         rendered = clip[: active_end - active_start] * gain
                         section_deck[active_start:active_end] += rendered
+                        if stem_export:
+                            _g = deck_group_for_role(role_name)
+                            _buf = stem_bufs.setdefault(_g, np.zeros(total_len, dtype=np.float32))
+                            _s = sec_abs + active_start
+                            _e = min(total_len, _s + rendered.size)
+                            if _e > _s:
+                                _buf[_s:_e] += rendered[: _e - _s]
                         if tail_participates:
                             tail_start = max(0, sec_len - active_start)
                             tail_audio = clip[tail_start:tail_start + tail_len] * gain
@@ -4966,6 +4976,14 @@ class EarcrateCore:
             db.commit()
             return {"type": "render_rejected", "path": None, "report": str(q_report), "quality_gate": report.get("quality_gate"), "drop_count": report["drop_count"], "failure_kind": "post_render_quality_gate", "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": selected_layers, "presented": False}
         sf.write(str(dst), mix, sr, subtype="PCM_24")
+        if stem_export and stem_bufs:
+            _stems_rec = {}
+            for _g in sorted(stem_bufs):
+                _sp = dst.with_name(dst.stem + f".stem_{_g}.wav")
+                sf.write(str(_sp), stem_bufs[_g].astype(np.float32), sr, subtype="PCM_24")
+                _stems_rec[_g] = str(_sp)
+            report["stems"] = {"note": "pre-blend, pre-limiter, pre-LUFS role-group captures; observational only",
+                                "paths": _stems_rec}
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         write_wav_info_chunk(dst, {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "params_sha": sha256_text(json_dumps(arrangement.get("params") or {})), "analyzer_version": ANALYZER_VERSION, "render_timestamp": report["render_timestamp"]})
         db.execute("UPDATE mashups SET render_path=?, engine_version=?, arrangement_sha=?, render_report_path=? WHERE id=?", (str(dst), ENGINE_VERSION, arr_sha, str(report_path), mashup_id))

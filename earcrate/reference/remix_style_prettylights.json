@@ -1,0 +1,15 @@
+{
+  "artist": "Pretty Lights",
+  "aka": ["Derek Vincent Smith"],
+  "genre": "electro-soul / sample-based glitch-hop ('Electro Hip-Hop Soul')",
+  "remix_method": "collage of chopped vintage soul/funk/jazz over hip-hop breakbeats; multiple samples pitched/re-tuned to fit; post-2013 records live->tape->vinyl then re-samples to fake the 'off an old record' feel",
+  "tempo_bpm": {"typical_range": [85, 110], "cluster": [90, 100], "half_time_feel": true, "note": "high-BPM DB entries are OTHER artists' DnB/dubstep remixes, not his style"},
+  "groove": {"feel": "swung hip-hop / boom-bap breakbeat", "swing": "moderate-to-heavy 16th swing, human/sampled timing", "syncopation": "high; chopped stabs off-grid + glitch stutters"},
+  "spectral_signature": {"low_end": "big warm round analog low end (fat kick/bass), not modern sub-forward", "mids": "warm forward soul mids are the emotional core (vocal chops, horns, Rhodes)", "highs_air": "ROLLED-OFF / softened; vinyl crackle, hiss, tape saturation instead of crisp air", "overall": "warm/dark, nostalgic, analog"},
+  "foreground_policy": "chopped soul vocal hook (or lead phrase) is foreground; in remix context a target vocal sits there",
+  "arrangement": "filtered lo-fi intro motif -> breakbeat drop -> vocal-chop groove -> filter-sweep breakdown to lone sample/keys -> soulful swell rebuild",
+  "harvestability": "highly decomposable collage of loop-friendly chunks; but tape/vinyl glue means stems bleed into one tonal family",
+  "engine_mapping": {"persona": "remix_prettylights_v1", "target_low200_share": 0.34, "target_high3000_share": 0.12, "target_rms_std_db": 4.5, "note": "estimates from sonic character, not measured; vinyl/tape rolled-off highs -> deliberately LOWER high3000 target than any bright modern mix; warm analog low end weighted to bass/kick not deep sub"},
+  "sources": ["en.wikipedia.org/wiki/Pretty_Lights", "westword.com Derek Vincent Smith Q&A", "raverrafting.com interviews", "uaudio.com Joel Hamilton", "songbpm.com Pretty Lights"],
+  "confidence": "medium-high (method/character high; tempo medium; key low; exact shares inferred)"
+}

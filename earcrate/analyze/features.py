@@ -1,6 +1,7 @@
 from earcrate.core.deps import *
 from earcrate.core.deps import _dt
 from earcrate.core.config import *
+from earcrate.analyze.beat_features import beat_state_features
 def _clamp01(x: float) -> float:
     return 0.0 if x < 0.0 else (1.0 if x > 1.0 else float(x))
 
@@ -63,6 +64,107 @@ def _estimate_sections(y: np.ndarray, sr: int, beats: np.ndarray, downbeats: np.
     return sections
 
 
+def song_recurrence_curve(y: np.ndarray, sr: int, beat_times: Optional[np.ndarray] = None,
+                          max_cols: int = 1500) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Beat-synchronous chroma self-similarity recurrence (Bartsch-Wakefield /
+    Cooper-Foote thumbnailing).
+
+    Answers, per beat-column of the SONG, "how strongly does this moment recur at
+    OTHER, non-adjacent regions of the same track?" -- the deterministic definition
+    of a hook: the chorus comes back, the drop returns, the phrase repeats 3-4x.
+
+    Returns (col_start, col_end, recur):
+      col_start[k], col_end[k]  wall-clock span (seconds) of column k
+      recur[k] in [0,1]         off-diagonal recurrence, per-song relative
+                                (the maximally-recurring column == 1.0)
+
+    Method: L2-normalised chroma is pooled into beat-synchronous columns; a cosine
+    self-similarity matrix is thresholded and its main-diagonal band (adjacent
+    moments, which are trivially self-similar) is zeroed; each column's recurrence
+    is the row-sum of the remaining off-diagonal match strength.
+
+    Efficiency: the SSM is O(n_cols^2). n_cols is bounded by beat count (a few
+    hundred for a pop song); columns beyond ``max_cols`` are merged by even
+    subsampling of the beat grid (median-pooled), so the matrix never exceeds
+    max_cols^2 regardless of track length. Fully deterministic: same PCM -> same
+    numbers (no RNG, no clock)."""
+    dur = float(y.size) / float(sr)
+    if y.size < sr or dur < 2.0 or float(np.max(np.abs(y))) < 1e-6:
+        z = np.zeros(0, dtype=np.float32)
+        return z, z, z
+    hop = 512
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=hop)
+    n_frames = chroma.shape[1]
+    if beat_times is None:
+        try:
+            _, bf = librosa.beat.beat_track(y=y, sr=sr, units="frames", trim=False)
+            beat_times = librosa.frames_to_time(bf, sr=sr)
+        except Exception:
+            beat_times = np.zeros(0, dtype=np.float64)
+    beat_times = np.asarray(beat_times, dtype=np.float64)
+    beat_times = beat_times[(beat_times > 0.05) & (beat_times < dur - 0.02)]
+    if beat_times.size >= 8:
+        edges = np.concatenate(([0.0], np.sort(beat_times), [dur]))
+    else:
+        # No usable beat grid: fall back to a fixed ~0.5 s column grid so the
+        # recurrence definition still applies to ambient / beatless material.
+        edges = np.concatenate((np.arange(0.0, dur, 0.5), [dur]))
+    edges = np.unique(edges)
+    if edges.size - 1 > max_cols:
+        keep = np.unique(np.linspace(0, edges.size - 1, max_cols + 1).round().astype(int))
+        edges = edges[keep]
+    n_cols = edges.size - 1
+    if n_cols < 4:
+        z = np.zeros(0, dtype=np.float32)
+        return z, z, z
+    frame_edges = np.clip(np.round(edges * sr / hop).astype(int), 0, n_frames)
+    cols = np.zeros((12, n_cols), dtype=np.float32)
+    for k in range(n_cols):
+        f0, f1 = int(frame_edges[k]), int(frame_edges[k + 1])
+        if f1 <= f0:
+            f1 = min(n_frames, f0 + 1)
+        cols[:, k] = np.median(chroma[:, f0:f1], axis=1) if f1 > f0 else 0.0
+    col_start = edges[:-1].astype(np.float32)
+    col_end = edges[1:].astype(np.float32)
+    norm = np.linalg.norm(cols, axis=0, keepdims=True) + 1e-9
+    cn = cols / norm
+    ssm = cn.T @ cn  # cosine similarity in [0, 1] for non-negative chroma
+    # Zero the main-diagonal band: adjacent columns are trivially similar and are
+    # NOT evidence of recurrence. Band width ~= a couple of seconds of columns.
+    col_dur = np.diff(edges)
+    med = float(np.median(col_dur)) if col_dur.size else 0.5
+    band = max(1, int(round(2.0 / max(med, 1e-3))))
+    thr = 0.60  # cosine floor below which two columns are "not the same idea"
+    match = np.clip((ssm - thr) / (1.0 - thr), 0.0, 1.0).astype(np.float32)
+    for k in range(n_cols):
+        lo = max(0, k - band)
+        hi = min(n_cols, k + band + 1)
+        match[k, lo:hi] = 0.0
+    recur_raw = match.sum(axis=1)
+    peak = float(recur_raw.max())
+    recur = (recur_raw / peak).astype(np.float32) if peak > 1e-9 else np.zeros(n_cols, dtype=np.float32)
+    return col_start, col_end, recur
+
+
+def segment_recurrence(col_start: np.ndarray, col_end: np.ndarray, recur: np.ndarray,
+                       a: float, b: float) -> float:
+    """Duration-weighted mean recurrence of the columns overlapping segment [a,b].
+
+    Maps the song-level recurrence curve down to a single value the per-segment
+    scorer can fold into hook_score. Returns 0.0 when the curve is empty or the
+    segment lands outside it (backward-compatible no-op)."""
+    if recur.size == 0 or b <= a:
+        return 0.0
+    lo = np.minimum(col_end, b)
+    hi = np.maximum(col_start, a)
+    overlap = np.clip(lo - hi, 0.0, None)
+    tot = float(overlap.sum())
+    if tot <= 1e-9:
+        idx = int(np.argmin(np.abs((col_start + col_end) * 0.5 - (a + b) * 0.5)))
+        return float(recur[idx])
+    return float(np.sum(overlap * recur) / tot)
+
+
 def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
     """Pure DSP: PCM in, feature dict out. No DB, no self, no file I/O.
 
@@ -72,7 +174,7 @@ def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
         return {"bpm": 120.0, "bpm_confidence": 0.0, "beats": np.array([], dtype=np.float32),
                 "downbeats": np.array([], dtype=np.float32), "key_root": 0, "key_mode": 1,
                 "key_confidence": 0.0, "loudness_lufs": -70.0, "energy": 0.0,
-                "vocal_likelihood": 0.0, "sections": []}
+                "vocal_likelihood": 0.0, "sections": [], "beat_state": {}}
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo_val = librosa.feature.tempo(onset_envelope=onset_env, sr=sr, aggregate=np.median)
     bpm = float(np.atleast_1d(tempo_val)[0])
@@ -99,9 +201,16 @@ def compute_pcm_features(y: np.ndarray, sr: int) -> Dict[str, Any]:
         loudness = float(20 * np.log10(max(1e-9, energy)))
     vocal_like = _vocal_likelihood(y, sr)
     sections = _estimate_sections(y, sr, beat_times, downbeats)
+    # Step-2 per-beat state (role activity/groove/local harmony/novelty). Guarded:
+    # a beat-state failure must never fail the whole file's analysis -- it degrades
+    # to {} and the region/transition layers fall back to grid-only anchors.
+    beat_state: Dict[str, Any] = {}
+    with contextlib.suppress(Exception):
+        beat_state = beat_state_features(y, sr, beat_times, downbeats)
     return {"bpm": bpm, "bpm_confidence": bpm_conf, "beats": beat_times, "downbeats": downbeats,
             "key_root": int(key_root), "key_mode": int(key_mode), "key_confidence": float(key_conf),
-            "loudness_lufs": loudness, "energy": energy, "vocal_likelihood": vocal_like, "sections": sections}
+            "loudness_lufs": loudness, "energy": energy, "vocal_likelihood": vocal_like,
+            "sections": sections, "beat_state": beat_state}
 
 
 def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -133,6 +242,7 @@ def analyze_file_worker(job: Dict[str, Any]) -> Dict[str, Any]:
             energy=np.float32(feats["energy"]), beats=feats["beats"].astype(np.float32),
             downbeats=feats["downbeats"].astype(np.float32),
             sections_json=json.dumps(feats["sections"], ensure_ascii=False),
+            beat_state_json=json.dumps(feats.get("beat_state") or {}, ensure_ascii=False),
             vocal_likelihood=np.float32(feats["vocal_likelihood"]),
             pcm_sha=pcm,
             pcm_scope=np.asarray("full"),

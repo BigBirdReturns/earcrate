@@ -1,0 +1,14 @@
+{
+  "artist": "Branchez",
+  "genre": "melodic/chill trap, future-club, soul-sampling hip-hop",
+  "remix_method": "single-source vocal bootleg: keep ONE lead vocal (+ often one melodic hook from the source), rebuild the instrumental in a melodic-trap style",
+  "tempo_bpm": {"typical_range": [130, 145], "half_time_feel": true, "confirmed": "High You Are remix 137 BPM"},
+  "groove": {"feel": "half-time trap hats over laid-back backbeat", "swing": "moderate humanized (drummer)", "syncopation": "restrained; lives in hat rolls + vocal-chop placement"},
+  "spectral_signature": {"low_end": "prominent 808 sub, restrained in chill remixes", "mids": "soulful synth/piano/keys + foreground vocal", "highs_air": "trap hats/rolls + light reverb; not harsh", "overall": "warm, mellow-soulful with bright hats"},
+  "foreground_policy": "source lead vocal stays foreground; synth/piano lead may share instrumental sections",
+  "arrangement": "vocal-led intro over piano -> 808 half-time drop -> breakdown strips to vocal+piano+reverb",
+  "harvestability": "highly decomposable modular layers (vocal, piano hook, trap kit, 808, pad); anchor = the single source vocal",
+  "engine_mapping": {"persona": "remix_branchez_v1", "target_low200_share": 0.34, "target_high3000_share": 0.16, "target_rms_std_db": 4.5, "note": "estimates from sonic character, not measured; brighter than Pretty Lights (trap hats), 808-sub-forward low end"},
+  "sources": ["runthetrap.com/2012 & 2014 interviews", "thissongissick.com", "thenewlofi.com", "tunebat.com High You Are Branchez Remix", "songbpm.com"],
+  "confidence": "medium (BPM/method high; spectral qualitative; exact shares inferred)"
+}

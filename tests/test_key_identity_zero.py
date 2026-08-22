@@ -100,14 +100,15 @@ def test_exact_slot_transform_and_pair_score_read_key_zero_identically():
 
 def test_source_pool_identity_distinguishes_C_from_unknown_key():
     key_c = _atom("same-source", 0)
-    unknown = _atom("same-source", None)
+    unknown_same_identity = _atom("same-source", None)
+    unknown_other_identity = _atom("other-source", None)
     c_projection = corrected_source_pool_projection([key_c])
-    unknown_projection = corrected_source_pool_projection([unknown])
+    unknown_projection = corrected_source_pool_projection([unknown_same_identity])
 
     assert c_projection[0]["key_root"] == 0
     assert unknown_projection[0]["key_root"] is None
-    assert corrected_source_pool_identity([key_c]) != corrected_source_pool_identity([unknown])
-    assert corrected_source_pool_identity([key_c, unknown]) == corrected_source_pool_identity([unknown, key_c])
+    assert corrected_source_pool_identity([key_c]) != corrected_source_pool_identity([unknown_same_identity])
+    assert corrected_source_pool_identity([key_c, unknown_other_identity]) == corrected_source_pool_identity([unknown_other_identity, key_c])
 
 
 def test_key_identity_policy_is_installed_on_engine():

@@ -3,10 +3,16 @@ __version__ = "0.8.27"
 # The split runtime historically imports common names through core.deps, while
 # their implementations live in core.util. Multi-island persistence and render
 # dispatch are real runtime paths, so make that import surface complete before
-# any CLI or planner module is loaded. This is an alias only: utility identity,
+# any CLI or planner module is loaded. These are aliases only: utility identity,
 # timestamps, source custody, and serialized plan authority are unchanged.
 from earcrate.core import deps as _core_deps
-from earcrate.core.util import now_utc as _now_utc, safe_name as _safe_name, ulidish as _ulidish
+from earcrate.core.util import (
+    arrangement_sha as _arrangement_sha,
+    now_utc as _now_utc,
+    safe_name as _safe_name,
+    ulidish as _ulidish,
+)
+_core_deps.arrangement_sha = _arrangement_sha
 _core_deps.now_utc = _now_utc
 _core_deps.safe_name = _safe_name
 _core_deps.ulidish = _ulidish
@@ -38,4 +44,4 @@ _functools.update_wrapper(_render_dispatch, _raw_single_deck)
 
 del _EarcrateCore, _install_key_identity, _install_island_set, _install_exact_pool_rotation, _functools
 del _render_dispatch, _single_deck, _raw_single_deck
-del _core_deps, _now_utc, _safe_name, _ulidish
+del _arrangement_sha, _core_deps, _now_utc, _safe_name, _ulidish

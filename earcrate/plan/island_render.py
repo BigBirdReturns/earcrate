@@ -93,7 +93,12 @@ def render_island_set(
     sample_rate = int(config.sample_rate)
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    scratch = Path(config.agent_root) / "runs" / f"island-render-{uuid.uuid4().hex}"
+    # The ordinary renderer accepts outputs only beneath working_root/renders.
+    # Segment renders are implementation details, but they still pass through
+    # that renderer and therefore must live inside the same validated root.
+    render_root = Path(config.working_root) / "renders"
+    render_root.mkdir(parents=True, exist_ok=True)
+    scratch = render_root / f".island-render-{uuid.uuid4().hex}"
     scratch.mkdir(parents=True, exist_ok=False)
     temp_ids: List[str] = []
     masters: List[Any] = []

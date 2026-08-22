@@ -3046,6 +3046,9 @@ class EarcrateCore:
         pool = list(deck.get("pool") or [])
         profile_data = load_tastespec(str(params.get("taste_profile") or "girl_talk_v1"))
         profile0 = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
+        _reuse_override = dict(params.get("reuse_policy_override") or {})
+        if _reuse_override:
+            profile0 = {**profile0, **_reuse_override}
         need_sources0 = sources_needed(target_seconds, float(profile0.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         deck_sources = int(((deck.get("diagnostics") or {}).get("have") or {}).get("sources", 0))
         if deck_sources and deck_sources < need_sources0:
@@ -3085,6 +3088,10 @@ class EarcrateCore:
         sparks = [x for x in pool if x.get("ear_role") in {"PICKUP_FILL","DROP_HIT","TRANSITION_TAIL","TEXTURE","VOX_SHOUT"}]
         for xs in (foreground, floors, basses, sparks):
             xs.sort(key=lambda x: (float(x.get("score") or 0.0), float(x.get("hook_score") or 0.0), str(x.get("id"))), reverse=True)
+        _rs = dict(params.get("recurrence_scores") or {})
+        if params.get("foreground_rank_recurrence") and _rs:
+            foreground.sort(key=lambda x: (float(_rs.get(str(x.get("atom_id")), 0.0)),
+                                           float(x.get("score") or 0.0), str(x.get("id"))), reverse=True)
         recent_sources: List[str] = []
         recent_loop_ids: List[str] = []
         prev_sec: Optional[Dict[str, Any]] = None
@@ -3116,6 +3123,8 @@ class EarcrateCore:
         favorite_atoms -= vetoed_atoms
         source_use: Dict[str, int] = {}
         profile = TASTE_PROFILES.get(str(params.get("taste_profile") or "girl_talk_v1"), TASTE_PROFILES["girl_talk_v1"])
+        if _reuse_override:
+            profile = {**profile, **_reuse_override}
         need_sources = sources_needed(target_seconds, float(profile.get("source_seconds") or DEFAULT_SOURCE_SECONDS))
         max_events_per_source = max(2, int(math.ceil((total_bars / 4.0) / max(1, need_sources))) + 1)
         def source_of(x: Dict[str, Any]) -> str:
@@ -4486,6 +4495,8 @@ class EarcrateCore:
             total_bars = max(total_bars, int(sec["bar_start"]) + int(sec["bars"]))
         total_len = int(math.ceil(total_bars * 4 * 60.0 / bpm * sr))
         mix = np.zeros(total_len, dtype=np.float32)
+        stem_export = bool((arrangement.get("params") or {}).get("stem_export"))
+        stem_bufs: Dict[str, np.ndarray] = {}
         audio_cache: Dict[str, np.ndarray] = {}
         transform_cache: Dict[str, np.ndarray] = {}
         transform_cache_dir = c.agent_root / "cache" / "transforms" / ENGINE_VERSION
@@ -4691,6 +4702,7 @@ class EarcrateCore:
 
         def render_section_deck(sidx: int, sec: Dict[str, Any], tail_len: int) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
             sec_len = int(round(int(sec["bars"]) * 4 * 60.0 / bpm * sr))
+            sec_abs = int(round(int(sec["bar_start"]) * 4 * 60.0 / bpm * sr))
             deck_len = sec_len + max(0, int(tail_len))
             vocal_present = any(layer.get("role") == "vocal" for layer in sec.get("layers", []))
             section_has_bass = any(layer.get("role") == "bass" for layer in sec.get("layers", []))
@@ -4774,10 +4786,17 @@ class EarcrateCore:
                     reaches_section_end = active_start + active_len >= sec_len - 8
                     tail_participates = bool(tail_len > 32 and reaches_section_end)
                     render_len = active_len + (tail_len if tail_participates else 0)
-                    clip = tile_with_crossfade(clip, render_len, sr)
-                    clip = simple_fft_filter(clip, sr, role_name, vocal_present, section_has_bass)
-                    clip = normalize_layer_rms(clip, role_name)
-                    clip = tame_short_overlay(clip, sr, role_name, active_bars)
+                    _phrase_once = bool((arrangement.get("params") or {}).get("phrase_playback")) and role_name == "vocal"
+                    if _phrase_once:
+                        from earcrate.deck.dsp import phrase_once_playback as _pop
+                        clip = simple_fft_filter(clip, sr, role_name, vocal_present, section_has_bass)
+                        clip = normalize_layer_rms(clip, role_name)
+                        clip = _pop(clip, render_len, sr)
+                    else:
+                        clip = tile_with_crossfade(clip, render_len, sr)
+                        clip = simple_fft_filter(clip, sr, role_name, vocal_present, section_has_bass)
+                        clip = normalize_layer_rms(clip, role_name)
+                        clip = tame_short_overlay(clip, sr, role_name, active_bars)
 
                     fade_in = True; fade_out = not tail_participates
                     if active_start == 0 and sidx > 0:
@@ -4792,13 +4811,21 @@ class EarcrateCore:
                         for nl in nxt.get("layers", []):
                             if nl.get("loop_id") == layer.get("loop_id") and int(nl.get("bar_offset") or 0) == 0:
                                 fade_out = False; break
-                    clip = apply_edge_fades(clip, sr, fade_in=fade_in, fade_out=fade_out, fade_ms=14)
+                    if not _phrase_once:
+                        clip = apply_edge_fades(clip, sr, fade_in=fade_in, fade_out=fade_out, fade_ms=14)
                     layer_gain_db = cap_overlay_gain_db(float(layer.get("gain_db", -8.0)), role_name, active_bars)
                     gain = 10 ** (layer_gain_db / 20.0)
                     active_end = min(deck_len, active_start + clip.size)
                     if active_end > active_start:
                         rendered = clip[: active_end - active_start] * gain
                         section_deck[active_start:active_end] += rendered
+                        if stem_export:
+                            _g = deck_group_for_role(role_name)
+                            _buf = stem_bufs.setdefault(_g, np.zeros(total_len, dtype=np.float32))
+                            _s = sec_abs + active_start
+                            _e = min(total_len, _s + rendered.size)
+                            if _e > _s:
+                                _buf[_s:_e] += rendered[: _e - _s]
                         if tail_participates:
                             tail_start = max(0, sec_len - active_start)
                             tail_audio = clip[tail_start:tail_start + tail_len] * gain
@@ -4966,6 +4993,14 @@ class EarcrateCore:
             db.commit()
             return {"type": "render_rejected", "path": None, "report": str(q_report), "quality_gate": report.get("quality_gate"), "drop_count": report["drop_count"], "failure_kind": "post_render_quality_gate", "engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seconds": round(mix.size / sr, 3), "sections": len(sections), "layers": selected_layers, "presented": False}
         sf.write(str(dst), mix, sr, subtype="PCM_24")
+        if stem_export and stem_bufs:
+            _stems_rec = {}
+            for _g in sorted(stem_bufs):
+                _sp = dst.with_name(dst.stem + f".stem_{_g}.wav")
+                sf.write(str(_sp), stem_bufs[_g].astype(np.float32), sr, subtype="PCM_24")
+                _stems_rec[_g] = str(_sp)
+            report["stems"] = {"note": "pre-blend, pre-limiter, pre-LUFS role-group captures; observational only",
+                                "paths": _stems_rec}
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         write_wav_info_chunk(dst, {"engine_version": ENGINE_VERSION, "arrangement_sha": arr_sha, "seed": arrangement.get("seed"), "params_sha": sha256_text(json_dumps(arrangement.get("params") or {})), "analyzer_version": ANALYZER_VERSION, "render_timestamp": report["render_timestamp"]})
         db.execute("UPDATE mashups SET render_path=?, engine_version=?, arrangement_sha=?, render_report_path=? WHERE id=?", (str(dst), ENGINE_VERSION, arr_sha, str(report_path), mashup_id))

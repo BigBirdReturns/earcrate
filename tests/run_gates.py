@@ -33,7 +33,15 @@ for _thread_var in (
     # oversubscribe hard enough to segfault on ordinary CI/local machines.
     os.environ[_thread_var] = "1"
 
-MODULES = ("test_gates", "test_tastespec_vertical")
+MODULES = (
+    "test_gates",
+    "test_tastespec_vertical",
+    "test_island_set",
+    "test_island_set_import",
+    "test_island_runtime_paths",
+    "test_exact_pool_rotation",
+    "test_key_identity_zero",
+)
 
 
 def _cases():

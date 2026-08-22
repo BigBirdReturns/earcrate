@@ -38,6 +38,7 @@ MODULES = (
     "test_tastespec_vertical",
     "test_island_set",
     "test_island_set_import",
+    "test_exact_pool_rotation",
 )
 
 

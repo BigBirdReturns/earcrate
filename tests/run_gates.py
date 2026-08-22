@@ -39,6 +39,7 @@ MODULES = (
     "test_island_set",
     "test_island_set_import",
     "test_exact_pool_rotation",
+    "test_key_identity_zero",
 )
 
 

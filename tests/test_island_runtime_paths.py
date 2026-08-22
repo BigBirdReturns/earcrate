@@ -2,9 +2,12 @@
 
 The private Proof-005 fixture reached plan acceptance, then exposed that the
 persist and render-dispatch paths imported utility functions from an incomplete
-runtime surface. These gates execute those paths rather than inspecting them.
-The repository runner calls tests directly, so both witnesses accept only the
-supported ``tmp_path`` fixture.
+runtime surface. A later private run exposed a second runtime-only defect: the
+island dispatcher put segment WAVs beneath agent_root even though the ordinary
+renderer accepts destinations only beneath working_root/renders. These gates
+execute the real paths and enforce the real root relationship rather than
+letting a permissive stub hide it. The repository runner calls tests directly,
+so both witnesses accept only the supported ``tmp_path`` fixture.
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ class _RuntimeCore:
         )
         self.config.working_root.mkdir(parents=True, exist_ok=True)
         self.config.agent_root.mkdir(parents=True, exist_ok=True)
+        self.rendered_segment_paths = []
         self.db = sqlite3.connect(":memory:")
         self.db.row_factory = sqlite3.Row
         self.db.execute(_SCHEMA)
@@ -77,8 +81,16 @@ class _RuntimeCore:
         return str(path)
 
     def render_mashup(self, mashup_id, destination):
-        """Synthetic stand-in for the existing single-deck renderer."""
-        destination = Path(destination)
+        """Stand-in that enforces the ordinary renderer's real destination law."""
+        destination = Path(destination).resolve()
+        render_root = (self.config.working_root / "renders").resolve()
+        try:
+            destination.relative_to(render_root)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"render destination escapes working render root: {destination}"
+            ) from exc
+        self.rendered_segment_paths.append(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         samples = np.linspace(-0.25, 0.25, self.config.sample_rate, dtype=np.float32)
         sf.write(str(destination), samples, self.config.sample_rate, subtype="PCM_24")
@@ -142,6 +154,8 @@ def test_island_render_dispatch_executes_real_runtime_imports(tmp_path):
 
     install_island_render_dispatch(Core)
     core = Core(tmp_path / "render")
+    assert core.config.working_root.parent == core.config.agent_root.parent
+    assert core.config.working_root != core.config.agent_root
     destination = core.config.working_root / "renders" / "runtime-island.wav"
     segment = {
         "bpm": 120.0,
@@ -178,3 +192,9 @@ def test_island_render_dispatch_executes_real_runtime_imports(tmp_path):
     parent = core.conn().execute("SELECT render_report_path FROM mashups WHERE id='parent'").fetchone()
     assert parent is not None and Path(parent["render_report_path"]).exists()
     assert core.conn().execute("SELECT COUNT(*) FROM mashups WHERE id LIKE 'isl_%'").fetchone()[0] == 0
+
+    render_root = (core.config.working_root / "renders").resolve()
+    assert core.rendered_segment_paths, "dispatcher must invoke the ordinary renderer"
+    assert all(path.is_relative_to(render_root) for path in core.rendered_segment_paths)
+    assert all(not path.exists() for path in core.rendered_segment_paths)
+    assert all(not path.parent.exists() for path in core.rendered_segment_paths)

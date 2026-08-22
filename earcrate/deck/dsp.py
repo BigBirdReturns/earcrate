@@ -327,3 +327,24 @@ def pitch_distance(a: int, b: int) -> int:
     if d > 6:
         d -= 12
     return int(d)
+
+
+def phrase_once_playback(y: np.ndarray, render_len: int, sr: int = DEFAULT_SAMPLE_RATE) -> np.ndarray:
+    """Proof-001 phrase law: the span plays ONCE — preserved attack (5 ms ramp),
+    natural 300 ms raised-cosine release at its own end, no retriggers, no
+    tiling. A span shorter than the window leaves honest silence behind it; a
+    longer span is trimmed to the window with the release ending at the
+    boundary. Deterministic."""
+    out = np.zeros(int(render_len), dtype=np.float32)
+    n = int(min(y.size, render_len))
+    if n <= 0:
+        return out
+    seg = y[:n].astype(np.float32, copy=True)
+    a = max(1, int(0.005 * sr))
+    if seg.size > a:
+        seg[:a] *= np.linspace(0.0, 1.0, a, dtype=np.float32)
+    r = min(seg.size, int(0.300 * sr))
+    if r > 1:
+        seg[-r:] *= (0.5 * (1.0 + np.cos(np.linspace(0.0, np.pi, r)))).astype(np.float32)
+    out[:n] = seg
+    return out

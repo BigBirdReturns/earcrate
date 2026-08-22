@@ -1,0 +1,1 @@
+Review checklist: exact deck constraints; exact source allowlists; one global turnover ledger; zero cross-island source reuse; phrase-aligned capacity; existing equal-power joins; complete accounting; stems reconcile; deterministic identities; single-deck compatibility.

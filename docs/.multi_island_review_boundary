@@ -1,0 +1,1 @@
+Repository implementation only. Private source identities, media, and Proof 005 fixture remain outside Git. Remove this sentinel before landing if the canonical documentation already carries the boundary.

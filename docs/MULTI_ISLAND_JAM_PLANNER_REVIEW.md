@@ -1,0 +1,1 @@
+The authoritative review checklist and private acceptance boundary are in issue #118. This branch documentation describes only the repository mechanism and contains no private source identities or fixture values beyond the public projection.

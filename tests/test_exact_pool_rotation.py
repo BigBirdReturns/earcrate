@@ -6,8 +6,11 @@ continued past the existing 12-event veto. These fixtures reproduce that shape
 without private identities or media.
 """
 from collections import Counter
+from collections.abc import Mapping
 import copy
+import importlib.util
 import json
+from pathlib import Path
 
 from earcrate.plan import source_rotation
 from earcrate.plan.exact_pool_assignment import ExactPoolAssignmentError
@@ -245,7 +248,7 @@ def _singleton_block_scene(rider_role="drum_anchor"):
 def _greedy_refusal(pool, arrangement, params):
     """Prove the first authority really does refuse this fixture."""
     try:
-        source_rotation._greedy_rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
+        source_rotation._depth_one_fast_path(_Core(), arrangement, pool, params, SEED)
     except ExactPoolRotationError as exc:
         return exc
     raise AssertionError("fixture does not reproduce a greedy exact-pool refusal")
@@ -280,30 +283,49 @@ def test_repair_does_not_let_a_flexible_source_eat_a_constrained_source_slot():
     assert _slot_map(again) == slots
 
 
-def test_repair_assignment_is_input_order_independent():
-    """Witness 3 — reversing source, atom, section and mapping order changes nothing."""
-    pool, arrangement, params = _singleton_block_scene()
-    baseline = rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
-
+def _permuted(pool, arrangement):
+    """Four equivalent inputs at once: source order, atom order, section order, key order."""
     shuffled_pool = [
         {key: item[key] for key in reversed(list(item))}
         for item in reversed(pool)
     ]
     reordered = copy.deepcopy(arrangement)
     reordered["sections"] = list(reversed(reordered["sections"]))
-    variant = rebalance_exact_pool_sources(_Core(), reordered, shuffled_pool, params, SEED)
+    return shuffled_pool, reordered
 
-    assert _slot_map(variant) == _slot_map(baseline)
-    assert (
-        variant["taste_ledger"]["exact_pool_rotation"]["source_event_counts"]
-        == baseline["taste_ledger"]["exact_pool_rotation"]["source_event_counts"]
-    )
+
+def _canonical_form(result):
+    """The whole repaired object, keyed by musical position rather than declaration order."""
+    body = {key: value for key, value in result.items() if key != "sections"}
+    body["sections_by_bar"] = {
+        str(int(section["bar_start"])): section for section in result["sections"]
+    }
+    return json.dumps(body, sort_keys=True, default=str)
+
+
+def test_repair_is_identical_under_equivalent_input_permutations():
+    """Witness 3 — the receipt is a measurement, so compare all of it.
+
+    Slot identity alone is too weak a claim to seal into provenance: a receipt keyed
+    on declaration order can differ while the music is identical. This compares every
+    layer body at equal musical position, the repair ledger including every
+    replacement record, and the assignment ledger.
+    """
+    for scene in (_singleton_block_scene, _matched_occurrence_cap_scene, _cap_chain_scene):
+        pool, arrangement, params = scene()
+        baseline = rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
+        shuffled_pool, reordered = _permuted(pool, arrangement)
+        variant = rebalance_exact_pool_sources(_Core(), reordered, shuffled_pool, params, SEED)
+
+        assert _slot_map(variant) == _slot_map(baseline), scene.__name__
+        assert variant["taste_ledger"] == baseline["taste_ledger"], scene.__name__
+        assert _canonical_form(variant) == _canonical_form(baseline), scene.__name__
 
 
 def test_repair_is_not_invoked_when_the_greedy_path_already_succeeds():
     """Witness 4 — successful-path byte identity and a frozen legacy ledger."""
     pool, arrangement, params = _fixture()
-    greedy = source_rotation._greedy_rebalance_exact_pool_sources(_Core(), arrangement, pool, params, 413676)
+    greedy = source_rotation._depth_one_fast_path(_Core(), arrangement, pool, params, 413676)
     through_wrapper = rebalance_exact_pool_sources(_Core(), arrangement, pool, params, 413676)
 
     assert json.dumps(through_wrapper, sort_keys=False) == json.dumps(greedy, sort_keys=False)
@@ -464,3 +486,226 @@ def test_repair_leaves_non_exact_island_composition_untouched():
     partial = dict(params)
     partial.pop("exact_target_key")
     assert core.compose_taste_arrangement(pool, partial, 11)["ordinary"] is True
+
+
+# ---------------------------------------------------------------------------
+# Review corrections: coupled cap-and-occurrence choice, jointly modified section
+# compatibility, whole-receipt permutation equality, and provenance resolution.
+# ---------------------------------------------------------------------------
+
+
+def _matched_occurrence_cap_scene():
+    """A bounded assignment that requires moving the occurrence coverage matched.
+
+    Two role families that never meet. The bass/floor half reproduces the Season-001
+    refusal so the fast path declines. The vocal/spark half is the coupled case:
+    ``lead`` is the only vocal source, so both vocal slots are its and its cap of two
+    is already spent there, while its third occurrence is a spark atom that outranks
+    its own vocal atoms. Any decomposition that matches each source to its best-ranked
+    held slot and then relieves the cap *around* those matches therefore pins exactly
+    the occurrence that has to move: the two vocal slots reach no other source, so
+    relief has nowhere to go and refuses ``cap_constraint`` while this assignment
+    exists. Coverage and the cap have to be solved together, in one search.
+    """
+    flex_bass = _atom("flex", "bass", 0)
+    flex_floor = _atom("flex", "drum_anchor", 1)
+    hold = [_atom("hold", "drum_anchor", index) for index in range(2)]
+    bass_only = _atom("bass-only", "bass", 0)
+    lead = [_atom("lead", "vocal", index) for index in range(2)]
+    lead_spark = _atom("lead", "texture", 2, score=0.95)
+    spark = _atom("spark", "texture", 0)
+    pool = [flex_bass, flex_floor, *hold, bass_only, *lead, lead_spark, spark]
+    rows = [
+        [("bass", flex_bass), ("drum_anchor", hold[0])],
+        [("drum_anchor", hold[1])],
+        [("vocal", lead[0]), ("texture", lead_spark)],
+        [("vocal", lead[1]), ("texture", spark)],
+    ]
+    return _scene(rows, pool, cap=2)
+
+
+def test_repair_moves_a_matched_occurrence_to_hold_the_cap():
+    """Witness 12 — cap relief may move the occurrence coverage matched."""
+    pool, arrangement, params = _matched_occurrence_cap_scene()
+    _greedy_refusal(pool, arrangement, params)
+
+    result = rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
+    slots = _slot_map(result)
+    counts = Counter(_source_sequence(result))
+
+    assert set(counts) == {"flex", "hold", "bass-only", "lead", "spark"}
+    assert max(counts.values()) <= 2
+    # Both vocal slots can only be 'lead', so its floor occurrence is the one that
+    # must give way — and it is the occurrence the coverage matching selected.
+    assert slots[(8, 0)] == "lead" and slots[(12, 0)] == "lead"
+    assert slots[(8, 1)] != "lead"
+    assert slots[(0, 0)] == "bass-only"
+
+    assignment = result["taste_ledger"]["exact_pool_assignment"]
+    assert assignment["matched_occurrence_relocation_count"] >= 1
+    released = [
+        hop
+        for path in assignment["cap_relief_paths"]
+        for hop in path["hops"]
+        if (hop["bar_start"], hop["layer_index"]) == (8, 1)
+    ]
+    assert released and released[0]["from_source"] == "lead"
+
+
+class _VetoCore(_Core):
+    """A core that refuses one pairing however it is reached.
+
+    Compatibility is the core's to decide, and it decides on the pair actually
+    published — so a fixture can make two candidates each admissible against the layer
+    they replace and inadmissible against each other. The preference bump is what
+    makes the pair *attractive*: both vetoed sources score highest against the bar-8
+    counterparts, so any preference-following assignment reaches for that section
+    first.
+    """
+
+    VETOED_PAIR = {"solo", "echo"}
+    CONTESTED_COUNTERPARTS = {"atom-twin-1", "atom-twin-4"}
+
+    def atom_edge_score(self, left, right, relation, render_bpm, target_key, stretch_budget, pitch_budget):
+        pair = {left.get("source_track_key"), right.get("source_track_key")}
+        if pair == self.VETOED_PAIR:
+            return 0.0, {"vetoed": True, "relation": relation}
+        if right.get("atom_id") in self.CONTESTED_COUNTERPARTS:
+            # Only the two vetoed sources want the contested section; everyone else
+            # would rather be anywhere else. Preference, not luck, sends them there.
+            if left.get("source_track_key") in self.VETOED_PAIR:
+                return 0.9, {"fixture": True, "relation": relation, "contested": True}
+            return 0.6, {"fixture": True, "relation": relation, "contested": True}
+        return 0.75, {"fixture": True, "relation": relation}
+
+
+def _jointly_modified_section_scene():
+    """A section whose two layers are both replaced in one assignment.
+
+    ``twin`` holds all six vocal and floor slots against a cap of two, so four of them
+    change hands at once. ``solo`` and ``echo`` both score highest against the bar-12
+    layers, so both reach for that one section. Scored against the frozen snapshot each
+    is admissible against the layer it replaces; together they are not. Only the
+    finished section shows that, and there is room for them apart — ``duet`` and
+    ``sheen`` are the alternatives a search that keeps going will find.
+
+    The bass/spark half is disjoint in role family and only exists to make the
+    depth-one fast path decline, so the solver is the thing under test.
+    """
+    flex_bass = _atom("flex", "bass", 0)
+    flex_spark = _atom("flex", "texture", 1)
+    rest = [_atom("rest", "texture", index) for index in range(2)]
+    bass_only = _atom("bass-only", "bass", 0)
+    twin_vocal = [_atom("twin", "vocal", index) for index in range(3)]
+    twin_floor = [_atom("twin", "drum_anchor", index) for index in range(3, 6)]
+    solo = _atom("solo", "vocal", 0)
+    duet = _atom("duet", "vocal", 0)
+    echo = _atom("echo", "drum_anchor", 0)
+    sheen = _atom("sheen", "drum_anchor", 0)
+    pool = [flex_bass, flex_spark, *rest, bass_only, *twin_vocal, *twin_floor, solo, duet, echo, sheen]
+    rows = [
+        [("bass", flex_bass), ("texture", rest[0])],
+        [("texture", rest[1])],
+        [("vocal", twin_vocal[0]), ("drum_anchor", twin_floor[0])],
+        [("vocal", twin_vocal[1]), ("drum_anchor", twin_floor[1])],
+        [("vocal", twin_vocal[2]), ("drum_anchor", twin_floor[2])],
+    ]
+    return _scene(rows, pool, cap=2)
+
+
+def _published_pair_scores(core, result, pool):
+    """Re-judge every published layer against the counterpart it actually sits with."""
+    by_atom = {item["atom_id"]: item for item in pool}
+    by_loop = {item["id"]: item for item in pool}
+    judged = []
+    for section in result["sections"]:
+        for layer_index, layer in enumerate(section["layers"]):
+            candidate = by_atom[layer["atom_id"]]
+            role = str(layer["role"])
+            transform = source_rotation._transform_for_slot(candidate, role, 120.0, 0, {"stretch_budget": 8.0, "pitch_shift_budget": 2})
+            score = None
+            if transform is not None:
+                score = source_rotation._candidate_score(
+                    core, candidate, section, layer_index, role, transform,
+                    120.0, 0, {"stretch_budget": 8.0, "pitch_shift_budget": 2},
+                    by_atom, by_loop, SEED,
+                )
+            judged.append(((int(section["bar_start"]), layer_index), score))
+    return judged
+
+
+def test_repair_validates_the_section_pair_it_publishes():
+    """Witness 13 — two layers admissible apart, inadmissible together."""
+    pool, arrangement, params = _jointly_modified_section_scene()
+    core = _VetoCore()
+    _greedy_refusal(pool, arrangement, params)
+
+    result = rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+    slots = _slot_map(result)
+    counts = Counter(_source_sequence(result))
+    assert set(counts) == {"flex", "rest", "bass-only", "twin", "solo", "duet", "echo", "sheen"}
+    assert max(counts.values()) <= 2
+
+    # The vetoed pair never reaches a section, and every published layer is
+    # admissible against the counterpart it was actually published with.
+    for section in result["sections"]:
+        sources = {layer["source_track_key"] for layer in section["layers"]}
+        assert sources != _VetoCore.VETOED_PAIR
+    for slot_key, score in _published_pair_scores(core, result, pool):
+        assert score is not None, slot_key
+
+    # The first assignment did pair them: the authority found that out before
+    # publishing and kept searching rather than committing.
+    assignment = result["taste_ledger"]["exact_pool_assignment"]
+    assert assignment["final_pair_revisions"] >= 1
+    forbidden = assignment["forbidden_final_pairs"]
+    assert forbidden and forbidden[0]["source"] in _VetoCore.VETOED_PAIR
+    assert forbidden[0]["counterpart_source"] in _VetoCore.VETOED_PAIR
+
+
+def _witness_references(node):
+    """Every ``tests/...::name`` string anywhere inside a provenance structure."""
+    found = set()
+    if isinstance(node, str):
+        if node.startswith("tests/") and "::" in node:
+            found.add(node)
+    elif isinstance(node, Mapping):
+        for value in node.values():
+            found |= _witness_references(value)
+    elif isinstance(node, (list, tuple, set)):
+        for value in node:
+            found |= _witness_references(value)
+    return found
+
+
+def test_provenance_witnesses_resolve_to_discovered_tests():
+    """Witness 14 — a receipt may not name a witness that does not exist.
+
+    Provenance is only worth what it points at. Every witness reference the module
+    publishes, and every one it seals into an emitted receipt, has to resolve to a
+    real test the gate runner would discover.
+    """
+    from earcrate.plan import exact_pool_assignment
+
+    pool, arrangement, params = _singleton_block_scene()
+    receipt = rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
+    references = _witness_references(vars(exact_pool_assignment))
+    references |= _witness_references(receipt["taste_ledger"]["exact_pool_assignment"])
+    assert len(references) >= len(exact_pool_assignment.PROVENANCE_WITNESSES)
+    assert references >= set(exact_pool_assignment.PROVENANCE_WITNESSES)
+
+    here = Path(__file__).resolve()
+    root = here.parent.parent
+    for reference in sorted(references):
+        relative, _, name = reference.partition("::")
+        path = (root / relative).resolve()
+        assert path.is_file(), f"{reference} names a file that does not exist"
+        if path == here:
+            discovered = globals()
+        else:
+            spec = importlib.util.spec_from_file_location(f"_witness_{path.stem}", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            discovered = vars(module)
+        assert name.startswith("test_"), f"{reference} is not a discoverable gate name"
+        assert callable(discovered.get(name)), f"{reference} names a test that does not exist"

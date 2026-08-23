@@ -14,10 +14,11 @@ source exceeds the declared event cap. If the existing slots cannot satisfy
 those laws, planning refuses before audio or database publication.
 
 That first repair is a depth-1 greedy walk, and Jam Season 001 showed it refuses
-feasible pools purely on visit order. It therefore no longer gets the last word:
-when it refuses, ``exact_pool_assignment`` re-solves the whole assignment
-atomically with augmenting paths. When it succeeds, nothing else runs and its
-frozen ledger is returned untouched.
+feasible pools purely on visit order. It is therefore no longer an authority: it
+is a fast-path *proposal* to ``exact_pool_assignment``, which owns the assignment
+laws, accepts the proposal byte for byte when it satisfies them, and otherwise
+solves the whole assignment atomically. Only that module may declare an exact
+pool impossible.
 """
 from __future__ import annotations
 
@@ -371,45 +372,80 @@ def rebalance_exact_pool_sources(
     params: Mapping[str, Any],
     seed: int,
 ) -> Dict[str, Any]:
-    """Return an exact-pool arrangement with full source reach and bounded reuse.
+    """The one exact-pool assignment authority.
 
-    The greedy path below is the first authority and is unchanged. When it
-    satisfies coverage and the cap, its arrangement — including the frozen
-    ``exact_pool_rotation`` ledger — is returned exactly as it was before this
-    wrapper existed, and the complete-assignment solver is never built.
+    Ownership is deliberately singular. ``exact_pool_assignment`` holds the
+    assignment laws — every allowlisted source covered, no source past the reuse
+    cap, every slot kept, and every published pair role-compatible, transform-safe
+    and score-admissible. This function decides which of two constructions gets to
+    satisfy them; nothing here rescues a failed authority.
 
-    That greedy walk is order-sensitive in two coupled ways: it can only steal a
-    slot from a donor that already holds two or more events, and it commits each
-    missing source irreversibly in seed order. Season 001 refused four seeds on
-    island 7 for exactly that reason while a complete assignment existed. So a
-    refusal is no longer final: the assignment is re-solved atomically before
-    anyone is told the exact pool is impossible.
+    The first construction is the original depth-1 rotation, kept as an
+    identity-preserving fast path. It is a *proposal*: when the authority's
+    acceptance test passes, its arrangement — including the frozen
+    ``exact_pool_rotation`` ledger — is published exactly as it was before this
+    function existed, and no solver is built. It is verified rather than trusted,
+    so a proposal that satisfies the laws is byte-identical and one that does not
+    is simply not the answer.
 
-    The two preconditions below are re-checked here so a genuinely malformed
-    request still refuses immediately instead of being handed to the solver.
+    That walk is order-sensitive in two coupled ways: it can only steal a slot from
+    a donor that already holds two or more events, and it commits each missing
+    source irreversibly in seed order. Season 001 refused four seeds on island 7 for
+    exactly that reason while a complete assignment existed. So when there is no
+    acceptable proposal the second construction solves the whole assignment
+    atomically, and only it may declare the exact pool impossible.
+
+    The two preconditions below are the authority's own: a malformed request is
+    refused here rather than described as an assignment deficiency.
     """
+    from earcrate.plan.exact_pool_assignment import (
+        accept_fast_path_proposal,
+        solve_exact_pool_assignment,
+    )
+
     max_events_precheck = int(params.get("exact_pool_max_source_events") or DEFAULT_MAX_SOURCE_EVENTS)
     if max_events_precheck <= 0:
         raise ExactPoolRotationError("exact_pool_max_source_events must be positive")
     if not any(_source_identity(dict(item)) for item in pool):
         raise ExactPoolRotationError("exact source pool is empty")
 
+    proposal, disposition = _fast_path_proposal(core, arrangement, pool, params, int(seed))
+    if proposal is not None:
+        rejection = accept_fast_path_proposal(core, proposal, pool, params, int(seed))
+        if rejection is None:
+            return proposal
+        disposition = rejection
+    return solve_exact_pool_assignment(core, arrangement, pool, params, int(seed), fast_path=disposition)
+
+
+def _fast_path_proposal(
+    core: Any,
+    arrangement: Mapping[str, Any],
+    pool: Sequence[Mapping[str, Any]],
+    params: Mapping[str, Any],
+    seed: int,
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    """Offer the depth-one construction, or decline with the reason it cannot.
+
+    The fast path signals "no proposal" the only way the original code can — by
+    refusing — so this is the boundary that turns that refusal into an absent
+    proposal. It is never an answer to the caller, only an input to the authority's
+    choice, and the refusal text is preserved for the receipt.
+    """
     try:
-        return _greedy_rebalance_exact_pool_sources(core, arrangement, pool, params, seed)
-    except ExactPoolRotationError as greedy_refusal:
-        from earcrate.plan.exact_pool_assignment import repair_exact_pool_assignment
-
-        return repair_exact_pool_assignment(core, arrangement, pool, params, int(seed), legacy_error=greedy_refusal)
+        return _depth_one_fast_path(core, arrangement, pool, params, seed), {"disposition": "accepted", "detail": ""}
+    except ExactPoolRotationError as incomplete:
+        return None, {"disposition": "declined_no_complete_assignment", "detail": str(incomplete)}
 
 
-def _greedy_rebalance_exact_pool_sources(
+def _depth_one_fast_path(
     core: Any,
     arrangement: Mapping[str, Any],
     pool: Sequence[Mapping[str, Any]],
     params: Mapping[str, Any],
     seed: int,
 ) -> Dict[str, Any]:
-    """The original depth-1 rotation. Unchanged, and still the first authority."""
+    """The original depth-1 rotation, unchanged, offered as a proposal."""
     out: Dict[str, Any] = copy.deepcopy(dict(arrangement))
     render_bpm = float(out.get("bpm") or params.get("exact_target_bpm") or params.get("bpm") or 0.0)
     target_key = int(out.get("target_key") if out.get("target_key") is not None else params.get("exact_target_key") or 0) % 12

@@ -12,6 +12,12 @@ role, gain, duration, transition, and deck fixed, then deterministically assigns
 compatible transform-safe atoms so every allowlisted source appears and no
 source exceeds the declared event cap. If the existing slots cannot satisfy
 those laws, planning refuses before audio or database publication.
+
+That first repair is a depth-1 greedy walk, and Jam Season 001 showed it refuses
+feasible pools purely on visit order. It therefore no longer gets the last word:
+when it refuses, ``exact_pool_assignment`` re-solves the whole assignment
+atomically with augmenting paths. When it succeeds, nothing else runs and its
+frozen ledger is returned untouched.
 """
 from __future__ import annotations
 
@@ -365,7 +371,45 @@ def rebalance_exact_pool_sources(
     params: Mapping[str, Any],
     seed: int,
 ) -> Dict[str, Any]:
-    """Return an exact-pool arrangement with full source reach and bounded reuse."""
+    """Return an exact-pool arrangement with full source reach and bounded reuse.
+
+    The greedy path below is the first authority and is unchanged. When it
+    satisfies coverage and the cap, its arrangement — including the frozen
+    ``exact_pool_rotation`` ledger — is returned exactly as it was before this
+    wrapper existed, and the complete-assignment solver is never built.
+
+    That greedy walk is order-sensitive in two coupled ways: it can only steal a
+    slot from a donor that already holds two or more events, and it commits each
+    missing source irreversibly in seed order. Season 001 refused four seeds on
+    island 7 for exactly that reason while a complete assignment existed. So a
+    refusal is no longer final: the assignment is re-solved atomically before
+    anyone is told the exact pool is impossible.
+
+    The two preconditions below are re-checked here so a genuinely malformed
+    request still refuses immediately instead of being handed to the solver.
+    """
+    max_events_precheck = int(params.get("exact_pool_max_source_events") or DEFAULT_MAX_SOURCE_EVENTS)
+    if max_events_precheck <= 0:
+        raise ExactPoolRotationError("exact_pool_max_source_events must be positive")
+    if not any(_source_identity(dict(item)) for item in pool):
+        raise ExactPoolRotationError("exact source pool is empty")
+
+    try:
+        return _greedy_rebalance_exact_pool_sources(core, arrangement, pool, params, seed)
+    except ExactPoolRotationError as greedy_refusal:
+        from earcrate.plan.exact_pool_assignment import repair_exact_pool_assignment
+
+        return repair_exact_pool_assignment(core, arrangement, pool, params, int(seed), legacy_error=greedy_refusal)
+
+
+def _greedy_rebalance_exact_pool_sources(
+    core: Any,
+    arrangement: Mapping[str, Any],
+    pool: Sequence[Mapping[str, Any]],
+    params: Mapping[str, Any],
+    seed: int,
+) -> Dict[str, Any]:
+    """The original depth-1 rotation. Unchanged, and still the first authority."""
     out: Dict[str, Any] = copy.deepcopy(dict(arrangement))
     render_bpm = float(out.get("bpm") or params.get("exact_target_bpm") or params.get("bpm") or 0.0)
     target_key = int(out.get("target_key") if out.get("target_key") is not None else params.get("exact_target_key") or 0) % 12

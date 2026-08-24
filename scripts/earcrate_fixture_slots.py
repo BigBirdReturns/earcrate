@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
@@ -27,13 +28,13 @@ def _capture_json(path: Path) -> Tuple[Mapping[str, Any], bytes, str, Path]:
 
 
 def _same_path(left: Path, right: Path) -> bool:
-    a = left.expanduser().resolve()
-    b = right.expanduser().resolve()
-    if a == b:
+    first = left.expanduser().resolve()
+    second = right.expanduser().resolve()
+    if first == second:
         return True
-    if a.exists() and b.exists():
+    if first.exists() and second.exists():
         try:
-            return os.path.samefile(a, b)
+            return os.path.samefile(first, second)
         except OSError:
             return False
     return False
@@ -72,8 +73,19 @@ def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
             pass
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            block = handle.read(1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def census_receipt(candidate_path: Path) -> Dict[str, Any]:
-    candidate, _bytes, file_sha, resolved = _capture_json(candidate_path)
+    candidate, _body, file_sha, resolved = _capture_json(candidate_path)
     from earcrate.app import EarcrateCore
 
     result = dict(probe_candidate_slot_census(EarcrateCore(), candidate))
@@ -92,9 +104,11 @@ def qualification_receipt(
     max_source_events: int,
     max_anchor_rounds: int,
 ) -> Dict[str, Any]:
-    matrix, _matrix_bytes, matrix_sha, matrix_resolved = _capture_json(matrix_path)
-    candidate, _candidate_bytes, candidate_sha, candidate_resolved = _capture_json(candidate_path)
-    census, _census_bytes, census_sha, census_resolved = _capture_json(census_path)
+    matrix, _matrix_body, matrix_sha, matrix_resolved = _capture_json(matrix_path)
+    candidate, _candidate_body, candidate_sha, candidate_resolved = _capture_json(
+        candidate_path
+    )
+    census, _census_body, census_sha, census_resolved = _capture_json(census_path)
     result = dict(
         qualify_fixture_candidate(
             matrix,
@@ -105,9 +119,18 @@ def qualification_receipt(
         )
     )
     result["input_files"] = {
-        "survival_matrix": {"path": str(matrix_resolved), "file_sha256": matrix_sha},
-        "candidate": {"path": str(candidate_resolved), "file_sha256": candidate_sha},
-        "slot_census": {"path": str(census_resolved), "file_sha256": census_sha},
+        "survival_matrix": {
+            "path": str(matrix_resolved),
+            "file_sha256": matrix_sha,
+        },
+        "candidate": {
+            "path": str(candidate_resolved),
+            "file_sha256": candidate_sha,
+        },
+        "slot_census": {
+            "path": str(census_resolved),
+            "file_sha256": census_sha,
+        },
     }
     result["path_semantics"] = "operational_only_not_fixture_or_slot_identity"
     return result
@@ -121,13 +144,15 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     census = subparsers.add_parser(
-        "census", help="probe every island through the ordinary composer without publishing"
+        "census",
+        help="probe every island through the ordinary composer without publishing",
     )
     census.add_argument("candidate", type=Path)
     census.add_argument("--out", type=Path, required=True)
 
     qualify = subparsers.add_parser(
-        "qualify", help="derive one source partition against a captured slot census"
+        "qualify",
+        help="derive one source partition against a captured slot census",
     )
     qualify.add_argument("matrix", type=Path)
     qualify.add_argument("candidate", type=Path)
@@ -163,15 +188,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 max_source_events=int(args.max_source_events),
                 max_anchor_rounds=int(args.max_anchor_rounds),
             )
-            _write_json_atomic(args.receipt, result)
             if result.get("complete"):
                 qualified = result.get("qualified_candidate")
                 if not isinstance(qualified, Mapping):
                     raise RuntimeError("complete qualification has no candidate")
+                # The candidate is written first. The receipt is the commit marker
+                # and binds the exact candidate bytes that reached disk.
                 _write_json_atomic(args.candidate_out, qualified)
+                result["qualified_candidate_file"] = {
+                    "path": str(args.candidate_out.expanduser().resolve()),
+                    "file_sha256": _sha256_file(args.candidate_out.expanduser().resolve()),
+                }
+                _write_json_atomic(args.receipt, result)
                 print(str(args.candidate_out.expanduser().resolve()))
                 print(str(args.receipt.expanduser().resolve()))
                 return 0
+            _write_json_atomic(args.receipt, result)
             print(str(args.receipt.expanduser().resolve()))
             if result.get("impossibility_claimed"):
                 return 3
@@ -180,7 +212,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 2
         raise ValueError(f"unknown command: {args.command}")
     except Exception as exc:
-        print(f"earcrate_fixture_slots: {type(exc).__name__}: {exc}")
+        print(
+            f"earcrate_fixture_slots: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
         return 2
 
 

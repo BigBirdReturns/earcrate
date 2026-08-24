@@ -7,35 +7,64 @@ import json
 from earcrate.plan.fixture_diversity import fixture_projection
 from earcrate.plan.fixture_slot_qualification import (
     INDETERMINATE_ACTION,
+    FixtureSlotQualificationError,
     attach_slot_census_to_error,
     qualify_fixture_candidate,
     slot_census_from_arrangement,
 )
 
 
+def _digest(value):
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def _candidate(parts):
-    islands, cursor = [], 0.0
+    islands = []
+    cursor = 0.0
     for index, (deck, sources) in enumerate(parts):
-        islands.append({
-            "island_id": f"island-{index}", "deck_id": deck,
-            "target_bpm": 100.0 + index, "target_key": index,
-            "capacity_s": 100.0, "allocated_duration_s": 100.0,
-            "start_s": cursor, "end_s": cursor + 100.0,
-            "source_include_ids": list(sources),
-            "required_roles": ["foreground", "floor", "bass"],
-            "min_sources": 1, "max_sources": 99,
-        })
+        islands.append(
+            {
+                "island_id": f"island-{index}",
+                "deck_id": deck,
+                "target_bpm": 100.0 + index,
+                "target_key": index,
+                "capacity_s": 100.0,
+                "allocated_duration_s": 100.0,
+                "start_s": cursor,
+                "end_s": cursor + 100.0,
+                "source_include_ids": list(sources),
+                "required_roles": ["foreground", "floor", "bass"],
+                "min_sources": 1,
+                "max_sources": 99,
+            }
+        )
         cursor += 100.0
     value = {
-        "kind": "earcrate_fixture_candidate", "schema_version": 1,
-        "profile": "girl_talk_v1", "persona": "remix_prettylights_v1",
+        "kind": "earcrate_fixture_candidate",
+        "schema_version": 1,
+        "profile": "girl_talk_v1",
+        "persona": "remix_prettylights_v1",
         "phrase_playback_law": "proof001_phrase_law",
-        "source_pool_sha256": "pool-fixture", "source_exclude_ids": [],
-        "transform_policy": {"identity": "tf", "unchanged": True, "stretch_budget": 8.0, "pitch_shift_budget": 2},
+        "source_pool_sha256": "pool-fixture",
+        "source_exclude_ids": [],
+        "transform_policy": {
+            "identity": "tf",
+            "unchanged": True,
+            "stretch_budget": 8.0,
+            "pitch_shift_budget": 2,
+        },
         "turnover_policy": {"identity": "turn", "unchanged": True},
-        "transition": {"technique": "equal_power", "phrase_boundary_required": True},
-        "duration_s": cursor, "phrase_bars": 4, "seed": 17,
-        "islands": islands, "transitions": [],
+        "transition": {
+            "technique": "equal_power",
+            "phrase_boundary_required": True,
+        },
+        "duration_s": cursor,
+        "phrase_bars": 4,
+        "seed": 17,
+        "islands": islands,
+        "transitions": [],
     }
     value["fixture_sha256"] = fixture_projection(value)["fixture_identity"]
     value["fixture_id"] = "fixture-" + value["fixture_sha256"][:12]
@@ -44,24 +73,44 @@ def _candidate(parts):
 
 def _matrix(decks):
     return {
-        "duration_s": 200.0, "island_count": len(decks), "phrase_bars": 4,
-        "candidate_count": 3, "base_seed": 11, "max_attempts": 64,
+        "duration_s": 200.0,
+        "island_count": len(decks),
+        "phrase_bars": 4,
+        "candidate_count": 3,
+        "base_seed": 11,
+        "max_attempts": 64,
         "required_roles": ["foreground", "floor", "bass"],
         "request_template": {
-            "profile": "girl_talk_v1", "source_pool_sha256": "pool-fixture",
-            "persona": "remix_prettylights_v1", "phrase_playback_law": "proof001_phrase_law",
-            "transform_policy": {"identity": "tf", "unchanged": True, "stretch_budget": 8.0, "pitch_shift_budget": 2},
+            "profile": "girl_talk_v1",
+            "source_pool_sha256": "pool-fixture",
+            "persona": "remix_prettylights_v1",
+            "phrase_playback_law": "proof001_phrase_law",
+            "transform_policy": {
+                "identity": "tf",
+                "unchanged": True,
+                "stretch_budget": 8.0,
+                "pitch_shift_budget": 2,
+            },
             "turnover_policy": {"identity": "turn", "unchanged": True},
-            "transition": {"technique": "equal_power", "phrase_boundary_required": True},
+            "transition": {
+                "technique": "equal_power",
+                "phrase_boundary_required": True,
+            },
             "source_exclude_ids": [],
         },
         "decks": [
             {
-                "deck_id": deck, "target_bpm": 100.0 + index, "target_key": index,
+                "deck_id": deck,
+                "target_bpm": 100.0 + index,
+                "target_key": index,
                 "capacity_s": 200.0,
-                "sources": [{"source_id": source, "roles": sorted(roles)} for source, roles in sources.items()],
+                "sources": [
+                    {"source_id": source, "roles": sorted(roles)}
+                    for source, roles in sources.items()
+                ],
                 "required_roles": ["foreground", "floor", "bass"],
-                "min_sources": 1, "max_sources": 99,
+                "min_sources": 1,
+                "max_sources": 99,
             }
             for index, (deck, sources) in enumerate(decks.items())
         ],
@@ -71,47 +120,87 @@ def _matrix(decks):
 def _census(candidate, families):
     rows = []
     for index, values in enumerate(families):
-        rows.append({
+        candidate_row = candidate["islands"][index]
+        row = {
+            "version": "earcrate_fixture_slot_qualification_v1",
             "island_id": f"island-{index}",
+            "candidate_fixture_sha256": candidate["fixture_sha256"],
+            "source_pool_sha256": candidate["source_pool_sha256"],
+            "exact_target_bpm": candidate_row["target_bpm"],
+            "exact_target_key": candidate_row["target_key"],
+            "composer_law": {"version": "test"},
+            "slot_count": len(values),
+            "role_family_counts": {
+                family: values.count(family) for family in sorted(set(values))
+            },
             "slots": [
-                {"slot_key": f"{slot}:0", "bar_start": slot, "layer_index": 0, "role_family": family}
+                {
+                    "slot_key": f"{slot}:0",
+                    "bar_start": slot,
+                    "section_musical_index": slot,
+                    "layer_index": 0,
+                    "section_type": "sustain",
+                    "role": family,
+                    "role_family": family,
+                }
                 for slot, family in enumerate(values)
             ],
-        })
-    value = {"candidate_fixture_sha256": candidate["fixture_sha256"], "islands": rows}
-    value["slot_census_family_sha256"] = hashlib.sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+            "path_semantics": "no_paths_or_media_identity_in_slot_census",
+            "deck_id": candidate_row["deck_id"],
+            "allocated_duration_s": candidate_row["allocated_duration_s"],
+            "candidate_source_count": len(candidate_row["source_include_ids"]),
+            "diagnostics_have": {},
+        }
+        row["slot_census_sha256"] = _digest(row)
+        rows.append(row)
+    value = {
+        "candidate_fixture_sha256": candidate["fixture_sha256"],
+        "source_pool_sha256": candidate["source_pool_sha256"],
+        "islands": rows,
+    }
+    value["slot_census_family_sha256"] = _digest(value)
     return value
 
 
 def _repair_fixture():
     decks = {
         "deck-a": {
-            "bass-only": {"bass"}, "vocal": {"foreground"},
-            "floor-a": {"floor"}, "flex": {"floor", "foreground"},
+            "bass-only": {"bass"},
+            "vocal": {"foreground"},
+            "floor-a": {"floor"},
+            "flex": {"floor", "foreground"},
         },
         "deck-b": {
-            "bass-only": {"bass"}, "vocal": {"foreground"},
-            "floor-a": {"floor"}, "flex": {"floor", "foreground"},
+            "bass-only": {"bass"},
+            "vocal": {"foreground"},
+            "floor-a": {"floor"},
+            "flex": {"floor", "foreground"},
         },
     }
-    candidate = _candidate([
-        ("deck-a", ["bass-only", "vocal"]),
-        ("deck-b", ["floor-a", "flex"]),
-    ])
-    census = _census(candidate, [
-        ["foreground", "floor", "floor"],
-        ["bass", "floor", "foreground"],
-    ])
+    candidate = _candidate(
+        [
+            ("deck-a", ["bass-only", "vocal"]),
+            ("deck-b", ["floor-a", "flex"]),
+        ]
+    )
+    census = _census(
+        candidate,
+        [
+            ["foreground", "floor", "floor"],
+            ["bass", "floor", "foreground"],
+        ],
+    )
     return decks, candidate, census
 
 
 def test_slot_qualification_moves_a_bass_only_source_to_a_bass_slot():
     decks, candidate, census = _repair_fixture()
     receipt = qualify_fixture_candidate(
-        _matrix(decks), candidate, census,
-        max_source_events=3, max_anchor_rounds=64,
+        _matrix(decks),
+        candidate,
+        census,
+        max_source_events=3,
+        max_anchor_rounds=64,
     )
     assert receipt["complete"] is True
     first, second = receipt["qualified_candidate"]["islands"]
@@ -124,15 +213,28 @@ def test_slot_qualification_moves_a_bass_only_source_to_a_bass_slot():
 
 def test_slot_qualification_moves_floor_capacity_under_the_existing_cap():
     decks = {
-        "deck-a": {"floor-1": {"floor"}, "floor-2": {"floor"}, "floor-3": {"floor"}, "vocal": {"foreground"}},
-        "deck-b": {"floor-1": {"floor"}, "floor-2": {"floor"}, "floor-3": {"floor"}, "vocal": {"foreground"}},
+        "deck-a": {
+            "floor-1": {"floor"},
+            "floor-2": {"floor"},
+            "floor-3": {"floor"},
+            "vocal": {"foreground"},
+        },
+        "deck-b": {
+            "floor-1": {"floor"},
+            "floor-2": {"floor"},
+            "floor-3": {"floor"},
+            "vocal": {"foreground"},
+        },
     }
-    candidate = _candidate([
-        ("deck-a", ["floor-1", "vocal"]),
-        ("deck-b", ["floor-2", "floor-3"]),
-    ])
+    candidate = _candidate(
+        [
+            ("deck-a", ["floor-1", "vocal"]),
+            ("deck-b", ["floor-2", "floor-3"]),
+        ]
+    )
     receipt = qualify_fixture_candidate(
-        _matrix(decks), candidate,
+        _matrix(decks),
+        candidate,
         _census(candidate, [["floor"] * 5, ["foreground", "floor"]]),
         max_source_events=3,
     )
@@ -147,7 +249,9 @@ def test_true_role_deficit_carries_a_max_flow_min_cut_proof():
         "deck-a": {"bass-only": {"bass"}, "floor": {"floor"}},
         "deck-b": {"bass-only": {"bass"}, "floor": {"floor"}},
     }
-    candidate = _candidate([("deck-a", ["bass-only"]), ("deck-b", ["floor"])])
+    candidate = _candidate(
+        [("deck-a", ["bass-only"]), ("deck-b", ["floor"])]
+    )
     receipt = qualify_fixture_candidate(
         _matrix(decks), candidate, _census(candidate, [["floor"], ["floor"]])
     )
@@ -155,6 +259,7 @@ def test_true_role_deficit_carries_a_max_flow_min_cut_proof():
     assert receipt["impossibility_claimed"] is True
     assert receipt["evidence_class"] == "max_flow_min_cut"
     assert receipt["deficiency"] == 1
+    assert receipt["cut_capacity"] == 1
     assert "bass-only" in receipt["reachable_sources"]
 
 
@@ -171,7 +276,9 @@ def test_anchor_round_budget_is_a_bound_not_an_impossibility_claim():
 
 def test_slot_qualification_is_independent_of_matrix_and_slot_order():
     decks, candidate, census = _repair_fixture()
-    first = qualify_fixture_candidate(_matrix(decks), candidate, census, max_source_events=3)
+    first = qualify_fixture_candidate(
+        _matrix(decks), candidate, census, max_source_events=3
+    )
     matrix = _matrix(decks)
     matrix["decks"].reverse()
     for deck in matrix["decks"]:
@@ -179,26 +286,52 @@ def test_slot_qualification_is_independent_of_matrix_and_slot_order():
     other_census = copy.deepcopy(census)
     for island in other_census["islands"]:
         island["slots"].reverse()
-    second = qualify_fixture_candidate(matrix, candidate, other_census, max_source_events=3)
+        island.pop("slot_census_sha256")
+        island["slot_census_sha256"] = _digest(island)
+    other_census.pop("slot_census_family_sha256")
+    other_census["slot_census_family_sha256"] = _digest(other_census)
+    second = qualify_fixture_candidate(
+        matrix, candidate, other_census, max_source_events=3
+    )
     assert first["qualified_fixture_sha256"] == second["qualified_fixture_sha256"]
-    assert first["qualified_candidate"]["islands"] == second["qualified_candidate"]["islands"]
+    assert (
+        first["qualified_candidate"]["islands"]
+        == second["qualified_candidate"]["islands"]
+    )
+
+
+def test_slot_census_tampering_is_refused_before_qualification():
+    decks, candidate, census = _repair_fixture()
+    tampered = copy.deepcopy(census)
+    tampered["islands"][0]["slots"][0]["role_family"] = "bass"
+    try:
+        qualify_fixture_candidate(_matrix(decks), candidate, tampered)
+    except FixtureSlotQualificationError as exc:
+        assert "digest mismatch" in str(exc)
+    else:
+        raise AssertionError("tampered slot census was accepted")
 
 
 def test_slot_census_excludes_source_and_atom_identity():
     arrangement = {
-        "bpm": 120.0, "target_key": 0,
-        "sections": [{
-            "bar_start": 4, "type": "drop",
-            "layers": [
-                {"role": "bass", "source_track_key": "private-source"},
-                {"role": "texture", "atom_id": "private-atom"},
-            ],
-        }],
+        "bpm": 120.0,
+        "target_key": 0,
+        "sections": [
+            {
+                "bar_start": 4,
+                "type": "drop",
+                "layers": [
+                    {"role": "bass", "source_track_key": "private-source"},
+                    {"role": "texture", "atom_id": "private-atom"},
+                ],
+            }
+        ],
     }
     census = slot_census_from_arrangement(arrangement, island_id="island-x")
     text = json.dumps(census, sort_keys=True)
     assert census["role_family_counts"] == {"bass": 1, "spark": 1}
-    assert "private-source" not in text and "private-atom" not in text
+    assert "private-source" not in text
+    assert "private-atom" not in text
 
 
 def test_exact_pool_refusal_is_enriched_without_reclassifying_it():
@@ -206,12 +339,22 @@ def test_exact_pool_refusal_is_enriched_without_reclassifying_it():
         def __init__(self):
             super().__init__("no assignment")
             self.deficiency = {"impossibility_claimed": True}
+
     refusal = Refusal()
     returned = attach_slot_census_to_error(
         refusal,
-        {"bpm": 120.0, "target_key": 0, "sections": [{"bar_start": 0, "layers": [{"role": "vocal"}]}]},
+        {
+            "bpm": 120.0,
+            "target_key": 0,
+            "sections": [
+                {"bar_start": 0, "layers": [{"role": "vocal"}]}
+            ],
+        },
         {"island_id": "island-x", "source_pool_sha256": "pool"},
     )
     assert returned is refusal
     assert refusal.deficiency["impossibility_claimed"] is True
-    assert refusal.deficiency["slot_census"]["role_family_counts"] == {"foreground": 1}
+    assert refusal.deficiency["slot_census"]["role_family_counts"] == {
+        "foreground": 1
+    }
+    assert refusal.deficiency["slot_census_capture"]["ok"] is True

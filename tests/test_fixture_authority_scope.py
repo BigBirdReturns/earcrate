@@ -175,3 +175,12 @@ def test_cli_preserves_realization_movement_without_building_a_fixture_shelf(tmp
     assert selection["selection_status"] == "not_run_non_discriminating_family"
     assert selection["realization_variation_pair_count"] == 10
     assert len(set(selection["semantic_fixture_identities"])) == 1
+
+
+def test_contract_and_package_entrypoint_share_one_authority():
+    import earcrate.plan.fixture_diversity as public
+    import earcrate.plan.fixture_diversity_contract as contract
+
+    assert contract.fixture_projection is public.fixture_projection
+    assert contract.classify_candidate_family is public.classify_candidate_family
+    assert contract.select_max_min is public.select_max_min

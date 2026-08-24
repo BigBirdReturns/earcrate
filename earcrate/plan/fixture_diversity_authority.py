@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from earcrate.plan import fixture_diversity_contract as _legacy
+from earcrate.plan import fixture_diversity_contract_core as _legacy
 
 
 DEFAULT_WEIGHTS = _legacy.DEFAULT_WEIGHTS

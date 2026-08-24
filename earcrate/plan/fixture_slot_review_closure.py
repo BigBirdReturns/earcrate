@@ -14,28 +14,40 @@ model and are enforced here rather than hidden in optimizer status:
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, Mapping, MutableMapping, Optional
+from contextvars import ContextVar
+from typing import Any, Dict, Mapping, MutableMapping
 
 from earcrate.plan import fixture_slot_binding as _binding
-from earcrate.plan.fixture_slot_contract import (
-    qualify_fixture_candidate as _qualify_without_parent_constraints,
+from earcrate.plan import fixture_slot_contract as _contract_module
+
+_qualify_without_parent_constraints = (
+    _contract_module.qualify_fixture_candidate
 )
 
 PAIR_CONSTRAINT_HALT = (
     "halt_slot_qualification_parent_pair_constraints_are_not_encoded"
 )
-_CAP_CONTEXT = "_fixture_slot_exact_pool_max_source_events"
+_REQUEST_CAP: ContextVar[int | None] = ContextVar(
+    "earcrate_fixture_slot_exact_pool_max_source_events",
+    default=None,
+)
 
 
 def _parent_refusal_projection(deficiency: Mapping[str, Any]) -> Dict[str, Any]:
     """Bind only the exact-pool evidence that governs a qualification round."""
-    forbidden = [copy.deepcopy(dict(row)) for row in deficiency.get("forbidden_final_pairs") or []]
+    forbidden = [
+        copy.deepcopy(dict(row))
+        for row in deficiency.get("forbidden_final_pairs") or []
+    ]
     body: Dict[str, Any] = {
         "failure_class": str(deficiency.get("failure_class") or ""),
-        "impossibility_claimed": bool(deficiency.get("impossibility_claimed")),
+        "impossibility_claimed": bool(
+            deficiency.get("impossibility_claimed")
+        ),
         "forbidden_final_pairs": forbidden,
         "learned_pair_constraint_count": int(
-            deficiency.get("learned_pair_constraint_count") or len(forbidden)
+            deficiency.get("learned_pair_constraint_count")
+            or len(forbidden)
         ),
     }
     for key in (
@@ -54,10 +66,13 @@ def _parent_refusal_projection(deficiency: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _bind_parent_refusal(
-    campaign: Mapping[str, Any], deficiency: Mapping[str, Any]
+    campaign: Mapping[str, Any],
+    deficiency: Mapping[str, Any],
 ) -> Dict[str, Any]:
     body = copy.deepcopy(dict(campaign))
-    body["parent_exact_pool_refusal"] = _parent_refusal_projection(deficiency)
+    body["parent_exact_pool_refusal"] = _parent_refusal_projection(
+        deficiency
+    )
     body["campaign_sha256"] = _binding._campaign_identity(body)
     return body
 
@@ -67,13 +82,7 @@ def qualify_fixture_candidate(
     census_campaign: Mapping[str, Any],
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Stop when the parent refusal depends on atom-pair co-occurrences.
-
-    The census exposes source reachability per slot. It does not expose the
-    chosen atom value at each slot, so a source-only solve cannot honour a
-    learned ``(slot, atom)`` co-occurrence. Returning a new candidate in that
-    situation would claim a repair that the model never represented.
-    """
+    """Stop when the parent refusal depends on atom-pair co-occurrences."""
     parent = census_campaign.get("parent_exact_pool_refusal")
     if isinstance(parent, Mapping):
         constraints = list(parent.get("forbidden_final_pairs") or [])
@@ -91,7 +100,9 @@ def qualify_fixture_candidate(
             result.update(
                 {
                     "private_acceptance": PAIR_CONSTRAINT_HALT,
-                    "parent_exact_pool_refusal": copy.deepcopy(dict(parent)),
+                    "parent_exact_pool_refusal": copy.deepcopy(
+                        dict(parent)
+                    ),
                 }
             )
             return result
@@ -102,40 +113,63 @@ def qualify_fixture_candidate(
     )
 
 
+# ``fixture_slot_contract`` was a public import before the final review layer
+# existed. Keep that path authoritative rather than leaving a source-only bypass.
+_contract_module.qualify_fixture_candidate = qualify_fixture_candidate
+
+
 def install_fixture_slot_review_closure(core_class: Any) -> Any:
     """Install the census wrapper plus exact request-cap propagation."""
-    if getattr(core_class, "_fixture_slot_review_closure_installed", False):
+    if getattr(
+        core_class,
+        "_fixture_slot_review_closure_installed",
+        False,
+    ):
         return core_class
 
     _binding.install_fixture_slot_census(core_class)
-    original_compose = core_class.compose_taste_arrangement
+    original_compose = getattr(
+        core_class,
+        "compose_taste_arrangement",
+        None,
+    )
     original_propose = core_class.propose_island_set
 
-    def compose_with_request_cap(
-        self: Any,
-        pool: list[dict[str, Any]],
-        params: Dict[str, Any],
-        seed: int,
-    ) -> Dict[str, Any]:
-        effective = dict(params or {})
-        declared = getattr(self, _CAP_CONTEXT, None)
-        if declared is not None and effective.get("exact_pool_max_source_events") is None:
-            effective["exact_pool_max_source_events"] = int(declared)
-        return original_compose(self, pool, effective, seed)
+    if original_compose is not None:
+        def compose_with_request_cap(
+            self: Any,
+            pool: list[dict[str, Any]],
+            params: Dict[str, Any],
+            seed: int,
+        ) -> Dict[str, Any]:
+            effective = dict(params or {})
+            declared = _REQUEST_CAP.get()
+            if (
+                declared is not None
+                and effective.get("exact_pool_max_source_events") is None
+            ):
+                effective["exact_pool_max_source_events"] = int(declared)
+            return original_compose(self, pool, effective, seed)
 
-    compose_with_request_cap.__name__ = getattr(
-        original_compose, "__name__", "compose_taste_arrangement"
-    )
-    compose_with_request_cap.__doc__ = getattr(original_compose, "__doc__", None)
-    compose_with_request_cap.__wrapped__ = original_compose
-    core_class.compose_taste_arrangement = compose_with_request_cap
+        compose_with_request_cap.__name__ = getattr(
+            original_compose,
+            "__name__",
+            "compose_taste_arrangement",
+        )
+        compose_with_request_cap.__doc__ = getattr(
+            original_compose,
+            "__doc__",
+            None,
+        )
+        compose_with_request_cap.__wrapped__ = original_compose
+        core_class.compose_taste_arrangement = compose_with_request_cap
 
     def propose_with_refusal_binding(
-        self: Any, params: Dict[str, Any]
+        self: Any,
+        params: Dict[str, Any],
     ) -> Dict[str, Any]:
         request = dict(params or {})
-        previous_cap = getattr(self, _CAP_CONTEXT, None)
-        had_previous = hasattr(self, _CAP_CONTEXT)
+        token = None
         declared = request.get("exact_pool_max_source_events")
         if declared not in (None, ""):
             cap = int(declared)
@@ -143,18 +177,24 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
                 raise _binding.FixtureSlotQualificationError(
                     "exact_pool_max_source_events must be positive"
                 )
-            setattr(self, _CAP_CONTEXT, cap)
+            token = _REQUEST_CAP.set(cap)
         try:
             return original_propose(self, request)
         except Exception as exc:
             deficiency = getattr(exc, "deficiency", None)
             if not isinstance(deficiency, MutableMapping):
                 raise
-            campaign = deficiency.get("fixture_slot_census_campaign")
+            campaign = deficiency.get(
+                "fixture_slot_census_campaign"
+            )
             if isinstance(campaign, Mapping):
                 bound = _bind_parent_refusal(campaign, deficiency)
-                deficiency["fixture_slot_census_campaign"] = bound
-                prior_run = str(deficiency.get("fixture_slot_census_run_id") or "")
+                deficiency[
+                    "fixture_slot_census_campaign"
+                ] = bound
+                prior_run = str(
+                    deficiency.get("fixture_slot_census_run_id") or ""
+                )
                 try:
                     _binding._publish_census_run(
                         self,
@@ -164,7 +204,9 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
                         supersedes_run_id=prior_run or None,
                     )
                 except Exception as receipt_error:
-                    deficiency["fixture_slot_census_receipt_failure"] = {
+                    deficiency[
+                        "fixture_slot_census_receipt_failure"
+                    ] = {
                         "exception_type": type(receipt_error).__name__,
                         "error": str(receipt_error),
                         "impossibility_claimed": False,
@@ -172,22 +214,25 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
                     }
             raise
         finally:
-            if had_previous:
-                setattr(self, _CAP_CONTEXT, previous_cap)
-            elif hasattr(self, _CAP_CONTEXT):
-                delattr(self, _CAP_CONTEXT)
+            if token is not None:
+                _REQUEST_CAP.reset(token)
 
     propose_with_refusal_binding.__name__ = getattr(
-        original_propose, "__name__", "propose_island_set"
+        original_propose,
+        "__name__",
+        "propose_island_set",
     )
-    propose_with_refusal_binding.__doc__ = getattr(original_propose, "__doc__", None)
+    propose_with_refusal_binding.__doc__ = getattr(
+        original_propose,
+        "__doc__",
+        None,
+    )
     propose_with_refusal_binding.__wrapped__ = original_propose
     core_class.propose_island_set = propose_with_refusal_binding
     core_class._fixture_slot_review_closure_installed = True
     return core_class
 
 
-# Keep the public installer name stable for ``earcrate.__init__``.
 install_fixture_slot_census = install_fixture_slot_review_closure
 
 

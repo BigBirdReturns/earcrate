@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 
 import earcrate.plan.fixture_slot_binding as slot_binding
+from earcrate.plan import fixture_slot_contract as direct_contract
 from earcrate.plan.fixture_slot_qualification import (
     PAIR_CONSTRAINT_HALT,
     install_fixture_slot_census,
@@ -48,6 +49,16 @@ def test_parent_atom_pair_constraints_stop_source_only_qualification():
     assert result["parent_exact_pool_refusal"][
         "learned_pair_constraint_count"
     ] == 1
+
+
+def test_direct_contract_import_has_no_pair_constraint_bypass():
+    assert direct_contract.qualify_fixture_candidate is qualify_fixture_candidate
+    result = direct_contract.qualify_fixture_candidate(
+        _candidate(), _campaign_with_parent_pair_constraint()
+    )
+    assert result["complete"] is False
+    assert result["impossibility_claimed"] is False
+    assert result["private_acceptance"] == PAIR_CONSTRAINT_HALT
 
 
 def test_request_cap_reaches_the_exact_island_composer_and_is_restored():
@@ -94,9 +105,6 @@ def test_request_cap_reaches_the_exact_island_composer_and_is_restored():
             {"exact_pool_max_source_events": 2}
         ) == {"ok": True}
         assert core.caps == [2]
-        assert not hasattr(
-            core, "_fixture_slot_exact_pool_max_source_events"
-        )
     finally:
         slot_binding.build_fixture_slot_census_campaign = original_builder
         slot_binding._publish_census_run = original_publisher

@@ -182,6 +182,8 @@ def _normalize_authority_candidate(
         raw_islands = list(normalized.get("islands") or [])
     raw_sections = list(target.get("sections") or [])
     raw_transitions = list(target.get("transitions") or [])
+    if not raw_transitions and target is not normalized:
+        raw_transitions = list(normalized.get("transitions") or [])
     if not all(isinstance(row, Mapping) for row in raw_islands):
         raise FixtureDiversityError("islands must be mappings")
     if not all(isinstance(row, Mapping) for row in raw_sections):
@@ -208,7 +210,21 @@ def _normalize_authority_candidate(
             sections_by_island.get(label, ()) if include_realization_context else ()
         )
         indexed.append((row, label, _island_descriptor(row, section_context)))
-    indexed.sort(key=lambda item: canonical_json(item[2]))
+
+    def island_order(
+        item: Tuple[Mapping[str, Any], str, Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        row, _label, descriptor = item
+        if row.get("start_s") is not None:
+            return (
+                0,
+                float(row["start_s"]),
+                float(row.get("end_s") or row["start_s"]),
+                canonical_json(descriptor),
+            )
+        return (1, canonical_json(descriptor))
+
+    indexed.sort(key=island_order)
 
     canonical_id_by_label: Dict[str, str] = {}
     canonical_islands: List[Dict[str, Any]] = []

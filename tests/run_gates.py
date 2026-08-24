@@ -47,6 +47,7 @@ MODULES = (
     "test_fixture_derivation",
     "test_fixture_review_closure",
     "test_fixture_slot_qualification",
+    "test_fixture_slot_role_contract",
 )
 
 

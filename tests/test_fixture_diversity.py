@@ -96,6 +96,18 @@ def test_fixture_labels_and_arrangement_hashes_cannot_manufacture_identity():
     assert fixture_id(base) == fixture_id(variant)
 
 
+def test_source_partition_distinguishes_redistribution_under_the_same_union():
+    base = _candidate(
+        "a", [["s1", "s2"], ["s3", "s4"]], [(120.0, 0), (100.0, 5)], [50, 50]
+    )
+    redistributed = _candidate(
+        "b", [["s1", "s3"], ["s2", "s4"]], [(120.0, 0), (100.0, 5)], [50, 50]
+    )
+    axes = fixture_distance(base, redistributed)["axes"]
+    assert axes["source_set"] == 0.0
+    assert axes["source_partition"] > 0.0
+
+
 def test_source_set_distance_is_symmetric_bounded_and_order_independent():
     assert jaccard_distance(["a", "b", "c"], ["c", "d"]) == jaccard_distance(
         ["d", "c"], ["c", "b", "a"]
@@ -113,6 +125,15 @@ def test_deck_sequence_distinguishes_order_and_exact_identity():
     assert first > 0.0
     assert second > 0.0
     assert first != second
+
+
+def test_form_signature_distinguishes_section_span_and_transition_law():
+    base = _candidate("a", [["a"]], [(120.0, 0)], [90])
+    changed = json.loads(json.dumps(base))
+    changed["fixture_id"] = "b"
+    changed["arrangement"]["sections"][0]["end_s"] -= 5.0
+    changed["arrangement"]["sections"][0]["transition_in"] = {"type": "cut"}
+    assert fixture_distance(base, changed)["axes"]["form_sequence"] > 0.0
 
 
 def test_duration_distance_is_independent_of_island_declaration_order():
@@ -158,6 +179,7 @@ def test_max_min_does_not_claim_discrimination_for_pair_or_zero_range():
     ]
     report = select_max_min(equal, limit=2, weights={
         "source_set": 1.0,
+        "source_partition": 0.0,
         "deck_sequence": 0.0,
         "island_duration": 0.0,
         "form_sequence": 0.0,
@@ -192,7 +214,7 @@ def test_fixture_receipts_name_only_structural_metrics():
     text = json.dumps(select_max_min(candidates, limit=2), sort_keys=True).lower()
     assert "mfcc" not in text
     for name in (
-        "source_set", "deck_sequence", "island_duration",
+        "source_set", "source_partition", "deck_sequence", "island_duration",
         "form_sequence", "role_occupancy", "transition_histogram",
     ):
         assert name in text

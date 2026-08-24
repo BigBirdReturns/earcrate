@@ -16,12 +16,16 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "source_set": 0.30,
-    "deck_sequence": 0.20,
-    "island_duration": 0.15,
-    "form_sequence": 0.20,
-    "role_occupancy": 0.10,
-    "transition_histogram": 0.05,
+    # Equal weights are the neutral repository default. A campaign may supply an
+    # explicit public contract, but private observations never silently tune this
+    # selector.
+    "source_set": 1.0,
+    "source_partition": 1.0,
+    "deck_sequence": 1.0,
+    "island_duration": 1.0,
+    "form_sequence": 1.0,
+    "role_occupancy": 1.0,
+    "transition_histogram": 1.0,
 }
 EPS = 1e-12
 
@@ -144,16 +148,32 @@ def _role_set(section: Mapping[str, Any]) -> Tuple[str, ...]:
     return tuple(sorted(roles))
 
 
+def _section_span_token(section: Mapping[str, Any]) -> Tuple[str, Any]:
+    if section.get("bars") is not None:
+        return ("bars", int(section["bars"]))
+    if section.get("start_s") is not None and section.get("end_s") is not None:
+        return ("seconds_hex", _float_identity(float(section["end_s"]) - float(section["start_s"])))
+    return ("unspecified", "")
+
+
 def _form_token(
     section: Mapping[str, Any],
     island_position: Mapping[str, int],
-) -> Tuple[int, str, Tuple[str, ...]]:
+) -> Tuple[int, str, Tuple[str, ...], Tuple[str, Any], str]:
     label = str(section.get("island_id") or "")
     position = island_position.get(label, -1)
+    transition = section.get("transition_in")
+    transition_type = (
+        str(transition.get("technique") or transition.get("type") or "")
+        if isinstance(transition, Mapping)
+        else ""
+    )
     return (
         position,
         str(section.get("type") or section.get("section_type") or ""),
         _role_set(section),
+        _section_span_token(section),
+        transition_type,
     )
 
 
@@ -178,6 +198,7 @@ def fixture_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
 
     deck_sequence: List[Dict[str, Any]] = []
     duration_sequence: List[str] = []
+    source_partition: List[List[str]] = []
     island_position: Dict[str, int] = {}
     for index, row in enumerate(islands):
         island_id = _island_id(row, index)
@@ -193,6 +214,10 @@ def fixture_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
             "target_key": int(key) % 12,
         })
         duration_sequence.append(_float_identity(_duration(row)))
+        partition_values: set[str] = set()
+        for field in ("source_allowlist", "source_include_ids", "source_ids"):
+            partition_values.update(str(value) for value in row.get(field) or [] if str(value))
+        source_partition.append(sorted(partition_values))
 
     transition_histogram = _normalized_histogram(
         (
@@ -206,6 +231,7 @@ def fixture_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
 
     projection: Dict[str, Any] = {
         "source_ids": _source_ids(candidate, islands),
+        "source_partition": source_partition,
         "deck_sequence": deck_sequence,
         "duration_sequence": duration_sequence,
         "form_sequence": form_sequence,
@@ -285,6 +311,7 @@ def fixture_distance(
     b = fixture_projection(right)
     axes = {
         "source_set": jaccard_distance(a["source_ids"], b["source_ids"]),
+        "source_partition": _sequence_distance(a["source_partition"], b["source_partition"]),
         "deck_sequence": _sequence_distance(a["deck_sequence"], b["deck_sequence"]),
         "island_duration": _duration_distance(a["duration_sequence"], b["duration_sequence"]),
         "form_sequence": _sequence_distance(a["form_sequence"], b["form_sequence"]),

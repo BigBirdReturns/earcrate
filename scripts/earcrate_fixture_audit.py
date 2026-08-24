@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare governed fixture candidates or measure one published master."""
+"""Derive governed fixtures, compare them, or measure one published master."""
 from __future__ import annotations
 
 import argparse
@@ -14,10 +14,11 @@ import numpy as np
 import soundfile as sf
 
 from earcrate.judge.arc import measure_dynamic_arc
+from earcrate.plan.fixture_derivation import derive_fixture_candidates
 from earcrate.plan.fixture_diversity import fixture_id, fixture_projection, select_max_min
 
 
-AUDIT_VERSION = "earcrate_fixture_audit_v1"
+AUDIT_VERSION = "earcrate_fixture_audit_v2"
 
 
 def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -61,6 +62,55 @@ def _emit(value: Mapping[str, Any], output: Optional[Path]) -> None:
         return
     _write_json_atomic(output, value)
     print(str(output))
+
+
+def derive_receipt(
+    matrix_path: Path,
+    output_dir: Path,
+    candidate_count: Optional[int] = None,
+    base_seed: Optional[int] = None,
+    max_attempts: Optional[int] = None,
+) -> Dict[str, Any]:
+    matrix_file = matrix_path.expanduser().resolve()
+    output_root = output_dir.expanduser().resolve()
+    matrix = _load_json(matrix_file)
+    result = derive_fixture_candidates(
+        matrix,
+        candidate_count=candidate_count,
+        base_seed=base_seed,
+        max_attempts=max_attempts,
+    )
+    candidates = sorted(
+        list(result.get("candidates") or []),
+        key=lambda candidate: str(candidate["fixture_sha256"]),
+    )
+    candidate_files: List[Dict[str, Any]] = []
+    for candidate in candidates:
+        semantic_identity = str(candidate["fixture_sha256"])
+        path = output_root / f"fixture-{semantic_identity[:16]}.json"
+        _write_json_atomic(path, candidate)
+        candidate_files.append({
+            "path": str(path),
+            "file_sha256": _sha256_file(path),
+            "fixture_id": str(candidate["fixture_id"]),
+            "semantic_fixture_identity": semantic_identity,
+            "derivation_seed": int(candidate["fixture_derivation_seed"]),
+            "island_count": len(candidate.get("islands") or []),
+            "assigned_source_count": int(candidate["fixture_derivation"]["assigned_source_count"]),
+            "net_duration_s": float(candidate["fixture_derivation"]["net_duration_s"]),
+        })
+    return {
+        **{key: value for key, value in result.items() if key != "candidates"},
+        "kind": "earcrate_fixture_derivation_receipt",
+        "audit_version": AUDIT_VERSION,
+        "path_semantics": "operational_only_not_fixture_or_source_identity",
+        "matrix_file": {
+            "path": str(matrix_file),
+            "file_sha256": _sha256_file(matrix_file),
+            "matrix_semantic_sha256": str(result["matrix_semantic_sha256"]),
+        },
+        "candidate_files": candidate_files,
+    }
 
 
 def _candidate_rows(paths: Sequence[Path]) -> List[Tuple[Mapping[str, Any], Dict[str, Any]]]:
@@ -131,9 +181,20 @@ def arc_receipt(arrangement_path: Path, master_path: Path) -> Dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="earcrate_fixture_audit",
-        description="Compare fixture authority or measure the dynamic arc of a governed master",
+        description="Derive fixture authority, compare it, or measure the dynamic arc of a governed master",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    derive = subparsers.add_parser(
+        "derive",
+        help="derive direct planner requests from a public-safe survival matrix",
+    )
+    derive.add_argument("matrix", type=Path, help="public-safe survival matrix JSON")
+    derive.add_argument("--count", type=int, default=None, help="candidate count override")
+    derive.add_argument("--base-seed", type=int, default=None, help="derivation seed override")
+    derive.add_argument("--max-attempts", type=int, default=None, help="bounded attempt override")
+    derive.add_argument("--out-dir", type=Path, required=True, help="candidate output directory")
+    derive.add_argument("--receipt", type=Path, default=None, help="derivation receipt path")
 
     diversity = subparsers.add_parser(
         "diversity",
@@ -157,13 +218,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "derive":
+            if args.count is not None and int(args.count) <= 0:
+                raise ValueError("--count must be positive")
+            if args.max_attempts is not None and int(args.max_attempts) <= 0:
+                raise ValueError("--max-attempts must be positive")
+            receipt = derive_receipt(
+                args.matrix,
+                args.out_dir,
+                candidate_count=args.count,
+                base_seed=args.base_seed,
+                max_attempts=args.max_attempts,
+            )
+            receipt_path = args.receipt or (args.out_dir / "DERIVATION_RECEIPT.json")
+            _emit(receipt, receipt_path)
+            return 0 if bool(receipt["complete"]) else 3
         if args.command == "diversity":
             if int(args.limit) <= 0:
                 raise ValueError("--limit must be positive")
             _emit(diversity_receipt(args.candidates, int(args.limit)), args.out)
         elif args.command == "arc":
             _emit(arc_receipt(args.arrangement, args.master), args.out)
-        else:  # argparse protects this branch
+        else:
             raise ValueError(f"unknown command: {args.command}")
     except Exception as exc:
         print(f"earcrate_fixture_audit: {type(exc).__name__}: {exc}", file=sys.stderr)

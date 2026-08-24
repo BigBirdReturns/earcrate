@@ -43,6 +43,7 @@ MODULES = (
     "test_key_identity_zero",
     "test_fixture_diversity",
     "test_fixture_audit_cli",
+    "test_fixture_derivation",
 )
 
 

@@ -2,8 +2,9 @@
 
 The seed is deliberately absent from every distance axis. A fixture comparison
 asks whether the source universe, exact decks, island allocation, form, role
-occupancy, or transition vocabulary changed. Arrangement hashes and audio hashes
-remain provenance; they are not evidence that the music's governing fixture moved.
+occupancy, or transition vocabulary changed. Arrangement hashes, audio hashes,
+and display labels remain provenance; they are not evidence that the music's
+governing fixture moved.
 """
 from __future__ import annotations
 
@@ -47,13 +48,18 @@ def _islands(candidate: Mapping[str, Any]) -> List[Mapping[str, Any]]:
     if not all(isinstance(row, Mapping) for row in rows):
         raise FixtureDiversityError("islands must be mappings")
 
-    def start_key(item: Tuple[int, Mapping[str, Any]]) -> Tuple[int, float, int]:
-        index, row = item
-        if row.get("start_s") is None:
-            return (1, 0.0, index)
-        return (0, float(row["start_s"]), index)
-
-    return [row for _index, row in sorted(enumerate(rows), key=start_key)]
+    indexed = list(enumerate(rows))
+    if rows and all(row.get("start_s") is not None for row in rows):
+        indexed.sort(
+            key=lambda item: (
+                float(item[1]["start_s"]),
+                float(item[1].get("end_s") or item[1]["start_s"]),
+                str(item[1].get("island_id") or ""),
+            )
+        )
+    elif rows and all(row.get("island_id") not in (None, "") for row in rows):
+        indexed.sort(key=lambda item: str(item[1]["island_id"]))
+    return [row for _index, row in indexed]
 
 
 def _sections(candidate: Mapping[str, Any]) -> List[Mapping[str, Any]]:
@@ -63,17 +69,23 @@ def _sections(candidate: Mapping[str, Any]) -> List[Mapping[str, Any]]:
     if not all(isinstance(row, Mapping) for row in rows):
         raise FixtureDiversityError("sections must be mappings")
 
-    def position(item: Tuple[int, Mapping[str, Any]]) -> Tuple[float, float, int]:
-        index, row = item
-        if row.get("start_s") is not None:
-            return (float(row["start_s"]), 0.0, index)
-        return (
-            float(row.get("island_index") or 0),
-            float(row.get("bar_start") or 0),
-            index,
+    indexed = list(enumerate(rows))
+    if rows and all(row.get("start_s") is not None for row in rows):
+        indexed.sort(
+            key=lambda item: (
+                float(item[1]["start_s"]),
+                float(item[1].get("end_s") or item[1]["start_s"]),
+                item[0],
+            )
         )
-
-    return [row for _index, row in sorted(enumerate(rows), key=position)]
+    elif rows and all(row.get("bar_start") is not None for row in rows):
+        indexed.sort(
+            key=lambda item: (
+                float(item[1].get("bar_start") or 0.0),
+                item[0],
+            )
+        )
+    return [row for _index, row in indexed]
 
 
 def _transitions(candidate: Mapping[str, Any]) -> List[Mapping[str, Any]]:
@@ -132,9 +144,14 @@ def _role_set(section: Mapping[str, Any]) -> Tuple[str, ...]:
     return tuple(sorted(roles))
 
 
-def _form_token(section: Mapping[str, Any]) -> Tuple[str, str, Tuple[str, ...]]:
+def _form_token(
+    section: Mapping[str, Any],
+    island_position: Mapping[str, int],
+) -> Tuple[int, str, Tuple[str, ...]]:
+    label = str(section.get("island_id") or "")
+    position = island_position.get(label, -1)
     return (
-        str(section.get("island_id") or ""),
+        position,
         str(section.get("type") or section.get("section_type") or ""),
         _role_set(section),
     )
@@ -149,29 +166,33 @@ def _normalized_histogram(values: Iterable[Any]) -> Dict[str, float]:
 
 
 def fixture_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
-    """Return the fixture-level semantic projection used by every comparison."""
+    """Return the fixture-level semantic projection used by every comparison.
+
+    Island labels are used only to join sections to their musical island position.
+    They are absent from the projection. Renaming ``island-001`` to ``deck-b`` or
+    respelling an arrangement hash therefore cannot manufacture diversity.
+    """
     islands = _islands(candidate)
     sections = _sections(candidate)
     transitions = _transitions(candidate)
 
     deck_sequence: List[Dict[str, Any]] = []
-    duration_by_island: Dict[str, float] = {}
-    seen_islands: set[str] = set()
+    duration_sequence: List[str] = []
+    island_position: Dict[str, int] = {}
     for index, row in enumerate(islands):
         island_id = _island_id(row, index)
-        if island_id in seen_islands:
+        if island_id in island_position:
             raise FixtureDiversityError(f"duplicate island_id: {island_id}")
-        seen_islands.add(island_id)
+        island_position[island_id] = index
         bpm = row.get("target_bpm", row.get("island_bpm"))
         key = row.get("target_key", row.get("island_key"))
         if bpm is None or key is None:
             raise FixtureDiversityError(f"island {island_id!r} has no exact deck identity")
         deck_sequence.append({
-            "island_id": island_id,
             "target_bpm_hex": _float_identity(bpm),
             "target_key": int(key) % 12,
         })
-        duration_by_island[island_id] = _duration(row)
+        duration_sequence.append(_float_identity(_duration(row)))
 
     transition_histogram = _normalized_histogram(
         (
@@ -181,15 +202,12 @@ def fixture_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
         for row in transitions
     )
     role_histogram = _normalized_histogram(_role_set(section) for section in sections)
-    form_sequence = [_form_token(section) for section in sections]
+    form_sequence = [_form_token(section, island_position) for section in sections]
 
-    projection = {
+    projection: Dict[str, Any] = {
         "source_ids": _source_ids(candidate, islands),
         "deck_sequence": deck_sequence,
-        "duration_by_island": {
-            island_id: _float_identity(duration_by_island[island_id])
-            for island_id in sorted(duration_by_island)
-        },
+        "duration_sequence": duration_sequence,
         "form_sequence": form_sequence,
         "role_occupancy_histogram": role_histogram,
         "transition_histogram": transition_histogram,
@@ -201,11 +219,7 @@ def fixture_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def fixture_id(candidate: Mapping[str, Any], projection: Optional[Mapping[str, Any]] = None) -> str:
-    explicit = (
-        candidate.get("fixture_id")
-        or candidate.get("fixture_sha256")
-        or candidate.get("arrangement_sha256")
-    )
+    explicit = candidate.get("fixture_id") or candidate.get("fixture_sha256")
     if explicit not in (None, ""):
         return str(explicit)
     body = projection or fixture_projection(candidate)
@@ -240,17 +254,21 @@ def _sequence_distance(left: Sequence[Any], right: Sequence[Any]) -> float:
     return previous[-1] / max(len(a), len(b))
 
 
-def _duration_distance(left: Mapping[str, str], right: Mapping[str, str]) -> float:
-    keys = sorted(set(left) | set(right))
-    a = {key: float.fromhex(left[key]) if key in left else 0.0 for key in keys}
-    b = {key: float.fromhex(right[key]) if key in right else 0.0 for key in keys}
-    sum_a = sum(a.values())
-    sum_b = sum(b.values())
+def _duration_distance(left: Sequence[str], right: Sequence[str]) -> float:
+    a = [float.fromhex(value) for value in left]
+    b = [float.fromhex(value) for value in right]
+    width = max(len(a), len(b))
+    if width == 0:
+        return 0.0
+    a += [0.0] * (width - len(a))
+    b += [0.0] * (width - len(b))
+    sum_a = sum(a)
+    sum_b = sum(b)
     if sum_a <= EPS and sum_b <= EPS:
         return 0.0
     if sum_a <= EPS or sum_b <= EPS:
         return 1.0
-    return 0.5 * sum(abs(a[key] / sum_a - b[key] / sum_b) for key in keys)
+    return 0.5 * sum(abs(x / sum_a - y / sum_b) for x, y in zip(a, b))
 
 
 def _histogram_distance(left: Mapping[str, float], right: Mapping[str, float]) -> float:
@@ -268,7 +286,7 @@ def fixture_distance(
     axes = {
         "source_set": jaccard_distance(a["source_ids"], b["source_ids"]),
         "deck_sequence": _sequence_distance(a["deck_sequence"], b["deck_sequence"]),
-        "island_duration": _duration_distance(a["duration_by_island"], b["duration_by_island"]),
+        "island_duration": _duration_distance(a["duration_sequence"], b["duration_sequence"]),
         "form_sequence": _sequence_distance(a["form_sequence"], b["form_sequence"]),
         "role_occupancy": _histogram_distance(
             a["role_occupancy_histogram"], b["role_occupancy_histogram"]

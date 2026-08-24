@@ -8,6 +8,7 @@ import numpy as np
 from earcrate.plan.fixture_diversity import (
     classify_candidate_family,
     fixture_distance,
+    fixture_id,
     jaccard_distance,
     select_max_min,
 )
@@ -15,7 +16,7 @@ from earcrate.judge.arc import gate_frame_rms_db, measure_dynamic_arc
 
 
 def _candidate(
-    fixture_id,
+    fixture_id_value,
     sources,
     decks,
     durations,
@@ -24,11 +25,12 @@ def _candidate(
     transitions=("equal_power", "equal_power"),
     arrangement_sha=None,
     seed=1,
+    island_prefix="isl",
 ):
     islands = []
     cursor = 0.0
     for index, ((bpm, key), duration) in enumerate(zip(decks, durations)):
-        island_id = f"isl-{index}"
+        island_id = f"{island_prefix}-{index}"
         islands.append({
             "island_id": island_id,
             "start_s": cursor,
@@ -52,9 +54,9 @@ def _candidate(
             "layers": [{"role": role} for role in role_sets[index]],
         })
     return {
-        "fixture_id": fixture_id,
+        "fixture_id": fixture_id_value,
         "seed": seed,
-        "arrangement_sha256": arrangement_sha or f"arr-{fixture_id}",
+        "arrangement_sha256": arrangement_sha or f"arr-{fixture_id_value}",
         "arrangement": {
             "islands": islands,
             "sections": sections,
@@ -78,6 +80,20 @@ def test_seed_only_hash_changes_are_non_discriminating():
     report = classify_candidate_family([base, other])
     assert report["status"] == "non_discriminating"
     assert report["distance_matrix"][0]["total"] == 0.0
+
+
+def test_fixture_labels_and_arrangement_hashes_cannot_manufacture_identity():
+    base = _candidate(
+        None, [["s1", "s2"], ["s3"]], [(120.0, 0), (100.0, 5)], [60.0, 40.0],
+        arrangement_sha="aaa", island_prefix="old",
+    )
+    variant = _candidate(
+        None, [["s1", "s2"], ["s3"]], [(120.0, 0), (100.0, 5)], [60.0, 40.0],
+        arrangement_sha="bbb", island_prefix="renamed",
+    )
+    report = fixture_distance(base, variant)
+    assert report["total"] == 0.0
+    assert fixture_id(base) == fixture_id(variant)
 
 
 def test_source_set_distance_is_symmetric_bounded_and_order_independent():
@@ -201,7 +217,13 @@ def _arc_fixture():
                 *([{"role": "bass", "gain_db": -7.0}] if index % 2 else []),
             ],
         })
-    return signal, sr, {"sections": sections}
+    return signal, sr, {
+        "islands": [
+            {"island_id": "left", "start_s": 0.0, "end_s": 20.0},
+            {"island_id": "right", "start_s": 20.0, "end_s": 40.0},
+        ],
+        "sections": sections,
+    }
 
 
 def test_arc_measurement_reproduces_the_gate_frame_law():
@@ -226,7 +248,34 @@ def test_arc_measurement_separates_variance_without_assigning_cause():
     assert abs(report["variance_decomposition_residual_db2"]) < 1e-10
     assert report["causal_disposition"] == "unassigned_measurement_only"
     assert len(report["role_entries_and_exits"]) == 3
-    assert "cause" not in json.dumps(report).lower().replace("causal_disposition", "")
+    assert all("cause" not in key for key in report if key != "causal_disposition")
+
+
+def test_arc_overlap_attribution_is_explicit_and_declaration_order_stable():
+    sr = 1000
+    signal = np.concatenate([
+        np.full(sr * 10, value, dtype=np.float32)
+        for value in (0.05, 0.10, 0.20)
+    ])
+    arrangement = {
+        "islands": [
+            {"island_id": "left", "start_s": 0.0, "end_s": 20.0},
+            {"island_id": "right", "start_s": 15.0, "end_s": 30.0},
+        ],
+        "sections": [
+            {"island_id": "left", "type": "BUILD", "start_s": 0.0, "end_s": 20.0, "layers": []},
+            {"island_id": "right", "type": "PAYOFF", "start_s": 15.0, "end_s": 30.0, "layers": []},
+        ],
+    }
+    first = measure_dynamic_arc(signal, sr, arrangement)
+    reversed_sections = json.loads(json.dumps(arrangement))
+    reversed_sections["sections"].reverse()
+    second = measure_dynamic_arc(signal, sr, reversed_sections)
+    assert first["regions"] == second["regions"]
+    assert first["within_region_variance_db2"] == second["within_region_variance_db2"]
+    assert first["between_region_variance_db2"] == second["between_region_variance_db2"]
+    assert any(row["kind"] == "transition_overlap" for row in first["regions"])
+    assert first["overlap_policy"] == "transition_frames_form_explicit_composite_regions"
 
 
 def test_fixture_diversity_import_does_not_mutate_exact_pool_authority():

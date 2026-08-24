@@ -182,9 +182,9 @@ def test_derivation_is_independent_of_deck_source_and_dictionary_order():
     baseline = derive_fixture_candidates(matrix)
     variant = copy.deepcopy(matrix)
     variant["decks"].reverse()
-    for deck in variant["decks"]:
+    for index, deck in enumerate(variant["decks"]):
         deck["sources"].reverse()
-        deck = {key: deck[key] for key in reversed(list(deck))}
+        variant["decks"][index] = {key: deck[key] for key in reversed(list(deck))}
     variant["request_template"] = {
         key: variant["request_template"][key]
         for key in reversed(list(variant["request_template"]))
@@ -216,6 +216,8 @@ def test_attempt_budget_is_a_bound_not_an_impossibility_claim():
     matrix["max_attempts"] = 4
     matrix["target_source_count"] = 3
     matrix["decks"] = [matrix["decks"][0]]
+    matrix["decks"][0]["sources"] = matrix["decks"][0]["sources"][:3]
+    matrix["decks"][0]["max_sources"] = 3
     receipt = derive_fixture_candidates(matrix)
     assert receipt["derived_candidate_count"] == 1
     assert receipt["complete"] is False

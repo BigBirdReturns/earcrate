@@ -1089,6 +1089,152 @@ def test_a_pool_that_cannot_fill_its_slots_is_refused_by_counting():
         raise AssertionError("six slots cannot be filled by three sources capped at one event")
 
 
+def _stripped(pool, *keys):
+    """The same pool with some identity field removed from every item."""
+    lightened = []
+    for item in pool:
+        copy_item = dict(item)
+        for key in keys:
+            copy_item.pop(key, None)
+        lightened.append(copy_item)
+    return lightened
+
+
+def _inferred_identity_scene(*keys):
+    """A pool the depth-one walk completes *without* any stable identity.
+
+    The arrangement is stamped with the identity ``source_rotation._source_identity``
+    will infer for these items once the explicit keys are gone, so the walk sees full
+    coverage, needs no replacement at all, and its acceptance predicate — which asks
+    only about coverage and the cap — is satisfied. That is the bypass: a plan can
+    reach publication having been assigned entirely on a guess from artist, title, or
+    the local path. The existing identity witness cannot see it, because its fixture
+    also reproduces the singleton refusal and the walk declines before the solver's
+    own identity check is ever reached.
+    """
+    named = [_atom("plain", "drum_anchor", index) for index in range(2)]
+    named.append(_atom("other", "drum_anchor", 0))
+    pool = _stripped(named, *keys)
+    stamped = [
+        dict(item, source_track_key=source_rotation._source_identity(lightened))
+        for item, lightened in zip(named, pool)
+    ]
+    rows = [
+        [("drum_anchor", stamped[0]), ("drum_anchor", stamped[1])],
+        [("drum_anchor", stamped[2])],
+    ]
+    _pool, arrangement, params = _scene(rows, pool, cap=2)
+    return pool, arrangement, params
+
+
+def test_stable_identity_is_required_before_a_proposal_is_even_offered():
+    """Witness 23 — the identity law is a precondition of the path, not of one construction.
+
+    Both variants below would publish without it: the depth-one walk succeeds outright,
+    and the acceptance predicate has nothing to say about identity. The preflight has to
+    run before the proposal is built, or a pool assigned on an inferred key reaches the
+    arrangement and the solver's check never happens.
+    """
+    from earcrate.plan.exact_pool_assignment import accept_fast_path_proposal
+
+    for keys in (("source_track_key", "source_id"), ("atom_id", "id", "loop_id")):
+        pool, arrangement, params = _inferred_identity_scene(*keys)
+
+        # Without the preflight this is exactly what would have been published.
+        proposal = source_rotation._depth_one_fast_path(_Core(), arrangement, pool, params, SEED)
+        assert accept_fast_path_proposal(_Core(), proposal, pool, params, SEED) is None, keys
+
+        try:
+            rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
+        except ExactPoolRotationError as exc:
+            assert getattr(exc, "deficiency", {}).get("failure_class") == "stable_identity_absent", keys
+            assert exc.deficiency["checked_before"] == "both_the_depth_one_proposal_and_the_solver"
+            assert exc.deficiency["unstable_pool_item_count"] == len(pool)
+        else:
+            raise AssertionError(f"a pool with no stable {keys[0]} must fail closed")
+
+    # A pool that does carry stable keys is untouched by the preflight.
+    pool, arrangement, params = _fixture()
+    assert rebalance_exact_pool_sources(_Core(), arrangement, pool, params, 413676)["sections"]
+
+
+def _forced(module, name, replacement, call):
+    """Run ``call`` with one module attribute replaced, and put it back."""
+    original = getattr(module, name)
+    setattr(module, name, replacement)
+    try:
+        call()
+    except ExactPoolRotationError as exc:
+        return exc
+    finally:
+        setattr(module, name, original)
+    raise AssertionError(f"forcing {name} did not raise")
+
+
+def test_an_invariant_failure_is_never_banked_as_an_honest_refusal():
+    """Witness 24 — a branch nobody expects to reach still has to fail safely.
+
+    Each category below is this module contradicting itself: an atom off the graph, a
+    coverage or cap check disagreeing with the assignment that just satisfied it, and an
+    objection the constraint language cannot encode. None of them shows the allowlist
+    has no lawful assignment, so none may set ``impossibility_claimed`` and all must
+    carry the halt instruction a search bound carries. The private harness keys on that
+    field, so an unreachable branch reporting the wrong thing is a live hazard.
+    """
+    from earcrate.plan import exact_pool_assignment
+
+    def run(scene, core):
+        pool, arrangement, params = scene()
+        return lambda: rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+
+    cover = exact_pool_assignment._cover_every_source
+
+    def uncovered(ordered_sources, preferences, assign, atoms, counts, atom_of, forbidden):
+        """Report success while leaving every source uncovered."""
+        counts.clear()
+        return [], None
+
+    def over_cap(ordered_sources, preferences, assign, atoms, counts, atom_of, forbidden):
+        """Cover everything honestly, then put one source far past the cap."""
+        paths, missing = cover(ordered_sources, preferences, assign, atoms, counts, atom_of, forbidden)
+        counts[sorted(ordered_sources)[0]] = 99
+        return paths, missing
+
+    forced = {
+        "selected_atom_has_no_edge": _forced(
+            exact_pool_assignment, "_edge_for_atom", lambda *a, **k: None,
+            run(_singleton_block_scene, _Core()),
+        ),
+        "post_assignment_coverage": _forced(
+            exact_pool_assignment, "_cover_every_source", uncovered,
+            run(_singleton_block_scene, _Core()),
+        ),
+        "post_assignment_cap": _forced(
+            exact_pool_assignment, "_cover_every_source", over_cap,
+            run(_singleton_block_scene, _Core()),
+        ),
+        "unexpressible_pair_objection": _forced(
+            exact_pool_assignment, "_recorded_pairs", lambda violations: [],
+            run(_learned_pair_revision_scene, _SelfPairVetoCore()),
+        ),
+    }
+
+    for category, exc in forced.items():
+        assert isinstance(exc, exact_pool_assignment.ExactPoolInvariantError), category
+        assert exc.deficiency["impossibility_claimed"] is False, category
+        assert exc.deficiency["evidence_class"] == "implementation_invariant_failure", category
+        assert exc.deficiency["private_acceptance"] == exact_pool_assignment.INDETERMINATE_REFUSAL_ACTION
+        assert exc.deficiency["failure_class"] not in {
+            "cap_constraint", "role_capacity", "section_pair_compatibility",
+        }, category
+        for claim in ("is impossible", "exhausted the assignment space", "no complete assignment"):
+            assert claim not in str(exc), (category, claim)
+
+    assert {exc.deficiency["failure_class"] for exc in forced.values()} == {
+        "selected_atom_has_no_edge", "post_assignment_invariant", "unexpressible_pair_objection",
+    }
+
+
 def _witness_references(node):
     """Every ``tests/...::name`` string anywhere inside a provenance structure."""
     found = set()

@@ -217,11 +217,14 @@ COMPLETENESS_STATEMENT = {
     "refusal_evidence": (
         "every deficiency carries impossibility_claimed. It is true only where the evidence "
         "beside it is a proof — a Hall witness, a counting argument, an exhausted alternating "
-        "exchange, or an exhausted assignment space, which search.space_exhausted marks. A "
-        "search_bound refusal sets it false and carries private_acceptance: the search ran out "
-        "of nodes, stack, or rounds, so it is neither a capacity diagnosis nor a deficiency "
-        "witness, may never be read as 'no compatible assignment exists', and must stop a run "
-        "that is deciding acceptance rather than count as an honest refusal"
+        "exchange, or an exhausted assignment space, which search.space_exhausted marks. Two "
+        "kinds of refusal set it false and carry private_acceptance instead. A search_bound "
+        "ran out of nodes, stack, or rounds. An ExactPoolInvariantError is this module "
+        "contradicting itself: an atom off the graph, a coverage or cap check disagreeing "
+        "with the assignment that just satisfied it, or an objection the constraint language "
+        "cannot encode. Neither is a capacity diagnosis or a deficiency witness, neither may "
+        "be read as 'no compatible assignment exists', and both must stop a run that is "
+        "deciding acceptance rather than count as an honest refusal"
     ),
     "constraint_identity": "stable_atom_or_loop_id_at_a_musical_position",
 }
@@ -238,6 +241,31 @@ class ExactPoolAssignmentError(_rotation.ExactPoolRotationError):
     def __init__(self, message: str, deficiency: Mapping[str, Any]):
         super().__init__(message)
         self.deficiency = dict(deficiency)
+
+
+class ExactPoolInvariantError(ExactPoolAssignmentError):
+    """This module contradicted itself. It is not a statement about the pool.
+
+    Selecting an atom the graph does not admit, finding a source uncovered or a cap
+    exceeded *after* an assignment that satisfied both, or reaching a published
+    pairing the validator rejects with no expressible objection — each of those is an
+    implementation invariant failing, a mismatch between what the search decided and
+    what publication produced, or an objection the constraint language cannot encode.
+    None of them proves the allowlist has no lawful assignment.
+
+    It subclasses the refusal so existing callers still catch it, but it is separated
+    by type *and* by ``impossibility_claimed``, and it carries the same halt
+    instruction a search bound does. A branch nobody expects to reach is still a
+    branch that has to fail safely when it is.
+    """
+
+    def __init__(self, message: str, deficiency: Mapping[str, Any]):
+        super().__init__(message, {
+            **dict(deficiency),
+            "impossibility_claimed": False,
+            "private_acceptance": INDETERMINATE_REFUSAL_ACTION,
+            "evidence_class": "implementation_invariant_failure",
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +287,34 @@ def _stable_atom_identity(item: Mapping[str, Any]) -> Optional[str]:
         if value not in (None, ""):
             return str(value)
     return None
+
+
+def require_stable_identity(pool: Sequence[Mapping[str, Any]]) -> None:
+    """Fail closed unless every pool item carries an explicit stable identity.
+
+    This runs *before* either construction, not inside the solver, and the ordering is
+    the whole point. ``source_rotation._source_identity`` falls back from an explicit
+    key to an artist/title guess and finally to a hash of the local path, so a
+    depth-one proposal can cover its own *inferred* source set and clear the cap
+    without any pool item ever naming a stable source. Checking identity only on the
+    solver's side leaves that proposal a way to publish, and #121 requires the exact
+    pool path to fail closed here and requires that a local path never decide an
+    assignment. Pools whose items carry real keys are unaffected.
+    """
+    weak = _weak_identity_report([dict(item) for item in pool])
+    if not weak:
+        return
+    raise ExactPoolAssignmentError(
+        f"exact pool assignment refuses: {len(weak)} pool item(s) carry no stable source and atom identity",
+        {
+            "failure_class": "stable_identity_absent",
+            "impossibility_claimed": True,
+            "reason": "matching requires a stable source key plus a stable atom or loop id; a local path may not decide assignment",
+            "checked_before": "both_the_depth_one_proposal_and_the_solver",
+            "unstable_pool_items": weak[:32],
+            "unstable_pool_item_count": len(weak),
+        },
+    )
 
 
 def _weak_identity_report(pool: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
@@ -1234,18 +1290,7 @@ def solve_exact_pool_assignment(
     ) % 12
     max_events = int(params.get("exact_pool_max_source_events") or _rotation.DEFAULT_MAX_SOURCE_EVENTS)
 
-    weak = _weak_identity_report([dict(item) for item in pool])
-    if weak:
-        raise ExactPoolAssignmentError(
-            f"exact pool assignment refuses: {len(weak)} pool item(s) carry no stable source and atom identity",
-            {
-                "failure_class": "stable_identity_absent",
-                "impossibility_claimed": True,
-                "reason": "matching requires a stable source key plus a stable atom or loop id; a local path may not decide assignment",
-                "unstable_pool_items": weak[:32],
-                "unstable_pool_item_count": len(weak),
-            },
-        )
+    require_stable_identity(pool)
 
     pool_by_source: Dict[str, List[Dict[str, Any]]] = {}
     for item in (dict(item) for item in pool):
@@ -1395,12 +1440,15 @@ def solve_exact_pool_assignment(
             layer = trial_sections[section_index]["layers"][layer_index]
             edge = _edge_for_atom(edges, slot_key, target_source, target_atom)
             if edge is None:  # unreachable: every search value comes from the graph
-                raise ExactPoolAssignmentError(
+                raise ExactPoolInvariantError(
                     f"exact pool assignment selected {target_atom!r} with no compatibility edge",
                     {
-                        "failure_class": "internal_consistency",
-                        "impossibility_claimed": True,
-                        "reason": "an assignment value must name an atom the compatibility graph admits at that slot",
+                        "failure_class": "selected_atom_has_no_edge",
+                        "reason": (
+                            "an assignment value must name an atom the compatibility graph admits at "
+                            "that slot; reaching this means the search and the graph disagree, which "
+                            "says nothing about whether the pool has a lawful assignment"
+                        ),
                         "slot": [slot_key[0], slot_key[1]],
                         "source": target_source,
                         "atom": target_atom,
@@ -1444,22 +1492,27 @@ def solve_exact_pool_assignment(
                     escalated = True
                     continue
                 # The complete search honoured every learned constraint and the
-                # finished sections still refuse. The only violations it can still
-                # produce are ones no pair constraint describes.
+                # finished sections still refuse, with nothing new the constraint
+                # language can express. Either the validator objects to something no
+                # co-occurrence describes, or what was searched and what was published
+                # have diverged. Neither shows the pool has no lawful assignment, and
+                # continuing would only reproduce this round, so it stops here as an
+                # invariant failure rather than as a refusal anyone may bank.
                 unpairable = [
                     violation for violation in violations if int(violation["counterpart_layer_index"]) < 0
                 ]
-                raise ExactPoolAssignmentError(
-                    "exact pool assignment cannot publish a section pairing that passes the compatibility law",
+                raise ExactPoolInvariantError(
+                    "exact pool assignment cannot express the objection its own validation raised",
                     {
-                        "failure_class": "section_pair_compatibility",
-                        "impossibility_claimed": True,
+                        "failure_class": "unexpressible_pair_objection",
                         "reason": (
                             "a published layer is inadmissible against no identifiable counterpart, so no "
-                            "co-occurrence constraint can describe it and no reassignment can avoid it"
+                            "co-occurrence constraint can describe the objection and the search cannot be "
+                            "told to avoid it"
                             if unpairable
                             else "a complete search satisfied every learned constraint and the published "
-                                 "sections still refuse the pairing it produced"
+                                 "sections still refuse the pairing it produced, so the search state and "
+                                 "the published arrangement have diverged"
                         ),
                         "violations": violations[:16],
                         "forbidden_final_pairs": list(forbidden_pairs),
@@ -1472,23 +1525,28 @@ def solve_exact_pool_assignment(
         used = {source_id for source_id, count in counts.items() if count > 0}
         missing_after = sorted(set(ordered_sources) - used)
         if missing_after:
-            raise ExactPoolAssignmentError(
+            raise ExactPoolInvariantError(
                 f"exact pool assignment left source unused: {missing_after[0]}",
                 {
-                    "failure_class": "role_capacity",
-                    "impossibility_claimed": True,
-                    "reason": "post-assignment coverage check failed",
+                    "failure_class": "post_assignment_invariant",
+                    "reason": (
+                        "the assignment that was just built covered every source and this check "
+                        "disagrees; that is a contradiction inside this module, not a deficiency "
+                        "in the allowlist"
+                    ),
                     "unmatched_sources": missing_after,
                 },
             )
         if counts and max(counts.values()) > max_events:
             offender = max(sorted(counts), key=lambda source_id: counts[source_id])
-            raise ExactPoolAssignmentError(
+            raise ExactPoolInvariantError(
                 f"exact pool assignment left {offender!r} above cap",
                 {
-                    "failure_class": "cap_constraint",
-                    "impossibility_claimed": True,
-                    "reason": "post-assignment cap check failed",
+                    "failure_class": "post_assignment_invariant",
+                    "reason": (
+                        "the assignment that was just built held the cap and this check disagrees; "
+                        "that is a contradiction inside this module, not a deficiency in the allowlist"
+                    ),
                     "declared_max_source_events": max_events,
                 },
             )
@@ -1799,6 +1857,8 @@ __all__ = [
     "PROVENANCE_WITNESSES",
     "SUCCESSFUL_PATH_PRESERVATION_WITNESS",
     "ExactPoolAssignmentError",
+    "ExactPoolInvariantError",
     "accept_fast_path_proposal",
+    "require_stable_identity",
     "solve_exact_pool_assignment",
 ]

@@ -402,11 +402,12 @@ def rebalance_exact_pool_sources(
     acceptable proposal the second construction solves the whole assignment
     atomically, and only it may declare the exact pool impossible.
 
-    The two preconditions below are the authority's own: a malformed request is
-    refused here rather than described as an assignment deficiency.
+    The preconditions below are the authority's own: a malformed request is refused
+    here rather than described as an assignment deficiency.
     """
     from earcrate.plan.exact_pool_assignment import (
         accept_fast_path_proposal,
+        require_stable_identity,
         solve_exact_pool_assignment,
     )
 
@@ -415,6 +416,14 @@ def rebalance_exact_pool_sources(
         raise ExactPoolRotationError("exact_pool_max_source_events must be positive")
     if not any(_source_identity(dict(item)) for item in pool):
         raise ExactPoolRotationError("exact source pool is empty")
+
+    # Identity is a precondition of the path, not of one construction. The depth-one
+    # walk keys on ``_source_identity``, which infers a key from artist and title and
+    # finally from a hash of the local path, so a proposal can satisfy the acceptance
+    # predicate against a source set that nothing stable ever named. Checking only on
+    # the solver's side leaves that proposal a way to publish, so the preflight runs
+    # before any proposal is built.
+    require_stable_identity(pool)
 
     proposal, disposition = _fast_path_proposal(core, arrangement, pool, params, int(seed))
     if proposal is not None:

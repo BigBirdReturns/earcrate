@@ -187,7 +187,13 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
             campaign = deficiency.get(
                 "fixture_slot_census_campaign"
             )
-            if isinstance(campaign, Mapping):
+            # A complete exact-pool refusal always declares whether it is an
+            # impossibility claim. Reduced synthetic callers without that field
+            # retain the binding layer's original one-run behavior.
+            if (
+                isinstance(campaign, Mapping)
+                and "impossibility_claimed" in deficiency
+            ):
                 bound = _bind_parent_refusal(campaign, deficiency)
                 deficiency[
                     "fixture_slot_census_campaign"

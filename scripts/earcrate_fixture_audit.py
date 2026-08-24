@@ -14,7 +14,7 @@ import numpy as np
 import soundfile as sf
 
 from earcrate.judge.arc import measure_dynamic_arc
-from earcrate.plan.fixture_diversity import fixture_id, select_max_min
+from earcrate.plan.fixture_diversity import fixture_id, fixture_projection, select_max_min
 
 
 AUDIT_VERSION = "earcrate_fixture_audit_v1"
@@ -68,13 +68,19 @@ def _candidate_rows(paths: Sequence[Path]) -> List[Tuple[Mapping[str, Any], Dict
     for path in paths:
         resolved = path.expanduser().resolve()
         candidate = _load_json(resolved)
+        projection = fixture_projection(candidate)
         receipt = {
             "path": str(resolved),
             "file_sha256": _sha256_file(resolved),
-            "fixture_id": fixture_id(candidate),
+            "fixture_id": fixture_id(candidate, projection),
+            "semantic_fixture_identity": projection["fixture_identity"],
         }
         rows.append((candidate, receipt))
-    rows.sort(key=lambda row: (row[1]["fixture_id"], row[1]["file_sha256"], row[1]["path"]))
+    rows.sort(key=lambda row: (
+        row[1]["semantic_fixture_identity"],
+        row[1]["file_sha256"],
+        row[1]["path"],
+    ))
     return rows
 
 
@@ -96,10 +102,13 @@ def arc_receipt(arrangement_path: Path, master_path: Path) -> Dict[str, Any]:
     payload = _load_json(arrangement_file)
     arrangement = payload.get("arrangement") if isinstance(payload.get("arrangement"), Mapping) else payload
     audio, sample_rate = sf.read(str(master_file), dtype="float32", always_2d=True)
-    if audio.size == 0:
-        mono = np.zeros(0, dtype=np.float32)
-    else:
-        mono = np.mean(audio, axis=1, dtype=np.float64).astype(np.float32)
+    if audio.shape[0] == 0:
+        raise ValueError("the governed master is empty")
+    if audio.shape[1] != 1:
+        raise ValueError(
+            f"dynamic-arc evidence requires the governed mono master, got {audio.shape[1]} channels"
+        )
+    mono = np.asarray(audio[:, 0], dtype=np.float32)
     return {
         "kind": "earcrate_dynamic_arc_receipt",
         "version": AUDIT_VERSION,
@@ -154,7 +163,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             _emit(diversity_receipt(args.candidates, int(args.limit)), args.out)
         elif args.command == "arc":
             _emit(arc_receipt(args.arrangement, args.master), args.out)
-        else:
+        else:  # argparse protects this branch
             raise ValueError(f"unknown command: {args.command}")
     except Exception as exc:
         print(f"earcrate_fixture_audit: {type(exc).__name__}: {exc}", file=sys.stderr)

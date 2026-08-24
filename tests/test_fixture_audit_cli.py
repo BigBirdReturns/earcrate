@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+
+from earcrate.judge.arc import DynamicArcError, measure_dynamic_arc
+from earcrate.plan.fixture_diversity import fixture_projection, select_max_min
 
 
 def _load_cli():
@@ -135,3 +139,83 @@ def test_fixture_audit_cli_measures_master_without_mutating_inputs(tmp_path):
     assert receipt["path_semantics"] == "operational_only_not_arrangement_or_pcm_identity"
     assert arrangement_path.read_bytes() == before_arrangement
     assert master_path.read_bytes() == before_master
+
+
+def test_fixture_audit_cli_refuses_stereo_as_noncanonical_arc_evidence(tmp_path):
+    cli = _load_cli()
+    sample_rate = 1000
+    signal = np.column_stack([
+        np.full(sample_rate * 10, 0.1, dtype=np.float32),
+        np.full(sample_rate * 10, 0.2, dtype=np.float32),
+    ])
+    arrangement = {
+        "islands": [{"island_id": "only", "start_s": 0.0, "end_s": 10.0}],
+        "sections": [{
+            "island_id": "only", "type": "PAYOFF", "start_s": 0.0, "end_s": 10.0,
+            "layers": [{"role": "vocal"}],
+        }],
+    }
+    arrangement_path = tmp_path / "arrangement.json"
+    master_path = tmp_path / "stereo.wav"
+    output_path = tmp_path / "should-not-exist.json"
+    arrangement_path.write_text(json.dumps(arrangement), encoding="utf-8")
+    sf.write(str(master_path), signal, sample_rate, subtype="FLOAT")
+    assert cli.main(["arc", str(arrangement_path), str(master_path), "--out", str(output_path)]) == 2
+    assert not output_path.exists()
+
+
+def test_display_fixture_ids_do_not_decide_max_min_ties():
+    candidates = [
+        _candidate("z-label", "a", 120.0, 0),
+        _candidate("a-label", "b", 120.0, 0),
+        _candidate("m-label", "c", 90.0, 8),
+    ]
+    baseline = select_max_min(candidates, limit=2)
+    relabelled = copy.deepcopy(candidates)
+    for index, candidate in enumerate(relabelled):
+        candidate["fixture_id"] = f"label-{2 - index}"
+    variant = select_max_min(relabelled, limit=2)
+    assert baseline["selection_status"] == "selected_max_min"
+    assert baseline["selected_semantic_fixture_identities"] == variant["selected_semantic_fixture_identities"]
+    assert baseline["selected_indexes"] == variant["selected_indexes"]
+
+
+def test_overlapping_section_declaration_and_island_labels_do_not_change_form_identity():
+    candidate = _candidate(None, "a", 120.0, 0)
+    candidate["arrangement"]["islands"][0]["island_id"] = "old-label"
+    candidate["arrangement"]["sections"] = [
+        {
+            "island_id": "old-label", "type": "PAYOFF", "start_s": 0.0, "end_s": 20.0,
+            "layers": [{"role": "bass"}],
+        },
+        {
+            "island_id": "old-label", "type": "BUILD", "start_s": 0.0, "end_s": 20.0,
+            "layers": [{"role": "vocal"}],
+        },
+    ]
+    variant = copy.deepcopy(candidate)
+    variant["arrangement"]["islands"][0]["island_id"] = "renamed"
+    variant["arrangement"]["sections"].reverse()
+    for section in variant["arrangement"]["sections"]:
+        section["island_id"] = "renamed"
+    assert fixture_projection(candidate) == fixture_projection(variant)
+
+
+def test_dynamic_arc_refuses_partial_island_spans():
+    signal = np.ones(2000, dtype=np.float32)
+    arrangement = {
+        "islands": [
+            {"island_id": "complete", "start_s": 0.0, "end_s": 1.0},
+            {"island_id": "partial", "start_s": 1.0},
+        ],
+        "sections": [
+            {"island_id": "complete", "start_s": 0.0, "end_s": 1.0, "layers": []},
+            {"island_id": "partial", "start_s": 1.0, "end_s": 2.0, "layers": []},
+        ],
+    }
+    try:
+        measure_dynamic_arc(signal, 1000, arrangement)
+    except DynamicArcError as exc:
+        assert "partial" in str(exc)
+    else:
+        raise AssertionError("partial island spans must fail closed")

@@ -1,4 +1,8 @@
 """Public slot-census and slot-qualified fixture partition authority."""
+from __future__ import annotations
+
+from typing import Any, Mapping
+
 from earcrate.plan.slot_census import (
     FixtureSlotQualificationError,
     VERSION as SLOT_QUALIFICATION_VERSION,
@@ -12,8 +16,33 @@ from earcrate.plan.slot_partition import (
     DEFAULT_MAX_ANCHOR_ROUNDS,
     DEFAULT_MAX_SOURCE_EVENTS,
     INDETERMINATE_ACTION,
-    qualify_fixture_candidate,
+    qualify_fixture_candidate as _qualify_fixture_candidate,
 )
+
+
+def qualify_fixture_candidate(
+    matrix: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    slot_census_receipt: Mapping[str, Any],
+    **kwargs: Any,
+):
+    """Ignore only CLI custody metadata; all semantic census bytes stay pinned."""
+    semantic_receipt = dict(slot_census_receipt)
+    ignored = []
+    if "candidate_file" in semantic_receipt:
+        semantic_receipt.pop("candidate_file")
+        ignored.append("candidate_file")
+    result = dict(
+        _qualify_fixture_candidate(
+            matrix,
+            candidate,
+            semantic_receipt,
+            **kwargs,
+        )
+    )
+    result["ignored_operational_census_fields"] = ignored
+    return result
+
 
 __all__ = [
     "DEFAULT_MAX_ANCHOR_ROUNDS",

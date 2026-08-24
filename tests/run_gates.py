@@ -28,9 +28,6 @@ for _thread_var in (
     "VECLIB_MAXIMUM_THREADS",
     "BLIS_NUM_THREADS",
 ):
-    # A gate runner must be deterministic even when the parent shell exports a
-    # high native thread count. Process-pool gates plus threaded BLAS otherwise
-    # oversubscribe hard enough to segfault on ordinary CI/local machines.
     os.environ[_thread_var] = "1"
 
 MODULES = (
@@ -48,6 +45,7 @@ MODULES = (
     "test_fixture_review_closure",
     "test_fixture_slot_qualification",
     "test_fixture_slot_role_contract",
+    "test_fixture_slot_lineage",
 )
 
 
@@ -112,10 +110,7 @@ def main(argv=None) -> int:
         else None
     ]
     if not cases:
-        print(
-            "FAIL runner: selected gate range is empty",
-            flush=True,
-        )
+        print("FAIL runner: selected gate range is empty", flush=True)
         return 2
     failures = 0
     for module_name, name, fn in cases:

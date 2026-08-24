@@ -388,6 +388,13 @@ def rebalance_exact_pool_sources(
     so a proposal that satisfies the laws is byte-identical and one that does not
     is simply not the answer.
 
+    That acceptance test is the predicate this walk has always had to satisfy —
+    every allowlisted source used, no source past the cap — re-derived from the
+    proposed layers rather than read back from its own ledger. It is deliberately
+    not widened. This is an adverse-path repair: an arrangement the depth-1 walk
+    could already produce has to come back unchanged, and a new criterion applied
+    here would quietly rewrite renders that were never broken.
+
     That walk is order-sensitive in two coupled ways: it can only steal a slot from
     a donor that already holds two or more events, and it commits each missing
     source irreversibly in seed order. Season 001 refused four seeds on island 7 for

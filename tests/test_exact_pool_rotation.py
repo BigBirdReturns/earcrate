@@ -245,10 +245,10 @@ def _singleton_block_scene(rider_role="drum_anchor"):
     return _scene(rows, pool, cap=3)
 
 
-def _greedy_refusal(pool, arrangement, params):
+def _greedy_refusal(pool, arrangement, params, core=None):
     """Prove the first authority really does refuse this fixture."""
     try:
-        source_rotation._depth_one_fast_path(_Core(), arrangement, pool, params, SEED)
+        source_rotation._depth_one_fast_path(core or _Core(), arrangement, pool, params, SEED)
     except ExactPoolRotationError as exc:
         return exc
     raise AssertionError("fixture does not reproduce a greedy exact-pool refusal")
@@ -661,6 +661,432 @@ def test_repair_validates_the_section_pair_it_publishes():
     forbidden = assignment["forbidden_final_pairs"]
     assert forbidden and forbidden[0]["source"] in _VetoCore.VETOED_PAIR
     assert forbidden[0]["counterpart_source"] in _VetoCore.VETOED_PAIR
+
+
+# ---------------------------------------------------------------------------
+# Source-review corrections: the successful path is preserved, a learned pair may
+# require moving an earlier placement, and the constraint is a property of two
+# atoms rather than of their two sources.
+# ---------------------------------------------------------------------------
+
+
+class _BedVetoCore(_Core):
+    """One vocal that does not sit on one bed — a judgement only the finished section makes.
+
+    The depth-one walk scores the layer it is about to replace against whatever stands
+    beside it *at that moment*. Here it replaces the bed, and the layer that change
+    invalidates is the vocal above it, which the walk had no reason to look at again.
+    The direction is the musical one: ``spark_into_phrase`` asks whether a floor layer
+    works under what is above it and admits this pairing, ``vocal_over_bed`` asks
+    whether the vocal sits on the bed beneath it and does not.
+
+    ``CONTESTED`` is what puts the replacement in bar 0 rather than bar 4: preference,
+    not luck, publishes the pairing.
+    """
+
+    VETOED_PAIR = {"newcomer", "underlay"}
+    CONTESTED = {"atom-newcomer-0"}
+
+    def atom_edge_score(self, left, right, relation, render_bpm, target_key, stretch_budget, pitch_budget):
+        pair = {left.get("source_track_key"), right.get("source_track_key")}
+        if relation == "vocal_over_bed" and pair == self.VETOED_PAIR:
+            return 0.0, {"vetoed": True, "relation": relation}
+        if right.get("atom_id") in self.CONTESTED:
+            return 0.9, {"fixture": True, "relation": relation, "contested": True}
+        return 0.6, {"fixture": True, "relation": relation}
+
+
+def _successful_proposal_scene():
+    """A pool the depth-one walk completes on its own, in exactly one replacement.
+
+    ``bed`` holds both floor slots and has an event to spare, so the walk hands one of
+    them to the missing ``underlay`` and every law it has ever been asked to satisfy
+    holds: every source used, nothing past the cap. Only one layer moves, so there is no
+    ordering question — the layer the move invalidates is the bar-0 vocal, which the
+    walk never touched and never re-judged.
+    """
+    newcomer = _atom("newcomer", "vocal", 0)
+    lead = _atom("lead", "vocal", 0)
+    bed = [_atom("bed", "drum_anchor", index) for index in range(2)]
+    underlay = _atom("underlay", "drum_anchor", 0)
+    pool = [newcomer, lead, *bed, underlay]
+    rows = [
+        [("vocal", newcomer), ("drum_anchor", bed[0])],
+        [("vocal", lead), ("drum_anchor", bed[1])],
+    ]
+    return _scene(rows, pool, cap=2)
+
+
+def test_a_historically_successful_proposal_is_published_unchanged():
+    """Witness 15 — the preservation boundary #121 draws, and that it is not vacuous.
+
+    This repair is an adverse-path repair. An arrangement the depth-one walk could
+    already produce has to come back with the same bytes, so the acceptance test stays
+    the predicate that walk has always had to satisfy. The pairing below really is
+    inadmissible against the finished section — and is still published, because a
+    criterion the old path never applied may not start rejecting plans that have been
+    shipping. Repairing that is a separate question with its own preservation decision.
+    """
+    from earcrate.plan.exact_pool_assignment import accept_fast_path_proposal
+
+    pool, arrangement, params = _successful_proposal_scene()
+    core = _BedVetoCore()
+    proposal = source_rotation._depth_one_fast_path(core, arrangement, pool, params, SEED)
+    published = rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+
+    assert json.dumps(published, sort_keys=False) == json.dumps(proposal, sort_keys=False)
+    assert "exact_pool_assignment" not in published["taste_ledger"]
+    assert accept_fast_path_proposal(core, proposal, pool, params, SEED) is None
+
+    slots = _slot_map(published)
+    assert set(slots.values()) == {"newcomer", "lead", "bed", "underlay"}
+    assert max(Counter(_source_sequence(published)).values()) <= 2
+
+    judged = dict(_published_pair_scores(core, published, pool))
+    assert judged[(0, 0)] is None, "the fixture no longer publishes an inadmissible pair"
+    assert all(score is not None for slot_key, score in judged.items() if slot_key != (0, 0))
+
+
+class _AtomPairCore(_Core):
+    """Compatibility as a property of two atoms rather than of their two sources.
+
+    ``VETOED_ATOMS`` is one inadmissible pairing. Every other pairing of the same two
+    *sources* is admissible, which is exactly what a source-keyed constraint cannot
+    say. ``OPENING_ATOMS`` reserves the opening section for the source already standing
+    in it, which is what keeps the compatibility graph tight enough for the reuse cap
+    to actually bind.
+    """
+
+    VETOED_ATOMS: set = set()
+    OPENING_ATOMS = {"atom-anchor-0", "atom-anchor-1"}
+    RESERVED_AGAINST = "swing"
+
+    def atom_edge_score(self, left, right, relation, render_bpm, target_key, stretch_budget, pitch_budget):
+        if {left.get("atom_id"), right.get("atom_id")} == self.VETOED_ATOMS:
+            return 0.0, {"vetoed": True, "relation": relation}
+        if left.get("source_track_key") == self.RESERVED_AGAINST and right.get("atom_id") in self.OPENING_ATOMS:
+            return 0.0, {"opening_reserved": True, "relation": relation}
+        return 0.75, {"fixture": True, "relation": relation}
+
+
+class _SelfPairVetoCore(_AtomPairCore):
+    VETOED_ATOMS = {"atom-swing-0", "atom-swing-1"}
+
+
+class _AlternativeAtomVetoCore(_AtomPairCore):
+    VETOED_ATOMS = {"atom-swing-0", "atom-dusk-0"}
+
+
+def _blocked_bass_half():
+    """The Season-001 decline, in role families the constrained half never touches.
+
+    ``bass-only`` can play one bass slot and ``flex`` sits in it alone, so the depth-one
+    walk's ``count <= 1`` guard makes that slot invisible and the walk declines — which
+    is the only reason it is here. Bass and vocal are disjoint from the floor and spark
+    families the rest of each fixture uses, so this half can neither lend the
+    constrained half a slot nor open an escape route through it.
+    """
+    flex_bass = _atom("flex", "bass", 0)
+    flex_vocal = _atom("flex", "vocal", 1)
+    hold = [_atom("hold", "vocal", index) for index in range(3)]
+    bass_only = _atom("bass-only", "bass", 0)
+    rows = [
+        [("bass", flex_bass), ("vocal", hold[0])],
+        [("vocal", hold[1]), ("vocal", hold[2])],
+    ]
+    return [flex_bass, flex_vocal, bass_only, *hold], rows
+
+
+def _learned_pair_revision_scene():
+    """A learned co-occurrence whose only lawful answer is to move its *other* end.
+
+    ``anchor`` holds all three floor slots against a cap of two and the opening section
+    is reserved to it, so the third floor slot must go to ``swing`` — and ``swing`` is
+    the only other source that can take it. The first assignment therefore publishes
+    swing's floor atom beside swing's own spark atom at bar 4, which the core refuses.
+
+    Honouring that constraint means moving bar 4's *spark* layer, and the spark layer is
+    a placement the fast constructor has already made. Its chains only read constraints
+    against placements already standing, so it rejects the floor slot's one remaining
+    source and reports a capacity deficiency over a pool that is not deficient.
+    """
+    anchor = [_atom("anchor", "drum_anchor", index) for index in range(3)]
+    swing_floor = _atom("swing", "drum_anchor", 0)
+    swing_spark = _atom("swing", "texture", 1)
+    glow = _atom("glow", "texture", 0)
+    blocked_pool, blocked_rows = _blocked_bass_half()
+    rows = [
+        [("drum_anchor", anchor[0]), ("drum_anchor", anchor[1])],
+        [("drum_anchor", anchor[2]), ("texture", swing_spark)],
+        [("texture", glow)],
+        *blocked_rows,
+    ]
+    pool = [*anchor, swing_floor, swing_spark, glow, *blocked_pool]
+    return _scene(rows, pool, cap=2)
+
+
+def test_repair_moves_an_earlier_placement_to_honour_a_learned_pair():
+    """Witness 16 — a refusal must prove impossibility, not report a stuck traversal."""
+    pool, arrangement, params = _learned_pair_revision_scene()
+    core = _SelfPairVetoCore()
+    _greedy_refusal(pool, arrangement, params, core)
+
+    result = rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+    slots = _slot_map(result)
+    counts = Counter(_source_sequence(result))
+    assert set(counts) == {"anchor", "swing", "glow", "flex", "hold", "bass-only"}
+    assert max(counts.values()) <= 2
+
+    # The floor slot keeps its one lawful source and the spark layer beside it — a
+    # placement made before the constraint was known — is the thing that gives way.
+    assert slots[(4, 0)] == "swing"
+    assert slots[(4, 1)] == "glow"
+    for slot_key, score in _published_pair_scores(core, result, pool):
+        assert score is not None, slot_key
+
+    assignment = result["taste_ledger"]["exact_pool_assignment"]
+    assert assignment["construction"] == "complete_pair_aware_search"
+    assert assignment["complete_search"]["constraints_in_search_state"] == [
+        "coverage", "reuse_cap", "learned_final_pairs",
+    ]
+    assert assignment["final_pair_revisions"] >= 1
+    forbidden = assignment["forbidden_final_pairs"]
+    assert {forbidden[0]["atom"], forbidden[0]["counterpart_atom"]} == _SelfPairVetoCore.VETOED_ATOMS
+
+
+def _alternative_atom_scene():
+    """A source whose best atom is refused and whose other atom is never asked about.
+
+    ``dusk`` is the only source that can play either spark slot, and the constraint the
+    core hands back names dusk's higher-ranked atom against swing's floor atom. Keyed on
+    the two sources, that constraint empties bar 4's spark slot — the refusal would land
+    on a placement nobody measured. Keyed on the two atoms, dusk's second atom is still
+    there, and it is admissible against the very counterpart that refused the first.
+    """
+    anchor = [_atom("anchor", "drum_anchor", index) for index in range(3)]
+    swing_floor = _atom("swing", "drum_anchor", 0)
+    dusk_first = _atom("dusk", "texture", 0, score=0.95)
+    dusk_second = _atom("dusk", "texture", 1, score=0.5)
+    blocked_pool, blocked_rows = _blocked_bass_half()
+    rows = [
+        [("drum_anchor", anchor[0]), ("drum_anchor", anchor[1])],
+        [("drum_anchor", anchor[2]), ("texture", dusk_first)],
+        [("texture", dusk_second)],
+        *blocked_rows,
+    ]
+    pool = [*anchor, swing_floor, dusk_first, dusk_second, *blocked_pool]
+    return _scene(rows, pool, cap=2)
+
+
+def _published_atoms(arrangement):
+    return {
+        (int(section["bar_start"]), layer_index): layer["atom_id"]
+        for section in arrangement["sections"]
+        for layer_index, layer in enumerate(section["layers"])
+    }
+
+
+def test_a_learned_pair_leaves_another_atom_of_the_same_source_available():
+    """Witness 17 — the constraint names two atoms, so it retires two atoms and no more."""
+    pool, arrangement, params = _alternative_atom_scene()
+    core = _AlternativeAtomVetoCore()
+    _greedy_refusal(pool, arrangement, params, core)
+
+    result = rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+    slots = _slot_map(result)
+    atoms = _published_atoms(result)
+    counts = Counter(_source_sequence(result))
+    assert set(counts) == {"anchor", "swing", "dusk", "flex", "hold", "bass-only"}
+    assert max(counts.values()) <= 2
+
+    # 'dusk' keeps the spark slot the refused atom was standing in. Only that atom is
+    # retired there, and the source's other atom takes its place beside the counterpart
+    # the first one could not sit with.
+    assert slots[(4, 0)] == "swing" and slots[(4, 1)] == "dusk"
+    assert atoms[(4, 1)] == "atom-dusk-1"
+    assert atoms[(4, 0)] == "atom-swing-0"
+    for slot_key, score in _published_pair_scores(core, result, pool):
+        assert score is not None, slot_key
+
+    assignment = result["taste_ledger"]["exact_pool_assignment"]
+    assert assignment["learned_pair_identity_basis"] == "stable_atom_or_loop_id_at_a_musical_position"
+    forbidden = assignment["forbidden_final_pairs"]
+    assert {forbidden[0]["atom"], forbidden[0]["counterpart_atom"]} == _AlternativeAtomVetoCore.VETOED_ATOMS
+    assert {forbidden[0]["source"], forbidden[0]["counterpart_source"]} == {"swing", "dusk"}
+
+
+def test_a_refusal_reports_an_exhausted_space_rather_than_a_stuck_traversal():
+    """Witness 18 — impossibility is proved, and a bound is never dressed up as one."""
+    anchor = [_atom("anchor", "drum_anchor", index) for index in range(3)]
+    swing_floor = _atom("swing", "drum_anchor", 0)
+    swing_spark = _atom("swing", "texture", 1)
+    blocked_pool, blocked_rows = _blocked_bass_half()
+    rows = [
+        [("drum_anchor", anchor[0]), ("drum_anchor", anchor[1])],
+        [("drum_anchor", anchor[2]), ("texture", swing_spark)],
+        *blocked_rows,
+    ]
+    # Bar 4 now has no third spark source to fall back on, so honouring the learned
+    # pair genuinely has nowhere to go. That is a different statement from the one the
+    # fast constructor makes, and only the exhausted search may make it.
+    pool, arrangement, params = _scene(rows, [*anchor, swing_floor, swing_spark, *blocked_pool], cap=2)
+    core = _SelfPairVetoCore()
+    _greedy_refusal(pool, arrangement, params, core)
+
+    try:
+        rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+    except ExactPoolAssignmentError as exc:
+        assert exc.deficiency["failure_class"] == "section_pair_compatibility"
+        assert exc.deficiency["impossibility_claimed"] is True
+        assert exc.deficiency["search"]["space_exhausted"] is True
+        assert exc.deficiency["search"]["depth_limited"] is False
+        assert exc.deficiency["search"]["nodes_explored"] > 0
+        assert exc.deficiency["learned_pair_constraint_count"] >= 1
+        assert "exhausted the assignment space" in str(exc)
+    else:
+        raise AssertionError("a pool with no lawful pairing must refuse with a proof")
+
+
+def test_a_search_bound_is_never_reported_as_an_impossibility():
+    """Witness 19 — an indeterminate search is not evidence and may not be acted on.
+
+    Only an exhausted space licenses an impossibility claim, because only an exhausted
+    space considered every assignment. A search that runs out of nodes, stack, or rounds
+    has learned nothing about the pool: it is not a capacity diagnosis, it is not a
+    deficiency witness, and a run deciding acceptance has to stop on it rather than bank
+    it as an honest refusal. The scene below is the same feasible one witness 16 solves —
+    only the budget changes — so the refusal is provably not a statement about the pool.
+    """
+    from earcrate.plan import exact_pool_assignment
+
+    pool, arrangement, params = _learned_pair_revision_scene()
+    core = _SelfPairVetoCore()
+    floor = exact_pool_assignment.SEARCH_NODE_BUDGET_FLOOR
+    ceiling = exact_pool_assignment.SEARCH_NODE_BUDGET_CEILING
+    exact_pool_assignment.SEARCH_NODE_BUDGET_FLOOR = 1
+    exact_pool_assignment.SEARCH_NODE_BUDGET_CEILING = 1
+    bounded = None
+    try:
+        rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+    except ExactPoolAssignmentError as exc:
+        bounded = exc
+    finally:
+        exact_pool_assignment.SEARCH_NODE_BUDGET_FLOOR = floor
+        exact_pool_assignment.SEARCH_NODE_BUDGET_CEILING = ceiling
+    assert bounded is not None, "a one-node budget cannot decide this assignment"
+
+    deficiency = bounded.deficiency
+    message = str(bounded)
+    assert deficiency["failure_class"] == "search_bound"
+    assert deficiency["impossibility_claimed"] is False
+    assert deficiency["private_acceptance"] == exact_pool_assignment.INDETERMINATE_REFUSAL_ACTION
+    assert deficiency["search"]["space_exhausted"] is False
+    assert "no impossibility is claimed" in message
+    for claim in ("is impossible", "exhausted the assignment space", "no complete assignment"):
+        assert claim not in message, claim
+
+    # The same pool, decided rather than bounded, is feasible. Nothing in that refusal
+    # was ever a statement about capacity or compatibility.
+    assert _slot_map(rebalance_exact_pool_sources(core, arrangement, pool, params, SEED))
+
+
+def test_every_refusal_declares_whether_it_is_a_claim_about_the_pool():
+    """Witness 20 — one field separates a proof from a bound, on every refusal path."""
+    flex_bass = _atom("flex", "bass", 0)
+    flex_floor = _atom("flex", "drum_anchor", 1)
+    hold = [_atom("hold", "drum_anchor", index) for index in range(3)]
+    twins = [_atom(f"bass-only-{tag}", "bass", 0) for tag in ("a", "b")]
+    hall = _scene(
+        [
+            [("bass", flex_bass), ("drum_anchor", hold[0])],
+            [("drum_anchor", hold[1]), ("drum_anchor", hold[2])],
+        ],
+        [flex_bass, flex_floor, *twins, *hold],
+        cap=3,
+    )
+
+    trio = [_atom(name, "drum_anchor", 0) for name in ("one", "two", "three")]
+    counting = _scene(
+        [
+            [("drum_anchor", trio[0]), ("drum_anchor", trio[1])],
+            [("drum_anchor", trio[2]), ("drum_anchor", trio[0])],
+            [("drum_anchor", trio[1]), ("drum_anchor", trio[2])],
+        ],
+        trio,
+        cap=1,
+    )
+
+    stripped_pool, identity_arrangement, identity_params = _singleton_block_scene()
+    unstable = []
+    for item in stripped_pool:
+        stripped = dict(item)
+        stripped.pop("source_track_key", None)
+        stripped.pop("source_id", None)
+        unstable.append(stripped)
+    identity = (unstable, identity_arrangement, identity_params)
+
+    for pool, arrangement, params in (hall, counting, identity):
+        try:
+            rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
+        except ExactPoolAssignmentError as exc:
+            assert exc.deficiency["impossibility_claimed"] is True, exc.deficiency["failure_class"]
+            assert exc.deficiency["failure_class"] != "search_bound"
+            assert "private_acceptance" not in exc.deficiency
+        else:
+            raise AssertionError("fixture was expected to refuse")
+
+
+def test_the_complete_search_is_identical_under_equivalent_input_permutations():
+    """Witness 21 — the escalated path is a measurement too, so compare all of it.
+
+    An exhaustive search has more freedom to be accidentally order-dependent than an
+    exchange chain does, and its receipt now carries a node count. Both scenes below
+    reach the search, so this compares every layer body at equal musical position, both
+    ledgers, and the search receipt inside them.
+    """
+    for scene, core in (
+        (_learned_pair_revision_scene, _SelfPairVetoCore()),
+        (_alternative_atom_scene, _AlternativeAtomVetoCore()),
+    ):
+        pool, arrangement, params = scene()
+        baseline = rebalance_exact_pool_sources(core, arrangement, pool, params, SEED)
+        shuffled_pool, reordered = _permuted(pool, arrangement)
+        variant = rebalance_exact_pool_sources(core, reordered, shuffled_pool, params, SEED)
+
+        ledger = baseline["taste_ledger"]["exact_pool_assignment"]
+        assert ledger["construction"] == "complete_pair_aware_search", scene.__name__
+        assert ledger["complete_search"]["nodes_explored"] > 0, scene.__name__
+        assert _slot_map(variant) == _slot_map(baseline), scene.__name__
+        assert variant["taste_ledger"] == baseline["taste_ledger"], scene.__name__
+        assert _canonical_form(variant) == _canonical_form(baseline), scene.__name__
+
+
+def test_a_pool_that_cannot_fill_its_slots_is_refused_by_counting():
+    """Witness 22 — arithmetic settles what no search should be asked to.
+
+    Three sources capped at one event each can hold three slots. Six slots must all be
+    occupied. No assignment exists and none needs to be searched for, so the refusal is
+    a counting proof rather than an exhausted space.
+    """
+    trio = [_atom(name, "drum_anchor", 0) for name in ("one", "two", "three")]
+    rows = [
+        [("drum_anchor", trio[0]), ("drum_anchor", trio[1])],
+        [("drum_anchor", trio[2]), ("drum_anchor", trio[0])],
+        [("drum_anchor", trio[1]), ("drum_anchor", trio[2])],
+    ]
+    pool, arrangement, params = _scene(rows, trio, cap=1)
+    _greedy_refusal(pool, arrangement, params)
+
+    try:
+        rebalance_exact_pool_sources(_Core(), arrangement, pool, params, SEED)
+    except ExactPoolAssignmentError as exc:
+        assert exc.deficiency["failure_class"] == "cap_constraint"
+        assert exc.deficiency["proof"] == "counting"
+        assert exc.deficiency["slot_count"] == 6
+        assert exc.deficiency["total_capacity"] == 3
+        assert "search" not in exc.deficiency
+    else:
+        raise AssertionError("six slots cannot be filled by three sources capped at one event")
 
 
 def _witness_references(node):

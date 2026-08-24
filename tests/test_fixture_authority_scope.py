@@ -107,7 +107,7 @@ def test_reseeded_arrangements_do_not_manufacture_fixture_diversity():
 def test_direct_fixture_candidates_still_authorize_structural_selection():
     candidates = [
         _fixture_candidate("a", "s1", 120.0),
-        _fixture_candidate("b", "s2", 100.0),
+        _fixture_candidate("b", "s1", 100.0),
         _fixture_candidate("c", "s3", 90.0),
     ]
     report = classify_candidate_family(candidates)

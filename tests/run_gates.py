@@ -42,6 +42,7 @@ MODULES = (
     "test_exact_pool_rotation",
     "test_key_identity_zero",
     "test_fixture_diversity",
+    "test_fixture_audit_cli",
 )
 
 

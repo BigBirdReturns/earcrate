@@ -14,7 +14,7 @@ model and are enforced here rather than hidden in optimizer status:
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, Mapping, MutableMapping
+from typing import Any, Dict, Mapping, MutableMapping, Optional
 
 from earcrate.plan import fixture_slot_binding as _binding
 from earcrate.plan.fixture_slot_contract import (
@@ -67,7 +67,13 @@ def qualify_fixture_candidate(
     census_campaign: Mapping[str, Any],
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Stop when the parent refusal depends on atom-pair co-occurrences."""
+    """Stop when the parent refusal depends on atom-pair co-occurrences.
+
+    The census exposes source reachability per slot. It does not expose the
+    chosen atom value at each slot, so a source-only solve cannot honour a
+    learned ``(slot, atom)`` co-occurrence. Returning a new candidate in that
+    situation would claim a repair that the model never represented.
+    """
     parent = census_campaign.get("parent_exact_pool_refusal")
     if isinstance(parent, Mapping):
         constraints = list(parent.get("forbidden_final_pairs") or [])
@@ -181,6 +187,7 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
     return core_class
 
 
+# Keep the public installer name stable for ``earcrate.__init__``.
 install_fixture_slot_census = install_fixture_slot_review_closure
 
 

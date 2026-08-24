@@ -13,6 +13,8 @@ from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from earcrate.plan.fixture_slot_qualification import qualify_fixture_candidate
 
+_REPLACE = os.replace
+
 
 def _capture_json(path: Path) -> Tuple[Mapping[str, Any], Dict[str, Any]]:
     resolved = path.expanduser().resolve()
@@ -59,15 +61,17 @@ def _preflight_outputs(
                 )
 
 
-def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
+def _json_bytes(value: Mapping[str, Any]) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    ).encode("utf-8")
+
+
+def _stage_bytes(path: Path, body: bytes) -> Tuple[Path, Path]:
     resolved = path.expanduser().resolve()
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, indent=2
-    ) + "\n"
     with tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
+        "wb",
         dir=str(resolved.parent),
         prefix=f".{resolved.name}.",
         suffix=".tmp",
@@ -77,11 +81,61 @@ def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
         handle.flush()
         os.fsync(handle.fileno())
         temporary = Path(handle.name)
+    return resolved, temporary
+
+
+def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
+    resolved, temporary = _stage_bytes(path, _json_bytes(value))
     try:
-        os.replace(str(temporary), str(resolved))
+        _REPLACE(str(temporary), str(resolved))
     finally:
         if temporary.exists():
             temporary.unlink()
+
+
+def _publish_candidate_and_receipt(
+    candidate_path: Path,
+    candidate: Mapping[str, Any],
+    receipt_path: Path,
+    receipt: Mapping[str, Any],
+) -> None:
+    """Publish the pair or restore the candidate side to its prior bytes."""
+    candidate_resolved = candidate_path.expanduser().resolve()
+    previous_candidate = (
+        candidate_resolved.read_bytes() if candidate_resolved.exists() else None
+    )
+    candidate_target, candidate_temp = _stage_bytes(
+        candidate_resolved, _json_bytes(candidate)
+    )
+    receipt_target, receipt_temp = _stage_bytes(
+        receipt_path, _json_bytes(receipt)
+    )
+    candidate_published = False
+    try:
+        _REPLACE(str(candidate_temp), str(candidate_target))
+        candidate_published = True
+        _REPLACE(str(receipt_temp), str(receipt_target))
+    except Exception:
+        if candidate_published:
+            if previous_candidate is None:
+                try:
+                    candidate_target.unlink()
+                except FileNotFoundError:
+                    pass
+            else:
+                restore_target, restore_temp = _stage_bytes(
+                    candidate_target, previous_candidate
+                )
+                try:
+                    _REPLACE(str(restore_temp), str(restore_target))
+                finally:
+                    if restore_temp.exists():
+                        restore_temp.unlink()
+        raise
+    finally:
+        for temporary in (candidate_temp, receipt_temp):
+            if temporary.exists():
+                temporary.unlink()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -135,16 +189,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 raise ValueError(
                     "--out-candidate is required when qualification succeeds"
                 )
-            _write_json_atomic(args.out_candidate, result["candidate"])
+            candidate_body = _json_bytes(result["candidate"])
             receipt["qualified_candidate_file"] = {
                 "path": str(args.out_candidate.expanduser().resolve()),
-                "file_sha256": hashlib.sha256(
-                    args.out_candidate.expanduser().resolve().read_bytes()
-                ).hexdigest(),
+                "file_sha256": hashlib.sha256(candidate_body).hexdigest(),
+                "publish_policy": (
+                    "candidate_and_receipt_staged_before_publish_with_candidate_rollback"
+                ),
             }
-        elif args.out_candidate is not None:
-            receipt["qualified_candidate_file"] = None
-        _write_json_atomic(args.receipt, receipt)
+            _publish_candidate_and_receipt(
+                args.out_candidate,
+                result["candidate"],
+                args.receipt,
+                receipt,
+            )
+        else:
+            if args.out_candidate is not None:
+                receipt["qualified_candidate_file"] = None
+            _write_json_atomic(args.receipt, receipt)
         print(str(args.receipt.expanduser().resolve()))
         return 0 if bool(result.get("complete")) else 3
     except Exception as exc:

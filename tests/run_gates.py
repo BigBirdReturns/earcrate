@@ -48,6 +48,7 @@ MODULES = (
     "test_fixture_review_closure",
     "test_fixture_slot_qualification",
     "test_fixture_slot_probe_cli",
+    "test_fixture_candidate_binding",
 )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 import contextlib
+import contextvars
 import copy
 import functools
 import hashlib
@@ -10,6 +11,9 @@ import json
 from typing import Any, Dict, Mapping, MutableMapping, Sequence
 
 VERSION = "earcrate_fixture_slot_qualification_v1"
+_CURRENT_CANDIDATE_BINDING: contextvars.ContextVar[Mapping[str, str] | None] = (
+    contextvars.ContextVar("earcrate_fixture_candidate_binding", default=None)
+)
 
 
 class FixtureSlotQualificationError(ValueError):
@@ -112,6 +116,23 @@ def _refresh_census_digest(census: MutableMapping[str, Any]) -> None:
     census["slot_census_sha256"] = _sha(census)
 
 
+def _active_binding(params: Mapping[str, Any]) -> Dict[str, str]:
+    inherited = dict(_CURRENT_CANDIDATE_BINDING.get() or {})
+    return {
+        "candidate_fixture_sha256": str(
+            params.get("fixture_sha256")
+            or inherited.get("candidate_fixture_sha256")
+            or ""
+        ),
+        "source_pool_sha256": str(
+            params.get("fixture_source_pool_sha256")
+            or params.get("source_pool_sha256")
+            or inherited.get("source_pool_sha256")
+            or ""
+        ),
+    }
+
+
 def attach_slot_census_to_error(
     error: Exception,
     arrangement: Mapping[str, Any],
@@ -120,15 +141,12 @@ def attach_slot_census_to_error(
     """Attach evidence to a structured refusal without changing its classification."""
     deficiency = getattr(error, "deficiency", None)
     if isinstance(deficiency, MutableMapping) and "slot_census" not in deficiency:
+        binding = _active_binding(params)
         deficiency["slot_census"] = slot_census_from_arrangement(
             arrangement,
             island_id=str(params.get("island_id") or arrangement.get("island_id") or ""),
-            candidate_fixture_sha256=str(params.get("fixture_sha256") or ""),
-            source_pool_sha256=str(
-                params.get("fixture_source_pool_sha256")
-                or params.get("source_pool_sha256")
-                or ""
-            ),
+            candidate_fixture_sha256=binding["candidate_fixture_sha256"],
+            source_pool_sha256=binding["source_pool_sha256"],
         )
         deficiency["slot_census_capture"] = {
             "ok": True,
@@ -137,10 +155,50 @@ def attach_slot_census_to_error(
     return error
 
 
+def _install_candidate_binding() -> None:
+    """Bind direct fixture provenance around planning without moving arrangement bytes."""
+    import earcrate.plan as plan_package
+    import earcrate.plan.islands as islands
+
+    if getattr(islands, "_slot_candidate_binding_installed", False):
+        return
+    original_plan = islands.plan_island_set
+
+    @functools.wraps(original_plan)
+    def bound_plan(core: Any, params: Mapping[str, Any]):
+        fixture = str(params.get("fixture_sha256") or "")
+        pool = str(params.get("source_pool_sha256") or "")
+        token = _CURRENT_CANDIDATE_BINDING.set(
+            {
+                "candidate_fixture_sha256": fixture,
+                "source_pool_sha256": pool,
+            }
+        )
+        try:
+            result = original_plan(core, params)
+            if not fixture:
+                return result
+            bound = dict(result)
+            bound["candidate_fixture_sha256"] = fixture
+            bound["candidate_source_pool_sha256"] = pool
+            qualification = params.get("slot_qualification")
+            if isinstance(qualification, Mapping):
+                bound["slot_qualification_sha256"] = _sha(dict(qualification))
+            return bound
+        finally:
+            _CURRENT_CANDIDATE_BINDING.reset(token)
+
+    islands._pre_slot_binding_plan_island_set = original_plan
+    islands.plan_island_set = bound_plan
+    plan_package.plan_island_set = bound_plan
+    islands._slot_candidate_binding_installed = True
+
+
 def install_slot_census_evidence() -> None:
-    """Enrich only exact-pool refusals; successful arrangement bytes are untouched."""
+    """Install candidate binding and enrich only exact-pool refusals."""
     import earcrate.plan.source_rotation as rotation
 
+    _install_candidate_binding()
     if getattr(rotation, "_slot_census_evidence_installed", False):
         return
     original = rotation.rebalance_exact_pool_sources

@@ -5,7 +5,7 @@ from earcrate.plan.fixture_slot_binding import (
     build_exact_pool_slot_census, build_fixture_slot_census_campaign,
     canonical_json, install_fixture_slot_census, semantic_sha256,
 )
-from earcrate.plan.fixture_slot_solver_authority import qualify_fixture_candidate
+from earcrate.plan.fixture_slot_solver import qualify_fixture_candidate
 
 __all__ = [
     "DEFAULT_MAX_SOURCE_EVENTS", "FixtureSlotQualificationError",

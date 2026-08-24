@@ -19,6 +19,12 @@ from earcrate.plan.islands import (
     plan_island_set,
     source_pool_identity,
 )
+from earcrate.plan.fixture_slot_qualification import (
+    FixtureSlotQualificationError,
+    probe_candidate_slot_census,
+    qualify_fixture_candidate,
+    slot_census_from_arrangement,
+)
 
 __all__ = [
     "readiness_scale",
@@ -32,4 +38,8 @@ __all__ = [
     "allocate_phrase_aligned_islands",
     "plan_island_set",
     "source_pool_identity",
+    "FixtureSlotQualificationError",
+    "probe_candidate_slot_census",
+    "qualify_fixture_candidate",
+    "slot_census_from_arrangement",
 ]

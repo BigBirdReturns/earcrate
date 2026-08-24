@@ -7,7 +7,10 @@ a new fixture identity or authorize max-min fixture selection. Direct
 """
 from __future__ import annotations
 
+from collections import Counter, defaultdict
+import copy
 import hashlib
+import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from earcrate.plan import fixture_diversity_contract_core as _legacy
@@ -88,20 +91,220 @@ def _observational_axes(scope: str) -> Tuple[str, ...]:
     return () if scope == FIXTURE_CANDIDATE_SCOPE else REALIZATION_ONLY_AXES
 
 
-def _semantic_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
+def _float_token(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        raise FixtureDiversityError(f"non-finite numeric identity: {value!r}")
+    return number.hex()
+
+
+def _source_values(row: Mapping[str, Any]) -> List[str]:
+    return sorted({
+        str(value)
+        for field in ("source_allowlist", "source_include_ids", "source_ids")
+        for value in row.get(field) or []
+        if str(value)
+    })
+
+
+def _section_descriptor(section: Mapping[str, Any]) -> Dict[str, Any]:
+    roles = sorted({
+        str(layer.get("role") or "full")
+        for layer in section.get("layers") or []
+        if isinstance(layer, Mapping)
+    })
+    if section.get("bars") is not None:
+        span: Tuple[str, Any] = ("bars", int(section["bars"]))
+    elif section.get("start_s") is not None and section.get("end_s") is not None:
+        span = (
+            "seconds_hex",
+            _float_token(float(section["end_s"]) - float(section["start_s"])),
+        )
+    else:
+        span = ("unspecified", "")
+    transition = section.get("transition_in")
+    transition_type = (
+        str(transition.get("technique") or transition.get("type") or "")
+        if isinstance(transition, Mapping)
+        else ""
+    )
+    return {
+        "start_s": _float_token(section.get("start_s")),
+        "end_s": _float_token(section.get("end_s")),
+        "bar_start": _float_token(section.get("bar_start")),
+        "type": str(section.get("type") or section.get("section_type") or ""),
+        "roles": roles,
+        "span": span,
+        "transition_in": transition_type,
+    }
+
+
+def _island_descriptor(
+    row: Mapping[str, Any], section_descriptors: Sequence[Mapping[str, Any]]
+) -> Dict[str, Any]:
+    duration = row.get("allocated_duration_s")
+    if (
+        duration is None
+        and row.get("start_s") is not None
+        and row.get("end_s") is not None
+    ):
+        duration = float(row["end_s"]) - float(row["start_s"])
+    if duration is None:
+        duration = row.get("duration_s", row.get("capacity_s"))
+    bpm = row.get("target_bpm", row.get("island_bpm"))
+    key = row.get("target_key", row.get("island_key"))
+    return {
+        "start_s": _float_token(row.get("start_s")),
+        "end_s": _float_token(row.get("end_s")),
+        "target_bpm": _float_token(bpm),
+        "target_key": None if key is None else int(key) % 12,
+        "sources": _source_values(row),
+        "duration": _float_token(duration),
+        "required_roles": sorted(str(value) for value in row.get("required_roles") or []),
+        "sections": sorted(
+            [dict(value) for value in section_descriptors], key=canonical_json
+        ),
+    }
+
+
+def _normalize_authority_candidate(
+    candidate: Mapping[str, Any], *, include_realization_context: bool
+) -> Dict[str, Any]:
+    """Remove island spelling and declaration order from public evidence identity."""
+    normalized = copy.deepcopy(dict(candidate))
+    body = normalized.get("arrangement")
+    target = body if isinstance(body, dict) else normalized
+
+    raw_islands = list(target.get("islands") or [])
+    if not raw_islands and target is not normalized:
+        raw_islands = list(normalized.get("islands") or [])
+    raw_sections = list(target.get("sections") or [])
+    raw_transitions = list(target.get("transitions") or [])
+    if not all(isinstance(row, Mapping) for row in raw_islands):
+        raise FixtureDiversityError("islands must be mappings")
+    if not all(isinstance(row, Mapping) for row in raw_sections):
+        raise FixtureDiversityError("sections must be mappings")
+    if not all(isinstance(row, Mapping) for row in raw_transitions):
+        raise FixtureDiversityError("transitions must be mappings")
+
+    sections_by_island: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for section in raw_sections:
+        label = str(section.get("island_id") or "")
+        if label:
+            sections_by_island[label].append(_section_descriptor(section))
+
+    indexed: List[Tuple[Mapping[str, Any], str, Dict[str, Any]]] = []
+    seen_labels: set[str] = set()
+    for index, row in enumerate(raw_islands):
+        label = str(row.get("island_id") or "")
+        if not label:
+            raise FixtureDiversityError(f"island {index} has no stable island_id")
+        if label in seen_labels:
+            raise FixtureDiversityError(f"duplicate island_id: {label}")
+        seen_labels.add(label)
+        section_context = (
+            sections_by_island.get(label, ()) if include_realization_context else ()
+        )
+        indexed.append((row, label, _island_descriptor(row, section_context)))
+    indexed.sort(key=lambda item: canonical_json(item[2]))
+
+    canonical_id_by_label: Dict[str, str] = {}
+    canonical_islands: List[Dict[str, Any]] = []
+    for position, (row, label, _descriptor) in enumerate(indexed):
+        canonical_id = f"fixture-island-{position:03d}"
+        canonical_id_by_label[label] = canonical_id
+        rewritten = dict(row)
+        rewritten["island_id"] = canonical_id
+        canonical_islands.append(rewritten)
+    if raw_islands:
+        target["islands"] = canonical_islands
+
+    canonical_sections: List[Dict[str, Any]] = []
+    for section in raw_sections:
+        rewritten = dict(section)
+        label = str(rewritten.get("island_id") or "")
+        if raw_islands:
+            if label not in canonical_id_by_label:
+                raise FixtureDiversityError(
+                    f"section references unknown island_id: {label!r}"
+                )
+            rewritten["island_id"] = canonical_id_by_label[label]
+        canonical_sections.append(rewritten)
+
+    def section_order(section: Mapping[str, Any]) -> Tuple[Any, ...]:
+        descriptor = canonical_json(_section_descriptor(section))
+        if section.get("start_s") is not None:
+            return (
+                0,
+                float(section["start_s"]),
+                float(section.get("end_s") or section["start_s"]),
+                str(section.get("island_id") or ""),
+                descriptor,
+            )
+        return (
+            1,
+            str(section.get("island_id") or ""),
+            float(section.get("bar_start") or 0.0),
+            descriptor,
+        )
+
+    target["sections"] = sorted(canonical_sections, key=section_order)
+
+    canonical_transitions: List[Dict[str, Any]] = []
+    for transition in raw_transitions:
+        rewritten = dict(transition)
+        for field in (
+            "from_island",
+            "to_island",
+            "from_island_id",
+            "to_island_id",
+        ):
+            label = str(rewritten.get(field) or "")
+            if label in canonical_id_by_label:
+                rewritten[field] = canonical_id_by_label[label]
+        canonical_transitions.append(rewritten)
+    if raw_transitions or "transitions" in target:
+        target["transitions"] = canonical_transitions
+    return normalized
+
+
+def _projection_parts(
+    candidate: Mapping[str, Any],
+) -> Tuple[str, Dict[str, Any], Dict[str, Any]]:
     scope = _candidate_scope(candidate)
-    full = dict(_legacy.fixture_projection(candidate))
+    full_normalized = _normalize_authority_candidate(
+        candidate, include_realization_context=True
+    )
+    full_projection = dict(_legacy.fixture_projection(full_normalized))
+    if scope == ARRANGEMENT_REALIZATION_SCOPE:
+        authority_normalized = _normalize_authority_candidate(
+            candidate, include_realization_context=False
+        )
+        authority_projection = dict(_legacy.fixture_projection(authority_normalized))
+    else:
+        authority_projection = full_projection
+    return scope, full_projection, authority_projection
+
+
+def _semantic_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
+    scope, full, authority = _projection_parts(candidate)
     full_identity = str(full["fixture_identity"])
     fields = (
         _FULL_PROJECTION_FIELDS
         if scope == FIXTURE_CANDIDATE_SCOPE
         else _AUTHORITY_PROJECTION_FIELDS
     )
-    authority_body = {field: full[field] for field in fields}
+    authority_body = {field: authority[field] for field in fields}
     authority_identity = hashlib.sha256(
         canonical_json(authority_body).encode("utf-8")
     ).hexdigest()
-    full.update(
+    combined = dict(full)
+    if scope == ARRANGEMENT_REALIZATION_SCOPE:
+        for field in _AUTHORITY_PROJECTION_FIELDS:
+            combined[field] = authority[field]
+    combined.update(
         {
             "evidence_scope": scope,
             "fixture_authority_fields": list(fields),
@@ -110,7 +313,7 @@ def _semantic_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
             "fixture_identity": authority_identity,
         }
     )
-    return full
+    return combined
 
 
 def fixture_projection(candidate: Mapping[str, Any]) -> Dict[str, Any]:
@@ -159,16 +362,48 @@ def fixture_distance(
             "cannot compare a fixture candidate with an arrangement realization"
         )
 
-    raw = dict(_legacy.fixture_distance(left, right, weights))
-    axes = {str(key): float(value) for key, value in raw["axes"].items()}
-    chosen = {str(key): float(value) for key, value in raw["weights"].items()}
+    left_full = _normalize_authority_candidate(
+        left, include_realization_context=True
+    )
+    right_full = _normalize_authority_candidate(
+        right, include_realization_context=True
+    )
+    full_raw = dict(_legacy.fixture_distance(left_full, right_full, weights))
+    chosen = {str(key): float(value) for key, value in full_raw["weights"].items()}
+    if left_scope == ARRANGEMENT_REALIZATION_SCOPE:
+        left_authority = _normalize_authority_candidate(
+            left, include_realization_context=False
+        )
+        right_authority = _normalize_authority_candidate(
+            right, include_realization_context=False
+        )
+        authority_raw = dict(
+            _legacy.fixture_distance(left_authority, right_authority, weights)
+        )
+        axes = {
+            name: float(authority_raw["axes"][name])
+            for name in FIXTURE_AUTHORITY_AXES
+        }
+        axes.update(
+            {
+                name: float(full_raw["axes"][name])
+                for name in REALIZATION_ONLY_AXES
+            }
+        )
+    else:
+        axes = {str(key): float(value) for key, value in full_raw["axes"].items()}
+
     classification_axes = _classification_axes(left_scope)
     observational_axes = _observational_axes(left_scope)
     left_projection = fixture_projection(left)
     right_projection = fixture_projection(right)
-
     authority_total = _weighted_total(
         axes, chosen, classification_axes, scope=left_scope
+    )
+    total_weight = sum(chosen.get(name, 0.0) for name in ALL_AXES)
+    observed_total = (
+        sum(axes[name] * chosen.get(name, 0.0) for name in ALL_AXES)
+        / total_weight
     )
     if observational_axes and sum(chosen.get(name, 0.0) for name in observational_axes) > EPS:
         realization_total = sum(
@@ -191,7 +426,7 @@ def fixture_distance(
         "axes": axes,
         "weights": chosen,
         "total": authority_total,
-        "observed_total": float(raw["total"]),
+        "observed_total": observed_total,
         "realization_total": realization_total,
     }
 
@@ -237,6 +472,11 @@ def classify_candidate_family(
         status = "discriminating"
 
     projections = [fixture_projection(candidate) for candidate in candidates]
+    semantic_ids = [projection["fixture_identity"] for projection in projections]
+    identity_counts = Counter(semantic_ids)
+    duplicate_ids = sorted(
+        identity for identity, count in identity_counts.items() if count > 1
+    )
     disposition = (
         "direct_fixture_authority"
         if scope == FIXTURE_CANDIDATE_SCOPE
@@ -251,12 +491,12 @@ def classify_candidate_family(
             fixture_id(candidate, projection)
             for candidate, projection in zip(candidates, projections)
         ],
-        "semantic_fixture_identities": [
-            projection["fixture_identity"] for projection in projections
-        ],
+        "semantic_fixture_identities": semantic_ids,
         "semantic_realization_identities": [
             projection["realization_identity"] for projection in projections
         ],
+        "unique_semantic_fixture_count": len(identity_counts),
+        "duplicate_semantic_fixture_identities": duplicate_ids,
         "structural_axes": list(ALL_AXES),
         "classification_axes": list(classification_axes),
         "observational_axes": list(observational_axes),
@@ -293,6 +533,12 @@ def select_max_min(
             **family,
             **empty,
             "selection_status": "not_run_non_discriminating_family",
+        }
+    if family["duplicate_semantic_fixture_identities"]:
+        return {
+            **family,
+            **empty,
+            "selection_status": "not_run_duplicate_semantic_fixture_identities",
         }
     if not totals or max(totals) - min(totals) <= EPS:
         return {

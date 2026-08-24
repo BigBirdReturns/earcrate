@@ -45,6 +45,7 @@ MODULES = (
     "test_fixture_authority_scope",
     "test_fixture_audit_cli",
     "test_fixture_derivation",
+    "test_fixture_review_closure",
 )
 
 

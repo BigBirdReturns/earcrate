@@ -207,8 +207,11 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
                         request,
                         deficiency,
                         bound,
-                        supersedes_run_id=prior_run or None,
                     )
+                    if prior_run:
+                        deficiency[
+                            "fixture_slot_census_supersedes_run_id"
+                        ] = prior_run
                 except Exception as receipt_error:
                     deficiency[
                         "fixture_slot_census_receipt_failure"

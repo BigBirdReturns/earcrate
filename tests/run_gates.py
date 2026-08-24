@@ -48,6 +48,7 @@ MODULES = (
     "test_fixture_slot_lineage",
     "test_fixture_slot_review_closure",
     "test_fixture_slot_receipt_contract",
+    "test_fixture_slot_final_boundaries",
 )
 
 

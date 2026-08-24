@@ -19,6 +19,7 @@ from typing import Any, Dict, Mapping, MutableMapping
 
 from earcrate.plan import fixture_slot_binding as _binding
 from earcrate.plan import fixture_slot_contract as _contract_module
+from earcrate.plan import fixture_slot_solver as _solver_module
 
 _qualify_without_parent_constraints = (
     _contract_module.qualify_fixture_candidate
@@ -113,9 +114,11 @@ def qualify_fixture_candidate(
     )
 
 
-# ``fixture_slot_contract`` was a public import before the final review layer
-# existed. Keep that path authoritative rather than leaving a source-only bypass.
+# Both historical public paths must resolve to the guarded authority. The
+# contract captured the original solver by value before this review layer was
+# imported, so the stored underlying function above remains recursion-free.
 _contract_module.qualify_fixture_candidate = qualify_fixture_candidate
+_solver_module.qualify_fixture_candidate = qualify_fixture_candidate
 
 
 def install_fixture_slot_review_closure(core_class: Any) -> Any:
@@ -169,15 +172,17 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
         params: Dict[str, Any],
     ) -> Dict[str, Any]:
         request = dict(params or {})
-        token = None
         declared = request.get("exact_pool_max_source_events")
+        effective_cap: int | None = None
         if declared not in (None, ""):
-            cap = int(declared)
-            if cap <= 0:
+            effective_cap = int(declared)
+            if effective_cap <= 0:
                 raise _binding.FixtureSlotQualificationError(
                     "exact_pool_max_source_events must be positive"
                 )
-            token = _REQUEST_CAP.set(cap)
+        # Every proposal shadows the inherited context, including an uncapped
+        # nested request. Resetting restores the outer request after return.
+        token = _REQUEST_CAP.set(effective_cap)
         try:
             return original_propose(self, request)
         except Exception as exc:
@@ -223,8 +228,7 @@ def install_fixture_slot_review_closure(core_class: Any) -> Any:
                     }
             raise
         finally:
-            if token is not None:
-                _REQUEST_CAP.reset(token)
+            _REQUEST_CAP.reset(token)
 
     propose_with_refusal_binding.__name__ = getattr(
         original_propose,

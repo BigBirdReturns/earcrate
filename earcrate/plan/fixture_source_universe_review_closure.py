@@ -27,6 +27,44 @@ from earcrate.plan import fixture_source_universe as _source
 SOURCE_UNIVERSE_SLOT_CENSUS_VERSION = "earcrate_exact_pool_slot_census_v3"
 
 
+def _ordered_island_composition_inputs(
+    params: Mapping[str, Any],
+) -> list[Dict[str, Any]]:
+    """Project the ordered schedule fields that drive census composition."""
+    rows: list[Dict[str, Any]] = []
+    for raw in params.get("islands") or []:
+        row = dict(raw)
+        rows.append(
+            {
+                "island_id": str(row.get("island_id") or ""),
+                "deck_id": str(row.get("deck_id") or ""),
+                "target_bpm": float(row.get("target_bpm") or 0.0),
+                "target_key": int(row.get("target_key") or 0) % 12,
+                "capacity_s": float(row.get("capacity_s") or 0.0),
+                "allocated_duration_s": float(
+                    row.get("allocated_duration_s") or 0.0
+                ),
+                "start_s": float(row.get("start_s") or 0.0),
+                "end_s": float(row.get("end_s") or 0.0),
+                "source_include_ids": sorted(
+                    {
+                        str(value)
+                        for value in row.get("source_include_ids") or []
+                    }
+                ),
+                "required_roles": sorted(
+                    {
+                        str(value)
+                        for value in row.get("required_roles") or []
+                    }
+                ),
+                "min_sources": int(row.get("min_sources") or 1),
+                "max_sources": int(row.get("max_sources") or 0),
+            }
+        )
+    return rows
+
+
 def _composition_policy_identity(params: Mapping[str, Any]) -> str:
     """Bind every caller-controlled input used by census composition."""
     transform = dict(params.get("transform_policy") or {})
@@ -39,6 +77,9 @@ def _composition_policy_identity(params: Mapping[str, Any]) -> str:
         "duration_s": float(params.get("duration_s") or 0.0),
         "source_exclude_ids": sorted(
             {str(value) for value in params.get("source_exclude_ids") or []}
+        ),
+        "ordered_island_composition_inputs": (
+            _ordered_island_composition_inputs(params)
         ),
         "phrase_playback_law": str(
             params.get("phrase_playback_law") or ""

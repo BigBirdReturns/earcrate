@@ -5,6 +5,9 @@ from typing import Any, Mapping
 
 from earcrate.plan.fixture_source_universe_determinism_contract import (
     CANONICAL_SLOT_ASSIGNMENT_VERSION,
+    _CanonicalAssignmentBound,
+    _CanonicalAssignmentInvariant,
+    _canonical_slot_assignment,
 )
 
 _EXPECTED_METHOD = (
@@ -25,6 +28,10 @@ def _json_int(value: Any, field: str, contradiction: Any) -> int:
 def _validate_canonicalization_receipt(
     module: Any,
     receipt: Mapping[str, Any],
+    *,
+    census: Mapping[str, Any],
+    target_source_count: int | None,
+    time_limit_s: float,
 ) -> None:
     contradiction = module._receipt_contradiction
     selected = receipt.get("selected_candidate")
@@ -81,7 +88,7 @@ def _validate_canonicalization_receipt(
     island_count = _json_int(
         canonical.get("island_count"), "island count", contradiction
     )
-    feasibility_checks = _json_int(
+    _json_int(
         canonical.get("feasibility_check_count"),
         "feasibility check count",
         contradiction,
@@ -98,8 +105,37 @@ def _validate_canonicalization_receipt(
         raise contradiction("canonicalization selected source count")
     if island_count != len(islands):
         raise contradiction("canonicalization island count")
-    if feasibility_checks < island_count + slot_count:
-        raise contradiction("canonicalization feasibility check count")
+    if target_source_count is not None and selected_count != target_source_count:
+        raise contradiction("requested exact source count")
+
+    max_source_events = _json_int(
+        selection.get("max_source_events"),
+        "selection event cap",
+        contradiction,
+    )
+    if max_source_events <= 0:
+        raise contradiction("selection event cap")
+
+    try:
+        expected_assignment, expected_receipt = _canonical_slot_assignment(
+            selected,
+            census,
+            max_source_events=max_source_events,
+            time_limit_s=float(time_limit_s),
+        )
+    except (_CanonicalAssignmentBound, _CanonicalAssignmentInvariant) as error:
+        raise contradiction(
+            f"canonical assignment recomputation: {type(error).__name__}: {error}"
+        ) from error
+    except Exception as error:
+        raise contradiction(
+            f"canonical assignment recomputation failed: {type(error).__name__}"
+        ) from error
+
+    if list(assignment) != expected_assignment:
+        raise contradiction("canonical slot assignment does not match census")
+    if canonical != expected_receipt:
+        raise contradiction("canonicalization receipt does not match recomputation")
 
 
 def install_source_universe_cli_final_contract(module: Any) -> None:
@@ -132,7 +168,13 @@ def install_source_universe_cli_final_contract(module: Any) -> None:
         )
         if selected_bytes is None:
             return None
-        _validate_canonicalization_receipt(module, receipt)
+        _validate_canonicalization_receipt(
+            module,
+            receipt,
+            census=census,
+            target_source_count=target_source_count,
+            time_limit_s=time_limit_s,
+        )
         return selected_bytes
 
     guarded_recovery.__name__ = original.__name__

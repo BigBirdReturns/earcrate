@@ -17,7 +17,7 @@ from earcrate.plan.fixture_source_universe import (
 
 
 A_SOURCES = ["s1", "s2", "s3", "s4", "s5"]
-B_SOURCES = ["s6", "s7", "s8", "s9", "s10"]
+B_SOURCES = sorted(["s6", "s7", "s8", "s9", "s10"])
 EXCESS_SOURCE = "s11"
 ALL_SOURCES = A_SOURCES + B_SOURCES + [EXCESS_SOURCE]
 

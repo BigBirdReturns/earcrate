@@ -20,40 +20,60 @@ def _reseal_campaign(campaign):
     return campaign
 
 
-def test_seed_duration_and_exclusions_are_bound_to_census_policy():
+def _assert_policy_drift_refused(candidate, campaign, drifted):
+    from earcrate.plan.fixture_diversity import fixture_projection
+
+    assert (
+        fixture_projection(drifted)["fixture_identity"]
+        == candidate["fixture_sha256"]
+    )
+    try:
+        select_planable_source_universe(
+            drifted,
+            campaign,
+            _solver=_solver_must_not_run,
+        )
+    except FixtureSlotQualificationError as exc:
+        assert "policy identity" in str(exc)
+    else:
+        raise AssertionError("a census-composition input drift reused stale evidence")
+
+
+def test_seed_duration_exclusions_and_capacity_are_bound_to_census_policy():
     candidate = helpers._candidate()
     campaign = helpers._campaign(candidate)
 
-    from earcrate.plan.fixture_diversity import fixture_projection
-
-    variants = []
     changed_seed = copy.deepcopy(candidate)
     changed_seed["seed"] = 999
-    variants.append(changed_seed)
 
     changed_duration = copy.deepcopy(candidate)
     changed_duration["duration_s"] = 21.0
-    variants.append(changed_duration)
 
     changed_exclusions = copy.deepcopy(candidate)
     changed_exclusions["source_exclude_ids"] = ["opaque-excluded-source"]
-    variants.append(changed_exclusions)
 
-    for drifted in variants:
-        assert (
-            fixture_projection(drifted)["fixture_identity"]
-            == candidate["fixture_sha256"]
-        )
-        try:
-            select_planable_source_universe(
-                drifted,
-                campaign,
-                _solver=_solver_must_not_run,
-            )
-        except FixtureSlotQualificationError as exc:
-            assert "policy identity" in str(exc)
-        else:
-            raise AssertionError("a census-composition input drift reused stale evidence")
+    changed_capacity = copy.deepcopy(candidate)
+    changed_capacity["islands"][0]["capacity_s"] = 40.0
+
+    for drifted in (
+        changed_seed,
+        changed_duration,
+        changed_exclusions,
+        changed_capacity,
+    ):
+        _assert_policy_drift_refused(candidate, campaign, drifted)
+
+
+def test_semantically_equivalent_island_reordering_cannot_reuse_a_census():
+    candidate = helpers._candidate()
+    candidate["islands"][0].update({"start_s": 0.0, "end_s": 10.0})
+    candidate["islands"][1].update({"start_s": 10.0, "end_s": 20.0})
+    helpers._seal_candidate(candidate)
+    campaign = helpers._campaign(candidate)
+
+    reordered = copy.deepcopy(candidate)
+    reordered["islands"].reverse()
+    _assert_policy_drift_refused(candidate, campaign, reordered)
 
 
 def test_fractional_pair_count_is_rejected_before_solver():

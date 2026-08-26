@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 
@@ -39,6 +40,9 @@ def test_stage2d_census_uses_expanded_policy_schema_v3():
     )
     assert public.SLOT_CENSUS_VERSION == slot_binding.SLOT_CENSUS_VERSION
     assert helpers._campaign()["version"] == slot_binding.SLOT_CENSUS_VERSION
+    assert {
+        row["version"] for row in helpers._campaign()["islands"]
+    } == {slot_binding.SLOT_CENSUS_VERSION}
 
 
 def test_source_universe_cli_runs_maximum_and_exact_common_count(tmp_path):
@@ -145,4 +149,80 @@ def test_source_universe_cli_refuses_input_alias_without_mutation(tmp_path):
     ) == 2
     assert candidate_path.read_bytes() == before_candidate
     assert census_path.read_bytes() == before_census
+    assert not receipt_path.exists()
+
+
+def test_source_universe_cli_refuses_hardlink_alias_without_mutation(tmp_path):
+    helpers = _helpers()
+    cli = _cli()
+    candidate_path = tmp_path / "candidate.json"
+    census_path = tmp_path / "census.json"
+    candidate_alias = tmp_path / "candidate-hardlink.json"
+    candidate_path.write_text(
+        json.dumps(helpers._candidate(), sort_keys=True), encoding="utf-8"
+    )
+    census_path.write_text(
+        json.dumps(helpers._campaign(), sort_keys=True), encoding="utf-8"
+    )
+    os.link(candidate_path, candidate_alias)
+    before_candidate = candidate_path.read_bytes()
+    before_census = census_path.read_bytes()
+
+    assert cli.main(
+        [
+            str(candidate_path),
+            str(census_path),
+            "--receipt",
+            str(candidate_alias),
+        ]
+    ) == 2
+    assert candidate_path.read_bytes() == before_candidate
+    assert candidate_alias.read_bytes() == before_candidate
+    assert census_path.read_bytes() == before_census
+
+
+def test_source_universe_cli_rolls_back_candidate_when_receipt_publish_fails(
+    tmp_path,
+):
+    helpers = _helpers()
+    cli = _cli()
+    candidate_path = tmp_path / "candidate.json"
+    census_path = tmp_path / "census.json"
+    output_path = tmp_path / "selected.json"
+    receipt_path = tmp_path / "receipt.json"
+    candidate_path.write_text(
+        json.dumps(helpers._candidate(), sort_keys=True), encoding="utf-8"
+    )
+    census_path.write_text(
+        json.dumps(helpers._campaign(), sort_keys=True), encoding="utf-8"
+    )
+    prior_output = b"prior selected candidate\n"
+    output_path.write_bytes(prior_output)
+
+    original_replace = cli._REPLACE
+    calls = {"count": 0}
+
+    def fail_receipt_publish(source, destination):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise OSError("injected receipt publish failure")
+        return original_replace(source, destination)
+
+    cli._REPLACE = fail_receipt_publish
+    try:
+        assert cli.main(
+            [
+                str(candidate_path),
+                str(census_path),
+                "--out-candidate",
+                str(output_path),
+                "--receipt",
+                str(receipt_path),
+            ]
+        ) == 2
+    finally:
+        cli._REPLACE = original_replace
+
+    assert calls["count"] == 3
+    assert output_path.read_bytes() == prior_output
     assert not receipt_path.exists()

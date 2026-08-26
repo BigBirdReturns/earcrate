@@ -5,14 +5,14 @@ remain mandatory. The census and candidate must therefore agree on every
 request field that can change ordinary island composition, and the source-only
 selector must stop whenever a parent refusal declares learned atom-pair state.
 
-The expanded composition-policy identity changes census semantics, so this
-closure advances every public census-version surface to schema v3 at install
-time. Historical Stage 2C v2 receipts remain immutable evidence but are not
-admissible inputs to Stage 2D; fresh censuses must be generated from the same
-sealed candidates and preserved parent refusals.
+The expanded Stage 2D composition identity is deliberately separate from the
+legacy ``policy_identity`` used by the accepted PR #127 slot-qualification
+authority. Existing qualification semantics remain unchanged. Fresh Stage 2D
+censuses add ``source_universe_policy_identity`` under schema v3; historical v2
+receipts remain immutable evidence but are not admissible to Stage 2D.
 
-This module changes no composer, census graph, MILP law, renderer, publication
-path, or accepted authority.
+This module changes no composer, census graph, slot-qualification law, renderer,
+publication path, or accepted authority.
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from earcrate.plan import fixture_slot_qualification_core as _core
 from earcrate.plan import fixture_source_universe as _source
 
 SOURCE_UNIVERSE_SLOT_CENSUS_VERSION = "earcrate_exact_pool_slot_census_v3"
+SOURCE_UNIVERSE_POLICY_FIELD = "source_universe_policy_identity"
 
 
 def _ordered_island_composition_inputs(
@@ -65,7 +66,7 @@ def _ordered_island_composition_inputs(
     return rows
 
 
-def _composition_policy_identity(params: Mapping[str, Any]) -> str:
+def source_universe_policy_identity(params: Mapping[str, Any]) -> str:
     """Bind every caller-controlled input used by census composition."""
     transform = dict(params.get("transform_policy") or {})
     body: Dict[str, Any] = {
@@ -190,26 +191,88 @@ def _install_schema_version() -> None:
 def _require_stage2d_schema(census_campaign: Mapping[str, Any]) -> None:
     campaign_version = str(census_campaign.get("version") or "")
     island_rows = list(census_campaign.get("islands") or [])
+    if not island_rows or any(
+        not isinstance(row, Mapping) for row in island_rows
+    ):
+        raise _core.FixtureSlotQualificationError(
+            "Stage 2D requires a nonempty mapping-valued island census family"
+        )
     island_versions = {
-        str(row.get("version") or "")
-        for row in island_rows
-        if isinstance(row, Mapping)
+        str(row.get("version") or "") for row in island_rows
     }
     if campaign_version != SOURCE_UNIVERSE_SLOT_CENSUS_VERSION:
         raise _core.FixtureSlotQualificationError(
             "source-universe selection requires a fresh slot-census campaign "
             f"with version {SOURCE_UNIVERSE_SLOT_CENSUS_VERSION!r}"
         )
-    if not island_rows or island_versions != {
-        SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
-    }:
+    if island_versions != {SOURCE_UNIVERSE_SLOT_CENSUS_VERSION}:
         raise _core.FixtureSlotQualificationError(
             "every Stage 2D island census must carry the active schema v3 version"
         )
 
 
+def _require_source_universe_policy(
+    candidate: Mapping[str, Any],
+    census_campaign: Mapping[str, Any],
+) -> None:
+    expected = source_universe_policy_identity(candidate)
+    supplied = str(census_campaign.get(SOURCE_UNIVERSE_POLICY_FIELD) or "")
+    if supplied != expected:
+        raise _core.FixtureSlotQualificationError(
+            "source-universe composition policy identity does not match the candidate"
+        )
+    island_values = {
+        str(row.get(SOURCE_UNIVERSE_POLICY_FIELD) or "")
+        for row in census_campaign.get("islands") or []
+        if isinstance(row, Mapping)
+    }
+    if island_values != {expected}:
+        raise _core.FixtureSlotQualificationError(
+            "an island census is not bound to the Stage 2D composition request"
+        )
+
+
+def _install_stage2d_census_builder() -> None:
+    if getattr(_binding, "_source_universe_census_builder_installed", False):
+        return
+    original_builder = _binding.build_fixture_slot_census_campaign
+
+    def build_with_source_universe_policy(
+        core: Any, params: Mapping[str, Any]
+    ) -> Dict[str, Any]:
+        campaign = copy.deepcopy(dict(original_builder(core, params)))
+        identity = source_universe_policy_identity(params)
+        campaign["version"] = SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
+        campaign[SOURCE_UNIVERSE_POLICY_FIELD] = identity
+        islands = [dict(row) for row in campaign.get("islands") or []]
+        for island in islands:
+            island["version"] = SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
+            island[SOURCE_UNIVERSE_POLICY_FIELD] = identity
+            island["slot_census_sha256"] = _binding._census_identity(island)
+        campaign["islands"] = islands
+        campaign["campaign_sha256"] = _binding._campaign_identity(campaign)
+        return campaign
+
+    build_with_source_universe_policy.__name__ = original_builder.__name__
+    build_with_source_universe_policy.__doc__ = original_builder.__doc__
+    build_with_source_universe_policy.__wrapped__ = original_builder
+    _binding.build_fixture_slot_census_campaign = (
+        build_with_source_universe_policy
+    )
+    for module_name in (
+        "earcrate.plan.fixture_slot_qualification",
+        "earcrate.plan.fixture_slot_contract",
+    ):
+        module = sys.modules.get(module_name)
+        if module is not None:
+            module.build_fixture_slot_census_campaign = (
+                build_with_source_universe_policy
+            )
+    _binding._source_universe_census_builder_installed = True
+
+
 def install_fixture_source_universe_review_closure() -> None:
-    """Install schema, policy binding and parent validation exactly once."""
+    """Install Stage 2D schema, census custody, and parent validation."""
     if getattr(
         _source,
         "_fixture_source_universe_review_closure_installed",
@@ -219,7 +282,7 @@ def install_fixture_source_universe_review_closure() -> None:
 
     original_select = _source.select_planable_source_universe
     _install_schema_version()
-    _core._policy_identity = _composition_policy_identity
+    _install_stage2d_census_builder()
 
     def guarded_select(
         candidate: Mapping[str, Any],
@@ -227,6 +290,7 @@ def install_fixture_source_universe_review_closure() -> None:
         **kwargs: Any,
     ) -> Dict[str, Any]:
         _require_stage2d_schema(census_campaign)
+        _require_source_universe_policy(candidate, census_campaign)
         parent = census_campaign.get("parent_exact_pool_refusal")
         if not isinstance(parent, Mapping):
             return _parent_receipt_failure(
@@ -281,8 +345,7 @@ def install_fixture_source_universe_review_closure() -> None:
                 parent,
                 failure_class="parent_pair_constraint_receipt_inconsistent",
                 reason=(
-                    "the parent refusal's forbidden_final_pairs field is not a "
-                    "list"
+                    "the parent refusal's forbidden_final_pairs field is not a list"
                 ),
                 declared_count=-1,
                 observed_count=-1,
@@ -353,6 +416,8 @@ def install_fixture_source_universe_review_closure() -> None:
 
 
 __all__ = [
+    "SOURCE_UNIVERSE_POLICY_FIELD",
     "SOURCE_UNIVERSE_SLOT_CENSUS_VERSION",
     "install_fixture_source_universe_review_closure",
+    "source_universe_policy_identity",
 ]

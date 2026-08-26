@@ -46,6 +46,7 @@ MODULES = (
     "test_fixture_slot_qualification",
     "test_fixture_slot_census_diagnostic",
     "test_fixture_source_universe",
+    "test_fixture_source_universe_cli",
     "test_fixture_slot_role_contract",
     "test_fixture_slot_lineage",
     "test_fixture_slot_review_closure",

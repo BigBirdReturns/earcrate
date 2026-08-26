@@ -29,6 +29,18 @@ def _cli():
     )
 
 
+def test_stage2d_census_uses_expanded_policy_schema_v3():
+    import earcrate.plan.fixture_slot_binding as slot_binding
+    import earcrate.plan.fixture_slot_qualification as public
+
+    helpers = _helpers()
+    assert slot_binding.SLOT_CENSUS_VERSION == (
+        "earcrate_exact_pool_slot_census_v3"
+    )
+    assert public.SLOT_CENSUS_VERSION == slot_binding.SLOT_CENSUS_VERSION
+    assert helpers._campaign()["version"] == slot_binding.SLOT_CENSUS_VERSION
+
+
 def test_source_universe_cli_runs_maximum_and_exact_common_count(tmp_path):
     helpers = _helpers()
     cli = _cli()

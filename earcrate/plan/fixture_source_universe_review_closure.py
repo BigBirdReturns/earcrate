@@ -5,9 +5,14 @@ remain mandatory. The census and candidate must therefore agree on every
 request field that can change ordinary island composition, and the source-only
 selector must stop whenever a parent refusal declares learned atom-pair state.
 
-This module patches the shared policy identity and the direct source-universe
-entrypoint at package installation time. It changes no composer, census graph,
-MILP law, renderer, publication path, or accepted authority.
+The expanded composition-policy identity changes census semantics, so this
+closure advances every public census-version surface to schema v3 at install
+time. Historical Stage 2C v2 receipts remain immutable evidence but are not
+admissible inputs to Stage 2D; fresh censuses must be generated from the same
+sealed candidates and preserved parent refusals.
+
+This module changes no composer, census graph, MILP law, renderer, publication
+path, or accepted authority.
 """
 from __future__ import annotations
 
@@ -15,8 +20,11 @@ import copy
 import sys
 from typing import Any, Dict, Mapping
 
+from earcrate.plan import fixture_slot_binding as _binding
 from earcrate.plan import fixture_slot_qualification_core as _core
 from earcrate.plan import fixture_source_universe as _source
+
+SOURCE_UNIVERSE_SLOT_CENSUS_VERSION = "earcrate_exact_pool_slot_census_v3"
 
 
 def _composition_policy_identity(params: Mapping[str, Any]) -> str:
@@ -105,8 +113,20 @@ def _pair_receipt_failure(
     return result
 
 
+def _install_schema_version() -> None:
+    _core.SLOT_CENSUS_VERSION = SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
+    _binding.SLOT_CENSUS_VERSION = SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
+    for module_name in (
+        "earcrate.plan.fixture_slot_qualification",
+        "earcrate.plan.fixture_slot_contract",
+    ):
+        module = sys.modules.get(module_name)
+        if module is not None:
+            module.SLOT_CENSUS_VERSION = SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
+
+
 def install_fixture_source_universe_review_closure() -> None:
-    """Install policy binding and pair-receipt validation exactly once."""
+    """Install schema, policy binding and pair validation exactly once."""
     if getattr(
         _source,
         "_fixture_source_universe_review_closure_installed",
@@ -115,6 +135,7 @@ def install_fixture_source_universe_review_closure() -> None:
         return
 
     original_select = _source.select_planable_source_universe
+    _install_schema_version()
     _core._policy_identity = _composition_policy_identity
 
     def guarded_select(
@@ -192,10 +213,12 @@ def install_fixture_source_universe_review_closure() -> None:
     public = sys.modules.get("earcrate.plan.fixture_slot_qualification")
     if public is not None:
         public.select_planable_source_universe = guarded_select
+        public.SLOT_CENSUS_VERSION = SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
 
     _source._fixture_source_universe_review_closure_installed = True
 
 
 __all__ = [
+    "SOURCE_UNIVERSE_SLOT_CENSUS_VERSION",
     "install_fixture_source_universe_review_closure",
 ]

@@ -28,9 +28,6 @@ for _thread_var in (
     "VECLIB_MAXIMUM_THREADS",
     "BLIS_NUM_THREADS",
 ):
-    # A gate runner must be deterministic even when the parent shell exports a
-    # high native thread count. Process-pool gates plus threaded BLAS otherwise
-    # oversubscribe hard enough to segfault on ordinary CI/local machines.
     os.environ[_thread_var] = "1"
 
 MODULES = (
@@ -46,6 +43,13 @@ MODULES = (
     "test_fixture_audit_cli",
     "test_fixture_derivation",
     "test_fixture_review_closure",
+    "test_fixture_slot_qualification",
+    "test_fixture_slot_census_diagnostic",
+    "test_fixture_slot_role_contract",
+    "test_fixture_slot_lineage",
+    "test_fixture_slot_review_closure",
+    "test_fixture_slot_receipt_contract",
+    "test_fixture_slot_final_boundaries",
 )
 
 
@@ -58,7 +62,9 @@ def _cases():
                 found += 1
                 yield module_name, name, fn
         if not found:
-            raise RuntimeError(f"gate module has no discovered tests: {module_name}")
+            raise RuntimeError(
+                f"gate module has no discovered tests: {module_name}"
+            )
 
 
 def _invoke(fn):
@@ -74,10 +80,26 @@ def _invoke(fn):
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Run the complete executable EarCrate gate suite")
-    parser.add_argument("--list", action="store_true", help="list discovered gates without executing them")
-    parser.add_argument("--start", type=int, default=0, help="zero-based discovered gate offset")
-    parser.add_argument("--limit", type=int, default=0, help="maximum gates to run (0 means all remaining)")
+    parser = argparse.ArgumentParser(
+        description="Run the complete executable EarCrate gate suite"
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="list discovered gates without executing them",
+    )
+    parser.add_argument(
+        "--start",
+        type=int,
+        default=0,
+        help="zero-based discovered gate offset",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="maximum gates to run (0 means all remaining)",
+    )
     args = parser.parse_args(argv)
     cases = list(_cases())
     if args.list:
@@ -86,7 +108,11 @@ def main(argv=None) -> int:
         print(f"SUMMARY {len(cases)} gates discovered")
         return 0
     start = max(0, int(args.start))
-    cases = cases[start: start + args.limit if args.limit and args.limit > 0 else None]
+    cases = cases[
+        start : start + args.limit
+        if args.limit and args.limit > 0
+        else None
+    ]
     if not cases:
         print("FAIL runner: selected gate range is empty", flush=True)
         return 2
@@ -98,9 +124,15 @@ def main(argv=None) -> int:
             print(f"PASS {label}", flush=True)
         except Exception as exc:
             failures += 1
-            print(f"FAIL {label}: {type(exc).__name__}: {exc}", flush=True)
+            print(
+                f"FAIL {label}: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
             traceback.print_exc()
-    print(f"SUMMARY {len(cases) - failures}/{len(cases)} gates passed", flush=True)
+    print(
+        f"SUMMARY {len(cases) - failures}/{len(cases)} gates passed",
+        flush=True,
+    )
     return 1 if failures else 0
 
 

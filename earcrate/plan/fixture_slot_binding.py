@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from earcrate.plan import fixture_slot_qualification_core as _core
@@ -141,6 +142,100 @@ def build_exact_pool_slot_census(
     return body
 
 
+_TURNOVER_REFUSAL_PREFIX = "TasteSpec deck infeasible:"
+_TURNOVER_REFUSAL_PATTERN = re.compile(
+    r"keeps (\d+)/(\d+) distinct playable sources"
+)
+
+
+def _turnover_refusal_counts(
+    error: BaseException,
+    restricted_diagnostics: Optional[Mapping[str, Any]],
+) -> Optional[Tuple[int, int]]:
+    """Classify the one composer refusal the diagnostic path may bypass.
+
+    The distinct-source turnover refusal is an arithmetic statement about the
+    restricted pool (surviving sources < required turnover), not an
+    operational failure, so it is the only composer exception that may open
+    the diagnostic composition path. The refusal's own counts must agree with
+    the independently measured restricted deck, or the bypass stays closed
+    and the exception remains an indeterminate census failure.
+    """
+    if type(error) is not RuntimeError:
+        return None
+    message = str(error)
+    if not message.startswith(_TURNOVER_REFUSAL_PREFIX):
+        return None
+    match = _TURNOVER_REFUSAL_PATTERN.search(message)
+    if match is None:
+        return None
+    surviving, required = int(match.group(1)), int(match.group(2))
+    if surviving >= required:
+        return None
+    measured = ((restricted_diagnostics or {}).get("have") or {}).get("sources")
+    if measured is None or int(measured) != surviving:
+        return None
+    return surviving, required
+
+
+def _compose_census_skeleton(
+    core: Any,
+    row: Mapping[str, Any],
+    base: Mapping[str, Any],
+    seed: int,
+    restricted: Sequence[Mapping[str, Any]],
+    restricted_diagnostics: Optional[Mapping[str, Any]],
+    full_deck: Sequence[Mapping[str, Any]],
+    full_diagnostics: Optional[Mapping[str, Any]],
+) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Compose the observed skeleton, restricted first, diagnostic second.
+
+    Ordinary planning keeps refusing the deficient restricted pool; the census
+    is a nonpublishing probe, so on exactly the distinct-source turnover
+    refusal it may observe a diagnostic skeleton composed from the already
+    computed campaign-universe exact-deck pool. Every other composer exception
+    propagates unchanged and remains an indeterminate census failure.
+    """
+    try:
+        raw, compose_params = _core._raw_island_arrangement(
+            core, restricted, row, base, seed
+        )
+        return raw, compose_params, None
+    except Exception as compose_error:
+        counts = _turnover_refusal_counts(
+            compose_error, restricted_diagnostics
+        )
+        if counts is None:
+            raise
+        surviving, required = counts
+        refusal_message = str(compose_error)
+    raw, compose_params = _core._raw_island_arrangement(
+        core, full_deck, row, base, seed
+    )
+    from earcrate.core.deps import ENGINE_VERSION
+
+    diagnostic = {
+        "bypassed_precondition": "tastespec_distinct_source_turnover",
+        "refusal_message": refusal_message,
+        "restricted_surviving_source_count": surviving,
+        "required_turnover_source_count": required,
+        "campaign_universe_surviving_source_count": int(
+            ((full_diagnostics or {}).get("have") or {}).get("sources")
+            or 0
+        ),
+        "deck_id": str(row.get("deck_id") or ""),
+        "render_bpm": float(row["target_bpm"]),
+        "target_key": int(row["target_key"]) % 12,
+        "allocated_duration_s": float(row["allocated_duration_s"]),
+        "composer": {
+            "engine_version": str(ENGINE_VERSION),
+            "entrypoint": "compose_taste_arrangement",
+        },
+        "disposition": "diagnostic_only_no_publication",
+    }
+    return raw, compose_params, diagnostic
+
+
 def build_fixture_slot_census_campaign(
     core: Any, params: Mapping[str, Any]
 ) -> Dict[str, Any]:
@@ -214,7 +309,7 @@ def build_fixture_slot_census_campaign(
             for source_id in include_ids
             for item in by_source.get(source_id, ())
         ]
-        restricted, _restricted_diagnostics = core.taste_feasible_pool(
+        restricted, restricted_diagnostics = core.taste_feasible_pool(
             allowed,
             float(row["target_bpm"]),
             int(row["target_key"]),
@@ -236,12 +331,15 @@ def build_fixture_slot_census_campaign(
                 f"island {row.get('island_id')!r} has no campaign-universe "
                 "transform-safe pool for census"
             )
-        raw, compose_params = _core._raw_island_arrangement(
+        raw, compose_params, diagnostic = _compose_census_skeleton(
             core,
-            restricted,
             row,
             base,
             int(params.get("seed") or 0) + index,
+            restricted,
+            restricted_diagnostics,
+            full_deck,
+            full_diagnostics,
         )
         census = build_exact_pool_slot_census(
             core,
@@ -279,6 +377,8 @@ def build_fixture_slot_census_campaign(
                 },
             }
         )
+        if diagnostic is not None:
+            census["diagnostic_composition"] = diagnostic
         census["slot_census_sha256"] = _census_identity(census)
         rows.append(census)
 
@@ -298,6 +398,11 @@ def build_fixture_slot_census_campaign(
         "duration_s": float(net_duration),
         "island_count": len(rows),
         "islands": rows,
+        "diagnostic_island_ids": sorted(
+            str(row.get("island_id") or "")
+            for row in rows
+            if row.get("diagnostic_composition") is not None
+        ),
         "impossibility_claimed": False,
         "disposition": "observed_raw_section_graphs_for_repartition",
     }

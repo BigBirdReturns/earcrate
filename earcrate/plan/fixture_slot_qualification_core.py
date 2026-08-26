@@ -27,7 +27,7 @@ import json
 import math
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
-SLOT_CENSUS_VERSION = "earcrate_exact_pool_slot_census_v1"
+SLOT_CENSUS_VERSION = "earcrate_exact_pool_slot_census_v2"
 SLOT_QUALIFICATION_VERSION = "earcrate_fixture_slot_qualification_v1"
 INDETERMINATE_ACTION = "halt_slot_qualification_this_is_not_an_impossibility_proof"
 DEFAULT_MAX_SOURCE_EVENTS = 12

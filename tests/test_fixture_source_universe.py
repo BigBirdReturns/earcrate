@@ -14,6 +14,10 @@ from earcrate.plan.fixture_source_universe import (
     PAIR_CONSTRAINT_HALT,
     select_planable_source_universe,
 )
+from earcrate.plan.fixture_source_universe_review_closure import (
+    SOURCE_UNIVERSE_POLICY_FIELD,
+    source_universe_policy_identity,
+)
 
 
 A_SOURCES = ["s1", "s2", "s3", "s4", "s5"]
@@ -53,9 +57,6 @@ def _candidate():
                 "technique": "equal_power",
                 "phrase_boundary_required": True,
             },
-            # The ordinary TasteSpec law still applies. Its hard minimum is five
-            # sources per island, so this fixture deliberately places both
-            # islands above that floor rather than weakening the product law.
             "reuse_policy_override": {"source_seconds": 100.0},
             "seed": 19,
             "duration_s": 20.0,
@@ -117,10 +118,12 @@ def _slot_rows(source_ids):
 
 def _campaign(candidate=None):
     candidate = copy.deepcopy(candidate or _candidate())
+    stage2d_policy = source_universe_policy_identity(candidate)
     rows = [
         _seal_census(
             {
                 "version": slot_binding.SLOT_CENSUS_VERSION,
+                SOURCE_UNIVERSE_POLICY_FIELD: stage2d_policy,
                 "island_id": "a",
                 "deck_id": "deck-a",
                 "render_bpm": 120.0,
@@ -137,6 +140,7 @@ def _campaign(candidate=None):
         _seal_census(
             {
                 "version": slot_binding.SLOT_CENSUS_VERSION,
+                SOURCE_UNIVERSE_POLICY_FIELD: stage2d_policy,
                 "island_id": "b",
                 "deck_id": "deck-b",
                 "render_bpm": 130.0,
@@ -161,6 +165,7 @@ def _campaign(candidate=None):
     campaign = {
         "kind": "earcrate_fixture_slot_census_campaign",
         "version": slot_binding.SLOT_CENSUS_VERSION,
+        SOURCE_UNIVERSE_POLICY_FIELD: stage2d_policy,
         "candidate_fixture_sha256": candidate["fixture_sha256"],
         "source_pool_sha256": "pool",
         "source_universe_sha256": slot_binding.semantic_sha256(sources),
@@ -301,7 +306,7 @@ def test_reuse_policy_drift_is_refused_before_selection():
     try:
         select_planable_source_universe(drifted, campaign)
     except FixtureSlotQualificationError as exc:
-        assert "policy identity" in str(exc)
+        assert "composition policy identity" in str(exc)
     else:
         raise AssertionError("turnover-policy drift reused an old census")
 

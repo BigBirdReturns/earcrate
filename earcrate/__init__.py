@@ -27,12 +27,16 @@ from earcrate.app import EarcrateCore as _EarcrateCore
 from earcrate.plan.key_identity import install_key_identity as _install_key_identity
 from earcrate.plan.islands import install_island_set as _install_island_set
 from earcrate.plan.source_rotation import install_exact_pool_rotation as _install_exact_pool_rotation
+from earcrate.plan.fixture_slot_census_probe import (
+    install_slot_census_turnover_probe as _install_slot_census_turnover_probe,
+)
 from earcrate.plan.fixture_slot_review_closure import (
     install_fixture_slot_census as _install_fixture_slot_census,
 )
 _install_key_identity(_EarcrateCore)
 _install_island_set(_EarcrateCore)
 _install_exact_pool_rotation(_EarcrateCore)
+_install_slot_census_turnover_probe()
 _install_fixture_slot_census(_EarcrateCore)
 
 # The island dispatcher replaces the bound method but must preserve the public
@@ -46,6 +50,6 @@ _single_deck = _EarcrateCore._single_deck_render_mashup
 _raw_single_deck = getattr(_single_deck, "__wrapped__", _single_deck)
 _functools.update_wrapper(_render_dispatch, _raw_single_deck)
 
-del _EarcrateCore, _install_key_identity, _install_island_set, _install_exact_pool_rotation, _install_fixture_slot_census, _functools
+del _EarcrateCore, _install_key_identity, _install_island_set, _install_exact_pool_rotation, _install_slot_census_turnover_probe, _install_fixture_slot_census, _functools
 del _render_dispatch, _single_deck, _raw_single_deck
 del _arrangement_sha, _core_deps, _now_utc, _safe_name, _ulidish

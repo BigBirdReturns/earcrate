@@ -5,8 +5,8 @@ proof-bearing exact-pool refusal. Product refusals historically expose that
 proof in several shapes: Hall evidence under ``hall_witness``, mapping-valued
 ``proof`` payloads, and scalar proof statements for counting, cap, and
 construction exhaustion. This module normalizes those producer shapes at the
-refusal-projection boundary, then requires one typed, nonempty mapping before
-either source-universe MILP may run.
+refusal-projection boundary, then requires one recognized typed proof schema
+before either source-universe MILP may run.
 
 Learned atom-pair state is classified by the existing review closure first.
 The proof guard applies only after the parent receipt explicitly establishes a
@@ -39,23 +39,30 @@ def _normalized_producer_proof(
             "kind": "hall_witness",
             "witness": copy.deepcopy(dict(hall_witness)),
         }
-    if hall_witness not in (None, "", [], {}):
-        return {
-            "kind": "hall_witness",
-            "witness": copy.deepcopy(hall_witness),
-        }
 
     if isinstance(raw_proof, str) and raw_proof.strip():
         return {
             "kind": "producer_proof_statement",
             "statement": raw_proof,
         }
-    if raw_proof not in (None, "", [], {}):
-        return {
-            "kind": "producer_proof_payload",
-            "payload": copy.deepcopy(raw_proof),
-        }
     return None
+
+
+def _valid_normalized_proof(proof: Any) -> bool:
+    """Accept only the proof schemas emitted by the producer normalizer."""
+    if not isinstance(proof, Mapping):
+        return False
+    kind = str(proof.get("kind") or "")
+    if kind == "mapping_proof":
+        payload = proof.get("payload")
+        return isinstance(payload, Mapping) and bool(payload)
+    if kind == "hall_witness":
+        witness = proof.get("witness")
+        return isinstance(witness, Mapping) and bool(witness)
+    if kind == "producer_proof_statement":
+        statement = proof.get("statement")
+        return isinstance(statement, str) and bool(statement.strip())
+    return False
 
 
 def _install_parent_proof_normalizer() -> None:
@@ -106,18 +113,24 @@ def _proof_failure(
             for source_id in island.get("source_include_ids") or []
         }
     )
+    proof = parent.get("proof")
     result = _source._failure(
         "parent_exact_pool_refusal_proof_missing_or_malformed",
         (
-            "the bound parent exact-pool refusal must carry a nonempty "
-            "mapping-valued proof before source-universe selection may run"
+            "the bound parent exact-pool refusal must carry a recognized "
+            "typed proof object before source-universe selection may run"
         ),
         solver={
             "method": "not_run",
             "parent_failure_class": str(
                 parent.get("failure_class") or ""
             ),
-            "proof_payload_type": type(parent.get("proof")).__name__,
+            "proof_payload_type": type(proof).__name__,
+            "proof_kind": (
+                str(proof.get("kind") or "")
+                if isinstance(proof, Mapping)
+                else ""
+            ),
         },
         parent_fixture_identity=parent_identity,
         parent_source_count=parent_source_count,
@@ -169,10 +182,9 @@ def install_fixture_source_universe_proof_contract() -> None:
             and parent.get("impossibility_claimed") is True
             and str(parent.get("failure_class") or "")
             and _has_explicit_zero_pair_state(parent)
+            and not _valid_normalized_proof(parent.get("proof"))
         ):
-            proof = parent.get("proof")
-            if not isinstance(proof, Mapping) or not proof:
-                return _proof_failure(candidate, parent)
+            return _proof_failure(candidate, parent)
         # Missing, malformed, inconsistent, positive, or section-pair state is
         # deliberately delegated to the existing pair-receipt authority.
         return original_select(candidate, census_campaign, **kwargs)

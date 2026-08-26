@@ -39,6 +39,9 @@ from earcrate.plan.fixture_source_universe_proof_contract import (
 from earcrate.plan.fixture_source_universe_determinism_contract import (
     install_fixture_source_universe_determinism_contract as _install_fixture_source_universe_determinism_contract,
 )
+from earcrate.plan.fixture_source_universe_final_contract import (
+    install_fixture_source_universe_final_contract as _install_fixture_source_universe_final_contract,
+)
 from earcrate.plan.fixture_slot_review_closure import (
     install_fixture_slot_census as _install_fixture_slot_census,
 )
@@ -49,6 +52,7 @@ _install_fixture_slot_turnover_contract()
 _install_fixture_source_universe_review_closure()
 _install_fixture_source_universe_proof_contract()
 _install_fixture_source_universe_determinism_contract()
+_install_fixture_source_universe_final_contract()
 _install_fixture_slot_census(_EarcrateCore)
 
 # The island dispatcher replaces the bound method but must preserve the public
@@ -65,6 +69,6 @@ _functools.update_wrapper(_render_dispatch, _raw_single_deck)
 del _EarcrateCore, _install_key_identity, _install_island_set, _install_exact_pool_rotation
 del _install_fixture_slot_turnover_contract, _install_fixture_source_universe_review_closure
 del _install_fixture_source_universe_proof_contract, _install_fixture_source_universe_determinism_contract
-del _install_fixture_slot_census, _functools
+del _install_fixture_source_universe_final_contract, _install_fixture_slot_census, _functools
 del _render_dispatch, _single_deck, _raw_single_deck
 del _arrangement_sha, _core_deps, _now_utc, _safe_name, _ulidish

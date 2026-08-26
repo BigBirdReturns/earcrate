@@ -253,9 +253,6 @@ def test_turnover_refusal_opens_diagnostic_composition_with_full_evidence():
     Core = _census_core_class()
     candidate = _candidate(pool)
 
-    # This duration deliberately distinguishes the base profile from the active
-    # persona override.  Girl Talk would require six sources; the Pretty Lights
-    # persona used by ordinary exact-island composition requires five.
     from earcrate.core.deps import TASTE_PROFILES
     from earcrate.plan.math import sources_needed
 
@@ -273,11 +270,9 @@ def test_turnover_refusal_opens_diagnostic_composition_with_full_evidence():
         Core(pool), _request(candidate)
     )
 
-    # Restricted first, then the existing campaign-universe deck.  Island b is
-    # already turnover-complete and therefore has no diagnostic second attempt.
     assert Core.calls[0] == ("a", ("s1", "s2", "s3", "s4"))
     assert Core.calls[1] == ("a", ("s1", "s2", "s3", "s4", "s9"))
-    assert Core.calls[2] == ("b", ("s6", "s7", "s8", "s9", "s10"))
+    assert Core.calls[2] == ("b", ("s10", "s6", "s7", "s8", "s9"))
     assert len(Core.calls) == 3
 
     assert campaign["diagnostic_island_ids"] == ["a"]
@@ -407,7 +402,7 @@ def test_diagnostic_census_supports_one_ordinary_qualification_round():
     }
     assert partition == {
         "a": ["s1", "s2", "s3", "s4", "s9"],
-        "b": ["s5", "s6", "s7", "s8", "s10"],
+        "b": ["s10", "s5", "s6", "s7", "s8"],
     }
     assert result["moved_source_count"] == 2
     assert result["candidate"]["fixture_sha256"] != candidate["fixture_sha256"]

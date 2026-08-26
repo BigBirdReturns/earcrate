@@ -4,7 +4,7 @@ import earcrate.plan.fixture_slot_binding as slot_binding
 import earcrate.plan.fixture_source_universe as source_module
 from earcrate.plan.fixture_slot_qualification import (
     FixtureSlotQualificationError,
-    PAIR_CONSTRAINT_HALT,
+    SOURCE_UNIVERSE_PAIR_CONSTRAINT_HALT,
     select_planable_source_universe,
 )
 import test_fixture_source_universe as helpers
@@ -64,7 +64,9 @@ def test_pair_state_precedes_proof_bearing_status():
         assert result["complete"] is False
         assert result["failure_class"] == expected
         assert result["impossibility_claimed"] is False
-        assert result["private_acceptance"] == PAIR_CONSTRAINT_HALT
+        assert result["private_acceptance"] == (
+            SOURCE_UNIVERSE_PAIR_CONSTRAINT_HALT
+        )
 
 
 def test_exact_source_count_requires_a_json_integer_before_solver():

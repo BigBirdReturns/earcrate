@@ -1,19 +1,93 @@
-"""Require explicit proof evidence before Stage 2D source selection.
+"""Normalize producer evidence and enforce the Stage 2D proof boundary.
 
-The Stage 2D source-universe authority consumes a refusal-attached census. A
-boolean impossibility label and a failure-class name do not constitute the
-mathematical evidence needed to authorize source-universe reduction. This
-additive guard requires a nonempty mapping-valued proof before either MILP
-phase can run, while preserving the existing parent-receipt and learned-pair
-classifications installed by the main review closure.
+Stage 2D may reduce a fixture's mandatory source universe only after a genuine
+proof-bearing exact-pool refusal. Product refusals historically expose that
+proof in several shapes: Hall evidence under ``hall_witness``, mapping-valued
+``proof`` payloads, and scalar proof statements for counting, cap, and
+construction exhaustion. This module normalizes those producer shapes at the
+refusal-projection boundary, then requires one typed, nonempty mapping before
+either source-universe MILP may run.
+
+Learned atom-pair state is classified by the existing review closure first.
+The proof guard applies only after the parent receipt explicitly establishes a
+consistent zero learned-pair state.
 """
 from __future__ import annotations
 
 import copy
 import sys
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Optional
 
 from earcrate.plan import fixture_source_universe as _source
+from earcrate.plan import fixture_slot_review_closure as _review
+
+
+def _normalized_producer_proof(
+    deficiency: Mapping[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Return a deterministic typed proof object without inventing evidence."""
+    raw_proof = deficiency.get("proof")
+    if isinstance(raw_proof, Mapping) and raw_proof:
+        return {
+            "kind": "mapping_proof",
+            "payload": copy.deepcopy(dict(raw_proof)),
+        }
+
+    hall_witness = deficiency.get("hall_witness")
+    if isinstance(hall_witness, Mapping) and hall_witness:
+        return {
+            "kind": "hall_witness",
+            "witness": copy.deepcopy(dict(hall_witness)),
+        }
+    if hall_witness not in (None, "", [], {}):
+        return {
+            "kind": "hall_witness",
+            "witness": copy.deepcopy(hall_witness),
+        }
+
+    if isinstance(raw_proof, str) and raw_proof.strip():
+        return {
+            "kind": "producer_proof_statement",
+            "statement": raw_proof,
+        }
+    if raw_proof not in (None, "", [], {}):
+        return {
+            "kind": "producer_proof_payload",
+            "payload": copy.deepcopy(raw_proof),
+        }
+    return None
+
+
+def _install_parent_proof_normalizer() -> None:
+    if getattr(
+        _review,
+        "_fixture_source_universe_parent_proof_normalizer_installed",
+        False,
+    ):
+        return
+
+    original_projection = _review._parent_refusal_projection
+
+    def projection_with_normalized_proof(
+        deficiency: Mapping[str, Any],
+    ) -> Dict[str, Any]:
+        body = copy.deepcopy(dict(original_projection(deficiency)))
+        normalized = _normalized_producer_proof(deficiency)
+        if normalized is None:
+            body.pop("proof", None)
+        else:
+            body["proof"] = normalized
+        body.pop("parent_refusal_sha256", None)
+        body["parent_refusal_sha256"] = _review._binding.semantic_sha256(body)
+        return body
+
+    projection_with_normalized_proof.__name__ = (
+        original_projection.__name__
+    )
+    projection_with_normalized_proof.__doc__ = original_projection.__doc__
+    projection_with_normalized_proof.__wrapped__ = original_projection
+    _review._parent_refusal_projection = projection_with_normalized_proof
+    _review._fixture_source_universe_parent_proof_normalizer_installed = True
 
 
 def _proof_failure(
@@ -53,8 +127,28 @@ def _proof_failure(
     return result
 
 
+def _has_explicit_zero_pair_state(parent: Mapping[str, Any]) -> bool:
+    """Return true only after the pair receipt is complete and constraint-free."""
+    if str(parent.get("failure_class") or "") == (
+        "section_pair_compatibility"
+    ):
+        return False
+    if "forbidden_final_pairs" not in parent:
+        return False
+    pairs = parent.get("forbidden_final_pairs")
+    if not isinstance(pairs, list):
+        return False
+    if "learned_pair_constraint_count" not in parent:
+        return False
+    declared = parent.get("learned_pair_constraint_count")
+    if type(declared) is not int:
+        return False
+    return declared == 0 and len(pairs) == 0
+
+
 def install_fixture_source_universe_proof_contract() -> None:
-    """Install the fail-closed parent-proof boundary once."""
+    """Install producer normalization and the fail-closed proof boundary once."""
+    _install_parent_proof_normalizer()
     if getattr(
         _source,
         "_fixture_source_universe_proof_contract_installed",
@@ -74,10 +168,13 @@ def install_fixture_source_universe_proof_contract() -> None:
             isinstance(parent, Mapping)
             and parent.get("impossibility_claimed") is True
             and str(parent.get("failure_class") or "")
+            and _has_explicit_zero_pair_state(parent)
         ):
             proof = parent.get("proof")
             if not isinstance(proof, Mapping) or not proof:
                 return _proof_failure(candidate, parent)
+        # Missing, malformed, inconsistent, positive, or section-pair state is
+        # deliberately delegated to the existing pair-receipt authority.
         return original_select(candidate, census_campaign, **kwargs)
 
     guarded_select.__name__ = original_select.__name__
@@ -92,4 +189,6 @@ def install_fixture_source_universe_proof_contract() -> None:
     _source._fixture_source_universe_proof_contract_installed = True
 
 
-__all__ = ["install_fixture_source_universe_proof_contract"]
+__all__ = [
+    "install_fixture_source_universe_proof_contract",
+]

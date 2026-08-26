@@ -120,6 +120,7 @@ def _campaign(candidate=None):
     rows = [
         _seal_census(
             {
+                "version": slot_binding.SLOT_CENSUS_VERSION,
                 "island_id": "a",
                 "deck_id": "deck-a",
                 "render_bpm": 120.0,
@@ -135,6 +136,7 @@ def _campaign(candidate=None):
         ),
         _seal_census(
             {
+                "version": slot_binding.SLOT_CENSUS_VERSION,
                 "island_id": "b",
                 "deck_id": "deck-b",
                 "render_bpm": 130.0,
@@ -302,6 +304,21 @@ def test_reuse_policy_drift_is_refused_before_selection():
         assert "policy identity" in str(exc)
     else:
         raise AssertionError("turnover-policy drift reused an old census")
+
+
+def test_historical_v2_census_is_rejected_even_when_resealed():
+    stale = _campaign()
+    stale["version"] = "earcrate_exact_pool_slot_census_v2"
+    for census in stale["islands"]:
+        census["version"] = "earcrate_exact_pool_slot_census_v2"
+        _seal_census(census)
+    stale["campaign_sha256"] = slot_binding._campaign_identity(stale)
+    try:
+        select_planable_source_universe(_candidate(), stale)
+    except FixtureSlotQualificationError as exc:
+        assert "fresh slot-census campaign" in str(exc)
+    else:
+        raise AssertionError("historical v2 evidence was reinterpreted as Stage 2D")
 
 
 def test_required_role_and_effective_turnover_bounds_remain_solver_laws():

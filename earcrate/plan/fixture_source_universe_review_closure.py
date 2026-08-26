@@ -125,6 +125,27 @@ def _install_schema_version() -> None:
             module.SLOT_CENSUS_VERSION = SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
 
 
+def _require_stage2d_schema(census_campaign: Mapping[str, Any]) -> None:
+    campaign_version = str(census_campaign.get("version") or "")
+    island_rows = list(census_campaign.get("islands") or [])
+    island_versions = {
+        str(row.get("version") or "")
+        for row in island_rows
+        if isinstance(row, Mapping)
+    }
+    if campaign_version != SOURCE_UNIVERSE_SLOT_CENSUS_VERSION:
+        raise _core.FixtureSlotQualificationError(
+            "source-universe selection requires a fresh slot-census campaign "
+            f"with version {SOURCE_UNIVERSE_SLOT_CENSUS_VERSION!r}"
+        )
+    if not island_rows or island_versions != {
+        SOURCE_UNIVERSE_SLOT_CENSUS_VERSION
+    }:
+        raise _core.FixtureSlotQualificationError(
+            "every Stage 2D island census must carry the active schema v3 version"
+        )
+
+
 def install_fixture_source_universe_review_closure() -> None:
     """Install schema, policy binding and pair validation exactly once."""
     if getattr(
@@ -143,6 +164,7 @@ def install_fixture_source_universe_review_closure() -> None:
         census_campaign: Mapping[str, Any],
         **kwargs: Any,
     ) -> Dict[str, Any]:
+        _require_stage2d_schema(census_campaign)
         parent = census_campaign.get("parent_exact_pool_refusal")
         if isinstance(parent, Mapping):
             raw_pairs = parent.get("forbidden_final_pairs")

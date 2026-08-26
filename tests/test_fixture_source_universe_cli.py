@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+
+
+def _load_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _helpers():
+    return _load_module(
+        Path(__file__).with_name("test_fixture_source_universe.py"),
+        "_earcrate_source_universe_test_helpers",
+    )
+
+
+def _cli():
+    return _load_module(
+        Path(__file__).resolve().parent.parent
+        / "scripts"
+        / "earcrate_source_universe.py",
+        "_earcrate_source_universe_cli_gate",
+    )
+
+
+def test_source_universe_cli_runs_maximum_and_exact_common_count(tmp_path):
+    helpers = _helpers()
+    cli = _cli()
+    candidate_path = tmp_path / "candidate.json"
+    census_path = tmp_path / "census.json"
+    candidate_path.write_text(
+        json.dumps(helpers._candidate(), sort_keys=True), encoding="utf-8"
+    )
+    census_path.write_text(
+        json.dumps(helpers._campaign(), sort_keys=True), encoding="utf-8"
+    )
+
+    maximum_candidate = tmp_path / "maximum.json"
+    maximum_receipt = tmp_path / "maximum-receipt.json"
+    assert cli.main(
+        [
+            str(candidate_path),
+            str(census_path),
+            "--out-candidate",
+            str(maximum_candidate),
+            "--receipt",
+            str(maximum_receipt),
+        ]
+    ) == 0
+    maximum = json.loads(maximum_receipt.read_text(encoding="utf-8"))
+    assert maximum["complete"] is True
+    assert maximum["maximum_planable_source_count"] == 10
+    assert maximum["selected_source_count"] == 10
+    assert maximum["request"]["target_source_count"] is None
+    assert maximum["candidate_input"]["capture_policy"].startswith(
+        "single_byte"
+    )
+    assert maximum["census_input"]["capture_policy"].startswith(
+        "single_byte"
+    )
+    assert maximum_candidate.is_file()
+
+    exact_candidate = tmp_path / "exact.json"
+    exact_receipt = tmp_path / "exact-receipt.json"
+    assert cli.main(
+        [
+            str(candidate_path),
+            str(census_path),
+            "--target-source-count",
+            "10",
+            "--out-candidate",
+            str(exact_candidate),
+            "--receipt",
+            str(exact_receipt),
+        ]
+    ) == 0
+    exact = json.loads(exact_receipt.read_text(encoding="utf-8"))
+    assert exact["complete"] is True
+    assert exact["selected_source_count"] == 10
+    assert exact["request"]["target_source_count"] == 10
+    assert (
+        json.loads(maximum_candidate.read_text(encoding="utf-8"))
+        == json.loads(exact_candidate.read_text(encoding="utf-8"))
+    )
+
+    bound_receipt = tmp_path / "bound-receipt.json"
+    assert cli.main(
+        [
+            str(candidate_path),
+            str(census_path),
+            "--target-source-count",
+            "11",
+            "--receipt",
+            str(bound_receipt),
+        ]
+    ) == 3
+    bound = json.loads(bound_receipt.read_text(encoding="utf-8"))
+    assert bound["complete"] is False
+    assert bound["impossibility_claimed"] is False
+    assert bound["failure_class"] == "target_exceeds_solver_certified_maximum"
+
+
+def test_source_universe_cli_refuses_input_alias_without_mutation(tmp_path):
+    helpers = _helpers()
+    cli = _cli()
+    candidate_path = tmp_path / "candidate.json"
+    census_path = tmp_path / "census.json"
+    receipt_path = tmp_path / "receipt.json"
+    candidate_path.write_text(
+        json.dumps(helpers._candidate(), sort_keys=True), encoding="utf-8"
+    )
+    census_path.write_text(
+        json.dumps(helpers._campaign(), sort_keys=True), encoding="utf-8"
+    )
+    before_candidate = candidate_path.read_bytes()
+    before_census = census_path.read_bytes()
+
+    assert cli.main(
+        [
+            str(candidate_path),
+            str(census_path),
+            "--out-candidate",
+            str(candidate_path),
+            "--receipt",
+            str(receipt_path),
+        ]
+    ) == 2
+    assert candidate_path.read_bytes() == before_candidate
+    assert census_path.read_bytes() == before_census
+    assert not receipt_path.exists()

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import copy
+import errno
+import hashlib
 import importlib.util
 import json
 import os
@@ -41,6 +44,27 @@ def _write_inputs(tmp_path):
         json.dumps(helpers._campaign(), sort_keys=True), encoding="utf-8"
     )
     return candidate_path, census_path
+
+
+def _commit_selection(cli, candidate_path, census_path, output_path, receipt_path):
+    assert cli.main(
+        [
+            str(candidate_path),
+            str(census_path),
+            "--out-candidate",
+            str(output_path),
+            "--receipt",
+            str(receipt_path),
+        ]
+    ) == 0
+    return json.loads(receipt_path.read_text(encoding="utf-8"))
+
+
+def _reseal_recovery_evidence(cli, receipt):
+    receipt["publication"]["recovery_evidence_sha256"] = cli.semantic_sha256(
+        cli._recovery_evidence_projection(receipt)
+    )
+    return receipt
 
 
 def test_stage2d_census_uses_expanded_policy_schema_v3():
@@ -89,6 +113,21 @@ def test_source_universe_cli_runs_maximum_and_exact_common_count(tmp_path):
     assert maximum["publication"]["candidate_role"] == "materialized_cache"
     assert maximum["selected_candidate"]["fixture_sha256"] == (
         maximum["selected_fixture_identity"]
+    )
+    selection = maximum["selected_candidate"][
+        "fixture_source_universe_selection"
+    ]
+    assert maximum["selected_source_universe_sha256"] == (
+        selection["selected_source_universe_sha256"]
+    )
+    assert maximum["slot_assignment_sha256"] == (
+        selection["slot_assignment_sha256"]
+    )
+    assert maximum["census_campaign_sha256"] == (
+        selection["census_campaign_sha256"]
+    )
+    assert maximum["publication"]["recovery_evidence_sha256"] == (
+        cli.semantic_sha256(cli._recovery_evidence_projection(maximum))
     )
     assert maximum_candidate.is_file()
     assert maximum_candidate.read_bytes() == cli._json_bytes(
@@ -275,11 +314,11 @@ def test_committed_receipt_recovers_candidate_after_process_style_interrupt(
     assert output_path.read_bytes() == expected
     assert (
         committed["selected_candidate_file"]["file_sha256"]
-        == __import__("hashlib").sha256(expected).hexdigest()
+        == hashlib.sha256(expected).hexdigest()
     )
 
 
-def test_malformed_or_mismatched_receipt_never_authorizes_recovery(tmp_path):
+def test_malformed_receipt_may_be_replaced_but_committed_mismatch_halts(tmp_path):
     cli = _cli()
     candidate_path, census_path = _write_inputs(tmp_path)
     output_path = tmp_path / "selected.json"
@@ -311,8 +350,10 @@ def test_malformed_or_mismatched_receipt_never_authorizes_recovery(tmp_path):
 
     committed = json.loads(receipt_path.read_text(encoding="utf-8"))
     committed["request"]["time_limit_s"] = 999.0
+    _reseal_recovery_evidence(cli, committed)
     receipt_path.write_bytes(cli._json_bytes(committed))
-    output_path.unlink()
+    prior_cache = b"prior-cache\n"
+    output_path.write_bytes(prior_cache)
 
     calls["count"] = 0
     cli.select_planable_source_universe = counted_selector
@@ -326,8 +367,175 @@ def test_malformed_or_mismatched_receipt_never_authorizes_recovery(tmp_path):
                 "--receipt",
                 str(receipt_path),
             ]
-        ) == 0
+        ) == 2
     finally:
         cli.select_planable_source_universe = original_selector
-    assert calls["count"] == 1
-    assert output_path.is_file()
+    assert calls["count"] == 0
+    assert output_path.read_bytes() == prior_cache
+
+
+def test_committed_receipt_contradictions_never_recover_or_rerun_solver(tmp_path):
+    cli = _cli()
+    candidate_path, census_path = _write_inputs(tmp_path)
+    output_path = tmp_path / "selected.json"
+    receipt_path = tmp_path / "receipt.json"
+    baseline = _commit_selection(
+        cli,
+        candidate_path,
+        census_path,
+        output_path,
+        receipt_path,
+    )
+    original_selector = cli.select_planable_source_universe
+
+    def solver_must_not_run(*_args, **_kwargs):
+        raise AssertionError("contradictory recovery invoked the solver")
+
+    def mutate_assignment(receipt):
+        receipt["slot_assignment"][0]["source_id"] = (
+            receipt["dropped_source_ids"][0]
+        )
+        receipt["slot_assignment_sha256"] = cli.semantic_sha256(
+            receipt["slot_assignment"]
+        )
+
+    def mutate_selection_solver(receipt):
+        receipt["solver"]["phase_one"]["selected_source_count"] = 999
+
+    def mutate_embedded_solver(receipt):
+        selection = receipt["selected_candidate"][
+            "fixture_source_universe_selection"
+        ]
+        selection["solver"]["phase_two"]["status"] = 9
+
+    cases = {
+        "parent identity": lambda row: row.__setitem__(
+            "parent_fixture_identity", "wrong-parent"
+        ),
+        "selected identity": lambda row: row.__setitem__(
+            "selected_fixture_identity", "wrong-selected"
+        ),
+        "parent count": lambda row: row.__setitem__("parent_source_count", 999),
+        "maximum count": lambda row: row.__setitem__(
+            "maximum_planable_source_count", 999
+        ),
+        "selected count": lambda row: row.__setitem__(
+            "selected_source_count", 999
+        ),
+        "dropped count": lambda row: row.__setitem__(
+            "dropped_source_count", 999
+        ),
+        "dropped ids": lambda row: row.__setitem__(
+            "dropped_source_ids", ["not-the-dropped-source"]
+        ),
+        "selected universe digest": lambda row: row.__setitem__(
+            "selected_source_universe_sha256", "bad-digest"
+        ),
+        "census identity": lambda row: row.__setitem__(
+            "census_campaign_sha256", "bad-census"
+        ),
+        "slot assignment": mutate_assignment,
+        "slot assignment digest": lambda row: row.__setitem__(
+            "slot_assignment_sha256", "bad-assignment-digest"
+        ),
+        "top-level solver": mutate_selection_solver,
+        "embedded solver": mutate_embedded_solver,
+        "candidate input": lambda row: row["candidate_input"].__setitem__(
+            "file_sha256", "bad-input"
+        ),
+        "census input": lambda row: row["census_input"].__setitem__(
+            "file_sha256", "bad-input"
+        ),
+        "request": lambda row: row["request"].__setitem__(
+            "time_limit_s", 999.0
+        ),
+        "candidate cache path": lambda row: row[
+            "selected_candidate_file"
+        ].__setitem__("path", str(tmp_path / "other.json")),
+        "candidate byte hash": lambda row: row[
+            "selected_candidate_file"
+        ].__setitem__("file_sha256", "bad-byte-hash"),
+        "candidate byte count": lambda row: row[
+            "selected_candidate_file"
+        ].__setitem__("byte_count", 999),
+    }
+
+    cli.select_planable_source_universe = solver_must_not_run
+    try:
+        for label, mutate in cases.items():
+            tampered = copy.deepcopy(baseline)
+            mutate(tampered)
+            _reseal_recovery_evidence(cli, tampered)
+            receipt_path.write_bytes(cli._json_bytes(tampered))
+            prior_cache = f"prior-cache:{label}\n".encode("utf-8")
+            output_path.write_bytes(prior_cache)
+            assert cli.main(
+                [
+                    str(candidate_path),
+                    str(census_path),
+                    "--out-candidate",
+                    str(output_path),
+                    "--receipt",
+                    str(receipt_path),
+                ]
+            ) == 2, label
+            assert output_path.read_bytes() == prior_cache, label
+    finally:
+        cli.select_planable_source_universe = original_selector
+
+
+def test_receipt_directory_eio_prevents_candidate_materialization(tmp_path):
+    cli = _cli()
+    candidate_path, census_path = _write_inputs(tmp_path)
+    candidate_dir = tmp_path / "candidate-dir"
+    receipt_dir = tmp_path / "receipt-dir"
+    candidate_dir.mkdir()
+    receipt_dir.mkdir()
+    output_path = candidate_dir / "selected.json"
+    receipt_path = receipt_dir / "receipt.json"
+    prior_cache = b"prior-candidate-cache\n"
+    output_path.write_bytes(prior_cache)
+
+    original_sync = cli._fsync_parent
+    calls = {"receipt": 0}
+
+    def fail_receipt_parent(path):
+        if path.parent == receipt_dir:
+            calls["receipt"] += 1
+            raise OSError(errno.EIO, "injected receipt directory sync failure")
+        return original_sync(path)
+
+    cli._fsync_parent = fail_receipt_parent
+    try:
+        assert cli.main(
+            [
+                str(candidate_path),
+                str(census_path),
+                "--out-candidate",
+                str(output_path),
+                "--receipt",
+                str(receipt_path),
+            ]
+        ) == 2
+    finally:
+        cli._fsync_parent = original_sync
+
+    assert calls["receipt"] == 1
+    assert output_path.read_bytes() == prior_cache
+    assert not receipt_path.exists()
+
+
+def test_directory_sync_explicit_unsupported_condition_is_portable(tmp_path):
+    cli = _cli()
+    target = tmp_path / "receipt.json"
+    target.write_text("{}\n", encoding="utf-8")
+    original_open = cli.os.open
+
+    def unsupported_directory_open(_path, _flags):
+        raise OSError(errno.EINVAL, "directory fsync unsupported")
+
+    cli.os.open = unsupported_directory_open
+    try:
+        cli._fsync_parent(target)
+    finally:
+        cli.os.open = original_open

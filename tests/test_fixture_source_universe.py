@@ -176,9 +176,12 @@ def _campaign(candidate=None):
             "failure_class": "coverage_counting_deficiency",
             "impossibility_claimed": True,
             "proof": {
-                "mandatory_source_count": 11,
-                "slot_count": 10,
-                "deficiency": 1,
+                "kind": "mapping_proof",
+                "payload": {
+                    "mandatory_source_count": 11,
+                    "slot_count": 10,
+                    "deficiency": 1,
+                },
             },
             "forbidden_final_pairs": [],
             "learned_pair_constraint_count": 0,

@@ -1,13 +1,21 @@
 """Final recovery validation for the Stage 2D source-universe CLI."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+import copy
+from typing import Any, Dict, Mapping
 
+from earcrate.plan import fixture_slot_binding as _binding
+from earcrate.plan import fixture_slot_qualification_core as _core
+from earcrate.plan import fixture_source_universe_review_closure as _review
 from earcrate.plan.fixture_source_universe_determinism_contract import (
     CANONICAL_SLOT_ASSIGNMENT_VERSION,
     _CanonicalAssignmentBound,
     _CanonicalAssignmentInvariant,
     _canonical_slot_assignment,
+)
+from earcrate.plan.fixture_source_universe_proof_contract import (
+    _has_explicit_zero_pair_state,
+    _valid_normalized_proof,
 )
 
 _EXPECTED_METHOD = (
@@ -23,6 +31,129 @@ def _json_int(value: Any, field: str, contradiction: Any) -> int:
     if type(value) is not int:
         raise contradiction(f"canonicalization {field}")
     return value
+
+
+def _immutable_candidate_projection(
+    candidate: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Remove only the fields Stage 2D is authorized to change."""
+    body = copy.deepcopy(dict(candidate))
+    for field in (
+        "fixture_id",
+        "fixture_sha256",
+        "fixture_source_universe_selection",
+    ):
+        body.pop(field, None)
+
+    islands = []
+    for raw in body.get("islands") or []:
+        if not isinstance(raw, Mapping):
+            raise _core.FixtureSlotQualificationError(
+                "fixture candidate islands must be mapping-valued"
+            )
+        row = copy.deepcopy(dict(raw))
+        row.pop("source_include_ids", None)
+        islands.append(row)
+    body["islands"] = islands
+    return body
+
+
+def _validate_current_census(
+    module: Any,
+    candidate: Mapping[str, Any],
+    census: Mapping[str, Any],
+) -> None:
+    """Apply the complete Stage 2D census custody contract before recovery."""
+    contradiction = module._receipt_contradiction
+    try:
+        if str(census.get("kind") or "") != (
+            "earcrate_fixture_slot_census_campaign"
+        ):
+            raise _core.FixtureSlotQualificationError(
+                "Stage 2D requires a slot-census campaign object"
+            )
+
+        _review._require_stage2d_schema(census)
+        _review._require_source_universe_policy(candidate, census)
+        parent_body = _core._candidate_body(candidate)
+        islands, _by_census_id = _binding._verified_census_campaign(
+            parent_body,
+            census,
+        )
+
+        source_ids = []
+        seen = set()
+        for island in islands:
+            for value in island.get("source_include_ids") or []:
+                source_id = str(value)
+                if not source_id:
+                    raise _core.FixtureSlotQualificationError(
+                        "fixture candidate contains an empty source identity"
+                    )
+                if source_id in seen:
+                    raise _core.FixtureSlotQualificationError(
+                        "fixture candidate assigns one source to multiple islands"
+                    )
+                seen.add(source_id)
+                source_ids.append(source_id)
+        source_ids.sort()
+        if not source_ids:
+            raise _core.FixtureSlotQualificationError(
+                "fixture candidate has an empty source universe"
+            )
+        if str(census.get("source_universe_sha256") or "") != (
+            _core.semantic_sha256(source_ids)
+        ):
+            raise _core.FixtureSlotQualificationError(
+                "slot census source universe does not match the candidate"
+            )
+        if type(census.get("source_count")) is not int or int(
+            census["source_count"]
+        ) != len(source_ids):
+            raise _core.FixtureSlotQualificationError(
+                "slot census source count does not match the candidate"
+            )
+        census_rows = list(census.get("islands") or [])
+        if type(census.get("island_count")) is not int or int(
+            census["island_count"]
+        ) != len(islands) or len(census_rows) != len(islands):
+            raise _core.FixtureSlotQualificationError(
+                "slot census island count does not match the candidate"
+            )
+
+        parent = census.get("parent_exact_pool_refusal")
+        if not isinstance(parent, Mapping):
+            raise _core.FixtureSlotQualificationError(
+                "Stage 2D census lacks its parent exact-pool refusal"
+            )
+        if parent.get("impossibility_claimed") is not True or not str(
+            parent.get("failure_class") or ""
+        ):
+            raise _core.FixtureSlotQualificationError(
+                "Stage 2D parent refusal is not proof-bearing"
+            )
+        if not _has_explicit_zero_pair_state(parent):
+            raise _core.FixtureSlotQualificationError(
+                "Stage 2D parent refusal does not establish zero learned-pair state"
+            )
+        if not _valid_normalized_proof(parent.get("proof")):
+            raise _core.FixtureSlotQualificationError(
+                "Stage 2D parent refusal lacks a recognized typed proof"
+            )
+        parent_digest = parent.get("parent_refusal_sha256")
+        if parent_digest is not None:
+            parent_body_for_digest = copy.deepcopy(dict(parent))
+            parent_body_for_digest.pop("parent_refusal_sha256", None)
+            if str(parent_digest) != _core.semantic_sha256(
+                parent_body_for_digest
+            ):
+                raise _core.FixtureSlotQualificationError(
+                    "Stage 2D parent refusal digest does not match its content"
+                )
+    except Exception as error:
+        raise contradiction(
+            f"current census custody: {type(error).__name__}: {error}"
+        ) from error
 
 
 def _validate_canonicalization_receipt(
@@ -156,6 +287,7 @@ def install_source_universe_cli_final_contract(module: Any) -> None:
         time_limit_s: float,
         output_path: Any,
     ) -> bytes | None:
+        _validate_current_census(module, candidate, census)
         selected_bytes = original(
             receipt,
             candidate=candidate,
@@ -168,6 +300,24 @@ def install_source_universe_cli_final_contract(module: Any) -> None:
         )
         if selected_bytes is None:
             return None
+
+        selected = receipt.get("selected_candidate")
+        if not isinstance(selected, Mapping):
+            raise module._receipt_contradiction(
+                "immutable selected candidate projection"
+            )
+        try:
+            parent_projection = _immutable_candidate_projection(candidate)
+            selected_projection = _immutable_candidate_projection(selected)
+        except Exception as error:
+            raise module._receipt_contradiction(
+                f"immutable selected candidate projection: {type(error).__name__}"
+            ) from error
+        if selected_projection != parent_projection:
+            raise module._receipt_contradiction(
+                "selected candidate changed authority outside its source partition"
+            )
+
         _validate_canonicalization_receipt(
             module,
             receipt,

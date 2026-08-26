@@ -144,6 +144,32 @@ def test_parent_refusal_must_be_complete_and_proof_bearing():
         assert result["private_acceptance"] == PAIR_CONSTRAINT_HALT
 
 
+def test_parent_refusal_requires_nonempty_mapping_proof_before_solver():
+    variants = []
+
+    missing = helpers._campaign()
+    missing["parent_exact_pool_refusal"].pop("proof")
+    variants.append(_reseal_campaign(missing))
+
+    for value in (None, {}, "not-proof", [], [1]):
+        malformed = helpers._campaign()
+        malformed["parent_exact_pool_refusal"]["proof"] = value
+        variants.append(_reseal_campaign(malformed))
+
+    for campaign in variants:
+        result = select_planable_source_universe(
+            helpers._candidate(),
+            campaign,
+            _solver=_solver_must_not_run,
+        )
+        assert result["complete"] is False
+        assert result["failure_class"] == (
+            "parent_exact_pool_refusal_proof_missing_or_malformed"
+        )
+        assert result["impossibility_claimed"] is False
+        assert result["private_acceptance"] == PAIR_CONSTRAINT_HALT
+
+
 def test_parent_pair_fields_may_not_be_omitted():
     variants = []
     missing_pairs = helpers._campaign()

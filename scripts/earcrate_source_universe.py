@@ -12,10 +12,12 @@ import tempfile
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from earcrate.plan.fixture_slot_qualification import (
+    SOURCE_UNIVERSE_SELECTION_VERSION,
     select_planable_source_universe,
 )
 
 _REPLACE = os.replace
+_PUBLICATION_CONTRACT = "receipt_atomic_commit_candidate_materialization_v1"
 
 
 def _capture_json(path: Path) -> Tuple[Mapping[str, Any], Dict[str, Any]]:
@@ -86,58 +88,190 @@ def _stage_bytes(path: Path, body: bytes) -> Tuple[Path, Path]:
     return resolved, temporary
 
 
-def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
-    resolved, temporary = _stage_bytes(path, _json_bytes(value))
+def _fsync_parent(path: Path) -> None:
+    try:
+        descriptor = os.open(str(path.parent), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        os.close(descriptor)
+
+
+def _write_bytes_atomic(path: Path, body: bytes) -> None:
+    resolved, temporary = _stage_bytes(path, body)
     try:
         _REPLACE(str(temporary), str(resolved))
+        _fsync_parent(resolved)
     finally:
         if temporary.exists():
             temporary.unlink()
 
 
-def _publish_candidate_and_receipt(
-    candidate_path: Path,
-    candidate: Mapping[str, Any],
-    receipt_path: Path,
-    receipt: Mapping[str, Any],
-) -> None:
-    """Publish the pair or restore the candidate side to its prior bytes."""
-    candidate_resolved = candidate_path.expanduser().resolve()
-    previous_candidate = (
-        candidate_resolved.read_bytes() if candidate_resolved.exists() else None
-    )
-    candidate_target, candidate_temp = _stage_bytes(
-        candidate_resolved, _json_bytes(candidate)
-    )
-    receipt_target, receipt_temp = _stage_bytes(
-        receipt_path, _json_bytes(receipt)
-    )
-    candidate_published = False
+def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
+    _write_bytes_atomic(path, _json_bytes(value))
+
+
+_MATERIALIZE_CANDIDATE = _write_bytes_atomic
+
+
+def _read_receipt(path: Path) -> Optional[Mapping[str, Any]]:
+    resolved = path.expanduser().resolve()
+    if not resolved.is_file():
+        return None
     try:
-        _REPLACE(str(candidate_temp), str(candidate_target))
-        candidate_published = True
-        _REPLACE(str(receipt_temp), str(receipt_target))
+        value = json.loads(resolved.read_bytes().decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, Mapping) else None
+
+
+def _recovery_candidate_bytes(
+    receipt: Mapping[str, Any],
+    *,
+    candidate: Mapping[str, Any],
+    census: Mapping[str, Any],
+    candidate_file: Mapping[str, Any],
+    census_file: Mapping[str, Any],
+    target_source_count: Optional[int],
+    time_limit_s: float,
+    output_path: Path,
+) -> Optional[bytes]:
+    """Validate one committed receipt against the exact current invocation."""
+    if receipt.get("complete") is not True:
+        return None
+    if str(receipt.get("kind") or "") != (
+        "earcrate_fixture_source_universe_selection_receipt"
+    ):
+        return None
+    if str(receipt.get("version") or "") != SOURCE_UNIVERSE_SELECTION_VERSION:
+        return None
+
+    publication = receipt.get("publication")
+    if not isinstance(publication, Mapping):
+        return None
+    if publication.get("contract") != _PUBLICATION_CONTRACT:
+        return None
+    if publication.get("authority") != "receipt":
+        return None
+    if publication.get("candidate_role") != "materialized_cache":
+        return None
+
+    if dict(receipt.get("candidate_input") or {}) != dict(candidate_file):
+        return None
+    if dict(receipt.get("census_input") or {}) != dict(census_file):
+        return None
+    if dict(receipt.get("request") or {}) != {
+        "target_source_count": target_source_count,
+        "time_limit_s": float(time_limit_s),
+    }:
+        return None
+
+    selected = receipt.get("selected_candidate")
+    selected_file = receipt.get("selected_candidate_file")
+    if not isinstance(selected, Mapping) or not isinstance(
+        selected_file, Mapping
+    ):
+        return None
+    if str(selected_file.get("path") or "") != str(
+        output_path.expanduser().resolve()
+    ):
+        return None
+
+    selected_bytes = _json_bytes(selected)
+    selected_sha = hashlib.sha256(selected_bytes).hexdigest()
+    if str(selected_file.get("file_sha256") or "") != selected_sha:
+        return None
+    if int(selected_file.get("byte_count") or -1) != len(selected_bytes):
+        return None
+
+    selected_identity = str(selected.get("fixture_sha256") or "")
+    if not selected_identity:
+        return None
+    if str(receipt.get("selected_fixture_identity") or "") != selected_identity:
+        return None
+    if str(selected_file.get("fixture_identity") or "") != selected_identity:
+        return None
+
+    from earcrate.plan.fixture_diversity import fixture_projection
+
+    try:
+        projected_identity = str(
+            fixture_projection(selected)["fixture_identity"]
+        )
     except Exception:
-        if candidate_published:
-            if previous_candidate is None:
-                try:
-                    candidate_target.unlink()
-                except FileNotFoundError:
-                    pass
-            else:
-                restore_target, restore_temp = _stage_bytes(
-                    candidate_target, previous_candidate
-                )
-                try:
-                    _REPLACE(str(restore_temp), str(restore_target))
-                finally:
-                    if restore_temp.exists():
-                        restore_temp.unlink()
-        raise
-    finally:
-        for temporary in (candidate_temp, receipt_temp):
-            if temporary.exists():
-                temporary.unlink()
+        return None
+    if projected_identity != selected_identity:
+        return None
+
+    current_parent = str(
+        candidate.get("fixture_sha256")
+        or candidate.get("fixture_id")
+        or ""
+    )
+    if not current_parent:
+        return None
+    if str(receipt.get("parent_fixture_identity") or "") != current_parent:
+        return None
+
+    selection = selected.get("fixture_source_universe_selection")
+    if not isinstance(selection, Mapping):
+        return None
+    if str(selection.get("parent_fixture_identity") or "") != current_parent:
+        return None
+    if str(selection.get("census_campaign_sha256") or "") != str(
+        census.get("campaign_sha256") or ""
+    ):
+        return None
+    if int(selection.get("selected_source_count") or -1) != int(
+        receipt.get("selected_source_count") or -2
+    ):
+        return None
+    if int(selection.get("maximum_planable_source_count") or -1) != int(
+        receipt.get("maximum_planable_source_count") or -2
+    ):
+        return None
+
+    return selected_bytes
+
+
+def _recover_committed_candidate(
+    receipt_path: Path,
+    *,
+    candidate: Mapping[str, Any],
+    census: Mapping[str, Any],
+    candidate_file: Mapping[str, Any],
+    census_file: Mapping[str, Any],
+    target_source_count: Optional[int],
+    time_limit_s: float,
+    output_path: Optional[Path],
+) -> bool:
+    if output_path is None:
+        return False
+    receipt = _read_receipt(receipt_path)
+    if receipt is None:
+        return False
+    selected_bytes = _recovery_candidate_bytes(
+        receipt,
+        candidate=candidate,
+        census=census,
+        candidate_file=candidate_file,
+        census_file=census_file,
+        target_source_count=target_source_count,
+        time_limit_s=time_limit_s,
+        output_path=output_path,
+    )
+    if selected_bytes is None:
+        return False
+
+    resolved = output_path.expanduser().resolve()
+    current = resolved.read_bytes() if resolved.is_file() else None
+    if current != selected_bytes:
+        _MATERIALIZE_CANDIDATE(resolved, selected_bytes)
+    return True
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -182,6 +316,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         candidate, candidate_file = _capture_json(args.candidate)
         census, census_file = _capture_json(args.census)
+
+        if _recover_committed_candidate(
+            args.receipt,
+            candidate=candidate,
+            census=census,
+            candidate_file=candidate_file,
+            census_file=census_file,
+            target_source_count=args.target_source_count,
+            time_limit_s=float(args.time_limit),
+            output_path=args.out_candidate,
+        ):
+            print(str(args.receipt.expanduser().resolve()))
+            return 0
+
         result = select_planable_source_universe(
             candidate,
             census,
@@ -207,20 +355,48 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 raise ValueError(
                     "--out-candidate is required when source-universe selection succeeds"
                 )
-            candidate_body = _json_bytes(result["candidate"])
+            selected = result.get("candidate")
+            if not isinstance(selected, Mapping):
+                raise ValueError(
+                    "complete source-universe selection has no candidate object"
+                )
+            selected_candidate = dict(selected)
+            candidate_body = _json_bytes(selected_candidate)
+            selected_identity = str(
+                result.get("selected_fixture_identity")
+                or selected_candidate.get("fixture_sha256")
+                or ""
+            )
+            if not selected_identity:
+                raise ValueError(
+                    "complete source-universe selection has no fixture identity"
+                )
+            receipt["selected_candidate"] = selected_candidate
             receipt["selected_candidate_file"] = {
                 "path": str(args.out_candidate.expanduser().resolve()),
                 "file_sha256": hashlib.sha256(candidate_body).hexdigest(),
-                "publish_policy": (
-                    "candidate_and_receipt_staged_before_publish_with_candidate_rollback"
+                "byte_count": len(candidate_body),
+                "fixture_identity": selected_identity,
+                "cache_role": "materialized_from_committed_receipt",
+            }
+            receipt["publication"] = {
+                "contract": _PUBLICATION_CONTRACT,
+                "authority": "receipt",
+                "commit_order": [
+                    "receipt_atomic_replace",
+                    "candidate_cache_materialization",
+                ],
+                "candidate_role": "materialized_cache",
+                "recovery": (
+                    "exact_invocation_rehydrates_candidate_without_solver"
                 ),
             }
-            _publish_candidate_and_receipt(
-                args.out_candidate,
-                result["candidate"],
-                args.receipt,
-                receipt,
-            )
+
+            # One authoritative commit boundary. A process interruption after
+            # this replace leaves a complete receipt from which the cache can
+            # be deterministically rehydrated by the next exact invocation.
+            _write_json_atomic(args.receipt, receipt)
+            _MATERIALIZE_CANDIDATE(args.out_candidate, candidate_body)
         else:
             if args.out_candidate is not None:
                 receipt["selected_candidate_file"] = None

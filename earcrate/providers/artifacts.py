@@ -1,5 +1,5 @@
 from earcrate.core.deps import *
-from earcrate.core.util import now_utc, json_dumps
+from earcrate.core.util import now_utc, json_dumps, visible_app_dir
 from earcrate.providers import register
 """EARCRATE v3 §5.3 (L3) — the ArtifactStore.
 
@@ -32,12 +32,15 @@ class ArtifactStore:
             # makes BOTH the provider's store and the renderer's get("artifacts")
             # resolve to the SAME on-disk root, so a materialized stem key
             # actually resolves. With NO workspace configured we fall back to a
-            # private mkdtemp (unshared) so nothing leaks between processes.
+            # VISIBLE, app-adjacent cache dir (never a temp dir) so stems land
+            # somewhere the user can actually find — EARCRATE_CACHE_ROOT overrides.
             env_root = os.environ.get("EARCRATE_L3_ROOT")
             if env_root:
                 root = Path(env_root)
             else:
-                root = Path(tempfile.mkdtemp(prefix="earcrate_l3_"))
+                cache_root = os.environ.get("EARCRATE_CACHE_ROOT")
+                base = Path(cache_root).expanduser() if cache_root else (visible_app_dir() / "cache")
+                root = base / "L3"
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
 
@@ -72,6 +75,14 @@ class ArtifactStore:
         bin_path.write_bytes(data)
         meta_path.write_text(json_dumps(meta), encoding="utf-8")
         return dict(meta)
+
+    def has(self, key: str) -> bool:
+        """Existence check WITHOUT reading the blob. Callers used ``get(key) is
+        not None`` to probe for cached stems — which read the entire ~48 MB WAV
+        (and its meta) off disk per probe. A warm-status sweep over a big library
+        did gigabytes of IO to answer a yes/no question."""
+        bin_path, meta_path = self._paths(key)
+        return bin_path.exists() and meta_path.exists()
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         """Return ``{\"data\": bytes, \"meta\": {...}}`` or None if absent."""

@@ -1,0 +1,129 @@
+{
+  "schema_version": "earcrate_robi_whoa_30s_commission_v1",
+  "commission_id": "EC-ROBI-WHOA-30S-001",
+  "created_at": "2026-08-29",
+  "source": {
+    "container_name": "Robi Throat Signing WHOA!.aac",
+    "container_bytes": 77209,
+    "container_sha256": "50f5937511a8acce65c76a34b216d96d03d1f78ba26708ba8d62a9fe67cd120a",
+    "codec": "aac",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 16.723216,
+    "canonical_pcm": {
+      "format": "f32le",
+      "sample_rate": 48000,
+      "channels": 1,
+      "sha256": "d797010c4c228bab0c25ea45f32d40fb6ab327c5c951b67871220714c657951a",
+      "authority": "diagnostic_decode_identity; container identity remains controlling"
+    },
+    "analysis_bundle": {
+      "name": "EarCrate-Robi-WHOA-analysis-bundle-20260829.zip",
+      "bytes": 349333763,
+      "sha256": "3c9d8b3142e1931dc758ab6853a4670364a83afddc9c37922eab9c857aa9a667",
+      "file_count": 45,
+      "status": "failure_corpus_only"
+    }
+  },
+  "target": {
+    "duration_seconds": 30.0,
+    "sample_rate": 48000,
+    "channels": 2,
+    "frames": 1440000,
+    "lossless_loop_required": true,
+    "continuous_loop_check_cycles": 4,
+    "internal_repetition_check_cycles": 10,
+    "maximum_owner_candidates": 1,
+    "delivery_container": "zip"
+  },
+  "musical_contract": {
+    "foreground_identity": "Robi remains recognizable as the foreground voice and recurring hook.",
+    "loop_behavior": "The same thirty-second object must remain pleasant and structurally complete under uninterrupted repetition.",
+    "band_rule": "The band must be one coherent performed organism from an admitted local provider or a source-coherent crate/rack construction.",
+    "timing_rule": "Use the measured timing of the selected rhythm body. A requested BPM is never timing authority.",
+    "arrangement_rule": "Variation must come from performance, subtraction, event placement, and source interaction, not from adding generic genre signifiers.",
+    "machine_triage": "Provider probes, engineering renders, and weak candidates remain machine-side. Only one complete candidate may enter owner review."
+  },
+  "allowed_authorities": [
+    {
+      "kind": "ace_step_vocal_to_bgm",
+      "provider_id": "ace-step-1.5",
+      "requirements": [
+        "exact provider repository revision",
+        "exact model and codec asset identities",
+        "sealed generation request and observed execution receipt",
+        "identified node and GPU",
+        "private binding to the exact Robi source"
+      ]
+    },
+    {
+      "kind": "midi_sag_vocal_to_bgm",
+      "provider_id": "midi-sag",
+      "requirements": [
+        "exact component repository revisions",
+        "exact beat, transcription, harmonization, generator, and codec asset identities",
+        "sealed generation request and observed execution receipt",
+        "identified node and GPU",
+        "private binding to the exact Robi source"
+      ]
+    },
+    {
+      "kind": "source_coherent_crate_rack",
+      "provider_id": "earcrate-local-crate",
+      "requirements": [
+        "approved EarAtoms only",
+        "one source-coherent kit/bass body rather than unrelated one-shots",
+        "exact atom, source, rack, binding, MIDI or MixScore, and render receipts",
+        "complete event execution",
+        "no source mutation"
+      ]
+    }
+  ],
+  "forbidden_mechanism_ids": [
+    "cloud_handwritten_synthesis",
+    "oscillator_kick",
+    "oscillator_snare",
+    "oscillator_hat",
+    "elementary_waveform_808",
+    "general_midi_soundfont",
+    "generic_one_shot_without_custody",
+    "tempo_as_style_evidence",
+    "hat_roll_as_style_evidence",
+    "clipping_as_style_evidence",
+    "retro_lounge_harmony",
+    "boom_bap_default",
+    "trap_token_completion",
+    "old_render_fallback",
+    "floor_safe_rescue",
+    "degraded_substitute",
+    "multi_option_owner_probe"
+  ],
+  "required_candidate_manifest": {
+    "schema": "schemas/earcrate_robi_whoa_candidate_v1.schema.json",
+    "candidate_count": 1,
+    "required_roles": ["robi_foreground", "band", "master"],
+    "required_audio": ["master_wav", "master_flac", "preview_mp3", "loop_check_mp3"],
+    "required_receipts": ["authority_receipt", "arrangement_receipt", "render_receipt", "loop_receipt"],
+    "required_source_accounting": true,
+    "required_stem_reconciliation": true
+  },
+  "owner_admission": {
+    "admissible_object": "one complete thirty-second loop candidate",
+    "inadmissible_objects": [
+      "provider probe",
+      "engineering render",
+      "diagnostic excerpt",
+      "candidate ladder",
+      "multiple variants sharing one dominant defect"
+    ],
+    "state_change_on_accept": "The Robi WHOA loop commission has an accepted production candidate.",
+    "state_change_on_reject": "The selected production mechanism closes; the source and commission remain available to another admitted mechanism."
+  },
+  "private_execution": {
+    "required": true,
+    "missing_execution_behavior": "refuse_without_audio",
+    "cloud_audio_generation_authorized": false,
+    "private_paths_in_public_projection": false,
+    "copyrighted_or_private_media_in_repository": false
+  }
+}

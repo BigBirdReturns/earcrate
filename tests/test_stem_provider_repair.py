@@ -5,8 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sqlite3
-
-import pytest
+import tempfile
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "earcrate_stem_provider_repair.py"
@@ -61,13 +60,22 @@ def _insert_source(db: sqlite3.Connection, path: Path, *, current: bool, status:
         roles.append("BED_CHORD")
     for index, role in enumerate(roles):
         loop_id = f"loop-{file_id}-{index}"
-        atom_id = f"atom-{file_id}-{index}"
         db.execute("INSERT INTO loops VALUES(?,?,?,?)", (loop_id, file_id, loop_pcm, loop_generation))
         db.execute(
             "INSERT INTO ear_atoms VALUES(?,?,?,?,?,?,?)",
-            (atom_id, loop_id, file_id, repair.PROFILE, status, role, 0.9),
+            (f"atom-{file_id}-{index}", loop_id, file_id, repair.PROFILE, status, role, 0.9),
         )
     db.commit()
+
+
+def _must_raise(exc_type, fn, contains: str = "") -> None:
+    try:
+        fn()
+    except exc_type as exc:
+        if contains:
+            assert contains in str(exc)
+        return
+    raise AssertionError(f"expected {exc_type.__name__}")
 
 
 def test_cuda_wheel_selection_uses_highest_supported_channel() -> None:
@@ -75,8 +83,7 @@ def test_cuda_wheel_selection_uses_highest_supported_channel() -> None:
     assert repair.choose_cuda_wheel(12.9) == "cu128"
     assert repair.choose_cuda_wheel(12.7) == "cu126"
     assert repair.choose_cuda_wheel(12.0) == "cu118"
-    with pytest.raises(repair.RepairError):
-        repair.choose_cuda_wheel(11.7)
+    _must_raise(repair.RepairError, lambda: repair.choose_cuda_wheel(11.7))
 
 
 def test_probe_source_excludes_stale_generation_and_unapproved_atoms(tmp_path: Path) -> None:
@@ -104,8 +111,7 @@ def test_probe_source_refuses_changed_file_bytes(tmp_path: Path) -> None:
     _insert_source(db, source, current=True, status="approved", drum=True, bass=True)
     source.write_bytes(b"changed")
 
-    with pytest.raises(repair.RepairError, match="hash"):
-        repair.select_probe_source(db, repair.PROFILE)
+    _must_raise(repair.RepairError, lambda: repair.select_probe_source(db, repair.PROFILE), "hash")
 
 
 def test_config_activation_is_backup_bound_and_reversible(tmp_path: Path) -> None:
@@ -136,3 +142,24 @@ def test_public_source_receipt_omits_private_path() -> None:
     })
     assert "path" not in receipt
     assert receipt["filename"] == "Song.wav"
+
+
+def main() -> int:
+    test_cuda_wheel_selection_uses_highest_supported_channel()
+    test_public_source_receipt_omits_private_path()
+    with tempfile.TemporaryDirectory(prefix="earcrate-stem-repair-test-") as raw:
+        root = Path(raw) / "selection"
+        root.mkdir(parents=True, exist_ok=True)
+        test_probe_source_excludes_stale_generation_and_unapproved_atoms(root)
+    with tempfile.TemporaryDirectory(prefix="earcrate-stem-repair-test-") as raw:
+        root = Path(raw)
+        test_probe_source_refuses_changed_file_bytes(root)
+    with tempfile.TemporaryDirectory(prefix="earcrate-stem-repair-test-") as raw:
+        root = Path(raw)
+        test_config_activation_is_backup_bound_and_reversible(root)
+    print("PASS 5/5 stem-provider repair gates")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

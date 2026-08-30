@@ -19,5 +19,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: gate tests
         run: python tests/run_gates.py
+      - name: interpreter-bound stem provider gates
+        run: python tests/test_process_stem_provider.py
       - name: package verifier (gate suite already passed above)
         run: python VERIFY_PACKAGE.py --skip-gates

@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "commission_id": "EC-ROBI-WHOA-30S-V2",
+  "campaign_version": "robi-whoa-bed-first-v2",
+  "predecessor": {
+    "terminal_status": "refused_no_qualified_candidate",
+    "refusal_sha256": "DF50A385B1F8FEAD0AED8C1EAEF4F57979C6D5E340B5546B17BEEE075BF1C7BC",
+    "closed_mechanism": "ace_step_vocal_to_bgm_full_mix_gate_v1",
+    "common_failures": [
+      "insufficient_audible_coverage",
+      "high_end_outside_workable_range",
+      "dynamics_too_flat_or_unstable"
+    ]
+  },
+  "source": {
+    "filename": "Robi-WHOA-source-48k-mono.wav",
+    "container_sha256": "df4f56ba11a7cfa07b40e7c73f8b51e2b2fae45c4d5173881d1db29d937eeee4",
+    "canonical_pcm_f32le_mono_48000_sha256": "aa2ff4ff0184391d43f7e7d315cd73d3485b3c31d5adf211968e137d55a0fa09",
+    "duration_seconds": 17.879375,
+    "modification_policy": "sample-accurate source slices only; no time stretch, pitch shift, synthesis, formant processing, reverb, or generated vocal"
+  },
+  "cycle": {
+    "sample_rate": 48000,
+    "channels": 2,
+    "bpm": 128.0,
+    "meter": "4/4",
+    "bars": 16,
+    "seconds": 30.0,
+    "provider_seconds": 31.666667,
+    "repeat_context_cycles": 3,
+    "owner_check_cycles": 5
+  },
+  "foreground": {
+    "gain_db": 3.0,
+    "edge_fade_ms": 8.0,
+    "events": [
+      {
+        "event_id": "native_phrase_a1",
+        "source_start_seconds": 1.98,
+        "source_end_seconds": 5.31,
+        "placement_seconds": 0.46875
+      },
+      {
+        "event_id": "native_phrase_a2",
+        "source_start_seconds": 1.98,
+        "source_end_seconds": 5.31,
+        "placement_seconds": 7.96875
+      },
+      {
+        "event_id": "middle_phrase",
+        "source_start_seconds": 8.18,
+        "source_end_seconds": 11.51,
+        "placement_seconds": 15.46875
+      },
+      {
+        "event_id": "final_whoa",
+        "source_start_seconds": 14.3,
+        "source_end_seconds": 17.6,
+        "placement_seconds": 22.96875
+      }
+    ]
+  },
+  "candidate_frontier": {
+    "ace_step_bgm_only": {
+      "candidate_count": 4,
+      "task_mode": "bgm_only",
+      "model": "acestep-v15-base",
+      "inference_steps": 32,
+      "guidance_scale": 6.5,
+      "track_classes": [
+        "drums",
+        "bass",
+        "percussion",
+        "texture"
+      ],
+      "caption": "Standalone contemporary rhythm bed only, written as one coherent 16-bar cycle at 128 BPM in 4/4. Build a producer-finished pocket from tactile sample-based drums, a mono-solid bass organism, dry percussion, clipped transients, negative space, and at most one sparse non-chordal texture. The kick, backbeat, bass, and percussion must behave as one performed system, with small four-bar variations and a final bar that resolves directly into the first bar. No vocals, spoken words, throat sounds, melodic lead, piano, electric piano, organ, guitar, jazz or lounge harmony, four-chord progression, orchestral pad, lo-fi vinyl wash, boom-bap cosplay, generic trap-roll grammar, EDM riser, festival drop, General MIDI timbre, or room reverb.",
+      "instruction": "Generate only drums, bass, percussion, and one sparse texture. No vocal or melodic lead."
+    },
+    "estate_graph": {
+      "taste_profiles": [
+        "girl_talk_v1",
+        "notorious_v1"
+      ],
+      "candidates_per_profile": 1,
+      "stem_policy": "separated",
+      "composition_mode": "reconstruction"
+    }
+  },
+  "bed_normalization": {
+    "target_lufs": -15.0,
+    "peak_ceiling_dbfs": -3.0,
+    "maximum_gain_db": 12.0
+  },
+  "bed_gate": {
+    "active_frame_ratio_min": 0.88,
+    "integrated_lufs_min": -22.0,
+    "integrated_lufs_max": -10.0,
+    "low_below_200_share_min": 0.035,
+    "low_below_200_share_max": 0.78,
+    "high_above_6000_share_min": 0.002,
+    "high_above_6000_share_max": 0.6,
+    "rms_frame_std_db_min": 0.45,
+    "rms_frame_std_db_max": 10.0,
+    "transients_per_second_min": 0.35,
+    "transients_per_second_max": 18.0,
+    "crest_db_min": 3.5,
+    "crest_db_max": 22.0,
+    "sixteenth_grid_support_min": 0.32,
+    "endpoint_jump_max": 1e-07,
+    "derivative_jump_max": 0.08,
+    "seam_cost_max": 0.55
+  },
+  "mix": {
+    "duck_cutoff_hz": 3000.0,
+    "duck_max_db": 2.5,
+    "duck_attack_ms": 10.0,
+    "duck_release_ms": 180.0,
+    "final_peak_ceiling_dbfs": -1.0,
+    "minimum_bed_gain_db": -9.0
+  },
+  "mix_gate": {
+    "foreground_lineage_correlation_min": 0.999999,
+    "active_frame_ratio_min": 0.9,
+    "bed_over_foreground_active_median_db_min": -40.0,
+    "bed_over_foreground_active_median_db_max": 2.5,
+    "duck_mean_active_db_min": 0.2,
+    "duck_max_db_max": 2.5001,
+    "endpoint_jump_max": 1e-07,
+    "derivative_jump_max": 0.08,
+    "seam_cost_max": 0.55
+  },
+  "selection": {
+    "policy": "rank only candidates that passed every standalone-bed gate; combine Robi only with the single best bed; publish only if the combined gate also passes",
+    "tie_break": "mechanism id, then seed",
+    "owner_surface": "one complete 30-second loop or one refusal receipt",
+    "synthetic_fallback": false,
+    "reuse_v1_candidates": false,
+    "gate_override": false
+  },
+  "delivery": {
+    "zip_name": "Robi-WHOA-BED-FIRST-V2-DELIVERY.zip",
+    "loop_wav": "Robi-WHOA-BED-FIRST-V2-30s-LOOP.wav",
+    "preview_mp3": "Robi-WHOA-BED-FIRST-V2-30s-preview.mp3",
+    "loop_check_mp3": "Robi-WHOA-BED-FIRST-V2-150s-loop-check.mp3",
+    "bed_wav": "Robi-WHOA-BED-FIRST-V2-bed.wav",
+    "foreground_wav": "Robi-WHOA-BED-FIRST-V2-Robi-foreground.wav",
+    "receipt": "RECEIPT.json"
+  }
+}

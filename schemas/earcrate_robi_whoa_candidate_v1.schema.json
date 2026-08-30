@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://earcrate.local/schemas/earcrate_robi_whoa_candidate_v1.schema.json",
+  "title": "EarCrate Robi WHOA 30-second candidate",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "commission_id",
+    "candidate_count",
+    "candidate_id",
+    "source",
+    "authority",
+    "construction",
+    "source_accounting",
+    "render",
+    "machine_disposition"
+  ],
+  "properties": {
+    "schema_version": {"const": "earcrate_robi_whoa_candidate_v1"},
+    "commission_id": {"const": "EC-ROBI-WHOA-30S-001"},
+    "candidate_count": {"const": 1},
+    "candidate_id": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "required": ["container_sha256"],
+      "properties": {
+        "container_sha256": {"const": "50f5937511a8acce65c76a34b216d96d03d1f78ba26708ba8d62a9fe67cd120a"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "required": ["kind", "provider_id", "receipt"],
+      "properties": {
+        "kind": {"enum": ["ace_step_vocal_to_bgm", "midi_sag_vocal_to_bgm", "source_coherent_crate_rack"]},
+        "provider_id": {"type": "string", "minLength": 1},
+        "receipt": {"$ref": "#/$defs/fileRef"}
+      }
+    },
+    "construction": {
+      "type": "object",
+      "required": ["mechanism_ids", "prohibited_mechanisms_used", "band_is_coherent_body"],
+      "properties": {
+        "mechanism_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "prohibited_mechanisms_used": {"type": "array", "maxItems": 0},
+        "band_is_coherent_body": {"const": true}
+      }
+    },
+    "source_accounting": {
+      "type": "object",
+      "required": ["robi_foreground", "events"],
+      "properties": {
+        "robi_foreground": {"const": true},
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["source_container_sha256", "source_start_seconds", "source_end_seconds", "target_start_seconds", "target_end_seconds"],
+            "properties": {
+              "source_container_sha256": {"const": "50f5937511a8acce65c76a34b216d96d03d1f78ba26708ba8d62a9fe67cd120a"},
+              "source_start_seconds": {"type": "number", "minimum": 0},
+              "source_end_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 16.723216},
+              "target_start_seconds": {"type": "number", "minimum": 0, "maximum": 30},
+              "target_end_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 30}
+            }
+          }
+        }
+      }
+    },
+    "render": {
+      "type": "object",
+      "required": ["master_wav", "master_flac", "preview_mp3", "loop_check_mp3", "stems", "frames", "sample_rate", "channels", "loop_cycles_printed", "stem_sum_peak_error", "boundary_discontinuity_dbfs"],
+      "properties": {
+        "master_wav": {"$ref": "#/$defs/fileRef"},
+        "master_flac": {"$ref": "#/$defs/fileRef"},
+        "preview_mp3": {"$ref": "#/$defs/fileRef"},
+        "loop_check_mp3": {"$ref": "#/$defs/fileRef"},
+        "stems": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/stemRef"}},
+        "frames": {"const": 1440000},
+        "sample_rate": {"const": 48000},
+        "channels": {"const": 2},
+        "loop_cycles_printed": {"minimum": 4},
+        "stem_sum_peak_error": {"type": "number", "minimum": 0, "maximum": 0.00001},
+        "boundary_discontinuity_dbfs": {"type": "number", "maximum": -80}
+      }
+    },
+    "machine_disposition": {
+      "type": "object",
+      "required": ["technical_pass", "selected_candidate_id", "owner_options"],
+      "properties": {
+        "technical_pass": {"const": true},
+        "selected_candidate_id": {"type": "string", "minLength": 1},
+        "owner_options": {"const": 1}
+      }
+    }
+  },
+  "$defs": {
+    "fileRef": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+      }
+    },
+    "stemRef": {
+      "allOf": [
+        {"$ref": "#/$defs/fileRef"},
+        {
+          "type": "object",
+          "required": ["role"],
+          "properties": {"role": {"type": "string", "minLength": 1}}
+        }
+      ]
+    }
+  }
+}

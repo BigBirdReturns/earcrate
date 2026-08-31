@@ -1,0 +1,249 @@
+{
+  "allowed_production_support": {
+    "external_harmonic_or_melodic_instruments": false,
+    "rhythm_support_may_supply": [
+      "kick",
+      "snare",
+      "hats",
+      "percussion",
+      "physical_pocket"
+    ],
+    "robi_must_supply": [
+      "recognizable_motif",
+      "identity_bearing_harmonic_motion",
+      "bass_or_low_register_phrase_when_qualified"
+    ],
+    "rule": "The objective is a record whose musical language is Robi, not a purity stunt in which every transient must be synthesized from his throat.",
+    "static_bearing_or_zap_bearing_stems": false,
+    "verified_estate_rhythm_stems": true
+  },
+  "commission_id": "robi_whoa_recognizable_forward_phrase_supported_record_v1",
+  "control_question": "Does a complete record use recognizable, forward-moving Robi phrases as its musical language, while sounding like a contemporary beat that a person would voluntarily leave running?",
+  "created_date": "2026-08-31",
+  "delivery": {
+    "no_owner_action_when_no_complete_candidate": true,
+    "on_success": [
+      "LISTEN-FIRST-five-uninterrupted-repetitions.wav",
+      "Robi-Recognizable-Forward-Phrase-30s-LOOP.wav",
+      "Robi-Recognizable-Forward-Phrase-DELIVERY.zip",
+      "RECEIPT.json",
+      "SOURCE_TIME_MAP.json",
+      "NEGATIVE_CORPUS_COMPARISON.json"
+    ],
+    "on_terminal_refusal": [
+      "LEDGER.json",
+      "PUBLIC_STATUS.json",
+      "REFUSAL.json"
+    ]
+  },
+  "execution_boundary": {
+    "ace_step": false,
+    "browser_or_http_server": false,
+    "compatibility_graph_mutation": false,
+    "crate_rebuild": false,
+    "global_crate_stamp_mutation": false,
+    "headless": true,
+    "owner_receipt_brokerage": false,
+    "provider_requalification": false,
+    "resume_from_sealed_ledger": true,
+    "source_audio_mutation": false
+  },
+  "hard_vetoes": [
+    "any principal event contains wraparound, reversal, or repeated source-cycle sustain",
+    "principal note value exceeds the consumed consecutive source span contract",
+    "unreceipted source-time mapping",
+    "static_or_zap_signature",
+    "click_beep_boop_signature",
+    "satanic_chant_or_reversed_speech_signature",
+    "stationary_vowel_synth_signature",
+    "rapid_retrigger_used_to_fake_sustain",
+    "source_recognition_without_musical_function",
+    "non_discriminating_candidate_frontier",
+    "reference_audio_or_notes_enter_output",
+    "owner_review_requested_for_diagnostic_or_component_proof"
+  ],
+  "objective": {
+    "maximize": [
+      "complete_record_likelihood",
+      "groove_and_pulse_clarity",
+      "recognizable_forward_robi_motion",
+      "credible_instrument_role",
+      "reference_neighborhood_fit",
+      "voluntary_repeatability",
+      "distance_from_rejected_negative_corpus"
+    ],
+    "minimize": [
+      "electrical_artifact_score",
+      "click_and_transient_discontinuity",
+      "metallic_phase_vocoder_smear",
+      "roughness",
+      "chant_or_horror_effect",
+      "masking",
+      "novelty_vocal_processing",
+      "stationary_synth_behavior"
+    ],
+    "negative_corpus_measurement": "Every owner-rejected and machine-closed Robi render found in sealed resident ledgers is a negative example. A candidate must not occupy the same local feature neighborhood as the dominant rejected mechanism.",
+    "required_multivariate_method": "Use covariance-aware distance or a learned local embedding over beat, bar, phrase, and full-loop measurements. Do not declare success from independent scalar thresholds alone.",
+    "source_recognition_measurement": "Compare the transformed event's normalized energy, onset, spectral-flux, and pitch-contour trajectories with its receipted source interval after compensating for the declared time and pitch transform."
+  },
+  "owner_intent": "Build a contemporary 30-second endlessly repeatable beat whose recognizable musical material is constructed from consecutive, forward-moving sections of Robi's performance. Written note values determine how much source time is heard. Do not convert a short grain into a cyclic synthesizer.",
+  "owner_review_admission": {
+    "local_resident_must_reject_obvious_failed_sound_classes_before_owner": true,
+    "machine_qualification_is_acceptance": false,
+    "only_artifact": "complete_30_second_loop_and_continuous_five_repeat_context",
+    "required_state_change": {
+      "keep": "accept exact candidate as Robi loop baseline",
+      "reject": "close exact candidate and continue or terminally close the mechanism family according to the resident ledger"
+    }
+  },
+  "portfolio": {
+    "all_candidates_must_be_complete_records": true,
+    "candidate_dimensions": [
+      "recognizable_source_phrase",
+      "phrase_entry_and_exit_points",
+      "written_note_values",
+      "monotonic_time_fit",
+      "sparse_voicing",
+      "pitch_and_formant_transform",
+      "bass_phrase_selection",
+      "verified_rhythm_support",
+      "negative_space",
+      "motif_repetition_and_variation",
+      "mix_balance",
+      "stereo_scale"
+    ],
+    "frontier_must_be_materially_discriminating": true,
+    "isolated_component_proofs_do_not_count": true,
+    "minimum_complete_30_second_candidates": 48
+  },
+  "predecessor_authority": {
+    "closed_families": [
+      "robi_whoa_v3_mechanism_family",
+      "robi_whoa_legacy_near_miss_mechanism_family_v2"
+    ],
+    "may_reopen_or_refine_closed_candidates": false,
+    "may_use_as_negative_corpus": true,
+    "must_discover_locally": true,
+    "required_negative_labels": [
+      "clicks_beeps_boops",
+      "electrical_static_zapping",
+      "general_midi_lounge",
+      "bathroom_reverb",
+      "satanic_or_reversed_sounding_chants",
+      "novelty_vocal_processing",
+      "stationary_grain_presented_as_sustained_note",
+      "rapid_retrigger_presented_as_sustain",
+      "source_recognizable_but_not_musically_functional",
+      "technically_qualified_but_not_voluntarily_listenable"
+    ]
+  },
+  "program_classification": "non_album_commission_and_reusable_sampling_floor",
+  "reference_neighborhood": {
+    "copying_prohibited": [
+      "reference_audio",
+      "reference_melody",
+      "reference_chord_progression",
+      "reference_bass_line"
+    ],
+    "multiscale_windows": [
+      "beat",
+      "bar",
+      "four_bar_phrase",
+      "full_30_seconds"
+    ],
+    "reported_reference_measurements": {
+      "spectral_bandwidth_hz": 2465.0,
+      "spectral_centroid_hz": 2294.0,
+      "stereo_side_to_mid_rms_ratio": 0.122,
+      "tempo_bpm": 93.75
+    },
+    "target_ranges": {
+      "spectral_bandwidth_hz": [
+        2000.0,
+        3100.0
+      ],
+      "spectral_centroid_hz": [
+        1800.0,
+        2900.0
+      ],
+      "stereo_side_to_mid_rms_ratio": [
+        0.07,
+        0.22
+      ],
+      "tempo_bpm": [
+        91.0,
+        99.0
+      ]
+    }
+  },
+  "repository_export_authority": {
+    "approved_branch_prefixes": [
+      "agent/resident-campaign-20260831",
+      "agent/robi-forward-phrase-record-20260831"
+    ],
+    "approved_remote": "https://github.com/BigBirdReturns/earcrate.git",
+    "authorization": "The owner has repeatedly directed execution and requested elimination of manual receipt brokerage. Pushing public code, tests, redacted campaign contracts, and receipts to the approved EarCrate remote is authorized.",
+    "private_media_must_not_be_pushed": true,
+    "private_paths_must_be_redacted": true
+  },
+  "schema_version": 1,
+  "source_authority": {
+    "reference": {
+      "accepted_filenames": [
+        "Still D.R.E. (Instrumental) 0.mp3",
+        "Still%20D.R.E.%20(Instrumental)%200.mp3"
+      ],
+      "reference_audio_in_output": false,
+      "reference_notes_or_harmony_may_be_copied": false,
+      "role": "production_neighborhood_control_only",
+      "sha256": "58f0a6b12098cd54fd14d5768ba6f616855c2cf24f6ba8be40e0c3359cfb1962"
+    },
+    "robi": {
+      "accepted_filenames": [
+        "Robi Throat Signing WHOA!.aac",
+        "Robi%20Throat%20Signing%20WHOA!.aac"
+      ],
+      "role": "identity_bearing_phrase_material",
+      "sha256": "50f5937511a8acce65c76a34b216d96d03d1f78ba26708ba8d62a9fe67cd120a"
+    }
+  },
+  "source_time_contract": {
+    "circular_looping_for_principal_tonal_events_forbidden": true,
+    "event_source_interval_must_be_receipted": true,
+    "forward_playback_only": true,
+    "micrograin_instrument_bank_forbidden": true,
+    "minimum_recognizable_source_seconds": 0.45,
+    "minimum_source_seconds_by_note_value": {
+      "dotted_half": 1.35,
+      "half": 0.9,
+      "quarter": 0.45,
+      "whole": 1.8
+    },
+    "monotonic_source_time_required": true,
+    "note_value_examples_at_96_bpm": {
+      "eighth_seconds": 0.3125,
+      "half_seconds": 1.25,
+      "quarter_seconds": 0.625,
+      "sixteenth_seconds": 0.15625,
+      "whole_seconds": 2.5
+    },
+    "onset_to_drum_mapping_forbidden": true,
+    "polyphonic_phrase_rule": {
+      "all_voice_source_time_maps_must_be_receipted": true,
+      "bass_should_prefer_a_distinct_phrase_or_nonidentical_source_trajectory": true,
+      "main_identity_voice_must_be_audibly_dominant": true,
+      "maximum_simultaneous_robi_phrase_voices": 2,
+      "same_phrase_same_trajectory_stack_requires_roughness_and_chant_veto_passage": true
+    },
+    "principal_unit": "recognizable_contiguous_phrase",
+    "reversal_forbidden": true,
+    "source_span_must_advance_for_entire_note_gate": true,
+    "source_to_output_duration_ratio": {
+      "maximum": 1.25,
+      "meaning": "time fitting may be used, but the note must consume a comparably long consecutive source phrase rather than loop a small fragment",
+      "minimum": 0.8
+    },
+    "stationary_cycle_sustain_forbidden": true
+  },
+  "status": "authorized_for_headless_resident_execution"
+}

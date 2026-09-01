@@ -1,0 +1,120 @@
+{
+  "commission_id": "robi_whoa_banger_continuation_v2",
+  "created_date": "2026-08-31",
+  "authority_source": {
+    "issue": 132,
+    "owner_verdict": "reject",
+    "verdict_language": "better, but not a banger",
+    "incumbent_local_commit": "3e690627aec864e4c4a99c4f210757fdfb4fd4d3",
+    "incumbent_classification": "best_so_far_rejected_complete_record_control",
+    "rule": "The incumbent is preserved as the control to beat. It is not accepted, and its improved mechanisms are not discarded."
+  },
+  "preserve_from_incumbent": {
+    "recognizable_robi_source_seconds_minimum": 11.53,
+    "multiple_distinct_recognizable_sections": true,
+    "intact_whoa_events_minimum": 2,
+    "verified_rhythm_support_roles": ["drums", "bass"],
+    "borrowed_other_stem": false,
+    "forward_source_time": true,
+    "source_recognition": true,
+    "static_or_zap_signature": false
+  },
+  "musical_gap": {
+    "classification": "complete_record_lacks_banger_level_compulsion",
+    "actors": ["Robi identity-bearing phrases", "estate drums", "estate bass", "resident producer-search"],
+    "mechanism": "The incumbent established recognizable source use and clean support, but its hook, pocket, impact, momentum, contrast, and payoff were insufficient to create voluntary replay demand.",
+    "must_improve": [
+      "drum-pocket authority",
+      "low-end impact without masking Robi",
+      "hook immediacy",
+      "four-bar forward motion",
+      "drop and return contrast",
+      "transient hierarchy",
+      "Robi-to-rhythm call and response",
+      "repeat-cycle compulsion",
+      "mix translation at ordinary playback level"
+    ]
+  },
+  "portfolio": {
+    "complete_30_second_candidates_minimum": 64,
+    "component_proofs_forbidden_as_delivery": true,
+    "materially_discriminating_families_minimum": 4,
+    "families": [
+      "pocket_and_microtiming",
+      "hook_entry_and_repetition",
+      "low_end_and_transient_weight",
+      "four_bar_arc_and_negative_space"
+    ],
+    "incumbent_comparison": {
+      "required": true,
+      "comparison_level": ["beat", "bar", "four_bar", "full_loop", "five_repeat"],
+      "candidate_must_beat_incumbent": [
+        "groove",
+        "impact",
+        "hook recall",
+        "momentum",
+        "voluntary repeatability"
+      ],
+      "mere_novelty_or_difference_is_not_improvement": true
+    }
+  },
+  "reference_policy": {
+    "reference_audio_in_output": false,
+    "reference_notes_in_output": false,
+    "allowed_use": [
+      "tempo neighborhood",
+      "transient hierarchy",
+      "spectral balance",
+      "stereo scale",
+      "arrangement density",
+      "repetition and variation distributions"
+    ],
+    "rule": "The reference describes a production neighborhood; it is not a score to copy."
+  },
+  "hard_vetoes": [
+    "click_beep_boop_signature",
+    "electrical_static_or_zap_signature",
+    "satanic_chant_or_reversed_speech_signature",
+    "stationary_vowel_synth_signature",
+    "circular_loop_used_as_principal_phrase_sustain",
+    "rapid_retrigger_used_to_fake_note_duration",
+    "generic_people_music_genre_token_completion",
+    "source_recognition_without_musical_function",
+    "borrowed_other_stem_in_audible_mix",
+    "lounge_or_general_midi_timbre",
+    "room_or_bathroom_wash",
+    "non_discriminating_frontier",
+    "candidate_that_only_improves_measurements_without_beating_the_incumbent_record"
+  ],
+  "execution_boundary": {
+    "headless": true,
+    "resume_from_local_resident_ledgers": true,
+    "owner_receipt_brokerage": false,
+    "browser_or_http_server": false,
+    "provider_requalification": false,
+    "crate_rebuild": false,
+    "compatibility_graph_mutation": false,
+    "global_crate_stamp_mutation": false,
+    "ace_step": false,
+    "private_media_export": false,
+    "continue_without_owner_until_complete_candidate": true
+  },
+  "owner_review_admission": {
+    "only_complete_record": true,
+    "required_files": [
+      "LISTEN-FIRST-five-uninterrupted-repetitions.wav",
+      "Robi-Banger-30s-LOOP.wav",
+      "Robi-Banger-DELIVERY.zip"
+    ],
+    "no_status_or_receipt_handoff": true,
+    "verdicts": ["keep", "reject"],
+    "keep_effect": "The exact candidate becomes the accepted Robi baseline.",
+    "reject_effect": "The candidate closes and the resident continues only if an unexhausted materially different family remains."
+  },
+  "terminal_refusal": {
+    "allowed_when": "Every declared materially different family has been executed and none beats the incumbent best-so-far control.",
+    "required_files": ["LEDGER.json", "PUBLIC_STATUS.json", "REFUSAL.json"],
+    "owner_action_required": false
+  },
+  "control_question": "Does the candidate preserve the incumbent's recognizable Robi identity while materially beating it on pocket, impact, hook, momentum, and five-repeat compulsion strongly enough to deserve the word banger?"
+}
